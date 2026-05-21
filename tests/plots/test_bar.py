@@ -65,7 +65,7 @@ def test_plot_produces_expected_patch_count(sample_dataframe, plot_kwargs, expec
 
 def test_missing_x_col_in_dataframe(sample_dataframe):
     """Test bar plot when the provided x_col does not exist in the DataFrame."""
-    with pytest.raises(KeyError, match="x_col 'missing_col' not found in DataFrame"):
+    with pytest.raises(ValueError, match="x_col 'missing_col' not found in DataFrame"):
         bar.plot(
             df=sample_dataframe,
             value_col="sales_q1",

@@ -66,7 +66,7 @@ def _validate_bar_inputs(
         raise ValueError("Cannot plot with empty DataFrame")
     if x_col is not None and x_col not in df.columns:
         msg = f"x_col '{x_col}' not found in DataFrame"
-        raise KeyError(msg)
+        raise ValueError(msg)
     if orientation not in VALID_ORIENTATIONS:
         msg = f"Invalid orientation: {orientation}. Expected one of {list(VALID_ORIENTATIONS)}"
         raise ValueError(msg)

@@ -328,6 +328,4 @@ class GainLoss:
 
         ax.axvline(0, color="black", linewidth=0.5)
 
-        ax.grid(axis="x", linestyle="--", alpha=0.7)
-
         return ax
