@@ -26,4 +26,6 @@ def test_cohort_analysis_integration(transactions_table):
 
     result = cohort_analysis.df
     assert result is not None
-    assert len(result.columns) > 0
+    # The pivoted output always exposes period_since=0 (the cohort's first period); other period
+    # columns are data-dependent so cannot be pinned here.
+    assert 0 in result.columns

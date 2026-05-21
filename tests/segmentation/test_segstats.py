@@ -1635,14 +1635,15 @@ class TestComposableGroupingSets:
         """Test cube() helper returns list of tuples for all combinations."""
         result = cube("region", "store")
         assert isinstance(result, list)
-        # CUBE(region, store) with 2 columns generates 2^2 = 4 grouping sets
-        assert len(result) == 2**2
-        assert set(result) == {
+        expected_grouping_sets = {
             ("region", "store"),  # Full detail
             ("region",),  # Region totals
             ("store",),  # Store totals
             (),  # Grand total
         }
+        assert set(result) == expected_grouping_sets
+        # Catches duplicate emissions that set comparison would hide.
+        assert len(result) == len(expected_grouping_sets)
 
     def test_cube_function_warns_on_many_dimensions(self):
         """Test cube() helper warns when using more than 6 dimensions."""
@@ -1677,7 +1678,7 @@ class TestComposableGroupingSets:
 
         # CUBE(region, store) with 2 columns generates 2^2 = 4 grouping sets (each with "date" appended)
         assert set(result) == set(expected)
-        assert len(result) == 2**2
+        assert len(result) == len(expected)
 
     def test_rollup_with_fixed_columns(self):
         """Test ROLLUP with fixed segment for time hierarchy analysis by customer type."""
@@ -1703,14 +1704,19 @@ class TestComposableGroupingSets:
             grouping_sets=cube("region", "category", "brand"),
         )
 
-        # CUBE with 3 columns generates 2^3 = 8 grouping sets
-        assert len(result) == 2**3
-        assert ("region", "category", "brand") in result  # Full detail
-        assert () in result  # Grand total
-        # Verify all single-dimension combinations exist
-        assert ("region",) in result
-        assert ("category",) in result
-        assert ("brand",) in result
+        expected_grouping_sets = {
+            ("region", "category", "brand"),  # Full detail
+            ("region", "category"),
+            ("region", "brand"),
+            ("category", "brand"),
+            ("region",),
+            ("category",),
+            ("brand",),
+            (),  # Grand total
+        }
+        assert set(result) == expected_grouping_sets
+        # Catches duplicate emissions that set comparison would hide.
+        assert len(result) == len(expected_grouping_sets)
 
     def test_multiple_cube_rollup_calls_rejected(self):
         """Test that mixing CUBE and ROLLUP in same specification raises error."""
@@ -1961,8 +1967,16 @@ class TestDivisionByZeroHandling:
             unknown_customer_value=-1,
         ).df
 
-        # The key assertion: no division by zero error occurred (we got results)
-        assert len(result) > 0
+        expected_segments = {
+            ("S1", "W1"),
+            ("S1", "W2"),
+            ("S2", "W1"),
+            ("S2", "W2"),  # leaf cells
+            ("S1", "Total"),
+            ("S2", "Total"),  # per-store rollup
+            ("Total", "Total"),  # grand total
+        }
+        assert set(zip(result["store_id"], result["week"], strict=True)) == expected_segments
 
         # Verify that spend_per_cust is NaN when customer_id count is 0
         # (all customers are unknown, so identified customer count is 0)

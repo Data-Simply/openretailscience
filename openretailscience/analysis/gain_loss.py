@@ -18,10 +18,11 @@ This analysis helps marketers:
 - Understand competitive dynamics in the market
 """
 
+from typing import Any
+
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots import bar
 from openretailscience.plots.styles.colors import COLORS
@@ -252,62 +253,42 @@ class GainLoss:
     def plot(
         self,
         title: str | None = None,
+        eyebrow: str | None = None,
+        subtitle: str | None = None,
         x_label: str | None = None,
         y_label: str | None = None,
         ax: Axes | None = None,
         source_text: str | None = None,
         move_legend_outside: bool = False,
-        **kwargs: dict[str, any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> SubplotBase:
         """Plot the gain loss table using the bar.plot wrapper.
 
         Args:
             title (str | None, optional): The title of the plot. Defaults to None.
+            eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+            subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
             x_label (str | None, optional): The x-axis label. Defaults to None.
             y_label (str | None, optional): The y-axis label. Defaults to None.
             ax (Axes | None, optional): The axes to plot on. Defaults to None.
             source_text (str | None, optional): The source text to add to the plot. Defaults to None.
             move_legend_outside (bool, optional): Whether to move the legend outside the plot. Defaults to False.
-            kwargs (dict[str, any]): Additional keyword arguments to pass to the plot.
+            kwargs (Any): Additional keyword arguments to pass to the plot.
 
         Returns:
             SubplotBase: The plot
         """
-        green_colors = [COLORS["green"][700], COLORS["green"][500], COLORS["green"][300]]
-        red_colors = [COLORS["red"][700], COLORS["red"][500], COLORS["red"][300]]
-
         increase_cols = ["new", "increased_focus", "switch_from_comparison"]
         decrease_cols = ["lost", "decreased_focus", "switch_to_comparison"]
         all_cols = increase_cols + decrease_cols
-
-        plot_df = self.gain_loss_table_df.copy()
-        default_y_label = self.focus_group_name if self.group_col is None else self.group_col
-        plot_data = plot_df.copy()
-
-        color_dict = {col: green_colors[i] for i, col in enumerate(increase_cols)}
-        color_dict.update({col: red_colors[i] for i, col in enumerate(decrease_cols)})
-
-        kwargs.pop("stacked", None)
-
-        ax = bar.plot(
-            df=plot_data,
-            value_col=all_cols,
-            title=gu.not_none(title, f"Gain Loss from {self.focus_group_name} to {self.comparison_group_name}"),
-            y_label=gu.not_none(y_label, default_y_label),
-            x_label=gu.not_none(x_label, self.value_col),
-            orientation="horizontal",
-            ax=ax,
-            source_text=source_text,
-            move_legend_outside=move_legend_outside,
-            stacked=True,
-            **kwargs,
-        )
-
-        for i, container in enumerate(ax.containers):
-            col_name = all_cols[i]
-            for patch in container:
-                patch.set_color(color_dict[col_name])
-
+        segment_colors = [
+            COLORS["green"][700],
+            COLORS["green"][500],
+            COLORS["green"][300],
+            COLORS["red"][700],
+            COLORS["red"][500],
+            COLORS["red"][300],
+        ]
         legend_labels = [
             "New",
             f"Increased {self.focus_group_name}",
@@ -317,23 +298,36 @@ class GainLoss:
             f"Switch To {self.comparison_group_name}",
         ]
 
-        if ax.get_legend():
-            ax.get_legend().remove()
+        default_y_label = self.focus_group_name if self.group_col is None else self.group_col
+        plot_data = self.gain_loss_table_df.copy()
 
-        legend = ax.legend(
-            legend_labels,
-            frameon=True,
-            bbox_to_anchor=(1.05, 1) if move_legend_outside else None,
-            loc="upper left" if move_legend_outside else "best",
+        kwargs.pop("stacked", None)
+        kwargs.pop("color", None)
+
+        resolved_title = (
+            title if title is not None else f"Gain Loss from {self.focus_group_name} to {self.comparison_group_name}"
         )
-        legend.get_frame().set_facecolor("white")
-        legend.get_frame().set_edgecolor("white")
+
+        ax = bar.plot(
+            df=plot_data,
+            value_col=all_cols,
+            title=resolved_title,
+            eyebrow=eyebrow,
+            subtitle=subtitle,
+            y_label=y_label if y_label is not None else default_y_label,
+            x_label=x_label if x_label is not None else self.value_col,
+            orientation="horizontal",
+            ax=ax,
+            source_text=source_text,
+            move_legend_outside=move_legend_outside,
+            legend_labels=legend_labels,
+            stacked=True,
+            color=segment_colors,
+            **kwargs,
+        )
 
         ax.axvline(0, color="black", linewidth=0.5)
 
-        gu.set_axis_format(ax.xaxis, "shorthand")
         ax.grid(axis="x", linestyle="--", alpha=0.7)
-
-        gu.standard_tick_styles(ax)
 
         return ax

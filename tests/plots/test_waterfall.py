@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from matplotlib.colors import to_hex
 
-from openretailscience.plots.styles.colors import COLORS
+from openretailscience.options import option_context
 from openretailscience.plots.waterfall import format_data_labels, plot
 
 
@@ -57,18 +57,17 @@ class TestWaterfallPlot:
         source_texts = [text for text in result_ax.figure.texts if text.get_text() == source_text]
         assert len(source_texts) == 1
 
-    def test_plot_colors_assigned_correctly_replicated_replicated(self, test_data):
-        """Test that the function assigns colors correctly to the bars."""
+    def test_plot_colors_assigned_correctly(self, test_data):
+        """Configured positive/negative colors should flow through to bar facecolors."""
         amounts, labels = test_data
+        positive_color = "#1f77b4"
+        negative_color = "#d62728"
 
-        result_ax = plot(amounts, labels)
+        with option_context("plot.color.positive", positive_color, "plot.color.negative", negative_color):
+            result_ax = plot(amounts, labels)
 
         colors = [to_hex(patch.get_facecolor()) for patch in result_ax.patches]
 
-        positive_color = COLORS["green"][500]
-        negative_color = COLORS["red"][500]
-
-        assert isinstance(result_ax, plt.Axes)
         assert len(result_ax.patches) == len(labels)
         assert colors == [
             positive_color,
@@ -77,18 +76,18 @@ class TestWaterfallPlot:
             negative_color,
         ]
 
-    def test_net_bar_colored_blue(self, test_data):
-        """Test that the net bar is colored blue."""
+    def test_net_bar_uses_configured_difference_color(self, test_data):
+        """Configured difference color should flow through to the net bar's facecolor."""
         amounts, labels = test_data
+        difference_color = "#9467bd"
 
-        result_ax = plot(amounts, labels, display_net_bar=True)
+        with option_context("plot.color.difference", difference_color):
+            result_ax = plot(amounts, labels, display_net_bar=True)
 
-        last_bar_color = [to_hex(patch.get_facecolor()) for patch in result_ax.patches][-1]
-        net_bar_blue = COLORS["blue"][500]
+        last_bar_color = to_hex(result_ax.patches[-1].get_facecolor())
 
-        assert isinstance(result_ax, plt.Axes)
-        assert len(result_ax.patches) == len(labels) + 1  # Check if 5 bars are plotted (including net bar)
-        assert last_bar_color == net_bar_blue
+        assert len(result_ax.patches) == len(labels) + 1
+        assert last_bar_color == difference_color
 
     def test_generates_waterfall_plot_with_zero_amounts_removed(self, test_data):
         """Test that the function generates a waterfall plot with zero amounts removed."""
@@ -110,6 +109,19 @@ class TestWaterfallPlot:
 
         with pytest.raises(ValueError):
             plot(amounts, labels, data_label_format="invalid_format")
+
+    def test_bar_labels_use_data_label_size(self, test_data):
+        """Bar-end data labels should track plot.font.data_label_size, not label_size."""
+        amounts, labels = test_data
+        custom_data_label_size = 17.0
+
+        with option_context("plot.font.data_label_size", custom_data_label_size):
+            result_ax = plot(amounts, labels, data_label_format="absolute")
+
+        bar_label_texts = [t for t in result_ax.texts if t.get_text()]
+        assert len(bar_label_texts) == len(amounts)
+        for text in bar_label_texts:
+            assert text.get_fontsize() == custom_data_label_size
 
     @pytest.mark.parametrize("label_format", ["percentage", "both"])
     def test_zero_total_change_does_not_raise(self, label_format):

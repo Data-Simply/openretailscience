@@ -48,14 +48,15 @@ retail analysis, sales tracking, and customer behavior insights.
   styling, formatting, and other plot adjustments.
 """
 
-import numpy as np
+from typing import Any, Literal
+
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 from pandas.tseries.offsets import BaseOffset
 
-import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.options import get_option
-from openretailscience.plots.styles.colors import get_linear_cmap, get_named_color
+from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 
 def plot(
@@ -65,13 +66,16 @@ def plot(
     agg_func: str = "sum",
     group_col: str | None = None,
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
     legend_title: str | None = None,
     ax: Axes | None = None,
     source_text: str | None = None,
     move_legend_outside: bool = False,
-    **kwargs: dict[str, any],
+    legend_style: Literal["box", "end_of_line"] | None = None,
+    **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
     """Plots the value_col over time.
 
@@ -91,21 +95,32 @@ def plot(
         period (str | BaseOffset): The period to group the data by.
         agg_func (str, optional): The aggregation function to apply to the value_col. Defaults to "sum".
         group_col (str, optional): The column to group the data by. Defaults to None.
-        title (str, optional): The title of the plot. Defaults to None. When None the title is set to
-            `f"{value_col.title()} by {group_col.title()}"`
-        x_label (str, optional): The x-axis label. Defaults to None. When None the x-axis label is set to blank
-        y_label (str, optional): The y-axis label. Defaults to None. When None the y-axis label is set to the title
-            case of `value_col`
+        title (str, optional): The title of the plot. Defaults to None (no title rendered).
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
+        x_label (str, optional): The x-axis label. Defaults to None (no x-axis label rendered).
+        y_label (str, optional): The y-axis label. Defaults to None (no y-axis label rendered).
         legend_title (str, optional): The title of the legend. Defaults to None. When None the legend title is set to
             the title case of `group_col`
         ax (Axes, optional): The matplotlib axes object to plot on. Defaults to None.
         source_text (str, optional): The source text to add to the plot. Defaults to None.
         move_legend_outside (bool, optional): Whether to move the legend outside the plot. Defaults to True.
+        legend_style (Literal["box", "end_of_line"], optional): How series are labelled. ``"box"`` renders the
+            standard legend; ``"end_of_line"`` suppresses the legend and places a colored series label at the
+            right end of each line. When ``"end_of_line"``, ``move_legend_outside`` and ``legend_title`` are
+            ignored and a warning is emitted if either is supplied.
         **kwargs: Additional keyword arguments to pass to the Pandas plot function.
 
     Returns:
         SubplotBase: The matplotlib axes object.
+
+    Raises:
+        ValueError: If `legend_style` is not one of ``None``, ``"box"``, or ``"end_of_line"``.
     """
+    if legend_style not in (None, "box", "end_of_line"):
+        msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"
+        raise ValueError(msg)
+
     df["transaction_period"] = df[get_option("column.transaction_date")].dt.to_period(
         period,
     )
@@ -113,19 +128,15 @@ def plot(
     if group_col is None:
         default_colors = get_named_color("primary")
         df = df.groupby("transaction_period")[value_col].agg(agg_func)
-        default_title = "Total Sales"
         show_legend = False
     else:
-        default_colors = get_linear_cmap("green")(
-            np.linspace(0, 1, df[group_col].nunique()),
-        )
         df = (
             df.groupby([group_col, "transaction_period"])[value_col]
             .agg(agg_func)
             .reset_index()
             .pivot(index="transaction_period", columns=group_col, values=value_col)
         )
-        default_title = f"{value_col.title()} by {group_col.title()}"
+        default_colors = get_plot_colors(df.shape[1])
         show_legend = True
 
     linewidth = kwargs.pop("linewidth", 3)
@@ -137,21 +148,19 @@ def plot(
         ax=ax,
         **kwargs,
     )
-    ax = gu.standard_graph_styles(
+
+    return standard_graph_styles(
         ax,
-        title=gu.not_none(title, default_title),
-        x_label=gu.not_none(x_label, ""),
-        y_label=gu.not_none(y_label, value_col.title()),
+        title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
+        x_label=x_label,
+        y_label=y_label,
         legend_title=legend_title,
         move_legend_outside=move_legend_outside,
         show_legend=show_legend,
+        legend_style=legend_style,
+        source_text=source_text,
+        grid_axis="y",
+        x_margin=0,
     )
-
-    gu.set_axis_format(ax.yaxis, "shorthand")
-
-    if source_text is not None:
-        gu.add_source_text(ax=ax, source_text=source_text)
-
-    gu.standard_tick_styles(ax)
-
-    return ax

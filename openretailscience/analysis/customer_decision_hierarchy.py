@@ -62,7 +62,7 @@ The analysis examines customer purchase patterns to identify substitutability:
 - **Strategic Clarity**: Data-driven approach to range decisions
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -70,10 +70,10 @@ import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.sparse import csr_matrix
+from scipy.spatial.distance import squareform
 
-import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.options import ColumnHelper, get_option
-from openretailscience.plots.styles.styling_helpers import PlotStyler
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 
 class CustomerDecisionHierarchy:
@@ -229,11 +229,11 @@ class CustomerDecisionHierarchy:
 
         return (a * d - b * c) / denominator
 
-    def _get_yules_q_distances(self) -> float:
-        """Calculate the Yules Q distances between pairs of products.
+    def _get_yules_q_distances(self) -> np.ndarray:
+        """Calculate the Yule's Q distances between pairs of products.
 
         Returns:
-            float: The Yules Q distances between pairs of products.
+            np.ndarray: A square matrix of Yule's Q distances between pairs of products.
         """
         # Create a sparse matrix where the rows are the customers and the columns are the products
         # The values are True if the customer bought the product and False if they didn't
@@ -266,13 +266,14 @@ class CustomerDecisionHierarchy:
                 yules_q_matrix[i, j] = yules_q_dist
                 yules_q_matrix[j, i] = yules_q_dist
 
-        # Normalize the yules q values to be between 0 and 1 and return
-        return (yules_q_matrix + 1) / 2
+        # yules_q_dist = 1 - Q lives in [0, 2]; halving rescales it into [0, 1] while
+        # preserving the zero diagonal so this is a valid distance matrix.
+        return yules_q_matrix / 2
 
     def _calculate_distances(
         self,
         method: Literal["yules_q"],
-    ) -> None:
+    ) -> np.ndarray:
         """Calculates distances between items using the specified method.
 
         Args:
@@ -282,7 +283,7 @@ class CustomerDecisionHierarchy:
             ValueError: If the method is not valid.
 
         Returns:
-            None
+            np.ndarray: A square matrix of pairwise product distances.
         """
         # Check method is valid
         if method == "yules_q":
@@ -292,6 +293,16 @@ class CustomerDecisionHierarchy:
 
         return distances
 
+    def _compute_linkage_matrix(self) -> np.ndarray:
+        """Compute the hierarchical-clustering linkage matrix from precomputed distances.
+
+        scipy's ``linkage`` infers input semantics from shape: a 1-D array is treated as a
+        condensed distance vector; a 2-D array is treated as an observation matrix and scipy
+        recomputes Euclidean distances between rows. ``squareform`` converts the square
+        distance matrix to condensed form so scipy uses the precomputed distances directly.
+        """
+        return linkage(squareform(self.distances, checks=False), method="ward")
+
     def plot(
         self,
         title: str = "Customer Decision Hierarchy",
@@ -299,42 +310,41 @@ class CustomerDecisionHierarchy:
         y_label: str | None = None,
         ax: Axes | None = None,
         figsize: tuple[int, int] | None = None,
+        eyebrow: str | None = None,
+        subtitle: str | None = None,
         source_text: str | None = None,
-        **kwargs: dict[str, any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> SubplotBase:
         """Plots the customer decision hierarchy dendrogram.
 
         Args:
-            title (str, optional): The title of the plot. Defaults to None.
+            title (str, optional): The title of the plot. Defaults to "Customer Decision Hierarchy".
             x_label (str, optional): The label for the x-axis. Defaults to None.
             y_label (str, optional): The label for the y-axis. Defaults to None.
             ax (Axes, optional): The matplotlib Axes object to plot on. Defaults to None.
             figsize (tuple[int, int], optional): The figure size. Defaults to None.
+            eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+            subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
             source_text (str, optional): The source text to annotate on the plot. Defaults to None.
-            **kwargs (dict[str, any]): Additional keyword arguments to pass to the dendrogram function.
+            **kwargs (Any): Additional keyword arguments to pass to the dendrogram function.
 
         Returns:
             SubplotBase: The matplotlib SubplotBase object.
         """
-        linkage_matrix = linkage(self.distances, method="ward")
+        linkage_matrix = self._compute_linkage_matrix()
         labels = self.pairs_df[self.product_col].cat.categories
 
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
 
         orientation = kwargs.get("orientation", "top")
-        default_x_label, default_y_label = (
-            ("Products", "Distance") if orientation in ["top", "bottom"] else ("Distance", "Products")
-        )
+        distance_is_y = orientation in ["top", "bottom"]
+        default_x_label, default_y_label = (None, "Distance") if distance_is_y else ("Distance", None)
 
-        gu.standard_graph_styles(
-            ax=ax,
-            title=title,
-            x_label=gu.not_none(x_label, default_x_label),
-            y_label=gu.not_none(y_label, default_y_label),
-        )
+        dendrogram(linkage_matrix, labels=labels, ax=ax, **kwargs)
 
-        # Set the y label to be on the right side of the plot
+        # Move ticks/labels for orientations whose categorical axis sits on the
+        # opposite side from the matplotlib default.
         if orientation == "left":
             ax.yaxis.tick_right()
             ax.yaxis.set_label_position("right")
@@ -342,18 +352,20 @@ class CustomerDecisionHierarchy:
             ax.xaxis.tick_top()
             ax.xaxis.set_label_position("top")
 
-        dendrogram(linkage_matrix, labels=labels, ax=ax, **kwargs)
-        styler = PlotStyler()
-        styler.apply_ticks(ax)
-
-        # Rotate the x-axis labels if they are too long
-        if orientation in ["top", "bottom"]:
-            plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
-
-        # Set the font properties for the tick labels
-        gu.standard_tick_styles(ax)
-
-        if source_text is not None:
-            gu.add_source_text(ax=ax, source_text=source_text)
+        # Chrome runs last so its tight_layout sees the populated axes (rotated
+        # category labels included) and reserves room for them — matching the
+        # call order of every other plot module. _auto_rotate_categorical_x_ticks
+        # inside standard_graph_styles owns x-tick rotation for top/bottom
+        # orientations.
+        standard_graph_styles(
+            ax=ax,
+            title=title,
+            x_label=x_label if x_label is not None else default_x_label,
+            y_label=y_label if y_label is not None else default_y_label,
+            eyebrow=eyebrow,
+            subtitle=subtitle,
+            source_text=source_text,
+            grid_axis="y" if distance_is_y else "x",
+        )
 
         return ax

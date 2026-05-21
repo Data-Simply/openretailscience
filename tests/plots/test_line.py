@@ -1,13 +1,19 @@
 """Tests for the plots.line module."""
 
+from itertools import pairwise
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
 from matplotlib.axes import Axes
 
-from openretailscience.options import PlotStyleHelper
+from openretailscience.options import get_option
 from openretailscience.plots import line
+from openretailscience.plots.styles.graph_utils import _LABEL_GAP_FACTOR, _POINTS_PER_INCH
+
+# Sub-pixel slack for matplotlib bbox rounding when comparing rendered gaps to a computed pixel threshold.
+_BBOX_PIXEL_ROUNDING_TOLERANCE_PX = 0.5
 
 
 @pytest.fixture(autouse=True)
@@ -23,15 +29,19 @@ def sample_dataframe():
     data = {
         "x": pd.date_range("2023-01-01", periods=10, freq="D"),
         "y": range(10, 20),
-        "group": ["A"] * 5 + ["B"] * 5,
+        "group": ["Online"] * 5 + ["In-Store"] * 5,
     }
     return pd.DataFrame(data)
 
 
 @pytest.fixture
 def sample_series():
-    """A sample pandas Series for testing."""
-    return pd.Series([100, 150, 200, 175, 225], index=["A", "B", "C", "D", "E"], name="revenue")
+    """A sample pandas Series of weekday revenue for testing."""
+    return pd.Series(
+        [100, 150, 200, 175, 225],
+        index=["Mon", "Tue", "Wed", "Thu", "Fri"],
+        name="revenue",
+    )
 
 
 @pytest.fixture
@@ -88,29 +98,61 @@ def test_plot_without_group_col(sample_dataframe):
     assert len(result_ax.get_lines()) == expected_num_lines, "Should have only one line"
 
 
-@pytest.mark.parametrize("move_legend_outside", [True, False])
-def test_plot_legend_positioning(sample_dataframe, move_legend_outside):
-    """move_legend_outside controls whether the legend is anchored outside the axes."""
-    result_ax = line.plot(
-        df=sample_dataframe,
-        value_col="y",
-        title="Legend positioning",
-        x_col="x",
-        group_col="group",
-        move_legend_outside=move_legend_outside,
+def test_end_of_line_labels_respect_min_gap_after_chrome():
+    """End-of-line labels must not collide after chrome's tight_layout reflow.
+
+    ``_resolve_end_of_line_label_ys`` spreads labels in display space using the
+    current ``ax.transData``. If labels are positioned before
+    ``standard_graph_styles`` runs ``apply_chart_chrome`` (which calls
+    ``tight_layout`` to fit the chrome band), the data→pixel mapping changes
+    and the configured 1.15-line-height gap shrinks. This test forces the
+    failure mode with five tightly clustered series on a short figure where
+    chrome consumes a meaningful share of axes height, and asserts that
+    adjacent end-of-line annotation bboxes don't overlap in the FINAL render.
+    """
+    categories = ["Bakery", "Dairy", "Produce", "Snacks", "Beverages"]
+    df = pd.DataFrame(
+        {
+            "month": list(range(1, 5)) * len(categories),
+            "category": [c for c in categories for _ in range(4)],
+            "revenue": [base + i for i in range(len(categories)) for base in (10, 20, 30, 100)],
+        },
     )
 
-    legend = result_ax.get_legend()
-    assert legend is not None
-    anchor = legend.get_bbox_to_anchor().transformed(result_ax.transAxes.inverted())
-    if move_legend_outside:
-        expected_x, expected_y = PlotStyleHelper().legend_bbox_to_anchor
-        assert anchor.x0 == pytest.approx(expected_x)
-        assert anchor.y0 == pytest.approx(expected_y)
-    else:
-        # Inside: legend anchored to the axes bbox.
-        assert anchor.x0 == pytest.approx(0.0)
-        assert anchor.y0 == pytest.approx(0.0)
+    fig, ax = plt.subplots(figsize=(6, 3.0), dpi=100)
+    line.plot(
+        df=df,
+        x_col="month",
+        value_col="revenue",
+        group_col="category",
+        legend_style="end_of_line",
+        title="Revenue by category",
+        subtitle="Five tightly clustered series",
+        source_text="Source: synthetic test data",
+        ax=ax,
+    )
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+
+    series_labels = set(categories)
+    annotations = [t for t in ax.texts if t.get_text() in series_labels]
+    assert len(annotations) == len(series_labels)
+
+    bboxes = sorted(
+        (t.get_window_extent(renderer=renderer) for t in annotations),
+        key=lambda b: b.y0,
+    )
+
+    legend_size = get_option("plot.font.legend_size")
+    min_gap_px = legend_size * fig.dpi / _POINTS_PER_INCH * _LABEL_GAP_FACTOR
+
+    for lower, upper in pairwise(bboxes):
+        center_gap_px = (upper.y0 + upper.y1) / 2 - (lower.y0 + lower.y1) / 2
+        assert center_gap_px >= min_gap_px - _BBOX_PIXEL_ROUNDING_TOLERANCE_PX, (
+            f"Adjacent end-of-line labels were positioned only "
+            f"{center_gap_px:.1f}px apart after chrome reflow, "
+            f"below the configured min gap of {min_gap_px:.1f}px."
+        )
 
 
 def test_plot_adds_source_text(sample_dataframe):
@@ -149,16 +191,15 @@ def test_plot_with_legend_title(sample_dataframe, move_legend_outside):
 
 
 @pytest.mark.parametrize(
-    ("group_col", "expected_legend"),
+    ("group_col", "expected_legend", "expected_line_count"),
     [
-        (None, False),
-        ("group", True),
+        (None, False, 1),
+        ("group", True, 2),
     ],
 )
-def test_default_line_styling(sample_dataframe, group_col, expected_legend):
-    """Default lines render with the documented linewidth, alpha, and zorder; legend visibility tracks group_col."""
+def test_default_line_styling(sample_dataframe, group_col, expected_legend, expected_line_count):
+    """Default lines render with the documented linewidth and zorder; legend visibility tracks group_col."""
     default_linewidth = 3
-    default_alpha = 1.0
     default_zorder = 2
 
     result_ax = line.plot(
@@ -170,10 +211,9 @@ def test_default_line_styling(sample_dataframe, group_col, expected_legend):
     )
 
     plotted_lines = result_ax.get_lines()
-    assert len(plotted_lines) > 0
+    assert len(plotted_lines) == expected_line_count
     for plot_line in plotted_lines:
         assert plot_line.get_linewidth() == default_linewidth
-        assert plot_line.get_alpha() == default_alpha
         assert plot_line.get_zorder() == default_zorder
 
     assert (result_ax.get_legend() is not None) is expected_legend
@@ -197,6 +237,19 @@ def test_dataframe_error_conditions(sample_dataframe, value_col, group_col, expe
             value_col=value_col,
             x_col="x",
             group_col=group_col,
+        )
+
+
+@pytest.mark.parametrize("invalid_value", ["endofline", "box ", "", "BOX"])
+def test_plot_rejects_invalid_legend_style(sample_dataframe, invalid_value):
+    """line.plot raises ValueError for legend_style values outside the documented set."""
+    with pytest.raises(ValueError, match="legend_style"):
+        line.plot(
+            df=sample_dataframe,
+            value_col="y",
+            x_col="x",
+            group_col="group",
+            legend_style=invalid_value,
         )
 
 
@@ -503,11 +556,21 @@ class TestHighlightFeature:
                 highlight=["NonExistent", "AlsoNotThere"],
             )
 
+    def test_highlight_empty_list_raises_error(self, multi_category_dataframe):
+        """Test that highlight=[] raises a clear error rather than silently double-drawing context lines."""
+        with pytest.raises(ValueError, match="highlight cannot be empty"):
+            line.plot(
+                df=multi_category_dataframe,
+                x_col="month",
+                value_col="revenue",
+                group_col="category",
+                highlight=[],
+            )
+
     def test_highlight_none_behaves_normally(self, multi_category_dataframe):
         """Test that highlight=None behaves like the original implementation."""
         expected_categories_count = 3
         highlighted_linewidth = 3
-        highlighted_alpha = 1.0
         highlighted_zorder = 2
 
         result_ax = line.plot(
@@ -528,9 +591,6 @@ class TestHighlightFeature:
             assert plot_line.get_linewidth() == highlighted_linewidth, (
                 "All lines should have highlighted linewidth when highlight=None"
             )
-            assert plot_line.get_alpha() == highlighted_alpha, (
-                "All lines should have highlighted alpha when highlight=None"
-            )
             assert plot_line.get_zorder() == highlighted_zorder, (
                 "All lines should have highlighted z-order when highlight=None"
             )
@@ -538,10 +598,8 @@ class TestHighlightFeature:
     def test_highlight_styling_properties(self, multi_category_dataframe):
         """Test that highlight applies correct styling properties."""
         highlighted_linewidth = 3
-        highlighted_alpha = 1.0
         highlighted_zorder = 2
-        context_linewidth = 1.5
-        context_alpha = 0.6
+        context_linewidth = 1.0
         context_zorder = 1
 
         result_ax = line.plot(
@@ -567,10 +625,77 @@ class TestHighlightFeature:
         assert highlighted_line.get_linewidth() == highlighted_linewidth, (
             "Highlighted line should have default highlighted linewidth"
         )
-        assert highlighted_line.get_alpha() == highlighted_alpha, "Highlighted line should have highlighted alpha"
         assert highlighted_line.get_zorder() == highlighted_zorder, "Highlighted line should have highlighted z-order"
 
         for context_line in context_lines:
             assert context_line.get_linewidth() == context_linewidth, "Context lines should have context linewidth"
-            assert context_line.get_alpha() == context_alpha, "Context lines should have context alpha"
             assert context_line.get_zorder() == context_zorder, "Context lines should have context z-order"
+
+    def test_legend_excludes_context_lines(self, multi_category_dataframe):
+        """When highlight is set, only the highlighted series should appear in the legend.
+
+        Otherwise, with many series, the legend fills with greyed-out context entries that add no
+        information (every context line is the same colour) and crowds out the highlighted ones.
+        Implementation: context series are renamed with a leading underscore, which matplotlib's
+        legend builder skips automatically.
+        """
+        result_ax = line.plot(
+            df=multi_category_dataframe,
+            x_col="month",
+            value_col="revenue",
+            group_col="category",
+            highlight="Electronics",
+            move_legend_outside=True,
+        )
+
+        legend = result_ax.get_legend()
+        legend_labels = [t.get_text() for t in legend.get_texts()]
+        assert legend_labels == ["Electronics"], (
+            f"Legend should contain only the highlighted series, got: {legend_labels}"
+        )
+
+    def test_highlight_with_caller_linewidth_kwarg(self, multi_category_dataframe):
+        """Caller-supplied linewidth must not collide with context-line styling when highlight is set.
+
+        Regression: the context-line branch hard-codes linewidth=1.0 while splatting **kwargs, which
+        previously included linewidth and caused pandas to raise TypeError for the duplicate keyword.
+        Highlighted lines must honour the caller's linewidth; context lines keep their fixed 1.0.
+        """
+        caller_linewidth = 5
+        context_linewidth = 1.0
+
+        result_ax = line.plot(
+            df=multi_category_dataframe,
+            x_col="month",
+            value_col="revenue",
+            group_col="category",
+            highlight="Electronics",
+            linewidth=caller_linewidth,
+        )
+
+        highlighted_line = next(pl for pl in result_ax.get_lines() if pl.get_label() == "Electronics")
+        context_lines = [pl for pl in result_ax.get_lines() if pl.get_label() != "Electronics"]
+
+        assert highlighted_line.get_linewidth() == caller_linewidth
+        for context_line in context_lines:
+            assert context_line.get_linewidth() == context_linewidth
+
+    def test_end_of_line_excludes_context_lines(self, multi_category_dataframe):
+        """End-of-line annotations must skip context lines for the same reason the box legend does.
+
+        ``draw_end_of_line_labels`` already filters labels starting with ``_`` (matplotlib convention),
+        so the underscore-prefix that hides context series from the legend also hides them here.
+        """
+        result_ax = line.plot(
+            df=multi_category_dataframe,
+            x_col="month",
+            value_col="revenue",
+            group_col="category",
+            highlight="Electronics",
+            legend_style="end_of_line",
+        )
+
+        annotation_texts = [t.get_text().strip() for t in result_ax.texts]
+        assert annotation_texts == ["Electronics"], (
+            f"End-of-line annotations should label only the highlighted series, got: {annotation_texts}"
+        )

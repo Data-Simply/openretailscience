@@ -139,9 +139,12 @@ show_missing  = true
 skip_covered  = true
 
 [tool.ruff.lint.per-file-ignores]
-"*.ipynb"     = [ "T201" ]
-"__init__.py" = [ "D104", "F401", "F403", "F405" ]
-"tests/*"     = [ "ANN", "ARG", "INP001", "S101", "SLF001" ]
+"*.ipynb"                         = [ "T201" ]
+"__init__.py"                     = [ "D104", "F401", "F403", "F405" ]
+"docs/gallery/**/*.ipynb"         = [ "ERA001", "PLR2004" ]
+"docs/getting_started/**/*.ipynb" = [ "ANN", "D103", "PLR2004" ]
+"docs/scripts/*"                  = [ "D103", "INP001", "PERF401", "PLR2004", "RUF001", "T201" ]
+"tests/*"                         = [ "ANN", "ARG", "INP001", "S101", "SLF001" ]
 
 [tool.ruff.lint.pylint]
 max-args       = 15
@@ -164,3 +167,7 @@ known-first-party = [ "openretailscience" ]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.pyright]
+venv     = ".venv"
+venvPath = "."

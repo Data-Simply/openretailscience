@@ -25,11 +25,11 @@ class TestTimePlot:
     @pytest.fixture
     def test_data(self):
         """Return a sample dataframe for plotting."""
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(42)
         data = {
             "transaction_date": pd.date_range(start="2022-01-01", periods=10, freq="D"),
             "sales": rng.integers(100, 500, size=10),
-            "category": ["A", "B"] * 5,
+            "category": ["Bakery", "Dairy"] * 5,
         }
         return pd.DataFrame(data)
 
@@ -56,7 +56,8 @@ class TestTimePlot:
         result_ax = plot(df, value_col="sales", title=custom_title)
 
         assert isinstance(result_ax, plt.Axes)
-        assert result_ax.get_title() == custom_title
+        title_texts = [t for t in result_ax.figure.texts if t.get_text() == custom_title]
+        assert len(title_texts) == 1
 
     def test_raises_value_error_for_invalid_period(self, test_data):
         """Test that the function raises a ValueError for an invalid period."""
@@ -92,3 +93,9 @@ class TestTimePlot:
         result_ax = plot(df, value_col="sales", group_col="category")
         legend_visible = result_ax.get_legend() is not None
         assert legend_visible, "Legend should be visible when group_col is provided."
+
+    @pytest.mark.parametrize("invalid_value", ["endofline", "box ", "", "BOX"])
+    def test_plot_rejects_invalid_legend_style(self, test_data, invalid_value):
+        """time.plot raises ValueError for legend_style values outside the documented set."""
+        with pytest.raises(ValueError, match="legend_style"):
+            plot(test_data, value_col="sales", legend_style=invalid_value)

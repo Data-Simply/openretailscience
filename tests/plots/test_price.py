@@ -19,17 +19,18 @@ def cleanup_figures():
 @pytest.fixture
 def sample_price_dataframe():
     """A sample dataframe for testing price architecture plots."""
+    rng = np.random.default_rng(42)
     data = {
         "product_id": range(1, 101),
         "unit_price": [
             # Walmart - mix of low and medium prices
-            *np.random.default_rng(42).uniform(1, 3, 25),
+            *rng.uniform(1, 3, 25),
             # Target - mostly medium prices
-            *np.random.default_rng(42).uniform(2, 5, 25),
+            *rng.uniform(2, 5, 25),
             # Amazon - higher prices
-            *np.random.default_rng(42).uniform(4, 8, 25),
+            *rng.uniform(4, 8, 25),
             # Best Buy - wide range
-            *np.random.default_rng(42).uniform(1, 10, 25),
+            *rng.uniform(1, 10, 25),
         ],
         "retailer": (["Walmart"] * 25 + ["Target"] * 25 + ["Amazon"] * 25 + ["Best Buy"] * 25),
         "country": (["US"] * 50 + ["UK"] * 50),
@@ -103,37 +104,23 @@ def test_plot_non_numeric_value_col(simple_price_dataframe):
         )
 
 
-@pytest.mark.parametrize("bins", [0, -5])
-def test_plot_invalid_bins_non_positive(bins, simple_price_dataframe):
-    """Test price architecture plot with zero or negative bins."""
-    with pytest.raises(ValueError, match="bins must be a positive integer"):
+@pytest.mark.parametrize(
+    ("bins", "match"),
+    [
+        (0, "bins must be a positive integer"),
+        (-5, "bins must be a positive integer"),
+        ([1], "bins list must contain at least 2 values"),
+        ([1, "invalid", 3], "All values in bins list must be numeric"),
+    ],
+)
+def test_plot_invalid_bins_raises_value_error(bins, match, simple_price_dataframe):
+    """Test price architecture plot raises ValueError for invalid bins values."""
+    with pytest.raises(ValueError, match=match):
         price.plot(
             df=simple_price_dataframe,
             value_col="unit_price",
             group_col="retailer",
             bins=bins,
-        )
-
-
-def test_plot_invalid_bins_list_too_short(simple_price_dataframe):
-    """Test price architecture plot with bins list too short."""
-    with pytest.raises(ValueError, match="bins list must contain at least 2 values"):
-        price.plot(
-            df=simple_price_dataframe,
-            value_col="unit_price",
-            group_col="retailer",
-            bins=[1],
-        )
-
-
-def test_plot_invalid_bins_list_non_numeric(simple_price_dataframe):
-    """Test price architecture plot with non-numeric bins list."""
-    with pytest.raises(ValueError, match="All values in bins list must be numeric"):
-        price.plot(
-            df=simple_price_dataframe,
-            value_col="unit_price",
-            group_col="retailer",
-            bins=[1, "invalid", 3],
         )
 
 
@@ -244,7 +231,8 @@ def test_plot_basic_functionality(sample_price_dataframe):
         y_label=y_label,
     )
 
-    assert result_ax.get_title() == title
+    title_texts = [t for t in result_ax.figure.texts if t.get_text() == title]
+    assert len(title_texts) == 1
     assert result_ax.get_xlabel() == x_label
     assert result_ax.get_ylabel() == y_label
 
@@ -271,6 +259,30 @@ def test_plot_with_country_grouping(sample_price_dataframe):
     assert len(result_ax.get_xticks()) == expected_countries
 
 
+def test_plot_strips_negative_zero_in_y_tick_labels():
+    """Y-tick labels never display "-0.0" even when the lowest bin's left edge is a near-zero negative.
+
+    pd.cut(..., include_lowest=True) extends the lowest bin's left edge by a small epsilon below
+    zero so the minimum is included. With one-decimal formatting the resulting "-0.0" leaks into
+    the y-tick labels; the plot should display "0.0" instead.
+    """
+    df = pd.DataFrame(
+        {
+            "unit_price": [0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 0.5, 12.0, 18.0],
+            "retailer": ["Walmart"] * 5 + ["Target"] * 5,
+        },
+    )
+
+    result_ax = price.plot(df=df, value_col="unit_price", group_col="retailer", bins=4)
+
+    y_tick_labels = [t.get_text() for t in result_ax.get_yticklabels()]
+    assert all("-0.0" not in label for label in y_tick_labels), (
+        f"Expected no '-0.0' in y-tick labels, got: {y_tick_labels}"
+    )
+    # Lowest band should start at the data minimum (zero), formatted positively.
+    assert y_tick_labels[0].startswith("0.0 - "), f"First label should start with '0.0 - ', got: {y_tick_labels[0]}"
+
+
 def test_plot_calls_standard_styling(simple_price_dataframe):
     """Title, axis labels and the supplied legend_title are rendered on the axes."""
     title = "Test Title"
@@ -290,12 +302,54 @@ def test_plot_calls_standard_styling(simple_price_dataframe):
         move_legend_outside=True,
     )
 
-    assert result_ax.get_title() == title
+    title_texts = [t for t in result_ax.figure.texts if t.get_text() == title]
+    assert len(title_texts) == 1
     assert result_ax.get_xlabel() == x_label
     assert result_ax.get_ylabel() == y_label
     legend = result_ax.get_legend()
     assert legend is not None
     assert legend.get_title().get_text() == legend_title
+
+
+def test_plot_legend_outside_reflows_axes_to_reserve_room(simple_price_dataframe):
+    """move_legend_outside=True must shrink the axes so the outside legend fits in the figure.
+
+    Without a reflow, the legend anchored at bbox=(1.02, 1.0) extends past the
+    figure's right edge and is clipped. tight_layout only reserves room for an
+    outside legend when the legend is present on the axes *before* chrome runs.
+    """
+    _, ax_inside = plt.subplots()
+    price.plot(
+        df=simple_price_dataframe,
+        value_col="unit_price",
+        group_col="retailer",
+        bins=3,
+        ax=ax_inside,
+        move_legend_outside=False,
+    )
+    inside_right = ax_inside.get_position().x1
+
+    _, ax_outside = plt.subplots()
+    price.plot(
+        df=simple_price_dataframe,
+        value_col="unit_price",
+        group_col="retailer",
+        bins=3,
+        ax=ax_outside,
+        move_legend_outside=True,
+    )
+    outside_right = ax_outside.get_position().x1
+
+    legend = ax_outside.get_legend()
+    assert legend is not None
+    expected_groups = 3
+    assert len(legend.get_texts()) == expected_groups
+
+    min_reserved_room = 0.05
+    assert outside_right < inside_right - min_reserved_room, (
+        f"Expected axes to be reflowed narrower with move_legend_outside=True "
+        f"(inside_right={inside_right:.3f}, outside_right={outside_right:.3f})"
+    )
 
 
 def test_plot_adds_source_text(simple_price_dataframe):

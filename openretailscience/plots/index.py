@@ -50,7 +50,7 @@ retail operations.
 
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 import ibis
 import matplotlib.pyplot as plt
@@ -58,8 +58,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-import openretailscience.plots.styles.graph_utils as gu
-from openretailscience.plots.styles.colors import get_linear_cmap, get_named_color
+from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 BASELINE_INDEX = 100
 DEFAULT_HIGHLIGHT_RANGE = (80, 120)
@@ -68,16 +68,16 @@ DEFAULT_HIGHLIGHT_RANGE = (80, 120)
 def filter_by_groups(
     df: pd.DataFrame,
     group_col: str,
-    exclude_groups: list[any] | None = None,
-    include_only_groups: list[any] | None = None,
+    exclude_groups: list[Any] | None = None,
+    include_only_groups: list[Any] | None = None,
 ) -> pd.DataFrame:
     """Filter dataframe by groups.
 
     Args:
         df (pd.DataFrame): The dataframe to filter.
         group_col (str): The column name for grouping.
-        exclude_groups (list[any], optional): Groups to exclude. Defaults to None.
-        include_only_groups (list[any], optional): Groups to include. Defaults to None.
+        exclude_groups (list[Any], optional): Groups to exclude. Defaults to None.
+        include_only_groups (list[Any], optional): Groups to include. Defaults to None.
 
     Returns:
         pd.DataFrame: The filtered dataframe.
@@ -97,22 +97,39 @@ def filter_by_value_thresholds(
 ) -> pd.DataFrame:
     """Filter dataframe by index value thresholds.
 
+    Thresholds are expressed in raw-index units (where 100 is the baseline). For example,
+    ``filter_above=120`` keeps only rows whose raw index is greater than 120. Internally,
+    the dataframe's ``index`` column has the baseline subtracted out, so the comparison
+    re-adds the baseline before testing.
+
     Args:
-        df (pd.DataFrame): The dataframe to filter.
-        filter_above (float, optional): Only keep indices above this value. Defaults to None.
-        filter_below (float, optional): Only keep indices below this value. Defaults to None.
+        df (pd.DataFrame): The dataframe to filter. Its ``index`` column is expected to be
+            in delta-from-baseline form (raw index minus 100).
+        filter_above (float, optional): Only keep rows whose raw index exceeds this value.
+            Defaults to None.
+        filter_below (float, optional): Only keep rows whose raw index is below this value.
+            Defaults to None.
 
     Returns:
         pd.DataFrame: The filtered dataframe.
 
     Raises:
+        ValueError: If ``filter_above`` is not strictly less than ``filter_below`` (the
+            thresholds form an empty open interval).
         ValueError: If filtering results in an empty dataset.
     """
+    if filter_above is not None and filter_below is not None and filter_above >= filter_below:
+        error_msg = (
+            f"filter_above ({filter_above}) must be < filter_below ({filter_below}); "
+            f"otherwise the filter excludes every row."
+        )
+        raise ValueError(error_msg)
+
     result_df = df.copy()
     if filter_above is not None:
-        result_df = result_df[result_df["index"] > filter_above]
+        result_df = result_df[result_df["index"] + BASELINE_INDEX > filter_above]
     if filter_below is not None:
-        result_df = result_df[result_df["index"] < filter_below]
+        result_df = result_df[result_df["index"] + BASELINE_INDEX < filter_below]
 
     # Check if filtering resulted in an empty dataframe
     if len(result_df) == 0:
@@ -183,23 +200,26 @@ def plot(  # noqa: C901, PLR0913
     agg_func: str = "sum",
     series_col: str | None = None,
     title: str | None = None,
-    x_label: str = "Index",
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
+    x_label: str | None = None,
     y_label: str | None = None,
     legend_title: str | None = None,
+    move_legend_outside: bool = False,
     highlight_range: Literal["default"] | tuple[float, float] | None = "default",
     sort_by: Literal["group", "value"] | None = "group",
     sort_order: Literal["ascending", "descending"] = "ascending",
     ax: Axes | None = None,
     source_text: str | None = None,
-    exclude_groups: list[any] | None = None,
-    include_only_groups: list[any] | None = None,
+    exclude_groups: list[Any] | None = None,
+    include_only_groups: list[Any] | None = None,
     drop_na: bool = False,
     top_n: int | None = None,
     bottom_n: int | None = None,
     filter_above: float | None = None,
     filter_below: float | None = None,
     color_by_threshold: bool = False,
-    **kwargs: dict[str, any],
+    **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
     """Creates an index plot.
 
@@ -230,13 +250,14 @@ def plot(  # noqa: C901, PLR0913
         value_to_index (str): The baseline category or value to index against (e.g., "A").
         agg_func (str, optional): The aggregation function to apply to the value_col. Defaults to "sum".
         series_col (str, optional): The column to use as the series. Defaults to None.
-        title (str, optional): The title of the plot. Defaults to None. When None the title is set to
-            `f"{value_col.title()} by {group_col.title()}"`
-        x_label (str, optional): The x-axis label. Defaults to "Index".
-        y_label (str, optional): The y-axis label. Defaults to None. When None the y-axis label is set to the title
-            case of `group_col`
+        title (str, optional): The title of the plot. Defaults to None (no title rendered).
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
+        x_label (str, optional): The x-axis label. Defaults to None (no x-axis label rendered).
+        y_label (str, optional): The y-axis label. Defaults to None (no y-axis label rendered).
         legend_title (str, optional): The title of the legend. Defaults to None. When None the legend title is set to
             the title case of `group_col`
+        move_legend_outside (bool, optional): Whether to move the legend outside the plot area. Defaults to False.
         highlight_range (Literal["default"] | tuple[float, float] | None, optional): The range to highlight. Defaults
             to "default". When "default" the range is set to (80, 120). When None no range is highlighted.
         sort_by (Literal["group", "value"] | None, optional): The column to sort by. Defaults to "group". When None the
@@ -245,8 +266,8 @@ def plot(  # noqa: C901, PLR0913
         sort_order (Literal["ascending", "descending"], optional): The order to sort the data. Defaults to "ascending".
         ax (Axes, optional): The matplotlib axes object to plot on. Defaults to None.
         source_text (str, optional): The source text to add to the plot. Defaults to None.
-        exclude_groups (list[any], optional): The groups to exclude from the plot. Defaults to None.
-        include_only_groups (list[any], optional): The groups to include in the plot. Defaults to None. When None all
+        exclude_groups (list[Any], optional): The groups to exclude from the plot. Defaults to None.
+        include_only_groups (list[Any], optional): The groups to include in the plot. Defaults to None. When None all
             groups are included. When not None only the groups in the list are included. Can not be used with
             exclude_groups.
         drop_na (bool, optional): Whether to drop NA index values. Defaults to False.
@@ -254,10 +275,12 @@ def plot(  # noqa: C901, PLR0913
             when series_col is None. Defaults to None.
         bottom_n (int, optional): Display only the bottom N indexes by value. Only applicable
             when series_col is None. Defaults to None.
-        filter_above (float, optional): Only display indexes above this value. Only applicable
-            when series_col is None. Defaults to None.
-        filter_below (float, optional): Only display indexes below this value. Only applicable
-            when series_col is None. Defaults to None.
+        filter_above (float, optional): Only display groups whose raw index exceeds this value
+            (e.g., ``filter_above=120`` keeps groups indexing above 120). Only applicable when
+            series_col is None. Defaults to None.
+        filter_below (float, optional): Only display groups whose raw index is below this value
+            (e.g., ``filter_below=80`` keeps groups indexing below 80). Only applicable when
+            series_col is None. Defaults to None.
         color_by_threshold (bool, optional): Color bars based on highlight_range thresholds using configurable option
             colors. Values >= the upper threshold use the ``plot.color.positive`` option, values <= the lower
             threshold use the ``plot.color.negative`` option, and values between use the ``plot.color.neutral`` option.
@@ -278,6 +301,7 @@ def plot(  # noqa: C901, PLR0913
         ValueError: If top_n, bottom_n, filter_above, or filter_below are used when series_col is provided.
         ValueError: If color_by_threshold is True but highlight_range is None.
         ValueError: If color_by_threshold is True when series_col is provided.
+        ValueError: If ``filter_above`` is not strictly less than ``filter_below``.
         ValueError: If filtering results in an empty dataset.
     """
     if sort_by not in ["group", "value", None]:
@@ -348,7 +372,7 @@ def plot(  # noqa: C901, PLR0913
 
     else:
         show_legend = True
-        default_colors = get_linear_cmap("green")(np.linspace(0, 1, df[series_col].nunique()))
+        default_colors = get_plot_colors(int(df[series_col].nunique()))
 
         if sort_by == "group":
             index_df = index_df.sort_values(by=[group_col, series_col], ascending=sort_order == "ascending")
@@ -405,23 +429,20 @@ def plot(  # noqa: C901, PLR0913
         ax.axvline(highlight_range[1], color="black", linewidth=0.25, alpha=0.1, zorder=-1)
         ax.axvspan(highlight_range[0], highlight_range[1], color="black", alpha=0.1, zorder=-1)
 
-    default_title = f"{value_col.title()} by {group_col.title()}"
-
-    ax = gu.standard_graph_styles(
+    return standard_graph_styles(
         ax=ax,
-        title=gu.not_none(title, default_title),
-        x_label=gu.not_none(x_label, "Index"),
-        y_label=gu.not_none(y_label, group_col.title()),
+        title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
+        x_label=x_label,
+        y_label=y_label,
         legend_title=legend_title,
+        move_legend_outside=move_legend_outside,
         show_legend=show_legend,
+        source_text=source_text,
+        # Index plots are horizontal bars (`barh`/`hlines`); gridlines belong on the value (x) axis.
+        grid_axis="x",
     )
-
-    if source_text is not None:
-        gu.add_source_text(ax=ax, source_text=source_text)
-
-    gu.standard_tick_styles(ax)
-
-    return ax
 
 
 def get_indexes(

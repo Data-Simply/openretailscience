@@ -25,9 +25,9 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.options import get_option
 from openretailscience.plots.styles.colors import get_named_color
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 # Period configurations: gap threshold and duration (in days)
 PERIOD_CONFIG = {
@@ -73,6 +73,8 @@ def plot(
     category_col: str,
     value_col: str,
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
     ax: Axes | None = None,
@@ -82,7 +84,7 @@ def plot(
     threshold_value: float | None = None,
     bar_height: float = 0.8,
     figsize: tuple[int, int] | None = None,
-    **kwargs: dict[str, Any],
+    **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
     """Creates a broken timeline plot showing data availability across categories over time.
 
@@ -93,6 +95,8 @@ def plot(
         category_col (str): The column containing categories to display on y-axis.
         value_col (str): The column containing values to determine data availability.
         title (str, optional): The title of the plot. Defaults to None.
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
         x_label (str, optional): The label for the x-axis. Defaults to None.
         y_label (str, optional): The label for the y-axis. Defaults to None.
         ax (Axes, optional): The Matplotlib Axes object to plot on. Defaults to None.
@@ -104,7 +108,7 @@ def plot(
         threshold_value (float, optional): Values below this threshold are considered gaps. Defaults to None.
         bar_height (float, optional): Height of timeline bars as fraction of available space. Defaults to 0.8.
         figsize: tuple[int, int] | None = None,
-        **kwargs (dict[str, Any]): Additional keyword arguments for matplotlib broken_barh function.
+        **kwargs (Any): Additional keyword arguments for matplotlib broken_barh function.
 
     Returns:
         SubplotBase: The Matplotlib Axes object with the generated plot.
@@ -143,28 +147,17 @@ def plot(
     if ax is None:
         _, ax = plt.subplots(figsize=figsize)
 
-    # Use module-level period configuration
-    gap_threshold = PERIOD_CONFIG[period]
+    period_days = PERIOD_CONFIG[period]
     bar_color = kwargs.pop("color", get_named_color("primary"))
+    bar_offset = bar_height / 2
 
-    # Process each category
     for category in categories:
         dates = df_copy[df_copy[category_col] == category][date_col].to_numpy()
-
-        # Convert to matplotlib date numbers and find segments
         dates_num = mdates.date2num(dates)
-        gaps = np.diff(dates_num) > gap_threshold
+        gaps = np.diff(dates_num) > period_days
         date_segments = np.split(dates_num, np.where(gaps)[0] + 1)
 
-        # Calculate appropriate width based on period type
-        base_width = PERIOD_CONFIG[period]
-        segments = []
-        for seg in date_segments:
-            if len(seg) > 0:
-                # Width should be number of periods * typical period duration
-                width = len(seg) * base_width
-                segments.append((seg[0], width))
-        bar_offset = bar_height / 2
+        segments = [(seg[0], len(seg) * period_days) for seg in date_segments if len(seg) > 0]
         ax.broken_barh(
             segments,
             (category_to_y[category] - bar_offset, bar_height),
@@ -183,15 +176,13 @@ def plot(
     ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
 
     # Apply standard graph styles
-    ax = gu.standard_graph_styles(
+    return standard_graph_styles(
         ax=ax,
         title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
         x_label=x_label,
         y_label=y_label,
+        source_text=source_text,
+        grid_axis="x",
     )
-
-    # Add source text if provided
-    if source_text:
-        gu.add_source_text(ax=ax, source_text=source_text)
-
-    return gu.standard_tick_styles(ax=ax)

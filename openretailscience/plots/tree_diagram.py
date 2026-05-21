@@ -619,15 +619,20 @@ class DetailedTreeNode(TreeNode):
         header_color = self._get_color(percent)
         header_text_color = "white"
         data_bg_color = "white"
-        data_text_color = get_named_color("context")  # Dark gray for better readability
-        label_color = get_named_color("context")  # Medium gray for labels
-        border_color = get_named_color("context")  # Light gray for borders
+        data_text_color = "#4b5563"
+        label_color = "#6b7280"
+        border_color = "#e5e7eb"
 
         style = PlotStyleHelper()
 
         # Get standard font properties
         semi_bold_font = get_font_properties(style.title_font)
         regular_font = get_font_properties(style.label_font)
+
+        header_font_size = 12
+        period_metric_font_size = 12
+        info_metric_font_size = 10
+        small_label_font_size = 10
 
         # Title section (colored header)
         title_section_height = self.NODE_HEIGHT * header_height_ratio
@@ -696,7 +701,7 @@ class DetailedTreeNode(TreeNode):
             ha="left",
             va="center",
             fontproperties=semi_bold_font,
-            fontsize=style.label_size,
+            fontsize=header_font_size,
             color=header_text_color,
         )
 
@@ -751,7 +756,7 @@ class DetailedTreeNode(TreeNode):
                 ha="left",
                 va="center",
                 fontproperties=regular_font,
-                fontsize=style.tick_size,
+                fontsize=small_label_font_size,
                 color=label_color,
             )
             # Period metric
@@ -762,7 +767,7 @@ class DetailedTreeNode(TreeNode):
                 ha="left",
                 va="center",
                 fontproperties=semi_bold_font,
-                fontsize=style.label_size,
+                fontsize=period_metric_font_size,
                 color=data_text_color,
             )
 
@@ -797,7 +802,7 @@ class DetailedTreeNode(TreeNode):
                 ha="left",
                 va="center",
                 fontproperties=regular_font,
-                fontsize=style.tick_size,
+                fontsize=small_label_font_size,
                 color=label_color,
             )
             # Metric on right
@@ -808,6 +813,6 @@ class DetailedTreeNode(TreeNode):
                 ha="right",
                 va="center",
                 fontproperties=semi_bold_font,
-                fontsize=style.tick_size,
+                fontsize=info_metric_font_size,
                 color=data_text_color,
             )

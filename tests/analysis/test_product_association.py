@@ -307,7 +307,6 @@ class TestProductAssociations:
 
         # Verify that we get exactly the target items we expect
         assert set(target_items) == set(result["product_1"].unique())
-        assert len(result) > 0
 
     def test_calc_association_target_item_single_vs_list(self, transactions_df):
         """Test that single target item and list with single item produce same results."""

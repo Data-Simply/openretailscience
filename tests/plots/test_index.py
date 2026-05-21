@@ -24,12 +24,12 @@ def test_get_indexes_basic():
     """Test get_indexes function with basic input to ensure it returns a valid DataFrame."""
     df = pd.DataFrame(
         {
-            "category": ["A", "A", "B", "B", "C", "C"],
+            "category": ["Bakery", "Bakery", "Dairy", "Dairy", "Produce", "Produce"],
             "value": [10, 20, 30, 40, 50, 60],
         },
     )
 
-    result = get_indexes(df, value_to_index="A", index_col="category", value_col="value", group_col="category")
+    result = get_indexes(df, value_to_index="Bakery", index_col="category", value_col="value", group_col="category")
     assert isinstance(result, pd.DataFrame)
     assert "category" in result.columns
     assert "index" in result.columns
@@ -40,15 +40,15 @@ def test_get_indexes_with_subgroup():
     """Test get_indexes function when a subgroup column is provided."""
     df = pd.DataFrame(
         {
-            "subgroup": ["X", "X", "X", "Y", "Y", "Y"],
-            "category": ["A", "A", "B", "B", "C", "C"],
+            "subgroup": ["Loyalty", "Loyalty", "Loyalty", "Regular", "Regular", "Regular"],
+            "category": ["Bakery", "Bakery", "Dairy", "Dairy", "Produce", "Produce"],
             "value": [10, 20, 30, 40, 50, 60],
         },
     )
 
     result = get_indexes(
         df,
-        value_to_index="A",
+        value_to_index="Bakery",
         index_col="category",
         value_col="value",
         group_col="category",
@@ -64,7 +64,7 @@ def test_get_indexes_invalid_agg_func():
     """Test get_indexes function with an invalid aggregation function."""
     df = pd.DataFrame(
         {
-            "category": ["A", "B", "C"],
+            "category": ["Bakery", "Dairy", "Produce"],
             "value": [10, 20, 30],
         },
     )
@@ -72,7 +72,7 @@ def test_get_indexes_invalid_agg_func():
     with pytest.raises(ValueError, match="Unsupported aggregation function"):
         get_indexes(
             df,
-            value_to_index="A",
+            value_to_index="Bakery",
             index_col="category",
             value_col="value",
             group_col="category",
@@ -80,41 +80,51 @@ def test_get_indexes_invalid_agg_func():
         )
 
 
-def test_get_indexes_with_different_aggregations():
-    """Test get_indexes function with various aggregation functions."""
+@pytest.mark.parametrize(
+    ("agg", "expected_dairy_index"),
+    [
+        ("sum", 500.0),
+        ("mean", 700.0),
+        ("max", 600.0),
+        ("min", 900.0),
+        ("nunique", 233.33333333333334),
+    ],
+)
+def test_get_indexes_with_different_aggregations(agg, expected_dairy_index):
+    """Test get_indexes computes aggregation-specific index values for the baseline category."""
+    # Uneven row counts per department ensure each agg_func produces a distinct index
+    # (sum and mean would otherwise coincide on equal-count groups).
     df = pd.DataFrame(
         {
-            "category": ["A", "A", "B", "B", "C", "C"],
-            "value": [10, 20, 30, 40, 50, 60],
+            "department": ["Dairy", "Dairy", "Dairy", "Bakery", "Bakery", "Meat", "Meat"],
+            "spend": [100, 200, 150, 300, 400, 500, 600],
         },
     )
 
-    for agg in ["sum", "mean", "max", "min", "nunique"]:
-        result = get_indexes(
-            df,
-            value_to_index="A",
-            index_col="category",
-            value_col="value",
-            group_col="category",
-            agg_func=agg,
-        )
-        assert isinstance(result, pd.DataFrame)
-        assert "category" in result.columns
-        assert "index" in result.columns
-        assert not result.empty
+    result = get_indexes(
+        df,
+        value_to_index="Dairy",
+        index_col="department",
+        value_col="spend",
+        group_col="department",
+        agg_func=agg,
+    )
+
+    expected = pd.DataFrame({"department": ["Dairy"], "index": [expected_dairy_index]})
+    pd.testing.assert_frame_equal(result, expected)
 
 
 def test_get_indexes_with_offset():
     """Test get_indexes function with an offset value."""
     df = pd.DataFrame(
         {
-            "category": ["A", "B", "C"],
+            "category": ["Bakery", "Dairy", "Produce"],
             "value": [10, 20, 30],
         },
     )
     result = get_indexes(
         df,
-        value_to_index="A",
+        value_to_index="Bakery",
         index_col="category",
         value_col="value",
         group_col="category",
@@ -132,15 +142,17 @@ def test_get_indexes_single_column():
     """Test that the function works with a single column index."""
     df = pd.DataFrame(
         {
-            "group_col": ["A", "A", "B", "B", "C", "C"],
-            "filter_col": ["X", "Y", "X", "Y", "X", "Y"],
+            "group_col": ["Bakery", "Bakery", "Dairy", "Dairy", "Produce", "Produce"],
+            "filter_col": ["Loyalty", "Regular", "Loyalty", "Regular", "Loyalty", "Regular"],
             "value_col": [1, 2, 3, 4, 5, 6],
         },
     )
-    expected_output = pd.DataFrame({"group_col": ["A", "B", "C"], "index": [77.77777778, 100, 106.0606]})
+    expected_output = pd.DataFrame(
+        {"group_col": ["Bakery", "Dairy", "Produce"], "index": [77.77777778, 100, 106.0606]},
+    )
     output = get_indexes(
         df=df,
-        value_to_index="X",
+        value_to_index="Loyalty",
         index_col="filter_col",
         value_col="value_col",
         group_col="group_col",
@@ -152,23 +164,23 @@ def test_get_indexes_two_columns():
     """Test that the function works with two columns as the index."""
     df = pd.DataFrame(
         {
-            "group_col1": ["A", "A", "B", "B", "C", "C", "A", "A", "B", "B", "C", "C"],
-            "group_col2": ["D", "D", "D", "D", "D", "D", "E", "E", "E", "E", "E", "E"],
-            "filter_col": ["X", "Y", "X", "Y", "X", "Y", "X", "Y", "X", "Y", "X", "Y"],
+            "group_col1": ["Bakery", "Bakery", "Dairy", "Dairy", "Produce", "Produce"] * 2,
+            "group_col2": ["Mall"] * 6 + ["Outlet"] * 6,
+            "filter_col": ["Loyalty", "Regular"] * 6,
             "value_col": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
         },
     )
     expected_output = pd.DataFrame(
         {
-            "group_col2": ["D", "D", "D", "E", "E", "E"],
-            "group_col1": ["A", "B", "C", "A", "B", "C"],
+            "group_col2": ["Mall", "Mall", "Mall", "Outlet", "Outlet", "Outlet"],
+            "group_col1": ["Bakery", "Dairy", "Produce", "Bakery", "Dairy", "Produce"],
             "index": [77.77777778, 100, 106.0606, 98.51851852, 100, 100.9661836],
         },
     )
 
     output = get_indexes(
         df=df,
-        value_to_index="X",
+        value_to_index="Loyalty",
         index_col="filter_col",
         value_col="value_col",
         group_col="group_col1",
@@ -181,13 +193,19 @@ def test_get_indexes_with_ibis_table_input():
     """Test that the get_indexes function works with an ibis Table."""
     df = pd.DataFrame(
         {
-            "category": ["A", "B", "C"],
+            "category": ["Bakery", "Dairy", "Produce"],
             "value": [10, 20, 30],
         },
     )
     table = ibis.memtable(df)
 
-    result = get_indexes(table, value_to_index="A", index_col="category", value_col="value", group_col="category")
+    result = get_indexes(
+        table,
+        value_to_index="Bakery",
+        index_col="category",
+        value_col="value",
+        group_col="category",
+    )
     assert isinstance(result, pd.DataFrame)
     assert "category" in result.columns
     assert "index" in result.columns
@@ -303,9 +321,9 @@ class TestIndexPlot:
     @pytest.fixture
     def test_data(self):
         """Return a sample dataframe for plotting."""
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(42)
         data = {
-            "category": ["A", "B", "C", "D", "E"] * 2,
+            "category": ["Bakery", "Dairy", "Produce", "Snacks", "Beverages"] * 2,
             "sales": rng.integers(100, 500, size=10),
             "region": ["North", "South", "East", "West", "Central"] * 2,
         }
@@ -322,13 +340,15 @@ class TestIndexPlot:
             value_col="sales",
             group_col="category",
             index_col="category",
-            value_to_index="A",
+            value_to_index="Bakery",
         )
 
         assert isinstance(result_ax, plt.Axes)
-        assert len(result_ax.patches) > 0
-        assert result_ax.get_xlabel() == "Index"
-        assert result_ax.get_ylabel() == "Category"
+        # barh adds a single BarContainer holding one Rectangle per y-axis row.
+        assert len(result_ax.containers) == 1
+        assert len(result_ax.containers[0]) == len(result_ax.get_yticklabels())
+        assert result_ax.get_xlabel() == ""
+        assert result_ax.get_ylabel() == ""
 
     def test_generates_index_plot_with_custom_title(self, test_data):
         """Test that the function generates an index plot with a custom title."""
@@ -339,12 +359,14 @@ class TestIndexPlot:
             value_col="sales",
             group_col="category",
             index_col="category",
-            value_to_index="A",
+            value_to_index="Bakery",
             title=custom_title,
         )
 
         assert isinstance(result_ax, plt.Axes)
-        assert result_ax.get_title() == custom_title
+        # Title is rendered as figure-level text by the chrome layout, not via ax.set_title.
+        title_texts = [t for t in result_ax.figure.texts if t.get_text() == custom_title]
+        assert len(title_texts) == 1
 
     def test_generates_index_plot_with_highlight_range(self, test_data):
         """Test that the function generates an index plot with a highlighted range."""
@@ -354,7 +376,7 @@ class TestIndexPlot:
             value_col="sales",
             group_col="category",
             index_col="category",
-            value_to_index="A",
+            value_to_index="Bakery",
             highlight_range=(80, 120),
         )
 
@@ -370,7 +392,7 @@ class TestIndexPlot:
             group_col="category",
             index_col="region",
             value_to_index="North",
-            include_only_groups=["A", "B"],
+            include_only_groups=["Bakery", "Dairy"],
         )
 
         assert isinstance(result_ax, plt.Axes)
@@ -378,17 +400,16 @@ class TestIndexPlot:
         # Verify that only the filtered groups appear in the plot
         y_labels = [label.get_text() for label in result_ax.get_yticklabels()]
         plotted_groups = set(y_labels)
-        expected_groups = {"A"}
+        expected_groups = {"Bakery"}
 
         assert plotted_groups == expected_groups, (
             f"Found groups {plotted_groups - expected_groups} that should have been filtered out. "
             f"Expected only groups from {expected_groups}."
         )
 
-        assert len(plotted_groups) > 0, "No groups were plotted - filtering may have removed all data."
-
-    def test_raises_value_error_for_invalid_sort_by(self, test_data):
-        """Test that the function raises a ValueError for an invalid sort_by parameter."""
+    @pytest.mark.parametrize("kwarg", ["sort_by", "sort_order"])
+    def test_raises_value_error_for_invalid_sort_kwarg(self, test_data, kwarg):
+        """Test that the function raises a ValueError for an invalid sort_by or sort_order parameter."""
         df = test_data
 
         with pytest.raises(ValueError):
@@ -397,22 +418,8 @@ class TestIndexPlot:
                 value_col="sales",
                 group_col="category",
                 index_col="category",
-                value_to_index="A",
-                sort_by="invalid",
-            )
-
-    def test_raises_value_error_for_invalid_sort_order(self, test_data):
-        """Test that the function raises a ValueError for an invalid sort_order parameter."""
-        df = test_data
-
-        with pytest.raises(ValueError):
-            plot(
-                df,
-                value_col="sales",
-                group_col="category",
-                index_col="category",
-                value_to_index="A",
-                sort_order="invalid",
+                value_to_index="Bakery",
+                **{kwarg: "invalid"},
             )
 
     def test_generates_index_plot_with_source_text(self, test_data):
@@ -424,7 +431,7 @@ class TestIndexPlot:
             value_col="sales",
             group_col="category",
             index_col="category",
-            value_to_index="A",
+            value_to_index="Bakery",
             source_text=source_text,
         )
 
@@ -440,7 +447,7 @@ class TestIndexPlot:
             value_col="sales",
             group_col="category",
             index_col="category",
-            value_to_index="A",
+            value_to_index="Bakery",
             x_label="Sales Value",
             y_label="Category Group",
         )
@@ -461,7 +468,7 @@ class TestIndexPlot:
             value_col="sales",
             group_col="category",
             index_col="category",
-            value_to_index="A",
+            value_to_index="Bakery",
             drop_na=True,
         )
         assert isinstance(result_ax, plt.Axes)
@@ -481,11 +488,11 @@ class TestIndexPlot:
     def test_nan_index_values_present_in_data(self, test_data):
         """Test that NaN index values are present in the index DataFrame when expected."""
         df = test_data.copy()
-        df.loc[df["category"] == "A", "sales"] = np.nan
+        df.loc[df["category"] == "Bakery", "sales"] = np.nan
 
         index_df = get_indexes(
             df,
-            value_to_index="A",
+            value_to_index="Bakery",
             index_col="category",
             value_col="sales",
             group_col="category",
@@ -493,50 +500,44 @@ class TestIndexPlot:
         assert index_df["index"].isna().any(), "Expected at least one NaN value in the 'index' column"
 
     def test_filter_by_index_values(self):
-        """Test that the function can filter indexes by value."""
+        """Test that filter_above drops groups whose raw index does not exceed the threshold."""
         df = pd.DataFrame(
             {
-                "category": ["A", "B", "C", "D", "E"] * 10,
-                "sales": [100, 200, 50, 300, 75] * 10,
+                "department": ["Dairy", "Bakery", "Meat", "Produce", "Snacks"] * 2,
+                "cust_type": ["Loyalty"] * 5 + ["Regular"] * 5,
+                "spend": [100, 200, 150, 300, 50, 120, 80, 200, 100, 90],
             },
         )
 
-        # Calculate what the actual index values will be so we can choose a meaningful threshold
         index_df = get_indexes(
             df=df,
-            value_to_index="A",
-            index_col="category",
-            value_col="sales",
-            group_col="category",
+            value_to_index="Loyalty",
+            index_col="cust_type",
+            value_col="spend",
+            group_col="department",
             offset=BASELINE_INDEX,
         )
+        index_df["raw_index"] = index_df["index"] + BASELINE_INDEX
 
-        # Choose a threshold that will actually filter some data
-        sorted_indexes = index_df.sort_values("index")["index"].tolist()
-
-        threshold = sorted_indexes[0] - 0.1
-
-        expected_above_threshold_groups = index_df[index_df["index"] > threshold]["category"].tolist()
+        # Place the threshold between the 2nd and 3rd sorted raw indexes so a strict subset
+        # of departments is dropped, exercising the actual filter path rather than a no-op.
+        sorted_raw = sorted(index_df["raw_index"].tolist())
+        threshold = (sorted_raw[1] + sorted_raw[2]) / 2
+        expected_kept = set(index_df.loc[index_df["raw_index"] > threshold, "department"])
 
         result_ax = plot(
             df,
-            value_col="sales",
-            group_col="category",
-            index_col="category",
-            value_to_index="A",
+            value_col="spend",
+            group_col="department",
+            index_col="cust_type",
+            value_to_index="Loyalty",
             filter_above=threshold,
         )
 
-        filtered_labels = [t.get_text() for t in result_ax.get_yticklabels()]
+        kept_labels = {t.get_text() for t in result_ax.get_yticklabels()}
 
-        assert len(filtered_labels) == len(expected_above_threshold_groups), (
-            f"Expected {len(expected_above_threshold_groups)} groups, got {len(filtered_labels)}"
-        )
-        assert all(label in expected_above_threshold_groups for label in filtered_labels), (
-            f"Expected groups {expected_above_threshold_groups}, but got {filtered_labels}"
-        )
-
-        assert isinstance(result_ax, plt.Axes)
+        assert kept_labels == expected_kept
+        assert len(kept_labels) < len(index_df)
 
     def test_empty_dataset_after_filtering(self, test_data):
         """Test that filtering that results in an empty dataset raises ValueError."""
@@ -549,7 +550,7 @@ class TestIndexPlot:
                 value_col="sales",
                 group_col="category",
                 index_col="category",
-                value_to_index="A",
+                value_to_index="Bakery",
                 filter_above=100000,  # Using an extremely high value that should cause all data to be filtered out
             )
 
@@ -656,7 +657,7 @@ class TestIndexPlot:
                 value_col="sales",
                 group_col="category",
                 index_col="category",
-                value_to_index="A",
+                value_to_index="Bakery",
                 series_col="region",
                 top_n=2,
             )
@@ -666,13 +667,27 @@ class TestIndexPlot:
         [
             (
                 "ascending",
-                [("A", "X"), ("A", "Y"), ("B", "X"), ("B", "Y"), ("C", "X"), ("C", "Y")],
-                ["A", "B", "C"],
+                [
+                    ("Bakery", "North"),
+                    ("Bakery", "South"),
+                    ("Dairy", "North"),
+                    ("Dairy", "South"),
+                    ("Produce", "North"),
+                    ("Produce", "South"),
+                ],
+                ["Bakery", "Dairy", "Produce"],
             ),
             (
                 "descending",
-                [("C", "Y"), ("C", "X"), ("B", "Y"), ("B", "X"), ("A", "Y"), ("A", "X")],
-                ["C", "B", "A"],
+                [
+                    ("Produce", "South"),
+                    ("Produce", "North"),
+                    ("Dairy", "South"),
+                    ("Dairy", "North"),
+                    ("Bakery", "South"),
+                    ("Bakery", "North"),
+                ],
+                ["Produce", "Dairy", "Bakery"],
             ),
         ],
     )
@@ -685,10 +700,10 @@ class TestIndexPlot:
         """Combined test: validates sorting of dataframe and sorting in plot output."""
         test_df = pd.DataFrame(
             {
-                "category": ["A", "B", "C", "A", "B", "C"],
-                "region": ["X", "X", "X", "Y", "Y", "Y"],
+                "category": ["Bakery", "Dairy", "Produce", "Bakery", "Dairy", "Produce"],
+                "region": ["North", "North", "North", "South", "South", "South"],
                 "sales": [100, 200, 150, 120, 180, 160],
-                "baseline_category": ["A", "A", "A", "A", "A", "A"],
+                "baseline_category": ["Bakery"] * 6,
             },
         )
         ascending_flag = sort_order == "ascending"
@@ -704,7 +719,7 @@ class TestIndexPlot:
             value_col="sales",
             group_col="category",
             index_col="baseline_category",
-            value_to_index="A",  # Compare all categories against baseline category A
+            value_to_index="Bakery",  # Compare all categories against the Bakery baseline
             series_col="region",
             sort_by="group",
             sort_order=sort_order,
@@ -722,7 +737,7 @@ class TestIndexPlot:
         legend = ax.get_legend()
         assert legend is not None
         legend_labels = [t.get_text() for t in legend.get_texts()]
-        expected_legend_labels = ["X", "Y"]
+        expected_legend_labels = ["North", "South"]
         assert set(legend_labels) == set(expected_legend_labels), (
             f"Legend mismatch: expected {expected_legend_labels}, got {legend_labels}"
         )
@@ -738,7 +753,7 @@ class TestIndexPlot:
                 value_col="sales",
                 group_col="category",
                 index_col="category",
-                value_to_index="A",
+                value_to_index="Bakery",
                 top_n=total_count + 1,
             )
 
@@ -753,7 +768,7 @@ class TestIndexPlot:
                 value_col="sales",
                 group_col="category",
                 index_col="category",
-                value_to_index="A",
+                value_to_index="Bakery",
                 bottom_n=total_count + 1,
             )
 
@@ -762,7 +777,7 @@ class TestIndexPlot:
         # Create a test index dataframe with the same groups
         test_df = pd.DataFrame(
             {
-                "category": ["A", "B", "C"],
+                "category": ["Bakery", "Dairy", "Produce"],
                 "index": [90, 110, 120],
             },
         )
@@ -784,13 +799,13 @@ def test_filter_by_groups_exclude_groups():
     # Create test dataframe with multiple categories
     test_df = pd.DataFrame(
         {
-            "category": ["A", "B", "C", "D", "E"],
+            "category": ["Bakery", "Dairy", "Produce", "Snacks", "Beverages"],
             "value": [10, 20, 30, 40, 50],
         },
     )
 
     # Test excluding specific groups
-    exclude_list = ["B", "D"]
+    exclude_list = ["Dairy", "Snacks"]
     result_df = filter_by_groups(
         df=test_df,
         group_col="category",
@@ -798,10 +813,10 @@ def test_filter_by_groups_exclude_groups():
     )
 
     # Check that excluded groups are not in the result
-    assert all(value not in result_df["category"].to_numpy() for value in ["B", "D"])
+    assert all(value not in result_df["category"].to_numpy() for value in ["Dairy", "Snacks"])
 
     # Check that other groups are still in the result
-    assert all(value in result_df["category"].to_numpy() for value in ["A", "C", "E"])
+    assert all(value in result_df["category"].to_numpy() for value in ["Bakery", "Produce", "Beverages"])
 
     # Check that the result has the expected number of rows
     expected_row_count = len(test_df) - len(exclude_list)
@@ -812,13 +827,13 @@ def test_filter_by_groups_validation_error():
     """Test that filter_by_groups raises ValueError when both exclude and include params are provided."""
     test_df = pd.DataFrame(
         {
-            "category": ["A", "B", "C", "D", "E"],
+            "category": ["Bakery", "Dairy", "Produce", "Snacks", "Beverages"],
             "value": [10, 20, 30, 40, 50],
         },
     )
 
-    exclude_list = ["B", "D"]
-    include_list = ["A", "C"]
+    exclude_list = ["Dairy", "Snacks"]
+    include_list = ["Bakery", "Produce"]
 
     # Test with both exclude_groups and include_only_groups
     with pytest.raises(ValueError, match="exclude_groups and include_only_groups cannot be used together"):
@@ -827,7 +842,7 @@ def test_filter_by_groups_validation_error():
             value_col="value",
             group_col="category",
             index_col="category",
-            value_to_index="A",
+            value_to_index="Bakery",
             exclude_groups=exclude_list,
             include_only_groups=include_list,
         )
@@ -837,8 +852,8 @@ def test_series_col_with_sort_by_value_validation_error():
     """Test that providing series_col with sort_by='value' raises ValueError."""
     test_df = pd.DataFrame(
         {
-            "category": ["A", "B", "C"] * 2,
-            "series": ["X", "X", "X", "Y", "Y", "Y"],
+            "category": ["Bakery", "Dairy", "Produce"] * 2,
+            "series": ["Loyalty", "Loyalty", "Loyalty", "Regular", "Regular", "Regular"],
             "value": [10, 20, 30, 40, 50, 60],
         },
     )
@@ -849,41 +864,74 @@ def test_series_col_with_sort_by_value_validation_error():
             value_col="value",
             group_col="category",
             index_col="category",
-            value_to_index="A",
+            value_to_index="Bakery",
             series_col="series",
             sort_by="value",
         )
 
 
-def test_filter_by_value_thresholds_filter_below():
-    """Test that filter_by_value_thresholds correctly filters values below a threshold."""
-    # Create test dataframe with varying index values
-    test_df = pd.DataFrame(
-        {
-            "category": ["A", "B", "C", "D", "E"],
-            "index": [80, 90, 100, 110, 120],
-        },
+class TestFilterByValueThresholds:
+    """Tests for filter_by_value_thresholds.
+
+    The ``index`` column is delta-from-baseline (raw index minus ``BASELINE_INDEX``), matching what
+    ``get_indexes(offset=BASELINE_INDEX)`` produces. The fixture below covers raw indexes 99, 100,
+    and 101 so the strict-inequality boundary at the threshold can be pinned down precisely:
+    departments indexing just under, at, or just over the baseline.
+    """
+
+    @pytest.fixture
+    def departments_around_baseline(self):
+        """Three departments with raw indexes 99, 100, 101 (i.e. just under/at/over baseline)."""
+        return pd.DataFrame(
+            {
+                "department": ["Bakery", "Dairy", "Produce"],
+                "index": [-1, 0, 1],
+            },
+        )
+
+    @pytest.mark.parametrize(
+        ("kwargs", "expected_departments"),
+        [
+            # filter_above is strict (>): raw=100 is dropped at the boundary, raw=101 kept.
+            pytest.param({"filter_above": 100}, ["Produce"], id="filter_above_strict_boundary"),
+            # filter_below is strict (<): raw=100 is dropped at the boundary, raw=99 kept.
+            pytest.param({"filter_below": 100}, ["Bakery"], id="filter_below_strict_boundary"),
+            # Combined thresholds form an open interval (filter_above, filter_below).
+            pytest.param(
+                {"filter_above": 99, "filter_below": 101},
+                ["Dairy"],
+                id="open_interval_keeps_only_baseline",
+            ),
+        ],
     )
+    def test_thresholds_compare_against_raw_index_with_strict_inequality(
+        self,
+        departments_around_baseline,
+        kwargs,
+        expected_departments,
+    ):
+        """Test thresholds are interpreted as raw indexes with strict inequality at the boundary."""
+        # Passing filter_above=100 must keep only Produce (raw=101) under the current contract;
+        # the previous delta-based contract would have kept every row in this fixture.
+        result_df = filter_by_value_thresholds(df=departments_around_baseline, **kwargs)
 
-    # Define the threshold value
-    threshold = 105
+        assert sorted(result_df["department"].tolist()) == expected_departments
 
-    # Apply the filter
-    result_df = filter_by_value_thresholds(
-        df=test_df,
-        filter_below=threshold,
+    @pytest.mark.parametrize(
+        ("filter_above", "filter_below"),
+        [
+            pytest.param(120, 80, id="inverted_thresholds"),
+            pytest.param(100, 100, id="equal_thresholds"),
+        ],
     )
-
-    # Verify only values below the threshold remain
-    assert all(result_df["index"] < threshold)
-
-    # Check that correct values are included and excluded
-    assert all(value in result_df["index"].to_numpy() for value in [80, 90, 100])
-    assert all(value not in result_df["index"].to_numpy() for value in [110, 120])
-
-    # Check that the result has the expected number of rows
-    expected_count = len(test_df[test_df["index"] < threshold])
-    assert len(result_df) == expected_count
+    def test_rejects_overlapping_thresholds(self, departments_around_baseline, filter_above, filter_below):
+        """Test that filter_above >= filter_below raises a clear ValueError before filtering runs."""
+        with pytest.raises(ValueError, match=r"filter_above .* must be < filter_below"):
+            filter_by_value_thresholds(
+                df=departments_around_baseline,
+                filter_above=filter_above,
+                filter_below=filter_below,
+            )
 
 
 class TestColorByThreshold:

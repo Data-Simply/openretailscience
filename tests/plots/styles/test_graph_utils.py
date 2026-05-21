@@ -4,13 +4,16 @@ import datetime
 import re
 import warnings
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import numpy as np
 import pytest
 from scipy import stats
 
+from openretailscience.options import get_option
 from openretailscience.plots.styles import graph_utils as gu
+from openretailscience.plots.styles import styling_helpers as sh
 
 
 @pytest.fixture(autouse=True)
@@ -148,12 +151,12 @@ def test_truncate_to_x_digits(num_str, digits, expected):
     ],
     ids=["defaults", "custom_options"],
 )
-def test_set_axis_format_percent(kwargs, expected_xmax, expected_decimals, expected_symbol):
-    """set_axis_format(axis, "percent") applies PercentFormatter with the given options."""
+def test_set_axis_percent(kwargs, expected_xmax, expected_decimals, expected_symbol):
+    """set_axis_percent applies PercentFormatter with the given options."""
     _, ax = plt.subplots()
     ax.plot([0, 0.25, 0.5, 0.75, 1.0], [0, 0.3, 0.5, 0.7, 1.0])
 
-    gu.set_axis_format(ax.yaxis, "percent", **kwargs)
+    gu.set_axis_percent(ax.yaxis, **kwargs)
 
     formatter = ax.yaxis.get_major_formatter()
     assert isinstance(formatter, mtick.PercentFormatter)
@@ -163,41 +166,41 @@ def test_set_axis_format_percent(kwargs, expected_xmax, expected_decimals, expec
     assert formatter(sample_value).endswith(expected_symbol)
 
 
-def test_set_axis_format_percent_symbol_none_suppresses_symbol():
-    """set_axis_format(axis, "percent", symbol=None) renders values without the % suffix."""
+def test_set_axis_percent_symbol_none_suppresses_symbol():
+    """set_axis_percent(symbol=None) renders values without the % suffix."""
     _, ax = plt.subplots()
     ax.plot([0, 0.5, 1.0], [0, 0.5, 1.0])
 
-    gu.set_axis_format(ax.yaxis, "percent", symbol=None)
+    gu.set_axis_percent(ax.yaxis, symbol=None)
 
     assert ax.yaxis.get_major_formatter()(0.5) == "50"
 
 
-def test_set_axis_format_shorthand_renders_tick_labels():
-    """set_axis_format(axis, "shorthand") produces shorthand tick labels (1500 → '2K')."""
+def test_set_axis_shorthand_renders_tick_labels():
+    """set_axis_shorthand produces shorthand tick labels (1500 → '2K')."""
     _, ax = plt.subplots()
     ax.plot([0, 1, 2], [0, 1500, 3000])
 
-    gu.set_axis_format(ax.yaxis, "shorthand", decimals=0)
+    gu.set_axis_shorthand(ax.yaxis, decimals=0)
 
     formatter = ax.yaxis.get_major_formatter()
     assert formatter(1500) == "2K"
     assert formatter(3_700_000) == "4M"
 
 
-def test_set_axis_format_shorthand_honours_prefix():
-    """set_axis_format(axis, "shorthand", prefix="$") prepends the currency symbol."""
+def test_set_axis_shorthand_honours_prefix():
+    """set_axis_shorthand(prefix="$") prepends the currency symbol."""
     _, ax = plt.subplots()
     ax.plot([0, 1], [0, 1500])
 
-    gu.set_axis_format(ax.yaxis, "shorthand", decimals=1, prefix="$")
+    gu.set_axis_shorthand(ax.yaxis, decimals=1, prefix="$")
 
     assert ax.yaxis.get_major_formatter()(1500) == "$1.5K"
 
 
 @pytest.mark.parametrize("axis_name", ["xaxis", "yaxis"])
-def test_set_axis_format_shorthand_auto_decimals(axis_name):
-    """When decimals is None, set_axis_format derives decimals from the matching axis's own ticks."""
+def test_set_axis_shorthand_auto_decimals(axis_name):
+    """When decimals is None, set_axis_shorthand derives decimals from the matching axis's own ticks."""
     _, ax = plt.subplots()
     # Asymmetric ranges so xaxis and yaxis require different decimal counts.
     # The yaxis range (~1.234M..1.26M) needs several decimals to keep shorthand labels
@@ -210,20 +213,102 @@ def test_set_axis_format_shorthand_auto_decimals(axis_name):
     else:
         expected_decimals = gu.get_decimals(ax.get_ylim(), ax.get_yticks())
 
-    gu.set_axis_format(fmt_axis, "shorthand")
+    gu.set_axis_shorthand(fmt_axis)
 
     formatter = fmt_axis.get_major_formatter()
     sample = 1_234_567
     assert formatter(sample) == gu.format_shorthand(sample, decimals=expected_decimals)
 
 
-def test_set_axis_format_rejects_unknown_type():
-    """An unknown format_type raises ValueError listing the valid options."""
-    _, ax = plt.subplots()
-    ax.plot([0, 1], [0, 1])
+class TestResolveEndOfLineLabelYs:
+    """Tests for the private end-of-line label position resolver."""
 
-    with pytest.raises(ValueError, match="Unsupported format_type"):
-        gu.set_axis_format(ax.yaxis, "ratio")  # type: ignore[arg-type]
+    def _make_candidates(self, y_ends: list[float]) -> list[gu._EndOfLineCandidate]:
+        return [
+            gu._EndOfLineCandidate(
+                label=f"Series{i}",
+                x_end=9,
+                y_end=y,
+                color="#000000",
+                marker_size=6.0,
+                zorder=2.0,
+            )
+            for i, y in enumerate(y_ends)
+        ]
+
+    def test_clusters_near_top_pin_bottom_label_at_data_area(self):
+        """Many endpoints clustered near ylim[1] must not push the lowest label below ylim[0].
+
+        Without a symmetric bottom clamp, the top-clamp back-propagation drives the lowest
+        label to ``y_top_px - (n-1)*min_gap_px`` which can fall below the data area on a
+        short figure with many series. The fix pins the bottom label at ``ylim[0]``;
+        any unavoidable overflow (when labels physically can't fit) moves to the top edge
+        instead, where it conflicts with title space rather than chart data.
+        """
+        fig, ax = plt.subplots(figsize=(4, 1.0), dpi=100)
+        ax.set_ylim(0, 100)
+        ax.set_xlim(0, 10)
+        fig.canvas.draw()
+
+        candidates = self._make_candidates([99.0 - 0.1 * i for i in range(6)])
+        label_ys = gu._resolve_end_of_line_label_ys(ax, candidates, font_pts=12.0)
+
+        ylim_low, _ = ax.get_ylim()
+        assert min(label_ys) >= ylim_low - 1e-6, f"min(label_ys)={min(label_ys)} fell below ylim[0]={ylim_low}"
+
+    def test_well_spaced_endpoints_unchanged(self):
+        """When endpoints already exceed the min gap, no bumping or clamping happens."""
+        fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
+        ax.set_ylim(0, 100)
+        ax.set_xlim(0, 10)
+        fig.canvas.draw()
+
+        y_ends = [10.0, 30.0, 50.0, 70.0, 90.0]
+        candidates = self._make_candidates(y_ends)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            label_ys = gu._resolve_end_of_line_label_ys(ax, candidates, font_pts=8.0)
+
+        np.testing.assert_allclose(label_ys, y_ends, atol=1e-6)
+
+    def test_warns_when_labels_cannot_fit(self):
+        """Geometry too tight to fit all labels emits a UserWarning naming a remedy.
+
+        Without the warning, the bottom-clamp+upward-bump silently pushes the top label
+        past ylim[1], producing labels outside the data area with no diagnostic for the
+        user to act on. The warning surfaces the infeasible geometry and points the
+        caller at remedies (switch legend_style, fewer series).
+        """
+        fig, ax = plt.subplots(figsize=(4, 0.6), dpi=100)
+        ax.set_ylim(0, 100)
+        ax.set_xlim(0, 10)
+        fig.canvas.draw()
+
+        candidates = self._make_candidates([10.0 + 5.0 * i for i in range(8)])
+
+        with pytest.warns(UserWarning, match="cannot fit"):
+            gu._resolve_end_of_line_label_ys(ax, candidates, font_pts=14.0)
+
+
+class TestDrawEndOfLineLabels:
+    """Tests for draw_end_of_line_labels.
+
+    End-of-line series labels functionally identify series, so their typography
+    must track the legend knobs, not the axis-label knobs.
+    """
+
+    def test_end_of_line_label_uses_legend_size(self):
+        """The annotation fontsize must equal plot.font.legend_size."""
+        fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
+        ax.plot([1, 2, 3], [1, 2, 3], label="Revenue")
+        fig.canvas.draw()
+
+        gu.draw_end_of_line_labels(ax)
+
+        labelled = [t for t in ax.texts if t.get_text() == "Revenue"]
+        assert len(labelled) == 1
+        assert labelled[0].get_fontsize() == get_option("plot.font.legend_size")
 
 
 class TestRegressionLine:
@@ -253,7 +338,7 @@ class TestRegressionLine:
         assert len(ax.get_lines()) == self.EXPECTED_LINE_COUNT_AFTER_REGRESSION
 
     def test_line_plot_with_datetime_data(self):
-        """Test regression line with datetime x-axis data."""
+        """Regression on datetime x-axis fits in date2num space and slopes with the data."""
         _, ax = plt.subplots()
         dates = [
             datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
@@ -266,8 +351,19 @@ class TestRegressionLine:
 
         gu.add_regression_line(ax, show_equation=True, show_r2=False)
 
-        # Check that a line was added
         assert len(ax.get_lines()) == self.EXPECTED_LINE_COUNT_AFTER_REGRESSION
+
+        regression_line = ax.get_lines()[1]
+        line_x = regression_line.get_xdata()
+        line_y = regression_line.get_ydata()
+        date_nums = mdates.date2num(dates)
+
+        # x-values are emitted in matplotlib date-number form, matching the input range.
+        assert min(line_x) <= min(date_nums)
+        assert max(line_x) >= max(date_nums)
+
+        # Values rise from 10 to 25 over the period, so the fitted line must slope upward.
+        assert line_y[-1] > line_y[0]
 
     def test_scatter_plot(self):
         """Test regression line with a scatter plot."""
@@ -445,37 +541,6 @@ class TestRegressionLine:
         assert min(line_x) <= min(all_x_positions)
         assert max(line_x) >= max(all_x_positions)
 
-    def test_bar_plot_container_no_orientation_attr(self):
-        """Test regression line with container lacking orientation attribute."""
-        _, ax = plt.subplots()
-        x = np.array([1, 2, 3])
-        y = np.array([2, 4, 3])
-        ax.bar(x, y)
-
-        # Add a mock container without orientation to test the hasattr branch
-        class MockContainer:
-            pass
-
-        mock_container = MockContainer()
-        ax.containers.insert(0, mock_container)  # Insert at beginning
-
-        gu.add_regression_line(ax, color="red")
-        # Should still work by falling back to default (vertical)
-        assert len(ax.get_lines()) == 1
-
-    def test_bar_plot_container_none_orientation(self):
-        """Test regression line with container having None orientation."""
-        _, ax = plt.subplots()
-        x = np.array([1, 2, 3])
-        y = np.array([2, 4, 3])
-        ax.bar(x, y)
-
-        ax.containers[0].orientation = None
-
-        gu.add_regression_line(ax, color="blue")
-        # Should still work by falling back to default (vertical)
-        assert len(ax.get_lines()) == 1
-
     def test_unsupported_regression_type_raises_error(self):
         """Test that unsupported regression types raise ValueError."""
         # Create test data
@@ -607,7 +672,6 @@ class TestRegressionLine:
         regression_line = ax.lines[0]
         x_line = regression_line.get_xdata()
         y_data = regression_line.get_ydata()
-        assert len(y_data) > 0
         assert np.all(np.isfinite(y_data))
         # Verify that filtering actually occurred: line should not extend all the way to x_max
         assert max(x_line) < self.OVERFLOW_X_MAX, "Some points should have been filtered due to overflow"
@@ -660,7 +724,7 @@ class TestRegressionLine:
         gu.add_regression_line(ax, regression_type=regression_type, show_equation=True, show_r2=True)
 
         texts = ax.texts
-        assert len(texts) >= 1
+        assert len(texts) == 1
         equation_text = texts[0].get_text()
         assert re.search(expected_pattern, equation_text), (
             f"Expected equation format matching '{expected_pattern}' for {regression_type}, got '{equation_text}'"
@@ -701,9 +765,23 @@ class TestRegressionLine:
         assert line.get_alpha() == self.EXPECTED_ALPHA
 
         # show_equation=False means no equation text, only R²
-        texts = [t.get_text() for t in ax.texts]
-        assert any("R²" in t for t in texts), "R² text should be displayed"
-        assert not any("y =" in t for t in texts), "Equation should not be displayed when show_equation=False"
+        assert len(ax.texts) == 1
+        annotation = ax.texts[0].get_text()
+        assert "R²" in annotation, f"R² text should be displayed, got '{annotation}'"
+        assert "y =" not in annotation, f"Equation should not be displayed when show_equation=False, got '{annotation}'"
+
+    def test_regression_annotation_uses_source_size(self):
+        """Regression annotation pairs source_font family with source_size, not label_size."""
+        _, ax = plt.subplots()
+        x = np.array([1, 2, 3, 4, 5])
+        y = np.array([2, 4, 6, 8, 10])
+        ax.scatter(x, y)
+
+        gu.add_regression_line(ax, show_equation=True, show_r2=True)
+
+        assert len(ax.texts) == 1
+        annotation = ax.texts[0]
+        assert annotation.get_fontsize() == get_option("plot.font.source_size")
 
     @pytest.mark.parametrize("regression_type", ["linear", "power", "logarithmic", "exponential"])
     def test_insufficient_data_points_all_types(self, regression_type):
@@ -836,7 +914,7 @@ class TestVisualRegression:
         y = np.sin(x) + 0.1 * rng.standard_normal(50)
         ax.plot(x, y, label="Sin Wave")
 
-        gu.standard_graph_styles(
+        sh.standard_graph_styles(
             ax,
             title="Test Graph Title",
             x_label="X Axis Label",
@@ -844,7 +922,8 @@ class TestVisualRegression:
             legend_title="Legend Title",
         )
 
-        assert ax.get_title() == "Test Graph Title"
+        title_texts = [t for t in ax.figure.texts if t.get_text() == "Test Graph Title"]
+        assert len(title_texts) == 1
         assert ax.get_xlabel() == "X Axis Label"
         assert ax.get_ylabel() == "Y Axis Label"
         assert ax.get_facecolor() == self.WHITE_RGBA
@@ -870,7 +949,7 @@ class TestVisualRegression:
                     np.sin(np.linspace(0, 10, 20)) + 0.1 * np.random.default_rng(42).standard_normal(20),
                 ),
             ),
-            ("bar", lambda: (["A", "B", "C", "D", "E"], [23, 45, 56, 78, 32])),
+            ("bar", lambda: (["Bakery", "Dairy", "Produce", "Snacks", "Beverages"], [23, 45, 56, 78, 32])),
         ],
     )
     def test_visual_regression_all_plot_types(self, plot_type, data_generator):
@@ -886,7 +965,7 @@ class TestVisualRegression:
         }
         plot_methods[plot_type](ax, x, y)
 
-        gu.standard_graph_styles(
+        sh.standard_graph_styles(
             ax,
             title=f"Test {plot_type.title()} Plot",
             x_label="X Values",
@@ -896,20 +975,5 @@ class TestVisualRegression:
         assert ax.get_facecolor() == self.WHITE_RGBA
         assert not ax.spines["top"].get_visible()
         assert not ax.spines["right"].get_visible()
-
-        plt.close(fig)
-
-    def test_visual_regression_source_text(self):
-        """Test source text visual consistency."""
-        fig, ax = plt.subplots(figsize=(8, 6))
-
-        x = np.linspace(0, 10, 50)
-        y = np.exp(-x / 5) * np.cos(x)
-        ax.plot(x, y)
-
-        source_text = gu.add_source_text(ax, "Source: Test Data 2024")
-
-        assert source_text.get_text() == "Source: Test Data 2024"
-        assert source_text.get_color() == "dimgray"
 
         plt.close(fig)

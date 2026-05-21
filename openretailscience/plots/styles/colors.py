@@ -3,9 +3,6 @@
 This module provides functions to create and retrieve color palettes.
 """
 
-from collections.abc import Generator
-from itertools import cycle
-
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 
@@ -93,51 +90,26 @@ def get_base_cmap() -> ListedColormap:
     return ListedColormap(colors)
 
 
-def get_single_color_cmap() -> Generator[str, None, None]:
-    """Returns a generator for monochromatic palette colors from options.
-
-    Returns:
-        Generator: A generator yielding colors in a looping fashion.
-    """
-    return cycle(get_option("plot.color.mono_palette"))
-
-
-def get_multi_color_cmap() -> Generator[str, None, None]:
-    """Returns a generator for multi-color palette from options.
-
-    Returns:
-        Generator: A generator yielding colors in a looping fashion.
-    """
-    return cycle(get_option("plot.color.multi_color_palette"))
-
-
 def get_plot_colors(num_series: int) -> list[str]:
     """Get appropriate colors for the given number of series.
 
-    Automatically selects between monochromatic and multi-color palettes based on
-    the number of series requested and the length of the monochromatic palette.
+    Selection logic:
+        * 1 series → ``plot.color.primary`` (brand color).
+        * 2+ series → cycled multi-color palette.
+
+    Categorical series (e.g. product categories, retailers, segments) read best when each
+    has its own hue, which is what the multi-color palette gives.
 
     Args:
         num_series: Number of series/groups being plotted
 
     Returns:
         List of hex color strings
-
-    Examples:
-        >>> get_plot_colors(2)  # Returns 2 colors from mono palette
-        ['#22c55e', '#86efac']
-
-        >>> get_plot_colors(5)  # Returns 5 colors from multi-color palette
-        ['#22c55e', '#3b82f6', '#ef4444', '#f97316', '#eab308']
     """
-    mono_palette = get_option("plot.color.mono_palette")
+    if num_series == 1:
+        return [get_option("plot.color.primary")]
+
     multi_palette = get_option("plot.color.multi_color_palette")
-
-    if num_series <= len(mono_palette):
-        # Use monochromatic palette (no cycling needed - we have enough colors)
-        return mono_palette[:num_series]
-
-    # Use multi-color palette (cycle if needed)
     return [multi_palette[i % len(multi_palette)] for i in range(num_series)]
 
 
@@ -153,16 +125,17 @@ def get_named_color(color_type: str) -> str:
     return get_option(f"plot.color.{color_type}")
 
 
-def get_heatmap_cmap() -> ListedColormap | LinearSegmentedColormap:
-    """Get heatmap colormap from options.
+def get_sequential_cmap() -> ListedColormap | LinearSegmentedColormap:
+    """Resolve the magnitude-ordered colormap (heatmap, cohort, period-on-period).
 
-    Supports both Tailwind color names (e.g., 'green', 'blue') and
-    matplotlib colormap names (e.g., 'Greens', 'viridis').
+    Reads ``plot.color.sequential``: a Tailwind hue name (``"green"``, ``"blue"``)
+    yields a discrete ``ListedColormap`` over the hue's shades; a matplotlib
+    colormap name (``"viridis"``, ``"Greens"``) is handed to ``plt.get_cmap``.
 
     Returns:
-        Matplotlib colormap object
+        ListedColormap | LinearSegmentedColormap: The resolved colormap.
     """
-    cmap_name = get_option("plot.color.heatmap")
+    cmap_name = get_option("plot.color.sequential")
     return get_listed_cmap(cmap_name) if cmap_name in COLORS else plt.get_cmap(cmap_name)
 
 

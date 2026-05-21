@@ -34,6 +34,7 @@ Series.
 """
 
 import warnings
+from collections.abc import Iterable
 from typing import Any, Literal
 
 import pandas as pd
@@ -42,17 +43,52 @@ from matplotlib.container import BarContainer
 from matplotlib.patches import Rectangle
 
 import openretailscience.plots.styles.graph_utils as gu
+from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_plot_colors
+from openretailscience.plots.styles.font_utils import get_font_properties
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
+
+VALID_ORIENTATIONS = ("horizontal", "h", "vertical", "v")
+VALID_SORT_ORDERS = ("ascending", "descending", None)
+VALID_DATA_LABEL_FORMATS = ("absolute", "percentage_by_bar_group", "percentage_by_series", None)
+DEFAULT_BAR_WIDTH = 0.8
 
 
-def plot(
+def _validate_bar_inputs(
+    df: pd.DataFrame | pd.Series,
+    x_col: str | None,
+    orientation: str,
+    sort_order: str | None,
+    data_label_format: str | None,
+) -> None:
+    """Validate ``plot`` arguments up-front so the body can stay focused on rendering."""
+    if df.empty:
+        raise ValueError("Cannot plot with empty DataFrame")
+    if x_col is not None and x_col not in df.columns:
+        msg = f"x_col '{x_col}' not found in DataFrame"
+        raise KeyError(msg)
+    if orientation not in VALID_ORIENTATIONS:
+        msg = f"Invalid orientation: {orientation}. Expected one of {list(VALID_ORIENTATIONS)}"
+        raise ValueError(msg)
+    if sort_order not in VALID_SORT_ORDERS:
+        msg = f"Invalid sort_order: {sort_order}. Expected one of {list(VALID_SORT_ORDERS)}"
+        raise ValueError(msg)
+    if data_label_format not in VALID_DATA_LABEL_FORMATS:
+        msg = f"Invalid data_label_format: {data_label_format}. Expected one of {list(VALID_DATA_LABEL_FORMATS)}"
+        raise ValueError(msg)
+
+
+def plot(  # noqa: PLR0913
     df: pd.DataFrame | pd.Series,
     value_col: str | list[str] | None = None,
     x_col: str | None = None,
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
     legend_title: str | None = None,
+    legend_labels: list[str] | None = None,
     ax: Axes | None = None,
     source_text: str | None = None,
     move_legend_outside: bool = False,
@@ -61,7 +97,7 @@ def plot(
     data_label_format: Literal["absolute", "percentage_by_bar_group", "percentage_by_series"] | None = None,
     use_hatch: bool = False,
     num_digits: int = 3,
-    **kwargs: dict[str, Any],
+    **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
     """Creates a customizable bar plot from a DataFrame or Series.
 
@@ -73,9 +109,14 @@ def plot(
                                                create grouped bars. Defaults to None.
         x_col (str, optional): The column to group data by, used for grouping bars. Defaults to None.
         title (str, optional): The title of the plot. Defaults to None.
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
         x_label (str, optional): The label for the x-axis. Defaults to None.
         y_label (str, optional): The label for the y-axis. Defaults to None.
         legend_title (str, optional): The title for the legend. Defaults to None.
+        legend_labels (list[str], optional): Override the legend labels read from the plotted series
+            (e.g. swap column ids for human-readable names). Length must match the number of
+            value columns or ``ValueError`` is raised. Defaults to None.
         ax (Axes, optional): The Matplotlib Axes object to plot on. Defaults to None.
         source_text (str, optional): Text to be displayed as a source at the bottom of the plot. Defaults to None.
         move_legend_outside (bool, optional): Whether to move the legend outside the plot area. Defaults to False.
@@ -90,39 +131,19 @@ def plot(
                                                                                 Defaults to None.
         use_hatch (bool, optional): Whether to apply hatch patterns to the bars. Defaults to False.
         num_digits (int, optional): The number of digits to display in the data labels. Defaults to 3.
-        **kwargs (dict[str, any]): Additional keyword arguments for the Pandas `plot` function.
+        **kwargs (Any): Additional keyword arguments for the Pandas `plot` function.
 
     Returns:
         SubplotBase: The Matplotlib Axes object with the generated plot.
     """
-    if df.empty:
-        raise ValueError("Cannot plot with empty DataFrame")
+    _validate_bar_inputs(df, x_col, orientation, sort_order, data_label_format)
 
-    # Check if x_col exists in the DataFrame, if provided
-    if x_col is not None and x_col not in df.columns:
-        msg = f"x_col '{x_col}' not found in DataFrame"
-        raise KeyError(msg)
+    width = kwargs.pop("width", DEFAULT_BAR_WIDTH)
 
-    valid_orientations = ["horizontal", "h", "vertical", "v"]
-    if orientation not in valid_orientations:
-        error_msg = f"Invalid orientation: {orientation}. Expected one of {valid_orientations}"
-        raise ValueError(error_msg)
-
-    # Validate the sort_order value
-    valid_sort_orders = ["ascending", "descending", None]
-    if sort_order not in valid_sort_orders:
-        error_msg = f"Invalid sort_order: {sort_order}. Expected one of {valid_sort_orders}"
-        raise ValueError(error_msg)
-
-    # Validate the data_label_format value
-    valid_data_label_formats = ["absolute", "percentage_by_bar_group", "percentage_by_series", None]
-    if data_label_format not in valid_data_label_formats:
-        error_msg = f"Invalid data_label_format: {data_label_format}. Expected one of {valid_data_label_formats}"
-        raise ValueError(error_msg)
-
-    width = kwargs.pop("width", 0.8)
-
-    value_col = [value_col] if isinstance(value_col, str) else (["Value"] if value_col is None else value_col)
+    if value_col is None:
+        value_col = ["Value"]
+    elif isinstance(value_col, str):
+        value_col = [value_col]
 
     df = df.to_frame(name=value_col[0]) if isinstance(df, pd.Series) else df
 
@@ -153,15 +174,6 @@ def plot(
         **kwargs,
     )
 
-    ax = gu.standard_graph_styles(
-        ax=ax,
-        title=title,
-        x_label=x_label,
-        y_label=y_label,
-        legend_title=legend_title,
-        move_legend_outside=move_legend_outside,
-    )
-
     if use_hatch:
         ax = gu.apply_hatches(ax=ax, num_segments=len(value_col))
 
@@ -178,10 +190,20 @@ def plot(
             num_digits=num_digits,
         )
 
-    if source_text:
-        gu.add_source_text(ax=ax, source_text=source_text)
-
-    return gu.standard_tick_styles(ax=ax)
+    return standard_graph_styles(
+        ax=ax,
+        title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
+        x_label=x_label,
+        y_label=y_label,
+        legend_title=legend_title,
+        legend_labels=legend_labels,
+        move_legend_outside=move_legend_outside,
+        source_text=source_text,
+        # Gridlines on the value axis only — vertical bars read off y, horizontal off x.
+        grid_axis="x" if plot_kind == "barh" else "y",
+    )
 
 
 def _generate_bar_labels(
@@ -201,17 +223,17 @@ def _generate_bar_labels(
 ) -> None:
     """Adds bar labels to the bar plot containers."""
     division_by_zero_list = []  # A list to track occurrences of division by zero
-    all_bar_values = []  # To store all the bar values for decimal calculation
     total_sum_per_column = df[value_col].sum()  # Series with a total for each column
-    all_labels = []
 
     for container, column in zip(ax.containers, value_col, strict=False):
+        if not isinstance(container, BarContainer):
+            msg = f"Expected BarContainer, got {type(container).__name__}"
+            raise TypeError(msg)
         if data_label_format == "absolute":
-            container_labels, bar_values = _generate_absolute_labels(container, plot_kind, num_digits)
-            all_bar_values.extend(bar_values)
+            container_labels = _generate_absolute_labels(container, plot_kind, num_digits)
         elif data_label_format == "percentage_by_bar_group":
             group_totals = df.groupby(x_col)[value_col].sum().sum(axis=1)
-            container_labels = _generate_percentage_by_bar_group_labels(
+            container_labels = _generate_percentage_labels(
                 container,
                 group_totals,
                 plot_kind,
@@ -220,17 +242,17 @@ def _generate_bar_labels(
             )
         elif data_label_format == "percentage_by_series":
             column_total = total_sum_per_column[column]
-            container_labels = _generate_percentage_by_series_labels(
+            container_labels = _generate_percentage_labels(
                 container,
-                column_total,
+                [column_total] * len(container),
                 plot_kind,
                 num_digits,
                 division_by_zero_list,
             )
+        else:
+            msg = f"Unhandled data_label_format: {data_label_format}"
+            raise ValueError(msg)
 
-        all_labels.append(container_labels)
-
-    for container, container_labels in zip(ax.containers, all_labels, strict=True):
         _apply_labels_to_container(ax, container, container_labels, data_label_format, is_stacked)
 
     # Check if any division by zero occurred and how many times
@@ -260,7 +282,7 @@ def _generate_absolute_labels(
     container: BarContainer,
     plot_kind: str,
     num_digits: int,
-) -> tuple[list[str], list[float]]:
+) -> list[str]:
     """Generate absolute value labels for the bars.
 
     Args:
@@ -269,31 +291,30 @@ def _generate_absolute_labels(
         num_digits (int): The number of digits to display in the labels.
 
     Returns:
-        tuple[list[str], list[float]]: A list of formatted labels and a list of raw bar values.
+        list[str]: A list of formatted labels.
     """
-    bar_values = [_get_bar_value(v, plot_kind) for v in container]
-    labels = [
+    return [
         gu.truncate_to_x_digits(
-            num_str=gu.format_shorthand(num=value, decimals=num_digits),
+            num_str=gu.format_shorthand(num=_get_bar_value(v, plot_kind), decimals=num_digits),
             digits=num_digits,
         )
-        for value in bar_values
+        for v in container
     ]
-    return labels, bar_values
 
 
-def _generate_percentage_by_bar_group_labels(
+def _generate_percentage_labels(
     container: BarContainer,
-    group_totals: pd.Series,
+    denominators: Iterable[float],
     plot_kind: str,
     num_digits: int,
     division_by_zero_list: list,
 ) -> list[str]:
-    """Generate percentage labels for each bar based on the group totals.
+    """Generate percentage labels for each bar against a per-bar denominator.
 
     Args:
         container (BarContainer): The container holding the bar objects.
-        group_totals (pd.Series): The total values for each group.
+        denominators (Iterable[float]): Per-bar denominators aligned with the container. Pass a Series for
+            per-bar-group totals or a broadcast scalar (e.g. ``[total] * len(container)``) for a shared series total.
         plot_kind (str): The type of plot ('bar' or 'barh').
         num_digits (int): The number of digits to display in the labels.
         division_by_zero_list (list): A list to track occurrences of division by zero.
@@ -302,49 +323,13 @@ def _generate_percentage_by_bar_group_labels(
         list[str]: A list of formatted percentage labels.
     """
     labels = []
-    for i, v in enumerate(container):
-        if group_totals.iloc[i] == 0:
-            division_by_zero_list.append(True)  # Track division by zero
+    for v, denom in zip(container, denominators, strict=True):
+        if denom == 0:
+            division_by_zero_list.append(True)
             labels.append("")
         else:
             bar_value = _get_bar_value(v, plot_kind)
-            percentage_value = (bar_value / group_totals.iloc[i]) * 100
-            labels.append(
-                gu.truncate_to_x_digits(
-                    num_str=gu.format_shorthand(num=percentage_value, decimals=num_digits),
-                    digits=num_digits,
-                ),
-            )
-    return labels
-
-
-def _generate_percentage_by_series_labels(
-    container: BarContainer,
-    column_total: float,
-    plot_kind: str,
-    num_digits: int,
-    division_by_zero_list: list,
-) -> list[str]:
-    """Generate percentage labels for each bar based on the series totals.
-
-    Args:
-        container (BarContainer): The container holding the bar objects.
-        column_total (float): The total value of the series.
-        plot_kind (str): The type of plot ('bar' or 'barh').
-        num_digits (int): The number of digits to display in the labels.
-        division_by_zero_list (list): A list to track occurrences of division by zero.
-
-    Returns:
-        list[str]: A list of formatted percentage labels.
-    """
-    labels = []
-    for v in container:
-        if column_total == 0:
-            division_by_zero_list.append(True)  # Track division by zero
-            labels.append("")
-        else:
-            bar_value = _get_bar_value(v, plot_kind)
-            percentage_value = (bar_value / column_total) * 100
+            percentage_value = (bar_value / denom) * 100
             labels.append(
                 gu.truncate_to_x_digits(
                     num_str=gu.format_shorthand(num=percentage_value, decimals=num_digits),
@@ -374,8 +359,13 @@ def _apply_labels_to_container(
         None
     """
     formatted_labels = [f"{v}%" if v != "" and data_label_format != "absolute" else v for v in container_labels]
+    style = PlotStyleHelper()
+    label_padding = 0 if is_stacked else 4
     ax.bar_label(
         container,
         labels=formatted_labels,
         label_type="center" if is_stacked else "edge",
+        padding=label_padding,
+        fontproperties=get_font_properties(style.data_label_font),
+        fontsize=style.data_label_size,
     )

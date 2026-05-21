@@ -5,7 +5,6 @@ import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
-from matplotlib.axes import Axes
 
 from openretailscience.analysis.gain_loss import GainLoss
 from openretailscience.options import option_context
@@ -163,7 +162,7 @@ def test_missing_required_column_raises():
     df = pd.DataFrame(
         {
             "spend": [100, 200],
-            "group": ["A", "B"],
+            "group": ["Brand A", "Brand B"],
         },
     )
     with pytest.raises(ValueError, match="columns are required but missing"):
@@ -172,9 +171,9 @@ def test_missing_required_column_raises():
             p1_index=[True, False],
             p2_index=[False, True],
             focus_group_index=[True, False],
-            focus_group_name="A",
+            focus_group_name="Brand A",
             comparison_group_index=[False, True],
-            comparison_group_name="B",
+            comparison_group_name="Brand B",
         )
 
 
@@ -235,8 +234,8 @@ def test_calc_gains_loss_table_with_group():
     pd.testing.assert_frame_equal(result, expected)
 
 
-def test_plot_returns_figure_from_gainloss(sample_df):
-    """Test that the `plot` method of the GainLoss class returns a valid matplotlib Axes object."""
+def test_plot_renders_six_gain_loss_segments_with_group_names_in_legend(sample_df):
+    """GainLoss.plot renders one labelled legend entry per gain/loss segment, interpolating group names."""
     p1 = sample_df["transaction_date"] < datetime.date(2023, 5, 1)
     p2 = sample_df["transaction_date"] >= datetime.date(2023, 5, 1)
 
@@ -253,8 +252,18 @@ def test_plot_returns_figure_from_gainloss(sample_df):
         comparison_group_name="Brand B",
     )
 
-    fig = gl.plot()
-    assert isinstance(fig, Axes)
+    ax = gl.plot()
+    expected_legend = [
+        "New",
+        "Increased Brand A",
+        "Switch From Brand B",
+        "Lost",
+        "Decreased Brand A",
+        "Switch To Brand B",
+    ]
+    legend = ax.get_legend()
+    assert legend is not None
+    assert [t.get_text() for t in legend.get_texts()] == expected_legend
 
 
 def test_with_custom_column_names(sample_df):

@@ -468,7 +468,7 @@ class TestRevenueTree:
         df = pd.DataFrame(
             {
                 "region": ["North", "North", "North", "South", "South", "South"],
-                "store": ["A", "A", "A", "B", "B", "B"],
+                "store": ["Store_101", "Store_101", "Store_101", "Store_102", "Store_102", "Store_102"],
                 cols.customer_id: [1, 2, 3, 4, 5, 6],
                 cols.transaction_id: [1, 2, 3, 4, 5, 6],
                 cols.unit_spend: [100.0, 200.0, 300.0, 400.0, 500.0, 600.0],
@@ -520,7 +520,7 @@ class TestRevenueTree:
         df = pd.DataFrame(
             {
                 "region": ["North", "North", "South", "South"],
-                "store": ["A", "A", "B", "B"],
+                "store": ["Store_101", "Store_101", "Store_102", "Store_102"],
                 cols.customer_id: [1, 2, 3, 4],
                 cols.transaction_id: [1, 2, 3, 4],
                 cols.unit_spend: [100.0, 200.0, 300.0, 400.0],
@@ -580,20 +580,30 @@ class TestRevenueTree:
 
         # Test with custom value labels
         ax = rt.draw_tree(value_labels=("Current", "Previous"))
-        assert isinstance(ax, Axes)
+        rendered = " ".join(t.get_text() for t in ax.texts)
+        assert "Current" in rendered
+        assert "Previous" in rendered
         plt.close()
 
         # Test with custom node labels
+        custom_node_labels = [
+            "Sales",
+            "Shoppers",
+            "Sales / Shopper",
+            "Trips / Shopper",
+            "Sales / Trip",
+        ]
         ax = rt.draw_tree(
-            unit_spend_label="Sales",
-            customer_id_label="Shoppers",
-            spend_per_customer_label="Sales / Shopper",
-            transactions_per_customer_label="Trips / Shopper",
-            spend_per_transaction_label="Sales / Trip",
+            unit_spend_label=custom_node_labels[0],
+            customer_id_label=custom_node_labels[1],
+            spend_per_customer_label=custom_node_labels[2],
+            transactions_per_customer_label=custom_node_labels[3],
+            spend_per_transaction_label=custom_node_labels[4],
             units_per_transaction_label="Items / Trip",
             price_per_unit_label="Price / Item",
         )
-        assert isinstance(ax, Axes)
+        rendered_labels = {t.get_text() for t in ax.texts}
+        assert set(custom_node_labels).issubset(rendered_labels)
         plt.close()
 
     def test_draw_tree_with_row_index(self, cols: ColumnHelper):
@@ -629,7 +639,7 @@ class TestRevenueTree:
         text_strings = [t.get_text() for t in ax.texts]
         # North P2 revenue is 120, P1 revenue is 250 (100 + 150)
         # The formatted values should appear in the text
-        assert any("120" in s for s in text_strings), "North region P2 revenue should appear"
+        assert "120" in text_strings, f"North region P2 revenue '120' should appear in {text_strings}"
         plt.close()
 
         # Draw second row (South region)
@@ -637,7 +647,7 @@ class TestRevenueTree:
         assert isinstance(ax, Axes)
         text_strings = [t.get_text() for t in ax.texts]
         # South P2 revenue is 220, P1 revenue is 450 (200 + 250)
-        assert any("220" in s for s in text_strings), "South region P2 revenue should appear"
+        assert "220" in text_strings, f"South region P2 revenue '220' should appear in {text_strings}"
         plt.close()
 
         # Test that out of bounds raises IndexError

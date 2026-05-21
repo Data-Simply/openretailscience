@@ -36,7 +36,7 @@ performance tracking, and visualizing changes over time.
 """
 
 import warnings
-from typing import Literal
+from typing import Any, Literal
 
 import pandas as pd
 from matplotlib.axes import Axes
@@ -45,12 +45,15 @@ import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_named_color
 from openretailscience.plots.styles.font_utils import get_font_properties
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 
 def plot(
     amounts: list[float],
     labels: list[str],
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     y_label: str | None = None,
     x_label: str = "",
     source_text: str | None = None,
@@ -59,7 +62,7 @@ def plot(
     display_net_line: bool = False,
     remove_zero_amounts: bool = True,
     ax: Axes | None = None,
-    **kwargs: dict[str, any],
+    **kwargs: Any,  # noqa: ANN401
 ) -> Axes:
     """Generates a waterfall chart.
 
@@ -76,6 +79,8 @@ def plot(
         amounts (list[float]): The amounts to plot.
         labels (list[str]): The labels for the amounts.
         title (str, optional): The title of the chart. Defaults to None.
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
         y_label (str, optional): The y-axis label. Defaults to None.
         x_label (str, optional): The x-axis label. Defaults to None.
         source_text (str, optional): The source text to add to the plot. Defaults to None.
@@ -93,7 +98,7 @@ def plot(
     if len(amounts) != len(labels):
         raise ValueError("The lengths of amounts and labels must be the same")
 
-    data_label_format = data_label_format.lower() if data_label_format else None
+    data_label_format = data_label_format.lower() if data_label_format is not None else None
     if data_label_format is not None and data_label_format not in [
         "absolute",
         "percentage",
@@ -136,21 +141,10 @@ def plot(
         **kwargs,
     )
 
-    extra_title_pad = 25 if data_label_format != "none" else 0
-    ax = gu.standard_graph_styles(
-        ax,
-        title=title,
-        y_label=gu.not_none(y_label, "Amounts"),
-        x_label=x_label,
-        title_pad=10 + extra_title_pad,
-    )
-
-    decimals = gu.get_decimals(ax.get_ylim(), ax.get_yticks())
-    gu.set_axis_format(ax.yaxis, "shorthand", decimals=decimals)
-
     # Add a black line at the y=0 position
     ax.axhline(y=0, color="black", linewidth=1, zorder=-1)
     if data_label_format is not None:
+        decimals = gu.get_decimals(ax.get_ylim(), ax.get_yticks())
         labels = format_data_labels(
             df["amounts"],
             amount_total,
@@ -164,19 +158,23 @@ def plot(
             label_type="edge",
             labels=labels,
             padding=5,
-            fontsize=style.label_size - 1,
-            fontproperties=get_font_properties(style.label_font),
+            fontsize=style.data_label_size,
+            fontproperties=get_font_properties(style.data_label_font),
         )
 
     if display_net_line:
         ax.axhline(y=amount_total, color="black", linewidth=1, linestyle="--")
 
-    if source_text is not None:
-        gu.add_source_text(ax=ax, source_text=source_text)
-
-    gu.standard_tick_styles(ax)
-
-    return ax
+    return standard_graph_styles(
+        ax,
+        title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
+        y_label=y_label,
+        x_label=x_label,
+        source_text=source_text,
+        grid_axis="y",
+    )
 
 
 def format_data_labels(
@@ -210,6 +208,6 @@ def format_data_labels(
         return [gu.format_shorthand(x, decimals=decimals + 1) for x in amounts]
 
     if label_format == "percentage":
-        return amounts.apply(lambda x: f"{x / total_change:.0%}").tolist()
+        return (amounts / total_change).map("{:.0%}".format).tolist()
 
     return [f"{gu.format_shorthand(x, decimals=decimals + 1)} ({x / total_change:.0%})" for x in amounts]

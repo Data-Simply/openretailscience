@@ -11,14 +11,15 @@ Example use case: Comparing sales data across multiple promotional weeks or seas
 """
 
 from datetime import datetime
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-from dateutil.relativedelta import relativedelta
 from matplotlib.axes import Axes
 
-import openretailscience.plots.styles.graph_utils as gu
-from openretailscience.plots.line import plot as line_plot
+from openretailscience.plots.styles.colors import get_sequential_cmap
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 LINE_STYLES = [
     "-",  # solid
@@ -31,6 +32,12 @@ LINE_STYLES = [
     (0, (3, 5, 1, 5, 1, 5)),  # loosely dashdotdotted
 ]
 
+SEQUENTIAL_SAMPLE_DARKEST = 0.85
+SEQUENTIAL_SAMPLE_LIGHTEST = 0.5
+
+LINEWIDTH_NEWEST = 2.5
+LINEWIDTH_OLDEST = 1.25
+
 
 def plot(
     df: pd.DataFrame,
@@ -40,11 +47,15 @@ def plot(
     x_label: str | None = None,
     y_label: str | None = None,
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     source_text: str | None = None,
     legend_title: str | None = None,
     move_legend_outside: bool = False,
+    legend_style: Literal["box", "end_of_line"] | None = None,
     ax: Axes | None = None,
-    **kwargs: dict[str, any],
+    figsize: tuple[int, int] | None = None,
+    **kwargs: Any,  # noqa: ANN401
 ) -> Axes:
     """Plot multiple overlapping periods from a single time series as individual lines.
 
@@ -68,10 +79,16 @@ def plot(
         x_label (Optional[str]): Custom label for the x-axis.
         y_label (Optional[str]): Custom label for the y-axis.
         title (Optional[str]): Title for the plot.
+        eyebrow (Optional[str]): Small uppercase label rendered above the title.
+        subtitle (Optional[str]): Supporting copy rendered below the title.
         source_text (Optional[str]): Text to show below the plot as a data source.
         legend_title (Optional[str]): Title for the plot legend.
         move_legend_outside (bool): Whether to place the legend outside the plot area.
+        legend_style (Literal["box", "end_of_line"], optional): How periods are labelled. ``"box"`` renders the
+            standard legend; ``"end_of_line"`` suppresses the legend and places a colored period label at the
+            right end of each line.
         ax (Optional[Axes]): Matplotlib Axes object to draw on. If None, a new one is created.
+        figsize (tuple[int, int], optional): Size of the new figure when ``ax`` is None. Defaults to None.
         **kwargs: Additional keyword arguments passed to the base line plot function.
 
     Returns:
@@ -79,28 +96,50 @@ def plot(
 
     Raises:
         ValueError: The 'periods' list must contain at least two (start, end) tuples for comparison.
+        ValueError: If `legend_style` is not one of ``None``, ``"box"``, or ``"end_of_line"``.
     """
+    if legend_style not in (None, "box", "end_of_line"):
+        msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"
+        raise ValueError(msg)
+
     min_period_length = 2
     if len(periods) < min_period_length:
         raise ValueError("The 'periods' list must contain at least two (start, end) tuples for comparison")
 
-    periods = [(pd.to_datetime(start), pd.to_datetime(end)) for start, end in periods]
-    start_ref = periods[0][0]
+    parsed_periods = [(pd.to_datetime(start), pd.to_datetime(end)) for start, end in periods]
+    start_ref = parsed_periods[0][0]
 
-    sorted_periods = sorted(periods, reverse=True, key=lambda x: pd.to_datetime(x[0]))
+    sorted_periods = sorted(parsed_periods, reverse=True, key=lambda x: x[0])
 
-    ax = ax or plt.gca()
+    if ax is None:
+        _, ax = plt.subplots(figsize=figsize)
 
     period_styles = {period: LINE_STYLES[idx % len(LINE_STYLES)] for idx, period in enumerate(sorted_periods)}
 
+    cmap = get_sequential_cmap()
+    color_samples = np.linspace(SEQUENTIAL_SAMPLE_DARKEST, SEQUENTIAL_SAMPLE_LIGHTEST, len(sorted_periods))
+    period_colors = {period: cmap(t) for period, t in zip(sorted_periods, color_samples, strict=True)}
+    # Newer periods draw thicker; uniform user-supplied linewidth wins if provided.
+    user_linewidth = kwargs.pop("linewidth", None)
+    if user_linewidth is None:
+        linewidth_samples = np.linspace(LINEWIDTH_NEWEST, LINEWIDTH_OLDEST, len(sorted_periods))
+        period_linewidths = dict(zip(sorted_periods, linewidth_samples, strict=True))
+    else:
+        period_linewidths = dict.fromkeys(sorted_periods, user_linewidth)
+    # Newer periods draw on top of older ones regardless of caller-supplied period order.
+    period_zorder = {period: len(sorted_periods) - idx + 2 for idx, period in enumerate(sorted_periods)}
+
+    df = df.copy()
     df[x_col] = pd.to_datetime(df[x_col])
 
     start_ref_year = start_ref.year
 
-    for start_str, end_str in periods:
-        style = period_styles[(start_str, end_str)]
-        start = pd.to_datetime(start_str)
-        end = pd.to_datetime(end_str)
+    for start, end in parsed_periods:
+        period_key = (start, end)
+        linestyle = period_styles[period_key]
+        color = period_colors[period_key]
+        linewidth = period_linewidths[period_key]
+        zorder = period_zorder[period_key]
         period_df = df[(df[x_col] >= start) & (df[x_col] <= end)].copy()
 
         if period_df.empty:
@@ -108,37 +147,37 @@ def plot(
 
         year_diff = start.year - start_ref_year
 
-        period_df["realigned_date"] = period_df[x_col].apply(
-            lambda d, year_diff=year_diff: d - relativedelta(years=year_diff),
-        )
+        period_df["realigned_date"] = period_df[x_col] - pd.DateOffset(years=year_diff)
 
-        label = f"{start_str.date()} to {end_str.date()}"
-        line_plot(
-            df=period_df,
-            x_col="realigned_date",
-            value_col=value_col,
-            ax=ax,
-            linestyle=style,
-            x_label=x_label,
-            y_label=y_label,
+        ax.plot(
+            period_df["realigned_date"],
+            period_df[value_col],
+            linestyle=linestyle,
+            color=color,
+            linewidth=linewidth,
+            zorder=zorder,
+            label=f"{start.date()} to {end.date()}",
             **kwargs,
         )
-        line = ax.get_lines()[-1]
-        line.set_label(label)
-        line.set_linestyle(style)
 
-    ax = gu.standard_graph_styles(
+    # ax.plot() only labels artists; without an explicit ax.legend() call no Legend
+    # is attached, so standard_graph_styles' legend gate (which requires
+    # ax.get_legend() is not None) silently skips legend styling and the periods
+    # render without a key. end_of_line styling removes this legend downstream.
+    ax.legend()
+
+    return standard_graph_styles(
         ax=ax,
         title=title,
-        x_label=x_label or x_col,
-        y_label=y_label or value_col,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
+        x_label=x_label,
+        y_label=y_label,
         legend_title=legend_title,
         move_legend_outside=move_legend_outside,
+        show_legend=True,
+        legend_style=legend_style,
+        source_text=source_text,
+        grid_axis="y",
+        x_margin=0,
     )
-
-    ax = gu.standard_tick_styles(ax)
-
-    if source_text:
-        gu.add_source_text(ax=ax, source_text=source_text)
-
-    return ax

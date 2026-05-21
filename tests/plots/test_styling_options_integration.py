@@ -14,7 +14,7 @@ TEST_LABEL_SIZE = 14.0
 TEST_FONT_SIZE_SMALL = 13.0
 TEST_FONT_SIZE_MEDIUM = 22.0
 TEST_DATA_LABEL_SIZE = 12.0
-TEST_TITLE_PAD = 25
+TEST_LEGEND_SIZE = 7.0
 TEST_X_LABEL_PAD = 20
 TEST_Y_LABEL_PAD = 15
 WHITESMOKE_RGBA = mcolors.to_rgba("whitesmoke")
@@ -38,7 +38,7 @@ class TestStylingOptionsIntegration:
             {
                 "x": [1, 2, 3, 4, 5],
                 "y": [2, 5, 3, 8, 7],
-                "category": ["A", "A", "B", "B", "A"],
+                "category": ["Bakery", "Bakery", "Dairy", "Dairy", "Bakery"],
                 "labels": ["Point1", "Point2", "Point3", "Point4", "Point5"],
             },
         )
@@ -63,12 +63,11 @@ class TestStylingOptionsIntegration:
                 y_label="Y Axis",
             )
 
-            # Verify title properties
-            assert ax.get_title() == "Custom Font Test"
-            assert ax.title.get_fontsize() == TEST_TITLE_SIZE
-            # Verify title font was applied
-            title_font_file = ax.title.get_fontproperties().get_file()
-            assert "Poppins-Bold.ttf" in title_font_file
+            # Title is now a figure-level Text rendered by the chrome layout.
+            title_texts = [t for t in ax.figure.texts if t.get_text() == "Custom Font Test"]
+            assert len(title_texts) == 1
+            assert title_texts[0].get_fontsize() == TEST_TITLE_SIZE
+            assert "Poppins-Bold.ttf" in title_texts[0].get_fontproperties().get_file()
 
             # Verify label properties
             assert ax.get_xlabel() == "X Axis"
@@ -79,8 +78,6 @@ class TestStylingOptionsIntegration:
     def test_spacing_customization_with_context(self, sample_dataframe):
         """Test that spacing options affect plot layout via context manager."""
         with option_context(
-            "plot.spacing.title_pad",
-            TEST_TITLE_PAD,
             "plot.spacing.x_label_pad",
             TEST_X_LABEL_PAD,
             "plot.spacing.y_label_pad",
@@ -95,16 +92,8 @@ class TestStylingOptionsIntegration:
                 y_label="Y Axis",
             )
 
-            # Verify label padding was applied
             assert ax.xaxis.labelpad == TEST_X_LABEL_PAD
             assert ax.yaxis.labelpad == TEST_Y_LABEL_PAD
-
-            # Verify title padding by measuring gap between title and axes
-            ax.figure.canvas.draw()
-            title_bbox = ax.title.get_window_extent()
-            axes_bbox = ax.get_window_extent()
-            title_gap = title_bbox.y0 - axes_bbox.y1
-            assert title_gap >= TEST_TITLE_PAD
 
     def test_style_customization_with_context(self, sample_dataframe):
         """Test that style options affect plot appearance via context manager."""
@@ -132,6 +121,49 @@ class TestStylingOptionsIntegration:
             assert ax.spines["right"].get_visible() is True
             assert ax.spines["bottom"].get_visible() is True
             assert ax.spines["left"].get_visible() is True
+
+    def test_legend_size_customization(self, sample_dataframe):
+        """Test that plot.font.legend_size controls legend entry font size."""
+        with option_context("plot.font.legend_size", TEST_LEGEND_SIZE):
+            ax = scatter.plot(
+                df=sample_dataframe,
+                value_col="y",
+                x_col="x",
+                group_col="category",
+                title="Custom Legend Size Test",
+                legend_title="Category",
+            )
+
+            legend = ax.get_legend()
+            assert legend is not None, "Expected a legend on grouped scatter plot"
+            legend_texts = legend.get_texts()
+            expected_categories = sample_dataframe["category"].nunique()
+            assert len(legend_texts) == expected_categories
+            for text in legend_texts:
+                assert text.get_fontsize() == TEST_LEGEND_SIZE
+
+    def test_legend_font_customization(self, sample_dataframe):
+        """Test that plot.font.legend_font controls legend title and entry font family."""
+        with option_context("plot.font.legend_font", "poppins_bold"):
+            ax = scatter.plot(
+                df=sample_dataframe,
+                value_col="y",
+                x_col="x",
+                group_col="category",
+                title="Custom Legend Font Test",
+                legend_title="Category",
+            )
+
+            legend = ax.get_legend()
+            assert legend is not None, "Expected a legend on grouped scatter plot"
+
+            assert "Poppins-Bold.ttf" in legend.get_title().get_fontproperties().get_file()
+
+            legend_texts = legend.get_texts()
+            expected_categories = sample_dataframe["category"].nunique()
+            assert len(legend_texts) == expected_categories
+            for text in legend_texts:
+                assert "Poppins-Bold.ttf" in text.get_fontproperties().get_file()
 
     def test_label_font_customization(self, sample_dataframe):
         """Test that data label fonts can be customized."""
@@ -179,8 +211,9 @@ class TestStylingOptionsIntegration:
             )
 
             # Verify various properties
-            assert ax.get_title() == "Multi-Option Test"
-            assert ax.title.get_fontsize() == TEST_FONT_SIZE_MEDIUM
+            title_texts = [t for t in ax.figure.texts if t.get_text() == "Multi-Option Test"]
+            assert len(title_texts) == 1
+            assert title_texts[0].get_fontsize() == TEST_FONT_SIZE_MEDIUM
             assert ax.get_xlabel() == "X Values"
             assert ax.get_ylabel() == "Y Values"
             assert ax.xaxis.label.get_fontsize() == TEST_FONT_SIZE_SMALL
@@ -202,7 +235,8 @@ class TestStylingOptionsIntegration:
         )
 
         # Default behavior should still work
-        assert ax.get_title() == "Default Behavior Test"
+        title_texts = [t for t in ax.figure.texts if t.get_text() == "Default Behavior Test"]
+        assert len(title_texts) == 1
         assert ax.get_xlabel() == "X Axis"
         assert ax.get_ylabel() == "Y Axis"
 
