@@ -10,9 +10,10 @@ distributions across categories by splitting the data into multiple histograms.
 For example, visualize the distribution of a single metric or compare multiple metrics simultaneously.
 - **Grouped Histograms**: Create separate histograms for each unique value in **`group_col`** (e.g., product categories
 or regions), allowing for easy comparison of distributions across groups.
-- **Range Clipping and Filling**: Use **`range_lower`** and **`range_upper`** to limit the values being plotted by
-clipping them or filling values outside the range with **NaN**. This is particularly useful when visualizing specific
-data ranges.
+- **Outlier-Preserving Clipping**: Use **`clip_range=(lower, upper)`** to clamp out-of-range values to the boundary
+so they pile up at the edge bins instead of being dropped. Pass `None` on either side for one-sided clipping
+(e.g., `clip_range=(0, None)` to clamp negatives only). To drop out-of-range values instead, pass matplotlib's
+native `range=(lower, upper)` through `**kwargs`.
 - **Comprehensive Customization**: Customize plot titles, axis labels, and legends, with the option to
 move the legend outside the plot.
 
@@ -23,8 +24,8 @@ single or multiple histograms.
 - **Group Comparisons**: Compare distributions across different groups, such as product categories,
 geographic regions, or customer segments. For instance, plot histograms to show how sales vary across
 different product categories.
-- **Trends and Ranges**: Use **range_lower** and **range_upper** to visualize data within specific ranges, filtering out
-outliers or focusing on key metrics for analysis.
+- **Outlier Visibility**: Use **`clip_range`** to keep extreme values visible at the edge bins rather than
+dropping them, so the shape of the central mass is readable without hiding how much sits beyond it.
 
 ### Limitations and Handling of Data
 
@@ -37,21 +38,24 @@ when plotting a Series.
 
 ### Additional Features
 
-- **Range Clipping or Filling**: You can control how the data is visualized by specifying bounds. If data points fall
-outside the defined range, you can either clip them to the boundary values or fill them with **NaN** for exclusion.
+- **Outlier-Preserving Clipping**: `clip_range=(lower, upper)` clamps values outside the bounds to the nearest
+boundary so the edge bins absorb the outlier mass. This differs from matplotlib's native `range`, which drops
+out-of-range values entirely. The two are mutually exclusive.
 - **Legend Customization**: For multiple histograms, you can add legends, including the option to move the
 legend outside the plot for clarity.
 
 """
 
-from typing import Any, Literal
+from typing import Any
 
-import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
 import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.plots.styles.colors import get_plot_colors
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
+
+CLIP_RANGE_LENGTH = 2
 
 
 def plot(
@@ -59,17 +63,17 @@ def plot(
     value_col: str | list[str] | None = None,
     group_col: str | None = None,
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
     legend_title: str | None = None,
     ax: Axes | None = None,
     source_text: str | None = None,
     move_legend_outside: bool = False,
-    range_lower: float | None = None,
-    range_upper: float | None = None,
-    range_method: Literal["clip", "fillna"] = "clip",
+    clip_range: tuple[float | None, float | None] | None = None,
     use_hatch: bool = False,
-    **kwargs: dict[str, Any],
+    **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
     """Plots a histogram of `value_col`, optionally split by `group_col`.
 
@@ -79,37 +83,52 @@ def plot(
             Can be a list of columns for multiple histograms.
         group_col (str, optional): The column used to define different histograms.
         title (str, optional): The title of the plot.
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
         x_label (str, optional): The x-axis label.
         y_label (str, optional): The y-axis label.
         legend_title (str, optional): The title of the legend.
         ax (Axes, optional): Matplotlib axes object to plot on.
         source_text (str, optional): The source text to add to the plot.
         move_legend_outside (bool, optional): Move the legend outside the plot.
-        range_lower (float, optional): Lower bound for clipping or filling NA values.
-        range_upper (float, optional): Upper bound for clipping or filling NA values.
-        range_method (str, optional): Whether to "clip" values outside the range or "fillna". Defaults to "clip".
+        clip_range (tuple[float | None, float | None], optional): `(lower, upper)` bounds that clamp out-of-range
+            values to the nearest boundary so they pile up at the edge bins. Pass `None` on either side for
+            one-sided clipping. Mutually exclusive with matplotlib's `range` kwarg, which drops out-of-range
+            values instead.
         use_hatch (bool, optional): Whether to use hatching for the bars.
         **kwargs: Additional keyword arguments for Pandas' `plot` function.
 
     Returns:
         SubplotBase: The matplotlib axes object.
+
+    Raises:
+        ValueError: If both `clip_range` and matplotlib's `range` kwarg are specified; if `clip_range` is not a
+            2-tuple or has lower greater than upper; or if `value_col` is a list and `group_col` is also provided.
     """
     if isinstance(value_col, list) and group_col is not None:
         raise ValueError("`value_col` cannot be a list when `group_col` is provided. Please choose one or the other.")
+
+    if clip_range is not None and "range" in kwargs:
+        raise ValueError(
+            "Cannot specify both `range` and `clip_range`. Use `clip_range` to clamp outliers to the edge bins, "
+            "or `range` to drop out-of-range values entirely.",
+        )
 
     value_col = _prepare_value_col(df=df, value_col=value_col)
 
     if isinstance(df, pd.Series):
         df = df.to_frame(name=value_col[0])
 
-    if (range_lower is not None) or (range_upper is not None):
-        df = _apply_range_clipping(
-            df=df,
-            value_col=value_col,
-            range_lower=range_lower,
-            range_upper=range_upper,
-            range_method=range_method,
-        )
+    if clip_range is not None and len(clip_range) != CLIP_RANGE_LENGTH:
+        msg = f"clip_range must be a 2-tuple of (lower, upper); got length {len(clip_range)}"
+        raise ValueError(msg)
+
+    if clip_range is not None:
+        clip_lower, clip_upper = clip_range
+        if clip_lower is not None and clip_upper is not None and clip_lower > clip_upper:
+            msg = f"clip_range lower ({clip_lower}) must be <= upper ({clip_upper})"
+            raise ValueError(msg)
+        df = df.assign(**{col: df[col].clip(lower=clip_lower, upper=clip_upper) for col in value_col})
 
     num_histograms = _get_num_histograms(df=df, value_col=value_col, group_col=group_col)
 
@@ -126,22 +145,23 @@ def plot(
         **kwargs,
     )
 
-    ax = gu.standard_graph_styles(
+    if use_hatch:
+        ax = gu.apply_hatches(ax=ax, num_segments=num_histograms)
+
+    return standard_graph_styles(
         ax=ax,
         title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
         x_label=x_label,
         y_label=y_label,
         legend_title=legend_title,
         move_legend_outside=move_legend_outside,
+        show_legend=num_histograms > 1,
+        source_text=source_text,
+        grid_axis="y",
+        x_margin=0,
     )
-
-    if use_hatch:
-        ax = gu.apply_hatches(ax=ax, num_segments=num_histograms)
-
-    if source_text:
-        gu.add_source_text(ax=ax, source_text=source_text)
-
-    return gu.standard_tick_styles(ax=ax)
 
 
 def _prepare_value_col(df: pd.DataFrame | pd.Series, value_col: str | list[str] | None) -> list[str]:
@@ -164,46 +184,6 @@ def _prepare_value_col(df: pd.DataFrame | pd.Series, value_col: str | list[str] 
         value_col = [value_col]
 
     return value_col
-
-
-def _apply_range_clipping(
-    df: pd.DataFrame,
-    value_col: list[str],
-    range_lower: float | None = None,
-    range_upper: float | None = None,
-    range_method: Literal["clip", "fillna"] = "fillna",
-) -> pd.DataFrame:
-    """Applies range clipping or filling based on the provided method and returns the modified dataframe.
-
-    Args:
-        df (pd.DataFrame): The dataframe to apply range clipping to.
-        value_col (list of str): The column(s) to apply clipping or filling to.
-        range_lower (float | None, optional): Lower bound for clipping or filling NA values.
-        range_upper (float | None, optional): Upper bound for clipping or filling NA values.
-        range_method (Literal, optional): Whether to "clip" values outside the range or "fillna". Defaults to "fillna".
-
-    Returns:
-        pd.DataFrame: The modified dataframe with the clipping or filling applied.
-    """
-    if range_method not in ["clip", "fillna"]:
-        error_msg = f"Invalid range_method: {range_method}. Expected 'clip' or 'fillna'."
-        raise ValueError(error_msg)
-
-    if range_method == "clip":
-        # Clip values based on the provided lower and upper bounds
-        return df.assign(**{col: df[col].clip(lower=range_lower, upper=range_upper) for col in value_col})
-
-    # For the "fillna" method, we will create a mask for the valid range and replace out-of-range values with NaN
-    def apply_mask(col: str) -> pd.Series:
-        mask = pd.Series([True] * len(df))
-        if range_lower is not None:
-            mask &= df[col] >= range_lower
-        if range_upper is not None:
-            mask &= df[col] <= range_upper
-        return df[col].where(mask, np.nan)
-
-    # Apply the mask to each column
-    return df.assign(**{col: apply_mask(col) for col in value_col})
 
 
 def _get_num_histograms(df: pd.DataFrame, value_col: list[str], group_col: str | None) -> int:
@@ -232,7 +212,7 @@ def _plot_histogram(
     ax: Axes | None,
     colors: list[str],
     num_histograms: int,
-    **kwargs: dict,
+    **kwargs: Any,  # noqa: ANN401
 ) -> Axes:
     """Plots histograms for the provided dataframe.
 

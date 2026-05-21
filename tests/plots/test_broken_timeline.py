@@ -1,7 +1,5 @@
 """Tests for the broken timeline plot module."""
 
-from unittest.mock import patch
-
 import pandas as pd
 import pytest
 from matplotlib import pyplot as plt
@@ -23,25 +21,38 @@ def sample_dataframe():
     """A sample dataframe for testing with intentional gaps."""
     date_col = get_option("column.transaction_date")
 
-    # Create data with gaps for different categories
+    # Create data with gaps for different stores
     data = {
         date_col: pd.to_datetime(
             [
                 "2025-04-01",
                 "2025-04-02",
-                "2025-04-03",  # Category A: continuous
+                "2025-04-03",  # Store_North: continuous
                 "2025-04-06",
-                "2025-04-07",  # Category A: gap then continues
+                "2025-04-07",  # Store_North: gap then continues
                 "2025-04-01",
-                "2025-04-02",  # Category B: starts same time
+                "2025-04-02",  # Store_South: starts same time
                 "2025-04-05",
-                "2025-04-06",  # Category B: gap then continues
+                "2025-04-06",  # Store_South: gap then continues
                 "2025-04-03",
                 "2025-04-04",
-                "2025-04-05",  # Category C: different pattern
+                "2025-04-05",  # Store_East: different pattern
             ],
         ),
-        "category": ["A", "A", "A", "A", "A", "B", "B", "B", "B", "C", "C", "C"],
+        "category": [
+            "Store_North",
+            "Store_North",
+            "Store_North",
+            "Store_North",
+            "Store_North",
+            "Store_South",
+            "Store_South",
+            "Store_South",
+            "Store_South",
+            "Store_East",
+            "Store_East",
+            "Store_East",
+        ],
         "value": [100, 150, 200, 120, 180, 300, 250, 400, 350, 80, 90, 110],
     }
     return pd.DataFrame(data)
@@ -86,7 +97,8 @@ class TestBrokenTimelinePlot:
         )
 
         assert isinstance(ax, Axes)
-        assert ax.get_title() == title
+        title_texts = [t for t in ax.figure.texts if t.get_text() == title]
+        assert len(title_texts) == 1
         assert ax.get_xlabel() == x_label
         assert ax.get_ylabel() == y_label
 
@@ -103,25 +115,27 @@ class TestBrokenTimelinePlot:
 
     def test_threshold_filtering(self, sample_dataframe):
         """Test threshold value filtering removes low values."""
-        # Plot with threshold that should filter out some data
+        threshold = 150
         ax = broken_timeline.plot(
             df=sample_dataframe,
             category_col="category",
             value_col="value",
-            threshold_value=150,
+            threshold_value=threshold,
         )
-
-        # Plot without threshold for comparison
         ax_no_threshold = broken_timeline.plot(
             df=sample_dataframe,
             category_col="category",
             value_col="value",
         )
 
-        # With threshold, there should be fewer or equal bars than without threshold
-        threshold_bars = len(list(ax.patches))
-        no_threshold_bars = len(list(ax_no_threshold.patches))
-        assert threshold_bars <= no_threshold_bars
+        surviving_categories = sorted(
+            sample_dataframe.loc[sample_dataframe["value"] >= threshold, "category"].unique(),
+        )
+        all_categories = sorted(sample_dataframe["category"].unique())
+
+        assert [t.get_text() for t in ax.get_yticklabels()] == surviving_categories
+        assert [t.get_text() for t in ax_no_threshold.get_yticklabels()] == all_categories
+        assert len(surviving_categories) < len(all_categories)
 
     def test_different_periods(self):
         """Test period aggregation works correctly for valid periods."""
@@ -141,28 +155,41 @@ class TestBrokenTimelinePlot:
                     "2025-02-12",
                 ],
             ),
-            "category": ["A"] * 8,
+            "category": ["Store_North"] * 8,
             "value": [100] * 8,
         }
         df = pd.DataFrame(data)
 
-        results = {}
+        segments = {}
         for period in ["D", "W"]:
             ax = broken_timeline.plot(df, "category", "value", period=period)
-            results[period] = len(list(ax.patches))
+            segments[period] = sum(len(c.get_paths()) for c in ax.collections)
 
-        # Weekly aggregation should have fewer or equal bars than daily
-        assert results["W"] <= results["D"]
+        # 01-01 and 01-02 form one daily segment; the other six dates are isolated.
+        expected_daily_segments = 7
+        # All 8 dates fall in 7 contiguous weeks, collapsing to a single weekly segment.
+        expected_weekly_segments = 1
+        assert segments["D"] == expected_daily_segments
+        assert segments["W"] == expected_weekly_segments
 
     def test_lowercase_period_handling(self, sample_dataframe):
-        """Test that lowercase period parameters are properly converted."""
-        ax = broken_timeline.plot(
+        """A lowercase period parameter produces the same segments as its uppercase equivalent."""
+        ax_lower = broken_timeline.plot(
             df=sample_dataframe,
             category_col="category",
             value_col="value",
             period="d",
         )
-        assert isinstance(ax, Axes)
+        ax_upper = broken_timeline.plot(
+            df=sample_dataframe,
+            category_col="category",
+            value_col="value",
+            period="D",
+        )
+
+        lower_segments = sum(len(c.get_paths()) for c in ax_lower.collections)
+        upper_segments = sum(len(c.get_paths()) for c in ax_upper.collections)
+        assert lower_segments == upper_segments
 
     def test_with_source_text(self, sample_dataframe):
         """Test adding source text appears in plot."""
@@ -220,16 +247,18 @@ class TestBrokenTimelinePlot:
             )
 
     def test_kwargs_passed_to_broken_barh(self, sample_dataframe):
-        """Test that additional kwargs are passed to broken_barh."""
+        """Extra kwargs reach broken_barh, visible as alpha applied to the rendered collections."""
+        alpha = 0.5
         ax = broken_timeline.plot(
             df=sample_dataframe,
             category_col="category",
             value_col="value",
-            alpha=0.5,
-            edgecolors="black",
+            alpha=alpha,
         )
 
-        assert isinstance(ax, Axes)
+        expected_collections = sample_dataframe["category"].nunique()
+        assert len(ax.collections) == expected_collections
+        assert all(collection.get_alpha() == alpha for collection in ax.collections)
 
     def test_y_axis_inverted(self, sample_dataframe):
         """Test that y-axis is inverted (categories from top to bottom)."""
@@ -244,14 +273,13 @@ class TestBrokenTimelinePlot:
         assert y_lim[0] > y_lim[1]  # First value should be greater than second for inverted axis
 
     def test_duplicate_date_category_combinations(self):
-        """Test handling of duplicate date-category combinations."""
+        """Duplicate (date, category) rows collapse into a single category row with one contiguous segment."""
         date_col = get_option("column.transaction_date")
 
-        # Create data with duplicates
         data = {
             date_col: pd.to_datetime(["2025-04-01", "2025-04-01", "2025-04-02"]),
-            "category": ["A", "A", "A"],  # Same category, same date for first two rows
-            "value": [100, 200, 150],  # Different values
+            "category": ["Store_North", "Store_North", "Store_North"],
+            "value": [100, 200, 150],
         }
         df_with_duplicates = pd.DataFrame(data)
 
@@ -261,7 +289,8 @@ class TestBrokenTimelinePlot:
             value_col="value",
         )
 
-        assert isinstance(ax, Axes)
+        assert [t.get_text() for t in ax.get_yticklabels()] == ["Store_North"]
+        assert sum(len(c.get_paths()) for c in ax.collections) == 1
 
     def test_categories_sorted_on_y_axis(self, sample_dataframe):
         """Test that categories are sorted on the y-axis."""
@@ -275,13 +304,13 @@ class TestBrokenTimelinePlot:
         assert y_labels == sorted(y_labels)  # Should be sorted
 
     def test_no_data_for_category(self):
-        """Test handling when a category has no data after filtering."""
+        """A category whose only row falls below threshold is dropped from the y-axis entirely."""
         date_col = get_option("column.transaction_date")
 
         data = {
             date_col: pd.to_datetime(["2025-04-01", "2025-04-02"]),
-            "category": ["A", "B"],
-            "value": [50, 200],  # A will be filtered out with threshold 100
+            "category": ["Store_North", "Store_South"],
+            "value": [50, 200],
         }
         df = pd.DataFrame(data)
 
@@ -292,7 +321,7 @@ class TestBrokenTimelinePlot:
             threshold_value=100,
         )
 
-        assert isinstance(ax, Axes)
+        assert [t.get_text() for t in ax.get_yticklabels()] == ["Store_South"]
 
     @pytest.mark.parametrize(
         ("period", "dates", "num_periods"),
@@ -308,16 +337,16 @@ class TestBrokenTimelinePlot:
 
         data = {
             date_col: pd.to_datetime(dates),
-            "category": ["A"] * len(dates),
+            "category": ["Store_North"] * len(dates),
             "value": [100] * len(dates),
         }
         df = pd.DataFrame(data)
 
-        with patch("matplotlib.axes.Axes.broken_barh") as mock_broken_barh:
-            broken_timeline.plot(df, "category", "value", period=period)
-            segments = mock_broken_barh.call_args[0][0]
-            actual_width = segments[0][1]
-            assert actual_width == expected_width
+        ax = broken_timeline.plot(df, "category", "value", period=period)
+        paths = ax.collections[0].get_paths()
+        first_path_vertices = paths[0].vertices
+        actual_width = first_path_vertices[2][0] - first_path_vertices[0][0]
+        assert actual_width == expected_width
 
     @pytest.mark.parametrize(
         ("period", "dates", "expected_segments"),
@@ -340,12 +369,11 @@ class TestBrokenTimelinePlot:
 
         data = {
             date_col: pd.to_datetime(dates),
-            "category": ["A"] * len(dates),
+            "category": ["Store_North"] * len(dates),
             "value": [100] * len(dates),
         }
         df = pd.DataFrame(data)
 
-        with patch("matplotlib.axes.Axes.broken_barh") as mock_broken_barh:
-            broken_timeline.plot(df, "category", "value", period=period)
-            segments = mock_broken_barh.call_args[0][0]
-            assert len(segments) == expected_segments
+        ax = broken_timeline.plot(df, "category", "value", period=period)
+        paths = ax.collections[0].get_paths()
+        assert len(paths) == expected_segments

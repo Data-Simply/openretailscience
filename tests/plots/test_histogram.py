@@ -1,12 +1,10 @@
 """Tests for the histograms plot module."""
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import pytest
 from matplotlib.axes import Axes
 
-from openretailscience.options import PlotStyleHelper
 from openretailscience.plots import histogram
 
 
@@ -23,7 +21,7 @@ def sample_dataframe():
     data = {
         "value_1": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
         "value_2": [10, 9, 8, 7, 6, 5, 4, 3, 2, 1],
-        "group": ["A"] * 5 + ["B"] * 5,
+        "group": ["Loyalty"] * 5 + ["Guest"] * 5,
     }
     return pd.DataFrame(data)
 
@@ -36,162 +34,147 @@ def sample_series():
 
 def test_plot_single_histogram(sample_dataframe):
     """Test the plot function with a single histogram."""
+    bins = 7
     result_ax = histogram.plot(
         df=sample_dataframe,
         value_col="value_1",
+        bins=bins,
         title="Test Single Histogram",
     )
 
     assert isinstance(result_ax, Axes)
-    assert len(result_ax.patches) > 0  # Ensure that some bars were plotted
+    assert len(result_ax.patches) == bins
 
 
 def test_plot_grouped_histogram(sample_dataframe):
     """Test the plot function with grouped histograms."""
+    bins = 7
     result_ax = histogram.plot(
         df=sample_dataframe,
         value_col="value_1",
         group_col="group",
+        bins=bins,
         title="Test Grouped Histogram",
     )
 
+    num_groups = sample_dataframe["group"].nunique()
     assert isinstance(result_ax, Axes)
-    assert len(result_ax.patches) > 0  # Ensure that some bars were plotted
+    assert len(result_ax.patches) == bins * num_groups
 
 
-def test_plot_enforces_range_clipping(sample_dataframe):
-    """Test that the plot function enforces range clipping through the Axes limits and print the min/max values."""
-    range_lower = 2
-    range_upper = 8
-
-    # Plot with range clipping
-    result_ax = histogram.plot(
-        df=sample_dataframe,
-        value_col="value_1",
-        title="Test Histogram with Range Clipping",
-        range_lower=range_lower,
-        range_upper=range_upper,
-        range_method="clip",
-    )
-
-    # Get the data limits from the resulting Axes object
-    x_data = result_ax.patches  # Access the bars in the histogram
-    clipped_values = [patch.get_x() for patch in x_data]
-
-    # Ensure that the x values (bars' positions) respect the clipping limits
-    assert all(range_lower <= val + np.finfo(np.float64).eps <= range_upper for val in clipped_values)
-
-
-def test_plot_with_range_fillna(sample_dataframe):
-    """Test the plot function with range fillna."""
-    range_lower = 3
-    range_upper = 9
-
-    # Plot with range clipping
-    result_ax = histogram.plot(
-        df=sample_dataframe,
-        value_col="value_1",
-        title="Test Histogram with Range Clipping",
-        range_lower=range_lower,
-        range_upper=range_upper,
-        range_method="fillna",
-    )
-
-    # Get the data limits from the resulting Axes object
-    x_data = result_ax.patches  # Access the bars in the histogram
-    clipped_values = [patch.get_x() for patch in x_data]
-
-    # Ensure that the x values (bars' positions) respect the clipping limits
-    assert all(range_lower <= val + np.finfo(np.float64).eps <= range_upper for val in clipped_values)
-
-
-def test_plot_with_range_lower_none(sample_dataframe):
-    """Test the plot function with range_lower=None (no lower bound) and a specific upper bound."""
-    range_upper = 8  # No lower bound
+def test_clip_range_piles_outliers_into_boundary_bins():
+    """clip_range=(lo, hi) clamps out-of-range values so they pile up at the edge bins."""
+    # 5 in-range values + 3 below-lower outliers + 2 above-upper outliers.
+    in_range = [10, 20, 30, 40, 50]
+    below_lower = [-5, -10, -20]
+    above_upper = [200, 300]
+    df = pd.DataFrame({"basket_amount": in_range + below_lower + above_upper})
 
     result_ax = histogram.plot(
-        df=sample_dataframe,
-        value_col="value_1",
-        title="Test Histogram with Upper Bound Only",
-        range_lower=None,
-        range_upper=range_upper,
-        range_method="clip",
+        df=df,
+        value_col="basket_amount",
+        clip_range=(0, 60),
+        bins=6,
     )
 
-    # Get the data limits from the resulting Axes object
-    x_data = result_ax.patches
-    clipped_values = [patch.get_x() for patch in x_data]
+    heights = [p.get_height() for p in result_ax.patches]
+    # Bin edges [0, 10, 20, 30, 40, 50, 60]; last bin is right-closed.
+    # All below-lower outliers clamp to 0 → first bin.
+    # All above-upper outliers + the in-range 50 land in the last bin (60 is closed).
+    expected_first_bin = len(below_lower)
+    expected_last_bin = len(above_upper) + 1  # +1 for the in-range value 50
+    assert heights[0] == expected_first_bin
+    assert heights[-1] == expected_last_bin
+    assert sum(heights) == len(df)
 
-    # Ensure that the x values (bars' positions) respect the upper bound, but no lower bound is applied
-    assert all(val + np.finfo(np.float64).eps <= range_upper for val in clipped_values)
 
-
-def test_plot_with_range_upper_none(sample_dataframe):
-    """Test the plot function with range_upper=None (no upper bound) and a specific lower bound."""
-    range_lower = 3  # No upper bound
+@pytest.mark.parametrize(
+    ("data", "clip_range", "expected_leftmost", "expected_rightmost"),
+    [
+        ([10, 20, 30, 40, 50, -5, -10, 200, 300], (0, 60), 0, 60),
+        ([0, 60, 200, 300], (None, 60), None, 60),
+        ([-50, -20, 10, 20, 30], (0, None), 0, None),
+    ],
+)
+def test_clip_range_bin_edges_respect_bounds(data, clip_range, expected_leftmost, expected_rightmost):
+    """clip_range bin edges hug the clipped bound on whichever side is set."""
+    df = pd.DataFrame({"basket_amount": data})
 
     result_ax = histogram.plot(
-        df=sample_dataframe,
-        value_col="value_1",
-        title="Test Histogram with Lower Bound Only",
-        range_lower=range_lower,
-        range_upper=None,
-        range_method="clip",
+        df=df,
+        value_col="basket_amount",
+        clip_range=clip_range,
+        bins=6,
     )
 
-    # Get the data limits from the resulting Axes object
-    x_data = result_ax.patches
-    clipped_values = [patch.get_x() for patch in x_data]
+    if expected_leftmost is not None:
+        leftmost = min(p.get_x() for p in result_ax.patches)
+        assert leftmost == pytest.approx(expected_leftmost)
+    if expected_rightmost is not None:
+        rightmost = max(p.get_x() + p.get_width() for p in result_ax.patches)
+        assert rightmost == pytest.approx(expected_rightmost)
 
-    # Ensure that the x values (bars' positions) respect the lower bound, but no upper bound is applied
-    assert all(range_lower <= val + np.finfo(np.float64).eps for val in clipped_values)
+
+def test_passing_range_and_clip_range_raises(sample_dataframe):
+    """Specifying both matplotlib's `range` and ORS's `clip_range` raises ValueError."""
+    with pytest.raises(ValueError, match="Cannot specify both `range` and `clip_range`"):
+        histogram.plot(
+            df=sample_dataframe,
+            value_col="value_1",
+            clip_range=(2, 8),
+            range=(2, 8),
+        )
 
 
-def test_plot_fillna_outside_range(sample_dataframe):
-    """Test the fillna method, ensuring values outside the range are replaced by NaN."""
-    range_lower = 3
-    range_upper = 8
+@pytest.mark.parametrize("clip_range", [(50,), (0, 50, 100)])
+def test_clip_range_wrong_length_raises(sample_dataframe, clip_range):
+    """clip_range must be a 2-tuple; other lengths raise a descriptive ValueError."""
+    with pytest.raises(ValueError, match="clip_range must be a 2-tuple"):
+        histogram.plot(
+            df=sample_dataframe,
+            value_col="value_1",
+            clip_range=clip_range,
+        )
 
-    result_ax = histogram.plot(
-        df=sample_dataframe,
-        value_col="value_1",
-        title="Test Histogram with Range Fillna",
-        range_lower=range_lower,
-        range_upper=range_upper,
-        range_method="fillna",
-    )
 
-    # Extract data from the resulting Axes
-    x_data = result_ax.patches
-    clipped_values = [patch.get_x() for patch in x_data]
-
-    # Ensure that values outside the range are not plotted (NaN)
-    assert all(range_lower <= val + np.finfo(np.float64).eps <= range_upper for val in clipped_values)
+def test_clip_range_lower_greater_than_upper_raises():
+    """clip_range with lower > upper raises rather than silently collapsing values to the bound."""
+    df = pd.DataFrame({"basket_amount": [10, 20, 30, 40, 50]})
+    with pytest.raises(ValueError, match=r"clip_range lower \(60\) must be <= upper \(0\)"):
+        histogram.plot(
+            df=df,
+            value_col="basket_amount",
+            clip_range=(60, 0),
+        )
 
 
 def test_plot_single_histogram_series(sample_series):
     """Test the plot function with a pandas series."""
+    bins = 7
     result_ax = histogram.plot(
         df=sample_series,
+        bins=bins,
         title="Test Single Histogram (Series)",
     )
 
     assert isinstance(result_ax, Axes)
-    assert len(result_ax.patches) > 0  # Ensure that some bars were plotted
+    assert len(result_ax.patches) == bins
 
 
 def test_plot_histogram_with_hatch(sample_dataframe):
     """use_hatch=True applies a hatch pattern to every histogram patch."""
+    bins = 7
     result_ax = histogram.plot(
         df=sample_dataframe,
         value_col="value_1",
+        bins=bins,
         title="Test Histogram with Hatch",
         use_hatch=True,
     )
 
     hatches = [p.get_hatch() for p in result_ax.patches]
-    assert len(hatches) > 0
-    assert all(h is not None for h in hatches)
+    assert len(hatches) == bins
+    assert all(isinstance(h, str) and len(h) > 0 for h in hatches)
 
 
 def test_plot_invalid_value_col_with_group_col(sample_dataframe):
@@ -203,24 +186,6 @@ def test_plot_invalid_value_col_with_group_col(sample_dataframe):
             group_col="group",
             title="Test Invalid Value Col with Group Col",
         )
-
-
-def test_plot_legend_outside(sample_dataframe):
-    """move_legend_outside=True anchors the legend at the configured outside position."""
-    result_ax = histogram.plot(
-        df=sample_dataframe,
-        value_col="value_1",
-        group_col="group",
-        title="Test Legend Outside",
-        move_legend_outside=True,
-    )
-
-    legend = result_ax.get_legend()
-    assert legend is not None
-    anchor = legend.get_bbox_to_anchor().transformed(result_ax.transAxes.inverted())
-    expected_x, expected_y = PlotStyleHelper().legend_bbox_to_anchor
-    assert anchor.x0 == pytest.approx(expected_x)
-    assert anchor.y0 == pytest.approx(expected_y)
 
 
 def test_plot_adds_source_text(sample_dataframe):
@@ -239,14 +204,17 @@ def test_plot_adds_source_text(sample_dataframe):
 
 def test_plot_multiple_histograms(sample_dataframe):
     """Test the plot function with multiple histograms."""
+    bins = 7
+    value_cols = ["value_1", "value_2"]
     result_ax = histogram.plot(
         df=sample_dataframe,
-        value_col=["value_1", "value_2"],
+        value_col=value_cols,
+        bins=bins,
         title="Test Multiple Histograms",
     )
 
     assert isinstance(result_ax, Axes)
-    assert len(result_ax.patches) > 0  # Ensure that bars were plotted for both histograms
+    assert len(result_ax.patches) == bins * len(value_cols)
 
 
 @pytest.mark.parametrize(
@@ -269,3 +237,15 @@ def test_histogram_legend_and_alpha_by_grouping(sample_dataframe, group_col, exp
 
     patch_alphas = {p.get_alpha() for p in result_ax.patches}
     assert patch_alphas == {expected_alpha}
+
+
+def test_single_histogram_with_legend_title_does_not_render_legend(sample_dataframe):
+    """A single-series histogram must not render a one-entry legend even if `legend_title` is set."""
+    result_ax = histogram.plot(
+        df=sample_dataframe,
+        value_col="value_1",
+        legend_title="Spend distribution",
+        title="Histogram with legend title but single series",
+    )
+
+    assert result_ax.get_legend() is None

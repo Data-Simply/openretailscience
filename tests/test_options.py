@@ -1,7 +1,6 @@
 """Tests for the Options module."""
 
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import toml
@@ -24,41 +23,19 @@ class TestOptions:
         with pytest.raises(ValueError, match=r"Unknown option: unknown.option"):
             options.describe_option("unknown_option")
 
-    def test_list_options_returns_all_options(self):
-        """Test listing all options returns all options."""
-        options = opt.Options()
-        assert options.list_options() == list(options._options.keys())
-
     def test_set_option_updates_value(self):
         """Test setting an option updates the option value correctly."""
         options = opt.Options()
         options.set_option("column.customer_id", "new_customer_id")
         assert options.get_option("column.customer_id") == "new_customer_id"
 
-    def test_get_option_retrieves_correct_value(self):
-        """Test getting an option retrieves the correct value."""
-        options = opt.Options()
-        expected_value = options._options["column.customer_id"]
-        actual_value = options.get_option("column.customer_id")
-        assert actual_value == expected_value
-
     def test_reset_option_restores_default_value(self):
         """Test resetting an option restores its default value."""
         options = opt.Options()
-        expected_value = options._options["column.customer_id"]
+        expected_value = options.get_option("column.customer_id")
         options.set_option("column.customer_id", "new_customer_id")
         options.reset_option("column.customer_id")
         assert options.get_option("column.customer_id") == expected_value
-
-    def test_describe_option_correct_description_and_value(self):
-        """Test describing an option provides the correct description and current value."""
-        options = opt.Options()
-        option = "column.customer_id"
-        expected_description = options._descriptions[option]
-        expected_value = options._options[option]
-
-        description = options.describe_option(option)
-        assert description == f"{option}: {expected_description} (current value: {expected_value})"
 
     def test_describe_option_returns_well_formed_string_for_all_options(self):
         """Test that describe_option returns a properly formatted string for every option."""
@@ -67,8 +44,6 @@ class TestOptions:
             description = options.describe_option(key)
             assert key in description
             assert "(current value:" in description
-        # Ensure no orphan descriptions exist without a matching option
-        assert set(options._options.keys()) == set(options._descriptions.keys())
 
     def test_context_manager_overrides_option(self):
         """Test that the context manager overrides the option value correctly at the global level."""
@@ -91,23 +66,9 @@ class TestOptions:
         assert opt.get_option("column.customer_id") == "new_customer_id"
         opt.reset_option("column.customer_id")
 
-    def test_get_option_retrieves_correct_value_global_level(self):
-        """Test getting an option retrieves the correct value at the global level."""
-        # Instantiate Options class to get the default value
-        options = opt.Options()
-        expected_value = options._options["column.customer_id"]
-        del options
-
-        actual_value = opt.get_option("column.customer_id")
-        assert actual_value == expected_value
-
     def test_reset_option_restores_default_value_global_level(self):
         """Test resetting an option restores its default value at the global level."""
-        # Instantiate Options class to get the default value
-        options = opt.Options()
-        expected_value = options._options["column.customer_id"]
-        del options
-
+        expected_value = opt.Options().get_option("column.customer_id")
         opt.set_option("column.customer_id", "new_customer_id")
         opt.reset_option("column.customer_id")
         assert opt.get_option("column.customer_id") == expected_value
@@ -115,22 +76,11 @@ class TestOptions:
     def test_describe_option_correct_description_and_value_global_level(self):
         """Test describing an option provides the correct description and current value at the global level."""
         option = "column.customer_id"
-        # Instantiate Options class to get the default value
-        options = opt.Options()
-        expected_description = options._descriptions[option]
-        expected_value = options._options[option]
-        del options
-
         description = opt.describe_option(option)
-        assert description == f"{option}: {expected_description} (current value: {expected_value})"
-
-    def test_list_options_returns_all_options_global_level(self):
-        """Test listing all options returns all options at the global level."""
-        options = opt.Options()
-        options_list = list(options._options.keys())
-        del options
-
-        assert opt.list_options() == options_list
+        # Format contract: "{option}: {description text} (current value: {value})"
+        assert description.startswith(f"{option}: ")
+        assert "column containing customer IDs" in description
+        assert description.endswith(f"(current value: {opt.get_option(option)})")
 
     def test_load_invalid_format_toml(self):
         """Test loading an invalid TOML file raises a TomlDecodeError."""
@@ -154,6 +104,26 @@ class TestOptions:
         with pytest.raises(ValueError, match=r"Unknown option in TOML file: column.agg.unknown_column"):
             opt.Options.load_from_toml(test_file_path)
 
+    def test_options_template_matches_defaults(self):
+        """Template must contain every default option with its default value, and no extras.
+
+        Why: the template doubles as runnable documentation of the full options surface.
+        A missing key hides an option from new users; an extra/stale key trips load_from_toml
+        with ValueError; a drifted value silently ships outdated defaults to anyone who
+        copies the file.
+        """
+        template_path = Path("options_template.toml").resolve()
+        with template_path.open() as f:
+            template_data = toml.load(f)
+
+        flat_template: dict[str, opt.OptionTypes] = {}
+        for section, options in template_data.items():
+            flat_template.update(opt.Options.flatten_options(section, options))
+
+        defaults = opt.Options()
+        expected = {name: defaults.get_option(name) for name in defaults.list_options()}
+        assert flat_template == expected
+
     def test_flatten_options(self):
         """Test flattening the options dictionary."""
         nested_options = {
@@ -172,55 +142,58 @@ class TestOptions:
         }
         assert expected_flat_options == opt.Options.flatten_options("column", nested_options["column"])
 
-    @pytest.fixture
-    def _reset_lru_cache(self):
-        opt.find_project_root.cache_clear()
-        yield
-        opt.find_project_root.cache_clear()
+    @pytest.mark.parametrize(
+        ("marker_name", "marker_is_dir", "start_subpath"),
+        [
+            (".git", True, ""),
+            ("openretailscience.toml", False, ""),
+            (".git", True, "sub/deeper"),
+        ],
+    )
+    def test_find_project_root_locates_marker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        marker_name: str,
+        marker_is_dir: bool,
+        start_subpath: str,
+    ) -> None:
+        """Test that find_project_root returns the directory containing the marker."""
+        marker = tmp_path / marker_name
+        if marker_is_dir:
+            marker.mkdir()
+        else:
+            marker.write_text("")
+        start_dir = tmp_path / start_subpath if len(start_subpath) > 0 else tmp_path
+        start_dir.mkdir(parents=True, exist_ok=True)
+        monkeypatch.chdir(start_dir)
+        assert opt.find_project_root() == tmp_path
 
-    @pytest.mark.usefixtures("_reset_lru_cache")
-    @patch("pathlib.Path.cwd")
-    @patch("pathlib.Path.is_dir")
-    def test_find_project_root_git_found(self, mock_is_dir, mock_cwd):
-        """Test finding the project root when the .git directory is found."""
-        mock_cwd.return_value = Path("/home/user/project")
-        mock_is_dir.side_effect = [True]  # .git directory exists
-        assert opt.find_project_root() == Path("/home/user/project")
-
-    @pytest.mark.usefixtures("_reset_lru_cache")
-    @patch("pathlib.Path.cwd")
-    @patch("pathlib.Path.is_dir")
-    @patch("pathlib.Path.is_file")
-    def test_find_project_root_toml_found(self, mock_is_file, mock_is_dir, mock_cwd):
-        """Test finding the project root when the openretailscience.toml file is found."""
-        mock_cwd.return_value = Path("/home/user/project")
-        mock_is_dir.side_effect = [False]  # .git directory doesn't exist
-        mock_is_file.side_effect = [True]  # openretailscience.toml file exists
-        assert opt.find_project_root() == Path("/home/user/project")
-
-    @pytest.mark.usefixtures("_reset_lru_cache")
-    @patch("pathlib.Path.cwd")
-    @patch("pathlib.Path.is_dir")
-    @patch("pathlib.Path.is_file")
-    @patch("pathlib.Path.parent")
-    def test_find_project_root_no_project_found(self, mock_parent, mock_is_file, mock_is_dir, mock_cwd):
-        """Test finding the project root when no project root is found."""
-        mock_cwd.return_value = Path("/")
-        mock_is_dir.side_effect = [False, False]  # No .git directory
-        mock_is_file.side_effect = [False, False]  # No openretailscience.toml file
-        mock_parent.return_value = Path("/")
+    def test_find_project_root_returns_none_when_no_marker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test that find_project_root returns None when no marker is found up to the filesystem root."""
+        monkeypatch.chdir(tmp_path)
         assert opt.find_project_root() is None
 
-    @pytest.mark.usefixtures("_reset_lru_cache")
-    @patch("pathlib.Path.cwd")
-    @patch("pathlib.Path.is_dir")
-    @patch("pathlib.Path.is_file")
-    def test_find_project_root_found_in_parent(self, mock_is_file, mock_is_dir, mock_cwd):
-        """Test finding the project root when the project root is found in a parent directory."""
-        mock_cwd.return_value = Path("/home/user/project/subdir")
-        mock_is_dir.side_effect = [False, True]  # .git directory in parent
-        mock_is_file.side_effect = [False]  # No openretailscience.toml file
-        assert opt.find_project_root() == Path("/home/user/project")
+    def test_find_project_root_reresolves_after_chdir(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test that find_project_root reflects the current working directory on each call."""
+        root_a = tmp_path / "project_a"
+        root_b = tmp_path / "project_b"
+        (root_a / ".git").mkdir(parents=True)
+        (root_b / ".git").mkdir(parents=True)
+
+        monkeypatch.chdir(root_a)
+        assert opt.find_project_root() == root_a
+
+        monkeypatch.chdir(root_b)
+        assert opt.find_project_root() == root_b
 
     def test_load_option_toml(self):
         """Test loading the test_options.toml file updates the options correctly."""

@@ -9,6 +9,10 @@ social:
 
 ### Cohort Analysis
 
+<div class="clear" markdown>
+
+![Cohort Analysis](assets/images/analysis_modules/cohort.svg){ align=right loading=lazy width="50%"}
+
 The cohort analysis module provides functionality for analyzing customer retention patterns over time. It helps
 businesses understand customer behavior by tracking groups of users (cohorts) based on their first interaction and
 observing their activity over subsequent periods.
@@ -31,33 +35,24 @@ The following key metrics are used in the analysis:
 - **Cohort Period**: Defines the period granularity (year, quarter, month, week, or day).
 - **Retention Percentage**: Calculates retention rates as a percentage of the first-period cohort.
 
+</div>
+
 Example:
 
 ```python
 import pandas as pd
-import datetime
 from openretailscience.analysis.cohort import CohortAnalysis
 
-data = {
-    "transaction_id": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+df = pd.DataFrame({
+    "transaction_id": range(12),
     "customer_id": [1, 2, 3, 1, 2, 3, 1, 2, 3, 4, 5, 4],
-    "transaction_date": [
-        datetime.date(2023, 1, 15),
-        datetime.date(2023, 1, 20),
-        datetime.date(2023, 2, 5),
-        datetime.date(2023, 2, 10),
-        datetime.date(2023, 3, 1),
-        datetime.date(2023, 3, 15),
-        datetime.date(2023, 3, 20),
-        datetime.date(2023, 4, 10),
-        datetime.date(2023, 4, 25),
-        datetime.date(2023, 5, 5),
-        datetime.date(2023, 5, 20),
-        datetime.date(2023, 6, 10),
-    ],
-    "unit_spend": [100, 150, 200, 120, 160, 210, 130, 170, 220, 140, 180, 230]
-}
-df = pd.DataFrame(data)
+    "transaction_date": pd.to_datetime([
+        "2023-01-15", "2023-01-20", "2023-02-05", "2023-02-10",
+        "2023-03-01", "2023-03-15", "2023-03-20", "2023-04-10",
+        "2023-04-25", "2023-05-05", "2023-05-20", "2023-06-10",
+    ]),
+    "unit_spend": [100, 150, 200, 120, 160, 210, 130, 170, 220, 140, 180, 230],
+})
 
 cohort = CohortAnalysis(
     df=df,
@@ -163,16 +158,14 @@ Example:
 import pandas as pd
 from openretailscience.analysis import cross_shop
 
-data = {
+df = pd.DataFrame({
     "customer_id": [1, 2, 3, 4, 5, 5, 6, 9, 7, 7, 8, 9, 5, 8],
-    "category_name" : [
+    "category_name": [
         "Electronics", "Clothing", "Home", "Sports", "Clothing", "Electronics", "Electronics",
-        "Clothing", "Home", "Electronics", "Clothing", "Electronics", "Home", "Home"
-        ],
-    "unit_spend": [100, 200, 300, 400, 200, 500, 100, 200, 300, 350, 400, 500, 250, 360]
-}
-
-df = pd.DataFrame(data)
+        "Clothing", "Home", "Electronics", "Clothing", "Electronics", "Home", "Home",
+    ],
+    "unit_spend": [100, 200, 300, 400, 200, 500, 100, 200, 300, 350, 400, 500, 250, 360],
+})
 
 cs_customers = cross_shop.CrossShop(
     df,
@@ -332,26 +325,24 @@ from openretailscience.analysis import revenue_tree
 
 np.random.seed(42)
 
-# Generate 100 records
-num_records = 100
+n = 100
 df = pd.DataFrame({
-    "group_id": np.random.choice([1, 2], size=num_records),
-    "customer_id": np.random.randint(1, 31, size=num_records),
-    "transaction_id": np.arange(1, num_records + 1),
-    "unit_spend": np.random.uniform(50, 500, size=num_records).round(2),
-    "unit_quantity": np.random.randint(1, 6, size=num_records),
+    "group_id": np.random.choice([1, 2], size=n),
+    "customer_id": np.random.randint(1, 31, size=n),
+    "transaction_id": np.arange(1, n + 1),
+    "unit_spend": np.random.uniform(50, 500, size=n).round(2),
+    "unit_quantity": np.random.randint(1, 6, size=n),
     "transaction_date": pd.to_datetime(
-        np.random.choice(pd.date_range("2023-01-01", "2023-01-10"), size=num_records)
-    )
+        np.random.choice(pd.date_range("2023-01-01", "2023-01-10"), size=n),
+    ),
 })
-
-df["period"] = df["transaction_date"].apply(lambda x: "P1" if x < pd.Timestamp("2023-01-04") else "P2")
+df["period"] = np.where(df["transaction_date"] < pd.Timestamp("2023-01-04"), "P1", "P2")
 
 rev_tree = revenue_tree.RevenueTree(
     df,
     period_col="period",
-    p1_value = "P1",
-    p2_value = "P2",
+    p1_value="P1",
+    p2_value="P2",
 )
 ```
 
@@ -520,14 +511,14 @@ Example:
 import pandas as pd
 from openretailscience.segmentation.nlr import NLRSegmentation
 
-data = pd.DataFrame({
+df = pd.DataFrame({
     "customer_id": [1, 1, 2, 2, 3, 4, 4, 5],
     "unit_spend": [50.0, 75.0, 100.0, 120.0, 80.0, 60.0, 90.0, 110.0],
     "period": ["P1", "P2", "P1", "P2", "P1", "P2", "P2", "P2"],
 })
 
 seg = NLRSegmentation(
-    df=data,
+    df=df,
     period_col="period",
     p1_value="P1",
     p2_value="P2",
@@ -571,17 +562,17 @@ Example:
 import pandas as pd
 from openretailscience.segmentation.rfm import RFMSegmentation
 
-data = pd.DataFrame({
+df = pd.DataFrame({
     "customer_id": [1, 1, 2, 2, 3, 3, 3],
     "transaction_id": [101, 102, 201, 202, 301, 302, 303],
-    "transaction_date": ["2024-03-01", "2024-03-10", "2024-02-20", "2024-02-25", "2024-01-15", "2024-01-20", "2024-02-05"],
-    "unit_spend": [50, 75, 100, 150, 200, 250, 300]
+    "transaction_date": pd.to_datetime([
+        "2024-03-01", "2024-03-10", "2024-02-20", "2024-02-25",
+        "2024-01-15", "2024-01-20", "2024-02-05",
+    ]),
+    "unit_spend": [50, 75, 100, 150, 200, 250, 300],
 })
 
-data["transaction_date"] = pd.to_datetime(data["transaction_date"])
-current_date = "2024-07-01"
-
-rfm_segmenter = RFMSegmentation(df=data, current_date=current_date)
+rfm_segmenter = RFMSegmentation(df=df, current_date="2024-07-01")
 rfm_results = rfm_segmenter.df
 ```
 
@@ -806,14 +797,12 @@ import ibis
 from openretailscience.utils.date import filter_and_label_by_periods
 
 # Create a sample transactions table
-data = pd.DataFrame({
+transactions = ibis.memtable(pd.DataFrame({
     "transaction_id": range(1, 101),
     "transaction_date": pd.date_range(start="2023-01-01", periods=100, freq="D"),
     "customer_id": [f"C{i % 20 + 1}" for i in range(100)],
-    "amount": [float(i % 5 * 25 + 50) for i in range(100)]
-})
-
-transactions = ibis.memtable(data)
+    "amount": [float(i % 5 * 25 + 50) for i in range(100)],
+}))
 
 # Define period ranges for analysis
 period_ranges = {
@@ -903,13 +892,11 @@ import ibis
 from openretailscience.utils.filter_and_label import filter_and_label_by_condition
 
 # Sample product table
-df = pd.DataFrame({
+products = ibis.memtable(pd.DataFrame({
     "product_id": range(1, 9),
     "category": ["toys", "shoes", "toys", "books", "electronics", "toys", "shoes", "books"],
-    "price": [15, 55, 25, 10, 200, 35, 60, 20]
-})
-
-products = ibis.memtable(df)
+    "price": [15, 55, 25, 10, 200, 35, 60, 20],
+}))
 
 # Define filter conditions
 conditions = {
@@ -963,12 +950,10 @@ import ibis
 from openretailscience.utils.label import label_by_condition
 
 # Sample transaction data
-df = pd.DataFrame({
+transactions = ibis.memtable(pd.DataFrame({
     "customer_id": [1, 1, 1, 2, 2, 3, 3],
     "product_category": ["toys", "books", "toys", "books", "clothes", "clothes", "clothes"],
-})
-
-transactions = ibis.memtable(df)
+}))
 
 # Binary labeling: Label customers who bought any toys
 toy_customers = label_by_condition(

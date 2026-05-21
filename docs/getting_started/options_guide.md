@@ -394,7 +394,6 @@ If changes in `openretailscience.toml` are not taking effect:
 
 1. Ensure file is in project root (same directory as `.git`)
 2. Restart Python kernel/session (options load on import)
-3. Clear LRU cache: `from openretailscience.options import find_project_root; find_project_root.cache_clear()`
 
 ### Column Not Found in Data
 

@@ -27,8 +27,9 @@ pre-aggregated before being passed to the function.
 - **Fixed Color Mapping**: The module uses a predefined colormap without dynamic adjustments.
 """
 
+from typing import Literal
+
 import pandas as pd
-from matplotlib import ticker
 from matplotlib.axes import Axes, SubplotBase
 
 from openretailscience.plots import heatmap
@@ -40,11 +41,13 @@ def plot(
     x_label: str | None = None,
     y_label: str | None = None,
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     ax: Axes | None = None,
     source_text: str | None = None,
     percentage: bool = True,
     figsize: tuple[int, int] | None = None,
-    **kwargs: dict[str, any],
+    colormap_style: Literal["discrete", "continuous"] = "discrete",
 ) -> SubplotBase:
     """Plots a cohort plot for the given DataFrame.
 
@@ -54,41 +57,32 @@ def plot(
         x_label (str, optional): Label for x-axis.
         y_label (str, optional): Label for y-axis.
         title (str, optional): Title of the plot.
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
         ax (Axes, optional): Matplotlib axes object to plot on.
         source_text (str, optional): Additional source text annotation.
         percentage (bool, optional): If True, displays cohort values as percentages. Defaults to True.
         figsize (tuple[int, int], optional): The size of the plot. Defaults to None.
-        **kwargs: Additional keyword arguments for cohort styling.
+        colormap_style (Literal["discrete", "continuous"], optional): Render the colorbar as a
+            stepped 5-bin scale ("discrete", default) or a smooth gradient ("continuous"). Use
+            "continuous" when retention differences between cohorts are small enough that the
+            discrete bins lump them together.
 
     Returns:
         SubplotBase: The matplotlib axes object.
     """
-    # Use generic heatmap
-    ax = heatmap.plot(
+    return heatmap.plot(
         df=df,
         cbar_label=cbar_label,
         x_label=x_label,
         y_label=y_label,
         title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
         ax=ax,
         source_text=source_text,
         figsize=figsize,
-        **kwargs,
+        x_labels_position="top",
+        cbar_format="{x:.0%}" if percentage else "{x:g}",
+        colormap_style=colormap_style,
     )
-
-    # Add cohort-specific styling
-    if percentage:
-        # 1. Update colorbar format for percentages
-        cbar = ax.figure.axes[-1]  # Get the colorbar axes
-        cbar.yaxis.set_major_formatter(ticker.PercentFormatter(1.0))
-
-        # 2. Update cell text to show percentages
-        for text in ax.texts:
-            # Re-format text as percentage
-            value = float(text.get_text())
-            text.set_text(f"{value:.0%}")
-
-    # 3. Add cohort-specific horizontal line
-    ax.hlines(y=3 - 0.5, xmin=-0.5, xmax=df.shape[1] - 0.5, color="white", linewidth=4)
-
-    return ax

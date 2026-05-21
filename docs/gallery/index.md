@@ -106,93 +106,106 @@ use a consistent API and come pre-styled with retail-friendly color schemes and 
   <a href="plots/area/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Area Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/area_thumbnail.png" alt="Area Plot">
+      <img src="../assets/images/gallery/area_thumbnail.png" alt="Area Plot">
     </div>
   </a>
 
   <a href="plots/bar/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Bar Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/bar_thumbnail.png" alt="Bar Plot">
+      <img src="../assets/images/gallery/bar_thumbnail.png" alt="Bar Plot">
     </div>
   </a>
   <a href="plots/broken_timeline/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Broken Timeline Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/broken_timeline_thumbnail.png" alt="Broken Timeline Plot">
+      <img src="../assets/images/gallery/broken_timeline_thumbnail.png" alt="Broken Timeline Plot">
     </div>
   </a>
   <a href="plots/cohort/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Cohort Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/cohort_thumbnail.png" alt="Cohort Plot">
+      <img src="../assets/images/gallery/cohort_thumbnail.png" alt="Cohort Plot">
+    </div>
+  </a>
+  <a href="plots/customer_decision_hierarchy/" class="glr-thumbcontainer">
+    <div class="glr-thumb-title">Customer Decision Hierarchy</div>
+    <div class="glr-thumb">
+      <img src="../assets/images/gallery/customer_decision_hierarchy_thumbnail.png" alt="Customer Decision Hierarchy">
     </div>
   </a>
   <a href="plots/heatmap/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Heatmap Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/heatmap_thumbnail.png" alt="Heatmap Plot">
+      <img src="../assets/images/gallery/heatmap_thumbnail.png" alt="Heatmap Plot">
     </div>
   </a>
   <a href="plots/histogram/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Histogram Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/histogram_thumbnail.png" alt="Histogram Plot">
+      <img src="../assets/images/gallery/histogram_thumbnail.png" alt="Histogram Plot">
     </div>
   </a>
   <a href="plots/line/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Line Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/line_thumbnail.png" alt="Line Plot">
+      <img src="../assets/images/gallery/line_thumbnail.png" alt="Line Plot">
     </div>
   </a>
 
   <a href="plots/period_on_period/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Period on Period Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/period_on_period_thumbnail.png" alt="Period on Period Plot">
+      <img src="../assets/images/gallery/period_on_period_thumbnail.png" alt="Period on Period Plot">
     </div>
     </a>
+
+  <a href="plots/revenue_tree/" class="glr-thumbcontainer">
+    <div class="glr-thumb-title">Revenue Tree</div>
+    <div class="glr-thumb">
+      <img src="../assets/images/gallery/revenue_tree_thumbnail.png" alt="Revenue Tree">
+    </div>
+  </a>
 
   <a href="plots/time/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Time Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/time_thumbnail.png" alt="Time Plot">
+      <img src="../assets/images/gallery/time_thumbnail.png" alt="Time Plot">
     </div>
   </a>
 
   <a href="plots/venn/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Venn Diagram</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/venn_thumbnail.png" alt="Venn Diagram">
+      <img src="../assets/images/gallery/venn_thumbnail.png" alt="Venn Diagram">
     </div>
   </a>
 
   <a href="plots/waterfall/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Waterfall Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/waterfall_thumbnail.png" alt="Waterfall Plot">
+      <img src="../assets/images/gallery/waterfall_thumbnail.png" alt="Waterfall Plot">
     </div>
   </a>
 
   <a href="plots/index_plot/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Index Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/index_thumbnail.png" alt="Index Plot">
+      <img src="../assets/images/gallery/index_thumbnail.png" alt="Index Plot">
     </div>
   </a>
 
   <a href="plots/scatter/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Scatter Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/scatter_thumbnail.png" alt="Scatter Plot">
+      <img src="../assets/images/gallery/scatter_thumbnail.png" alt="Scatter Plot">
     </div>
   </a>
 
   <a href="plots/price/" class="glr-thumbcontainer">
     <div class="glr-thumb-title">Price Plot</div>
     <div class="glr-thumb">
-      <img src="../assets/gallery/price_thumbnail.png" alt="Price Plot">
+      <img src="../assets/images/gallery/price_thumbnail.png" alt="Price Plot">
     </div>
   </a>
 

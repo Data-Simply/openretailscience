@@ -22,7 +22,10 @@ compact_arrays = false
 compact_inline_tables = false
 
 # Controls reordering of keys in tables
-reorder_arrays        = true
+# reorder_arrays kept false: some arrays (e.g. plot.color.multi_color_palette in
+# options_template.toml) carry semantic order, and `test_options_template_matches_defaults`
+# pins the order against the runtime defaults.
+reorder_arrays        = false
 reorder_inline_tables = true
 reorder_keys          = true
 

@@ -4,85 +4,39 @@ import pytest
 
 from openretailscience.options import get_option, option_context
 from openretailscience.plots.styles.colors import (
-    get_heatmap_cmap,
     get_named_color,
     get_plot_colors,
+    get_sequential_cmap,
 )
 
 
 class TestGetPlotColors:
     """Test get_plot_colors() function behavior."""
 
-    @pytest.mark.parametrize("num_series", [1, 3, 4, 10])
-    def test_get_plot_colors_returns_correct_length(self, num_series):
-        """Test that get_plot_colors returns correct number of colors."""
+    def test_get_plot_colors_single_series_uses_primary(self):
+        """Single-series plots use the brand primary color, not the mono palette's first stop."""
+        colors = get_plot_colors(1)
+        assert len(colors) == 1
+        assert colors[0] == get_option("plot.color.primary")
+
+    @pytest.mark.parametrize("num_series", [2, 3, 4, 10])
+    def test_get_plot_colors_multi_series_uses_multi_palette(self, num_series):
+        """Multi-series plots draw from the multi-color palette so each series gets a distinguishable hue."""
         colors = get_plot_colors(num_series)
         assert len(colors) == num_series
-
-    @pytest.mark.parametrize(
-        ("num_series", "expected_palette"),
-        [
-            (1, "mono"),  # 1 series: use monochromatic
-            (3, "mono"),  # 3 series: use monochromatic (equal to default mono length)
-            (4, "multi"),  # 4 series: switch to multi-color
-            (10, "multi"),  # Many series: use multi-color
-        ],
-    )
-    def test_get_plot_colors_palette_selection(self, num_series, expected_palette):
-        """Test get_plot_colors() returns correct number of colors from appropriate palette."""
-        colors = get_plot_colors(num_series)
-        assert len(colors) == num_series
-
-        mono_palette = get_option("plot.color.mono_palette")
         multi_palette = get_option("plot.color.multi_color_palette")
-
-        if expected_palette == "mono":
-            # All returned colors should be from monochromatic palette
-            assert all(c in mono_palette for c in colors)
-        else:
-            # Colors should be from multi-color palette
-            assert all(c in multi_palette for c in colors)
-
-    def test_get_plot_colors_custom_mono_palette(self):
-        """Test get_plot_colors() uses custom monochromatic palette."""
-        custom_mono = ["#1e40af", "#93c5fd"]  # Only 2 colors
-        two_series = 2
-        three_series = 3
-        with option_context("plot.color.mono_palette", custom_mono):
-            # With 2 series, should use mono palette
-            colors = get_plot_colors(two_series)
-            assert len(colors) == two_series
-            assert all(c in custom_mono for c in colors)
-
-            # With 3 series, should switch to multi-color palette
-            colors = get_plot_colors(three_series)
-            assert len(colors) == three_series
-            multi_palette = get_option("plot.color.multi_color_palette")
-            assert all(c in multi_palette for c in colors)
-
-    def test_get_plot_colors_empty_mono_palette(self):
-        """Test get_plot_colors() with disabled monochromatic palette."""
-        with option_context("plot.color.mono_palette", []):
-            # Even with 1 series, should use multi-color palette
-            colors = get_plot_colors(1)
-            assert len(colors) == 1
-            multi_palette = get_option("plot.color.multi_color_palette")
-            assert colors[0] == multi_palette[0]
+        assert all(c in multi_palette for c in colors)
 
     def test_get_plot_colors_cycling_behavior(self):
-        """Test get_plot_colors() cycles through multi-color palette when needed."""
+        """get_plot_colors() cycles through the multi-color palette when num_series exceeds its length."""
         five_series = 5
-        with option_context(
-            "plot.color.mono_palette",
-            [],  # Force multi-color
-            "plot.color.multi_color_palette",
-            ["#red", "#blue"],  # Only 2 colors
-        ):
+        two_color_palette = ["#1e40af", "#dc2626"]  # blue-700, red-600
+        with option_context("plot.color.multi_color_palette", two_color_palette):
             colors = get_plot_colors(five_series)
-            assert len(colors) == five_series
-            # Should cycle: red, blue, red, blue, red
-            expected = ["#red", "#blue", "#red", "#blue", "#red"]
-            assert colors == expected
+
+        assert len(colors) == five_series
+        expected = [two_color_palette[i % len(two_color_palette)] for i in range(five_series)]
+        assert colors == expected
 
 
 class TestGetNamedColor:
@@ -108,8 +62,8 @@ class TestGetNamedColor:
             get_named_color("invalid_color_type")
 
 
-class TestGetHeatmapCmap:
-    """Test get_heatmap_cmap() function behavior."""
+class TestGetSequentialCmap:
+    """Test get_sequential_cmap() function behavior."""
 
     @pytest.mark.parametrize(
         ("cmap_config", "expected_type"),
@@ -120,8 +74,8 @@ class TestGetHeatmapCmap:
             ("Greens", "LinearSegmentedColormap"),  # Matplotlib colormap
         ],
     )
-    def test_get_heatmap_cmap_supports_both_tailwind_and_matplotlib(self, cmap_config, expected_type):
-        """Test get_heatmap_cmap() handles both Tailwind and matplotlib colormap names."""
-        with option_context("plot.color.heatmap", cmap_config):
-            cmap = get_heatmap_cmap()
+    def test_get_sequential_cmap_supports_both_tailwind_and_matplotlib(self, cmap_config, expected_type):
+        """Test get_sequential_cmap() handles both Tailwind and matplotlib colormap names."""
+        with option_context("plot.color.sequential", cmap_config):
+            cmap = get_sequential_cmap()
             assert type(cmap).__name__ == expected_type

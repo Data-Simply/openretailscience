@@ -25,6 +25,7 @@ unit_quantity       = "units"
 unit_spend          = "spend"
 
 [column.calc]
+frequency_elasticity      = "frequency_elasticity"
 price_elasticity          = "price_elasticity"
 price_per_unit            = "price_per_unit"
 spend_per_customer        = "spend_per_customer"
@@ -40,38 +41,100 @@ percent            = "pct"
 percent_difference = "pct_diff"
 period_1           = "p1"
 period_2           = "p2"
+total              = "total"
+unknown_customer   = "unknown"
+
+# Plot Color Options
+[plot.color]
+# Multi-color rotation (27 colors): 9 curated hues x 3 shades.
+# First 5 hues are max-separated on the hue wheel (~70 deg apart) for 3-5 series.
+# Order: primaries (500), then lights (200), then darks (700).
+multi_color_palette = [
+    "#22c55e",
+    "#3b82f6",
+    "#f97316",
+    "#8b5cf6",
+    "#ef4444",
+    "#06b6d4",
+    "#ec4899",
+    "#eab308",
+    "#14b8a6",
+    "#bbf7d0",
+    "#bfdbfe",
+    "#fed7aa",
+    "#ddd6fe",
+    "#fecaca",
+    "#a5f3fc",
+    "#fbcfe8",
+    "#fef08a",
+    "#99f6e4",
+    "#15803d",
+    "#1d4ed8",
+    "#c2410c",
+    "#6d28d9",
+    "#b91c1c",
+    "#0e7490",
+    "#be185d",
+    "#a16207",
+    "#0f766e",
+]
+# Semantic colors used by waterfall, gain/loss, tree, etc.
+context    = "#d1d5db" # De-emphasized context lines (gray-300)
+difference = "#2563eb" # Difference values (waterfall transitions, tree differences) (blue-600, one shade darker than categorical blue-500)
+negative   = "#ef4444" # Negative values (losses, decreases)
+neutral    = "#6b7280" # Neutral values (net amounts)
+positive   = "#22c55e" # Positive values (gains, increases)
+primary    = "#16a34a" # Default color for single-series plots (green-600, one shade darker than categorical green-500)
+sequential = "green"   # Tailwind color name or matplotlib colormap name (heatmap, cohort, period-on-period)
+
+# Chrome (eyebrow / subtitle / title / tab / source) colors
+eyebrow  = "#737373" # Small uppercase eyebrow text above the title
+source   = "#737373" # Source text rendered below the plot
+subtitle = "#525252" # Subtitle text below the title
+tab      = "#16a34a" # Small rectangular tab mark above the title block
+title    = "#0a0a0a" # Main plot title
 
 # Plot Font Customization Options
 [plot.font]
 # Font family options: bundled fonts (poppins_regular, poppins_bold, poppins_semi_bold,
 # poppins_medium, poppins_light_italic) or system fonts (Arial, Times New Roman, etc.)
-data_label_font = "poppins_regular"
+data_label_font = "poppins_medium"
+eyebrow_font    = "poppins_semi_bold"
 label_font      = "poppins_regular"
+legend_font     = "poppins_regular"
 source_font     = "poppins_light_italic"
+subtitle_font   = "poppins_regular"
 tick_font       = "poppins_regular"
 title_font      = "poppins_semi_bold"
 
 # Font size options (in points)
-data_label_size = 8.0
-label_size      = 12.0
-source_size     = 10.0
+data_label_size = 10.0
+eyebrow_size    = 10.0
+label_size      = 11.0
+legend_size     = 10.0
+source_size     = 9.0
+subtitle_size   = 12.0
 tick_size       = 10.0
-title_size      = 20.0
+title_size      = 22.0
 
 # Plot Spacing & Padding Options
 [plot.spacing]
-title_pad   = 10 # Padding above title (in points)
 x_label_pad = 10 # Padding below x-axis label (in points)
 y_label_pad = 10 # Padding left of y-axis label (in points)
 
 # Plot Style Options
 [plot.style]
+auto_rotate_x_ticks   = true          # Rotate categorical x-tick labels only when neighbours would overlap (false: keep matplotlib's default rotation)
+auto_wrap_x_ticks     = true          # Wrap multi-word categorical x-tick labels onto two balanced lines before rotating
 background_color      = "white"       # Background color (matplotlib color names or hex)
-grid_alpha            = 0.5           # Grid transparency (0.0-1.0)
-grid_color            = "#DAD8D7"     # Grid line color
-legend_bbox_to_anchor = [ 1.0, 1.05 ] # Legend position when moved outside
+cell_corner_radius    = 0.05          # Corner radius for cell-based plots (heatmap, cohort), in cell-size units
+cell_gap              = 3.0           # Visual gap between cells in cell-based plots, in points (drawn as a background-colored edge)
+grid_alpha            = 1.0           # Grid transparency (0.0-1.0)
+grid_color            = "#e5e5e5"     # Grid line color
+legend_bbox_to_anchor = [ 1.02, 1.0 ] # Legend position when moved outside
 legend_loc            = "upper left"  # Legend location
 show_bottom_spine     = true          # Show bottom border
 show_left_spine       = true          # Show left border
 show_right_spine      = false         # Show right border
+show_tab              = true          # Show the small green tab mark above the title block
 show_top_spine        = false         # Show top border

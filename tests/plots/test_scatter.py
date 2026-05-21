@@ -1,5 +1,6 @@
 """Tests for the plots.scatter module."""
 
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -9,7 +10,6 @@ from matplotlib.axes import Axes
 from openretailscience.plots import scatter
 
 PERIODS = 6
-RNG = np.random.default_rng(42)
 
 
 @pytest.fixture(autouse=True)
@@ -22,11 +22,12 @@ def cleanup_figures():
 @pytest.fixture
 def sample_sales_dataframe():
     """A sample dataframe for Sales, Profit, and Expenses data."""
+    rng = np.random.default_rng(42)
     data = {
         "date": pd.date_range("2023-01-01", periods=PERIODS, freq="ME"),
-        "sales": RNG.integers(1000, 5000, size=PERIODS),
-        "profit": RNG.integers(200, 1000, size=PERIODS),
-        "expenses": RNG.integers(500, 3000, size=PERIODS),
+        "sales": rng.integers(1000, 5000, size=PERIODS),
+        "profit": rng.integers(200, 1000, size=PERIODS),
+        "expenses": rng.integers(500, 3000, size=PERIODS),
         "category": ["Electronics", "Clothing", "Furniture", "Electronics", "Clothing", "Furniture"],
     }
     return pd.DataFrame(data)
@@ -83,7 +84,7 @@ def test_plot_single_column(sample_sales_dataframe):
 
     # Verify scatter plot collections were created
     collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-    assert len(collections) >= 1, "No scatter plot collections found"
+    assert len(collections) == 1
 
     # Verify correct number of data points
     offsets = collections[0].get_offsets()
@@ -174,7 +175,7 @@ def test_plot_single_column_series(sample_sales_dataframe):
 
     # Verify scatter plot was created from series
     collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-    assert len(collections) >= 1, "No scatter plot collections found"
+    assert len(collections) == 1
 
     # Verify correct number of data points from series
     offsets = collections[0].get_offsets()
@@ -193,12 +194,14 @@ def test_plot_with_labels_single_series(sample_product_dataframe):
         y_label="Units Sold",
     )
 
-    assert result_ax.get_title() == "Product Performance"
+    title_texts = [t for t in result_ax.figure.texts if t.get_text() == "Product Performance"]
+    assert len(title_texts) == 1
     assert result_ax.get_xlabel() == "Price"
     assert result_ax.get_ylabel() == "Units Sold"
 
-    rendered_labels = {t.get_text() for t in result_ax.texts}
-    assert rendered_labels == set(sample_product_dataframe["product_name"])
+    rendered_labels = [t.get_text() for t in result_ax.texts]
+    assert len(rendered_labels) == len(sample_product_dataframe)
+    assert sorted(rendered_labels) == sorted(sample_product_dataframe["product_name"])
 
 
 def test_plot_with_labels_grouped_series(sample_store_dataframe):
@@ -214,7 +217,8 @@ def test_plot_with_labels_grouped_series(sample_store_dataframe):
         y_label="Revenue",
     )
 
-    assert result_ax.get_title() == "Store Performance by Region"
+    title_texts = [t for t in result_ax.figure.texts if t.get_text() == "Store Performance by Region"]
+    assert len(title_texts) == 1
     assert result_ax.get_xlabel() == "Customer Count"
     assert result_ax.get_ylabel() == "Revenue"
 
@@ -222,71 +226,25 @@ def test_plot_with_labels_grouped_series(sample_store_dataframe):
     collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
     assert len(collections) == sample_store_dataframe["region"].nunique()
 
-    rendered_labels = {t.get_text() for t in result_ax.texts}
-    assert rendered_labels == set(sample_store_dataframe["store_id"])
+    rendered_labels = [t.get_text() for t in result_ax.texts]
+    assert len(rendered_labels) == len(sample_store_dataframe)
+    assert sorted(rendered_labels) == sorted(sample_store_dataframe["store_id"])
 
 
-def test_plot_with_labels_custom_kwargs(sample_product_dataframe, mocker):
-    """Test scatter plot with custom label_kwargs passed to textalloc."""
-    mock_textalloc = mocker.patch("openretailscience.plots.scatter.ta.allocate")
-
-    custom_kwargs = {
-        "nbr_candidates": 100,
-        "min_distance": 0.1,
-    }
+def test_plot_label_kwargs_are_forwarded_to_textalloc(sample_product_dataframe):
+    """label_kwargs values override defaults and reach the rendered Text objects."""
+    distinctive_color = "#7f3fbf"
 
     result_ax = scatter.plot(
         df=sample_product_dataframe,
         value_col="units_sold",
         x_col="price",
         label_col="product_name",
-        label_kwargs=custom_kwargs,
-        title="Product Performance with Custom Labels",
+        label_kwargs={"textcolor": distinctive_color},
     )
 
-    # Verify basic plot structure
-    assert isinstance(result_ax, Axes)
-    assert result_ax.get_title() == "Product Performance with Custom Labels"
-
-    # Verify scatter plot was created
-    collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-    assert len(collections) >= 1, "No scatter plot collections found"
-
-    # Verify textalloc was called with custom kwargs
-    mock_textalloc.assert_called_once()
-    args, ta_kwargs = mock_textalloc.call_args
-
-    ax_arg = args[0]
-    x_coords = args[1]
-    y_coords = args[2]
-    labels = args[3]
-
-    # Verify coordinates and labels were created
-    assert len(x_coords) == len(sample_product_dataframe), (
-        f"Expected {len(sample_product_dataframe)} x coordinates, got {len(x_coords)}"
-    )
-    assert len(y_coords) == len(sample_product_dataframe), (
-        f"Expected {len(sample_product_dataframe)} y coordinates, got {len(y_coords)}"
-    )
-    assert len(labels) == len(sample_product_dataframe), (
-        f"Expected {len(sample_product_dataframe)} labels, got {len(labels)}"
-    )
-
-    # Check that custom kwargs were passed through to textalloc
-    assert ta_kwargs["nbr_candidates"] == custom_kwargs["nbr_candidates"], (
-        f"nbr_candidates not passed correctly: expected {custom_kwargs['nbr_candidates']},"
-        f" got {ta_kwargs.get('nbr_candidates')}"
-    )
-    assert ta_kwargs["min_distance"] == custom_kwargs["min_distance"], (
-        f"min_distance not passed correctly: expected {custom_kwargs['min_distance']},"
-        f" got {ta_kwargs.get('min_distance')}"
-    )
-    assert ax_arg == result_ax
-
-    # Verify labels contain correct product names
-    expected_labels = set(sample_product_dataframe["product_name"].tolist())
-    actual_labels = set(labels)
-    assert actual_labels == expected_labels, f"Labels don't match: expected {expected_labels}, got {actual_labels}"
+    matching_texts = [t for t in result_ax.texts if mcolors.to_hex(t.get_color()) == distinctive_color]
+    assert len(matching_texts) == len(sample_product_dataframe)
 
 
 @pytest.mark.parametrize(
@@ -334,11 +292,14 @@ def test_plot_labels_using_index_as_x(sample_product_dataframe):
         title="Product Performance using Index",
     )
 
-    assert result_ax.get_title() == "Product Performance using Index"
-    assert {t.get_text() for t in result_ax.texts} == set(sample_product_dataframe["product_name"])
+    title_texts = [t for t in result_ax.figure.texts if t.get_text() == "Product Performance using Index"]
+    assert len(title_texts) == 1
+    rendered_labels = [t.get_text() for t in result_ax.texts]
+    assert len(rendered_labels) == len(sample_product_dataframe)
+    assert sorted(rendered_labels) == sorted(sample_product_dataframe["product_name"])
 
 
-def test_plot_without_labels_no_textalloc_called(sample_product_dataframe):
+def test_plot_without_labels_renders_no_text_annotations(sample_product_dataframe):
     """Without label_col the axes carry no Text annotations."""
     result_ax = scatter.plot(
         df=sample_product_dataframe,
@@ -388,7 +349,7 @@ class TestBubbleChartFeature:
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
         collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-        assert len(collections) >= 1, "No scatter plot collections found"
+        assert len(collections) == 1
 
         sizes = collections[0].get_sizes()
         expected_sizes = bubble_chart_dataframe["store_sqft"].to_numpy() * size_scale
@@ -446,7 +407,7 @@ class TestBubbleChartFeature:
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
         collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-        assert len(collections) >= 1, "No scatter plot collections found"
+        assert len(collections) == 1
 
         # When size_col is None, all points should have uniform default size
         # matplotlib stores a single broadcast value when no per-point sizes are set
@@ -503,7 +464,7 @@ class TestBubbleChartFeature:
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
         collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-        assert len(collections) >= 1, "No scatter plot collections found"
+        assert len(collections) == 1
 
         # Verify sizes come from size_col, not the 's' parameter
         sizes = collections[0].get_sizes()
@@ -524,7 +485,7 @@ class TestBubbleChartFeature:
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
         collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-        assert len(collections) >= 1, "No scatter plot collections found"
+        assert len(collections) == 1
 
         # Verify all points use the user-provided 's' value
         sizes = collections[0].get_sizes()
@@ -597,7 +558,7 @@ class TestBubbleChartFeature:
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
         collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-        assert len(collections) >= 1, "No scatter plot collections found"
+        assert len(collections) == 1
 
         offsets = collections[0].get_offsets()
         assert len(offsets) == len(df), "All data points should be plotted"
@@ -618,11 +579,12 @@ class TestBubbleChartFeature:
         )
 
         collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-        assert len(collections) >= 1
+        assert len(collections) == 1
         assert np.array_equal(collections[0].get_sizes(), bubble_chart_dataframe["store_sqft"].to_numpy())
 
-        rendered_labels = {t.get_text() for t in result_ax.texts}
-        assert rendered_labels == set(bubble_chart_dataframe["store_id"].astype(str))
+        rendered_labels = [t.get_text() for t in result_ax.texts]
+        assert len(rendered_labels) == len(bubble_chart_dataframe)
+        assert sorted(rendered_labels) == sorted(bubble_chart_dataframe["store_id"].astype(str))
 
     def test_bubble_chart_x_col_equals_size_col(self, bubble_chart_dataframe):
         """Test bubble chart when x_col and size_col reference the same column."""
@@ -637,7 +599,7 @@ class TestBubbleChartFeature:
         assert isinstance(result_ax, Axes)
 
         collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
-        assert len(collections) >= 1, "No scatter plot collections found"
+        assert len(collections) == 1
 
         sizes = collections[0].get_sizes()
         expected_sizes = bubble_chart_dataframe["sales"].to_numpy()

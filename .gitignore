@@ -141,4 +141,4 @@ cython_debug/
 *.csv
 
 .claude-review
-.claude/commands/cr-create-issue.md
+.claude/scheduled_tasks.lock

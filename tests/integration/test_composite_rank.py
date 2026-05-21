@@ -28,5 +28,4 @@ def test_composite_rank_integration(transactions_table):
 
     result = composite_rank.df
     assert result is not None
-    assert len(result.columns) > 0
     assert "composite_rank" in result.columns

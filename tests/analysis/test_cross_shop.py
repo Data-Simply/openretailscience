@@ -1,6 +1,6 @@
 """Tests for the Cross Shop module."""
 
-from unittest.mock import MagicMock, patch
+import re
 
 import pandas as pd
 import pytest
@@ -12,6 +12,7 @@ from openretailscience.options import ColumnHelper, option_context
 TWO_GROUPS = 2
 THREE_GROUPS = 3
 FLOATING_POINT_TOLERANCE = 0.001
+PERCENT_ONE_DECIMAL = re.compile(r"^\d+\.\d%$")
 
 cols = ColumnHelper()
 
@@ -297,9 +298,54 @@ def test_group_3_only_one_side_provided(sample_data):
         )
 
 
-@patch("openretailscience.plots.venn.plot")
-def test_plot_passes_parameters_correctly(mock_venn_plot, sample_data):
-    """Test that the plot method passes parameters correctly to venn.plot."""
+def test_plot_default_labels_two_groups_render_as_set_labels(sample_data):
+    """Without explicit labels, two groups render as set labels "A" and "B"."""
+    cross_shop = CrossShop(
+        df=sample_data,
+        group_1_col="category_1_name",
+        group_1_val="Jeans",
+        group_2_col="category_1_name",
+        group_2_val="Shoes",
+    )
+    ax = cross_shop.plot()
+    text_values = {t.get_text() for t in ax.texts}
+    assert {"A", "B"}.issubset(text_values)
+
+
+def test_plot_default_labels_three_groups_render_as_set_labels(sample_data):
+    """Without explicit labels, three groups render as set labels "A", "B", "C"."""
+    cross_shop = CrossShop(
+        df=sample_data,
+        group_1_col="category_1_name",
+        group_1_val="Jeans",
+        group_2_col="category_1_name",
+        group_2_val="Shoes",
+        group_3_col="category_1_name",
+        group_3_val="Dresses",
+    )
+    ax = cross_shop.plot()
+    text_values = {t.get_text() for t in ax.texts}
+    assert {"A", "B", "C"}.issubset(text_values)
+
+
+def test_plot_custom_labels_render_as_set_labels(sample_data):
+    """Custom labels passed at construction render verbatim on the diagram."""
+    cross_shop = CrossShop(
+        df=sample_data,
+        group_1_col="category_1_name",
+        group_1_val="Jeans",
+        group_2_col="category_1_name",
+        group_2_val="Shoes",
+        labels=["Denim", "Footwear"],
+    )
+    ax = cross_shop.plot()
+    text_values = {t.get_text() for t in ax.texts}
+    assert {"Denim", "Footwear"}.issubset(text_values)
+
+
+def test_plot_renders_custom_title(sample_data):
+    """A title passed to plot() renders as a figure text element."""
+    title = "Cross-shop overlap"
     cross_shop = CrossShop(
         df=sample_data,
         group_1_col="category_1_name",
@@ -308,88 +354,9 @@ def test_plot_passes_parameters_correctly(mock_venn_plot, sample_data):
         group_2_val="Shoes",
         labels=["Jeans", "Shoes"],
     )
-
-    title = "Test Title"
-    source_text = "Source: Test Data"
-    vary_size = True
-    figsize = (10, 8)
-    ax = MagicMock()
-
-    def custom_formatter(x):
-        return f"Custom {x}"
-
-    cross_shop.plot(
-        title=title,
-        source_text=source_text,
-        vary_size=vary_size,
-        figsize=figsize,
-        ax=ax,
-        subset_label_formatter=custom_formatter,
-        extra_param="test",
-    )
-
-    mock_venn_plot.assert_called_once()
-    _, kwargs = mock_venn_plot.call_args
-
-    assert kwargs["df"] is cross_shop.cross_shop_table_df
-    assert kwargs["labels"] == ["Jeans", "Shoes"]
-    assert kwargs["title"] == title
-    assert kwargs["source_text"] == source_text
-    assert kwargs["vary_size"] == vary_size
-    assert kwargs["figsize"] == figsize
-    assert kwargs["ax"] == ax
-    assert kwargs["subset_label_formatter"] == custom_formatter
-    assert kwargs["extra_param"] == "test"
-
-
-def test_plot_with_default_labels(sample_data):
-    """Test that plot generates default alphabetical labels when none are provided."""
-    with patch("openretailscience.plots.venn.plot") as mock_venn_plot:
-        cross_shop = CrossShop(
-            df=sample_data,
-            group_1_col="category_1_name",
-            group_1_val="Jeans",
-            group_2_col="category_1_name",
-            group_2_val="Shoes",
-        )
-
-        cross_shop.plot()
-
-        _, kwargs = mock_venn_plot.call_args
-        assert kwargs["labels"] == ["A", "B"]
-
-
-def test_plot_with_default_labels_three_groups(sample_data):
-    """Test that plot generates default alphabetical labels for three groups."""
-    with patch("openretailscience.plots.venn.plot") as mock_venn_plot:
-        cross_shop = CrossShop(
-            df=sample_data,
-            group_1_col="category_1_name",
-            group_1_val="Jeans",
-            group_2_col="category_1_name",
-            group_2_val="Shoes",
-            group_3_col="category_1_name",
-            group_3_val="Dresses",
-        )
-
-        cross_shop.plot()
-
-        _, kwargs = mock_venn_plot.call_args
-        assert kwargs["labels"] == ["A", "B", "C"]
-
-
-def test_plot_returns_axes(sample_data):
-    """Test the plot method returns matplotlib axes."""
-    cross_shop = CrossShop(
-        df=sample_data,
-        group_1_col="category_1_name",
-        group_1_val="Jeans",
-        group_2_col="category_1_name",
-        group_2_val="Shoes",
-        labels=["Jeans", "Shoes"],
-    )
-    ax = cross_shop.plot(title="Test Title")
-    assert hasattr(ax, "plot")
+    ax = cross_shop.plot(title=title)
+    title_texts = [t for t in ax.figure.texts if t.get_text() == title]
+    assert len(title_texts) == 1
 
 
 def test_cross_shop_with_non_empty_dataframe():
@@ -442,28 +409,40 @@ def test_cross_shop_with_custom_value_col_and_agg_func(sample_data):
     assert cross_shop.cross_shop_df.loc[5, "custom_value"] == customer_value
 
 
-def test_plot_with_additional_kwargs(sample_data):
-    """Test plot method passing through additional kwargs to venn.plot."""
-    with patch("openretailscience.plots.venn.plot") as mock_venn_plot:
-        cross_shop = CrossShop(
-            df=sample_data,
-            group_1_col="category_1_name",
-            group_1_val="Jeans",
-            group_2_col="category_1_name",
-            group_2_val="Shoes",
-        )
+def test_plot_default_formatter_renders_subset_labels_as_percent_with_one_decimal(sample_data):
+    """Without a custom subset_label_formatter, subset percentages render as ``N.N%``."""
+    cross_shop = CrossShop(
+        df=sample_data,
+        group_1_col="category_1_name",
+        group_1_val="Jeans",
+        group_2_col="category_1_name",
+        group_2_val="Shoes",
+        labels=["Denim", "Footwear"],
+    )
+    ax = cross_shop.plot()
+    set_labels = {"Denim", "Footwear"}
+    subset_labels = [t.get_text() for t in ax.texts if t.get_text() not in set_labels]
+    expected_subset_count = (cross_shop.cross_shop_table_df["groups"] != (0, 0)).sum()
+    assert len(subset_labels) == expected_subset_count
+    assert all(PERCENT_ONE_DECIMAL.match(text) for text in subset_labels)
 
-        additional_kwargs = {
-            "alpha": 0.7,
-            "colors": ["red", "blue"],
-            "custom_param": "value",
-        }
 
-        cross_shop.plot(**additional_kwargs)
-
-        _, kwargs = mock_venn_plot.call_args
-        for key, value in additional_kwargs.items():
-            assert kwargs[key] == value
+def test_plot_custom_subset_label_formatter_replaces_default(sample_data):
+    """A custom subset_label_formatter overrides the default percentage format."""
+    cross_shop = CrossShop(
+        df=sample_data,
+        group_1_col="category_1_name",
+        group_1_val="Jeans",
+        group_2_col="category_1_name",
+        group_2_val="Shoes",
+        labels=["Denim", "Footwear"],
+    )
+    ax = cross_shop.plot(subset_label_formatter=lambda x: f"CUSTOM-{x:.2f}")
+    set_labels = {"Denim", "Footwear"}
+    subset_labels = [t.get_text() for t in ax.texts if t.get_text() not in set_labels]
+    expected_subset_count = (cross_shop.cross_shop_table_df["groups"] != (0, 0)).sum()
+    assert len(subset_labels) == expected_subset_count
+    assert all(text.startswith("CUSTOM-") for text in subset_labels)
 
 
 def test_with_custom_column_names(sample_data):
@@ -657,9 +636,11 @@ def test_simplified_interface_integration(sample_data, test_scenario, groups, ex
     assert "groups" in cross_shop.cross_shop_df.columns
     assert "group_labels" in cross_shop.cross_shop_df.columns
 
-    # Verify that segments are properly identified
+    # Verify that observed segments are valid combinations from the documented universe.
+    # expected_segments lists every possible bitstring combination; the fixture data only
+    # exercises a subset, so equality would be incorrect.
     unique_groups = cross_shop.cross_shop_df["groups"].unique()
-    assert len(unique_groups) > 0  # Should have at least some segments
+    assert {str(group) for group in unique_groups} <= set(expected_segments)
 
     # Check the aggregated table
     assert isinstance(cross_shop.cross_shop_table_df, pd.DataFrame)

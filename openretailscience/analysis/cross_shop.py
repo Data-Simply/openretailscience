@@ -59,6 +59,7 @@ The module generates Venn diagrams showing:
 """
 
 from collections.abc import Callable
+from typing import Any
 
 import ibis
 import pandas as pd
@@ -318,17 +319,21 @@ class CrossShop:
     def plot(
         self,
         title: str | None = None,
+        eyebrow: str | None = None,
+        subtitle: str | None = None,
         source_text: str | None = None,
         vary_size: bool = False,
         figsize: tuple[int, int] | None = None,
         ax: Axes | None = None,
         subset_label_formatter: Callable | None = None,
-        **kwargs: dict[str, any],
+        **kwargs: Any,  # noqa: ANN401
     ) -> SubplotBase:
         """Generate Venn diagram showing customer segment overlaps.
 
         Args:
             title (str, optional): Chart title (e.g., "Cross-Shopping: Organic vs Conventional").
+            eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+            subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
             source_text (str, optional): Data source attribution. Defaults to None.
             vary_size (bool, optional): Scale circles by segment value for visual impact.
                 True = larger segments appear bigger. Defaults to False.
@@ -336,7 +341,7 @@ class CrossShop:
             ax (Axes, optional): Existing axes for subplot integration. Defaults to None.
             subset_label_formatter (callable, optional): Custom formatting for percentages.
                 Default shows one decimal place (e.g., "34.5%").
-            **kwargs (dict[str, any]): Additional diagram customization options.
+            **kwargs (Any): Additional diagram customization options.
 
         Returns:
             SubplotBase: Matplotlib axes containing the cross-shop visualization.
@@ -345,6 +350,8 @@ class CrossShop:
             df=self.cross_shop_table_df,
             labels=self.labels,
             title=title,
+            eyebrow=eyebrow,
+            subtitle=subtitle,
             source_text=source_text,
             vary_size=vary_size,
             figsize=figsize,

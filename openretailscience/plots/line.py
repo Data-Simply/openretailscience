@@ -45,11 +45,13 @@ for use with actual datetime values**.
 
 """
 
+from typing import Any, Literal
+
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 
 def _validate_and_prepare_input(
@@ -92,30 +94,29 @@ def _validate_highlight_parameter(
     highlight: str | list[str] | None,
     value_col: str | list[str],
     group_col: str | None,
-    pivot_df: pd.DataFrame | None = None,
+    pivot_df: pd.DataFrame,
 ) -> list[str] | None:
     """Validate and normalize the highlight parameter against available columns."""
     if highlight is None:
         return None
 
-    # Convert single string to list for uniform handling
     if isinstance(highlight, str):
         highlight = [highlight]
 
-    # Check if this is a single-line plot
+    if len(highlight) == 0:
+        raise ValueError("highlight cannot be empty; pass None to disable highlighting")
+
     is_single_line = group_col is None and (
         isinstance(value_col, str) or (isinstance(value_col, list) and len(value_col) == 1)
     )
     if is_single_line:
         raise ValueError("highlight parameter cannot be used with single-line plots")
 
-    # Validate highlight values against available columns if pivot_df is provided
-    if pivot_df is not None:
-        available_columns = list(pivot_df.columns)
-        invalid_highlights = [h for h in highlight if h not in available_columns]
-        if invalid_highlights:
-            error_msg = f"highlight values {invalid_highlights} not found in available columns {available_columns}"
-            raise ValueError(error_msg)
+    available_columns = list(pivot_df.columns)
+    invalid_highlights = [h for h in highlight if h not in available_columns]
+    if invalid_highlights:
+        error_msg = f"highlight values {invalid_highlights} not found in available columns {available_columns}"
+        raise ValueError(error_msg)
 
     return highlight
 
@@ -172,97 +173,52 @@ def _render_plot(
     highlighted_colors: list[str],
     is_multi_line: bool,
     ax: Axes | None,
-    **kwargs: dict[str, any],
+    **kwargs: Any,  # noqa: ANN401
 ) -> Axes:
     """Render the actual plot with context and highlighted lines."""
-    # Context line styling
-    context_color = get_named_color("context")
-    context_alpha = 0.6
-    context_linewidth = 1.5
-
-    # Highlighted line styling
-    highlighted_linewidth = kwargs.pop("linewidth", 3)
-    highlighted_alpha = 1.0
-
-    # Plot context lines first (lower z-order)
-    if context_cols:
-        context_df = pivot_df[context_cols]
+    # Context lines first (lower z-order). Underscore-prefix the column names so matplotlib
+    # auto-excludes them from any legend rendered later
+    if len(context_cols) > 0:
+        context_df = pivot_df[context_cols].rename(columns={c: f"_{c}" for c in context_cols})
+        context_kwargs = {k: v for k, v in kwargs.items() if k not in ["color", "alpha", "zorder", "linewidth"]}
         ax = context_df.plot(
             ax=ax,
-            linewidth=context_linewidth,
-            color=context_color,
-            alpha=context_alpha,
+            linewidth=1.0,
+            color=get_named_color("context"),
             legend=False,
             zorder=1,
-            **{k: v for k, v in kwargs.items() if k not in ["color", "alpha", "zorder"]},
+            **context_kwargs,
         )
 
-    # Plot highlighted lines second (higher z-order)
-    if highlighted_cols:
-        highlighted_df = pivot_df[highlighted_cols]
-        ax = highlighted_df.plot(
-            ax=ax,
-            linewidth=highlighted_linewidth,
-            color=kwargs.pop("color", highlighted_colors),
-            alpha=highlighted_alpha,
-            legend=is_multi_line,
-            zorder=2,
-            **kwargs,
-        )
-    else:
-        # Handle case where only context lines exist (shouldn't happen due to validation)
-        ax = pivot_df.plot(
-            ax=ax,
-            linewidth=highlighted_linewidth,
-            color=kwargs.pop("color", highlighted_colors),
-            alpha=highlighted_alpha,
-            legend=is_multi_line,
-            **kwargs,
-        )
-
-    return ax
-
-
-def _apply_final_styling(
-    ax: Axes,
-    title: str | None,
-    x_label: str | None,
-    y_label: str | None,
-    legend_title: str | None,
-    move_legend_outside: bool,
-    source_text: str | None,
-) -> SubplotBase:
-    """Apply final styling and formatting to the plot."""
-    ax = gu.standard_graph_styles(
+    highlighted_df = pivot_df[highlighted_cols]
+    return highlighted_df.plot(
         ax=ax,
-        title=title,
-        x_label=x_label,
-        y_label=y_label,
-        legend_title=legend_title,
-        move_legend_outside=move_legend_outside,
+        linewidth=kwargs.pop("linewidth", 3),
+        color=kwargs.pop("color", highlighted_colors),
+        legend=is_multi_line,
+        zorder=2,
+        **kwargs,
     )
 
-    if source_text is not None:
-        gu.add_source_text(ax=ax, source_text=source_text)
 
-    return gu.standard_tick_styles(ax)
-
-
-def plot(
+def plot(  # noqa: PLR0913
     df: pd.DataFrame | pd.Series,
     value_col: str | list[str] | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     x_col: str | None = None,
     group_col: str | None = None,
     ax: Axes | None = None,
     source_text: str | None = None,
     legend_title: str | None = None,
     move_legend_outside: bool = False,
+    legend_style: Literal["box", "end_of_line"] | None = None,
     fill_na_value: float | None = None,
     highlight: str | list[str] | None = None,
-    **kwargs: dict[str, any],
+    **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
     """Plots `value_col` over `x_col` or index, with a separate line per unique `group_col` value.
 
@@ -277,12 +233,19 @@ def plot(
         x_label (str, optional): The x-axis label.
         y_label (str, optional): The y-axis label.
         title (str, optional): The title of the plot.
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
         x_col (str, optional): The column to be used as the x-axis. If None, the index is used.
         group_col (str, optional): The column used to define different lines.
         legend_title (str, optional): The title of the legend.
         ax (Axes, optional): Matplotlib axes object to plot on.
         source_text (str, optional): The source text to add to the plot.
         move_legend_outside (bool, optional): Move the legend outside the plot.
+        legend_style (Literal["box", "end_of_line"], optional): How series are labelled. ``"box"`` (default
+            when None) renders the standard matplotlib legend. ``"end_of_line"`` suppresses the legend and
+            places a colored series label at the right end of each line — the design system default for
+            line charts with few series. When ``"end_of_line"`` is set, ``move_legend_outside`` and
+            ``legend_title`` are ignored and a warning is emitted if either is supplied.
         fill_na_value (float, optional): Value to fill NaNs with after pivoting.
         highlight (str | list[str], optional): Line(s) to highlight. When using
             `group_col`, these should be group values. When using a list of `value_col`,
@@ -303,6 +266,7 @@ def plot(
         ValueError: If df is a Series and `group_col` is specified (cannot group a single series).
         ValueError: If `highlight` is provided for single-line plot.
         ValueError: If `highlight` values don't match available groups/columns.
+        ValueError: If `legend_style` is not one of ``None``, ``"box"``, or ``"end_of_line"``.
 
     Examples:
         Highlighting specific product categories:
@@ -353,27 +317,33 @@ def plot(
         ...     title="Revenue by Category (Electronics Highlighted)"
         ... )
     """
-    # Validate and prepare input
+    if legend_style not in (None, "box", "end_of_line"):
+        msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"
+        raise ValueError(msg)
+
     df, value_col = _validate_and_prepare_input(df, value_col, x_col, group_col)
-
-    # Validate highlight parameter (initial validation)
-    highlight = _validate_highlight_parameter(highlight, value_col, group_col)
-
-    # Create pivot DataFrame
     pivot_df = _create_pivot_dataframe(df, value_col, x_col, group_col, fill_na_value)
-
-    # Validate highlight values against available columns
     highlight = _validate_highlight_parameter(highlight, value_col, group_col, pivot_df)
 
-    # Categorize columns and generate colors
     highlighted_cols, context_cols = _categorize_columns(pivot_df, highlight)
     highlighted_colors = _generate_colors(highlighted_cols)
 
-    # Determine if multi-line plot
     is_multi_line = (group_col is not None) or (isinstance(value_col, list) and len(value_col) > 1)
 
-    # Render the plot
     ax = _render_plot(pivot_df, highlighted_cols, context_cols, highlighted_colors, is_multi_line, ax, **kwargs)
 
-    # Apply final styling
-    return _apply_final_styling(ax, title, x_label, y_label, legend_title, move_legend_outside, source_text)
+    return standard_graph_styles(
+        ax=ax,
+        title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
+        x_label=x_label,
+        y_label=y_label,
+        legend_title=legend_title,
+        move_legend_outside=move_legend_outside,
+        show_legend=is_multi_line,
+        legend_style=legend_style,
+        source_text=source_text,
+        grid_axis="y",
+        x_margin=0,
+    )

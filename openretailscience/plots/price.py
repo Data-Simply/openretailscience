@@ -26,13 +26,14 @@ retailers, countries, etc.
 - **Numeric Price Column**: Requires numeric price/value column for binning
 """
 
+from typing import Any
+
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
-from matplotlib.lines import Line2D
 
-import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.plots.styles.colors import get_plot_colors
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 
 def _validate_inputs(
@@ -117,19 +118,33 @@ def _validate_bins_parameter(bins: int | list[float]) -> int | list[float]:
     raise TypeError(msg)
 
 
+def _fmt_bin_edge(value: float) -> str:
+    """Format a bin edge to one decimal, normalising "-0.0" to "0.0".
+
+    pd.cut(..., include_lowest=True) extends the lowest bin's left edge by
+    ~0.1% of the data range below the minimum so that minimum is included;
+    when that epsilon lands within rounding distance of zero, naive formatting
+    produces "-0.0", which is meaningless to readers.
+    """
+    text = f"{value:.1f}"
+    return "0.0" if text == "-0.0" else text
+
+
 def plot(
     df: pd.DataFrame,
     value_col: str,
     group_col: str,
     bins: int | list[float],
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
     legend_title: str | None = None,
     ax: Axes | None = None,
     source_text: str | None = None,
     move_legend_outside: bool = False,
-    **kwargs: dict[str, any],
+    **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
     """Creates a bubble chart visualization showing price distribution analysis across categories.
 
@@ -142,13 +157,15 @@ def plot(
         group_col (str): Column containing the categorical grouping (e.g., "retailer").
         bins (int | list[float]): Either number of equal-width bins (int) or custom bin boundaries (list).
         title (str, optional): The title of the plot. Defaults to None.
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
         x_label (str, optional): The label for the x-axis. Defaults to None.
         y_label (str, optional): The label for the y-axis. Defaults to None.
         legend_title (str, optional): The title for the legend. Defaults to None.
         ax (Axes, optional): The Matplotlib Axes object to plot on. Defaults to None.
         source_text (str, optional): Text to be displayed as a source at the bottom of the plot. Defaults to None.
         move_legend_outside (bool, optional): Whether to move the legend outside the plot area. Defaults to False.
-        **kwargs (dict[str, Any]): Additional keyword arguments for the scatter plot function.
+        **kwargs (Any): Additional keyword arguments for the scatter plot function.
 
     Returns:
         SubplotBase: The Matplotlib Axes object with the generated bubble chart.
@@ -181,7 +198,7 @@ def plot(
     colors = get_plot_colors(len(groups))
 
     alpha = kwargs.pop("alpha", 0.7)
-    s_scale = kwargs.pop("s", 800)  # size for bubbles
+    s_scale = kwargs.pop("s", 2000)
     edge_color = kwargs.pop("edgecolor", "black")  # black stroke around bubbles
     line_width = kwargs.pop("linewidth", 1.5)  # Stroke width
 
@@ -216,60 +233,38 @@ def plot(
     ax.set_xticklabels(groups)
     ax.set_yticks(range(len(price_bins)))
 
-    # Format price bin labels to be more user-friendly
-    formatted_labels = []
-    for bin_ in price_bins:
-        # Extract left and right bounds from pandas Interval
-        left = bin_.left
-        right = bin_.right
-        # Format as price ranges
-        formatted_labels.append(f"{left:.1f} - {right:.1f}")
+    # Reserve half a unit on each side to give bubbles breathing room even at high s_scale.
+    ax.set_xlim(-0.5, len(groups) - 0.5)
+    ax.set_ylim(-0.5, len(price_bins) - 0.5)
+
+    # pd.cut(..., include_lowest=True) extends the lowest bin's left edge by ~0.1% of the data range below the minimum
+    # so the minimum value is included; when that epsilon lands within rounding distance of zero, naive formatting
+    # produces "-0.0", which is meaningless to readers.
+    formatted_labels = [f"{_fmt_bin_edge(bin_.left)} - {_fmt_bin_edge(bin_.right)}" for bin_ in price_bins]
 
     ax.set_yticklabels(formatted_labels)
 
-    # Apply standard styling but completely disable legend handling
-    ax = gu.standard_graph_styles(
+    # The single ax.scatter() call above draws all bubbles in one collection, so
+    # matplotlib's legend auto-discovery has no per-group handles to find. Seed
+    # one invisible labeled marker per group so standard_graph_styles can build
+    # the legend, and so tight_layout can reserve room for it when
+    # move_legend_outside=True. The bubble's edge stroke is omitted on the
+    # proxies — at legend marker size the stroke would dominate and wash out
+    # the fill color.
+    if len(groups) > 1:
+        for i, group in enumerate(groups):
+            ax.scatter([], [], c=[colors[i]], alpha=alpha, linewidths=0, label=group)
+
+    return standard_graph_styles(
         ax=ax,
         title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
         x_label=x_label,
         y_label=y_label,
-        legend_title=None,
-        move_legend_outside=False,
-        show_legend=False,
+        legend_title=legend_title,
+        move_legend_outside=move_legend_outside,
+        show_legend=len(groups) > 1,
+        source_text=source_text,
+        grid_axis="y",
     )
-
-    # Create custom legend with uniform circle sizes AFTER standard_graph_styles
-    if len(groups) > 1:  # Only create legend if there are multiple groups
-        legend_elements = []
-        for i, _group in enumerate(groups):
-            legend_elements.append(
-                Line2D(
-                    [0],
-                    [0],
-                    marker="o",
-                    color="w",
-                    markerfacecolor=colors[i],
-                    markersize=8,
-                    markeredgecolor="white",
-                    markeredgewidth=1,
-                    alpha=0.8,
-                    linestyle="None",
-                ),
-            )
-
-        if move_legend_outside:
-            ax.legend(
-                legend_elements,
-                groups,
-                title=legend_title,
-                bbox_to_anchor=(1.05, 1),
-                loc="upper left",
-                frameon=False,
-            )
-        else:
-            ax.legend(legend_elements, groups, title=legend_title, frameon=False)
-
-    if source_text:
-        gu.add_source_text(ax=ax, source_text=source_text)
-
-    return gu.standard_tick_styles(ax=ax)

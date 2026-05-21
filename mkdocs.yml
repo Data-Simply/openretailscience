@@ -8,6 +8,7 @@ nav:
   - Getting Started:
       - Installation: getting_started/installation.md
       - Options & Configuration: getting_started/options_guide.md
+      - Plot Styling Guide: getting_started/styling_guide.ipynb
   - Analysis Modules:
       - analysis_modules.md
   - Metrics:
@@ -18,10 +19,12 @@ nav:
       - Bar Plot: gallery/plots/bar.ipynb
       - Broken Timeline Plot: gallery/plots/broken_timeline.ipynb
       - Cohort Plot: gallery/plots/cohort.ipynb
+      - Customer Decision Hierarchy: gallery/plots/customer_decision_hierarchy.ipynb
       - Heatmap Plot: gallery/plots/heatmap.ipynb
       - Histogram Plot: gallery/plots/histogram.ipynb
       - Line Plot: gallery/plots/line.ipynb
       - Period on Period Plot: gallery/plots/period_on_period.ipynb
+      - Revenue Tree: gallery/plots/revenue_tree.ipynb
       - Time Plot: gallery/plots/time.ipynb
       - Venn Diagram: gallery/plots/venn.ipynb
       - Waterfall Plot: gallery/plots/waterfall.ipynb
@@ -110,7 +113,13 @@ plugins:
   - search
   - mkdocstrings
   - autorefs
-  - mkdocs-jupyter
+  - mkdocs-jupyter:
+      execute: false
+      remove_tag_config:
+        remove_cell_tags:
+          - remove_cell
+        remove_input_tags:
+          - hide_input
 
 markdown_extensions:
   - admonition

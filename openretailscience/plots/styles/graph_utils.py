@@ -5,7 +5,7 @@ import warnings
 from collections.abc import Generator
 from datetime import datetime
 from itertools import cycle
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 import matplotlib.ticker as mtick
 import numpy as np
@@ -13,12 +13,10 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.axis import XAxis, YAxis
 from matplotlib.dates import date2num
-from matplotlib.text import Text
 from scipy import stats
 
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.font_utils import get_font_properties
-from openretailscience.plots.styles.styling_helpers import PlotStyler
 
 ASSETS_PATH = pkg_resources.files("openretailscience").joinpath("assets")
 _MAGNITUDE_SUFFIXES = ["", "K", "M", "B", "T", "P"]
@@ -30,6 +28,31 @@ _DATA_SIZE_MULTIPLIER = 3
 _POSITIVE_X_FLOOR = 1e-6
 _VARIANCE_THRESHOLD = 1e-10
 _TEXT_X_PADDING = 0.05  # 5% from left
+
+# End-of-line label layout
+_POINTS_PER_INCH = 72.0
+_LABEL_GAP_FACTOR = 1.15  # multiple of font line height enforced between adjacent labels
+_LABEL_BUMP_THRESHOLD_PX = 1.0  # display-pixel delta above which a leader line is drawn
+_LEADER_LINEWIDTH = 0.8
+_LEADER_ALPHA = 0.55
+
+
+class _EndOfLineCandidate(TypedDict):
+    """End-of-line label candidate collected from a single visible line.
+
+    ``x_end`` is intentionally typed as object: matplotlib lines may carry
+    pandas Period/Timestamp or category strings on their x-axis, none of which
+    share a common numeric supertype. ``x_end`` is only fed back to ax.plot /
+    ax.annotate, both of which accept any matplotlib-renderable value.
+    """
+
+    label: str
+    x_end: object
+    y_end: float
+    color: str
+    marker_size: float
+    zorder: float
+
 
 # Map regression_type -> (check_x_positive, check_y_positive)
 _POSITIVITY_REQUIREMENTS: dict[str, tuple[bool, bool]] = {
@@ -151,72 +174,173 @@ def truncate_to_x_digits(num_str: str, digits: int) -> str:
     return f"{truncated_num}{suffix}"
 
 
-def standard_graph_styles(
-    ax: Axes,
-    title: str | None = None,
-    x_label: str | None = None,
-    y_label: str | None = None,
-    title_pad: int | None = None,
-    x_label_pad: int | None = None,
-    y_label_pad: int | None = None,
-    legend_title: str | None = None,
-    move_legend_outside: bool = False,
-    show_legend: bool = True,
-) -> Axes:
-    """Apply standard styles to a Matplotlib graph using styling helpers.
+def draw_end_of_line_labels(ax: Axes) -> None:
+    """Annotate each visible line with its series label at its right-most point.
+
+    Used by line-style plots when ``legend_style="end_of_line"``. For each
+    visible labeled line, places a small filled marker at the line's last
+    finite (x, y) and a colored text label to its right. When two or more
+    labels would overlap vertically, label y-positions are bumped apart by
+    the font line height (markers stay anchored at the true line endpoints)
+    and a thin leader connects each displaced label back to its marker.
 
     Args:
-        ax (Axes): The graph to apply the styles to.
-        title (str, optional): The title of the graph. Defaults to None.
-        x_label (str, optional): The x-axis label. Defaults to None.
-        y_label (str, optional): The y-axis label. Defaults to None.
-        title_pad (int, optional): The padding above the title. Defaults to styling context default.
-        x_label_pad (int, optional): The padding below the x-axis label. Defaults to styling context default.
-        y_label_pad (int, optional): The padding to the left of the y-axis label. Defaults to styling context default.
-        legend_title (str, optional): The title of the legend. If None, no legend title is applied. Defaults to None.
-        move_legend_outside (bool, optional): Whether to move the legend outside the plot. Defaults to False.
-        show_legend (bool): Whether to display the legend or not.
-
-    Returns:
-        Axes: The graph with the styles applied.
+        ax: Matplotlib axes containing the line plots.
     """
-    plot_styler = PlotStyler()
+    # Force matplotlib to settle the view limits before we read pixel positions.
+    # Without this, transData can map endpoints into pixel space using a stale
+    # viewLim, which makes the bump algorithm clamp every label to the chart top.
+    ax.autoscale_view()
 
-    # Apply base plot styling
-    plot_styler.apply_base_styling(ax)
+    style = PlotStyleHelper()
+    legend_font = get_font_properties(style.legend_font)
 
-    # Apply text styling
-    if title is not None:
-        plot_styler.apply_title(ax, title, title_pad)
+    candidates: list[_EndOfLineCandidate] = []
+    for line in ax.get_lines():
+        label = line.get_label()
+        if not label or label.startswith("_"):
+            continue
+        xdata = np.asarray(line.get_xdata())
+        ydata = np.asarray(line.get_ydata())
+        if len(xdata) == 0 or len(ydata) == 0:
+            continue
+        try:
+            finite_mask = np.isfinite(ydata.astype(float))
+        except (TypeError, ValueError):
+            finite_mask = np.array([True] * len(ydata))
+        if not finite_mask.any():
+            continue
+        idx = np.where(finite_mask)[0][-1]
+        candidates.append(
+            {
+                "label": label,
+                "x_end": xdata[idx],
+                "y_end": ydata[idx],
+                "color": line.get_color(),
+                "marker_size": max(line.get_linewidth() * 2.0, 6.0),
+                "zorder": line.get_zorder(),
+            },
+        )
 
-    if x_label is not None:
-        plot_styler.apply_label(ax, x_label, "x", x_label_pad)
+    if len(candidates) == 0:
+        return
 
-    if y_label is not None:
-        plot_styler.apply_label(ax, y_label, "y", y_label_pad)
+    label_ys = _resolve_end_of_line_label_ys(ax, candidates, style.legend_size)
 
-    # Apply tick styling
-    plot_styler.apply_ticks(ax)
+    for cand, y_lbl in zip(candidates, label_ys, strict=True):
+        x_end = cand["x_end"]
+        y_end = cand["y_end"]
+        color = cand["color"]
+        marker_size = cand["marker_size"]
+        zorder = cand["zorder"]
 
-    # Apply legend styling if needed
-    if show_legend and (ax.get_legend() is not None or legend_title is not None or move_legend_outside):
-        plot_styler.apply_legend(ax, legend_title, move_legend_outside)
+        # Leader first so the marker overlays its top end cleanly. Use a dummy x=0
+        # in the transform — transData is separable on cartesian axes, and the real
+        # x_end may be a non-numeric type (pandas Period, Timestamp, category) that
+        # matplotlib's affine transform can't handle directly.
+        y_end_px = ax.transData.transform((0, y_end))[1]
+        y_lbl_px = ax.transData.transform((0, y_lbl))[1]
+        if abs(y_lbl_px - y_end_px) > _LABEL_BUMP_THRESHOLD_PX:
+            ax.plot(
+                [x_end, x_end],
+                [y_end, y_lbl],
+                color=color,
+                linewidth=_LEADER_LINEWIDTH,
+                alpha=_LEADER_ALPHA,
+                clip_on=False,
+                zorder=zorder + 1,
+                scalex=False,
+                scaley=False,
+            )
 
-    return ax
+        ax.plot(
+            [x_end],
+            [y_end],
+            marker="o",
+            markersize=marker_size,
+            markerfacecolor=color,
+            markeredgecolor=color,
+            linestyle="none",
+            clip_on=False,
+            zorder=zorder + 2,
+            scalex=False,
+            scaley=False,
+        )
+        ax.annotate(
+            cand["label"],
+            xy=(x_end, y_lbl),
+            xytext=(marker_size + 6, 0),
+            textcoords="offset points",
+            ha="left",
+            va="center",
+            color=color,
+            fontsize=style.legend_size,
+            fontproperties=legend_font,
+            annotation_clip=False,
+        )
 
 
-def standard_tick_styles(ax: Axes) -> Axes:
-    """Apply standard tick styles using styling helpers.
+def _resolve_end_of_line_label_ys(ax: Axes, candidates: list[_EndOfLineCandidate], font_pts: float) -> list[float]:
+    """Greedy bump of overlapping label y-positions, returned in input order.
+
+    Works in display (pixel) space so the minimum gap reflects the rendered
+    font height regardless of the data y-scale. Sorts candidates by initial
+    pixel y, walks bottom-to-top pushing each label up if it would collide
+    with the previous one, and — if the topmost label exceeds the data area
+    — clamps it down and back-propagates.
 
     Args:
-        ax (Axes): The graph to apply the styles to.
+        ax: The axes whose transData maps the label points.
+        candidates: Input dicts as collected in ``draw_end_of_line_labels``;
+            only ``x_end`` and ``y_end`` are read here.
+        font_pts: Label font size in points; sets the per-label gap.
 
     Returns:
-        Axes: The graph with the styles applied.
+        A list of resolved y-positions in data coordinates, aligned with
+        ``candidates`` by index.
     """
-    plot_styler = PlotStyler()
-    plot_styler.apply_ticks(ax)
-    return ax
+    n = len(candidates)
+    initial_px = np.array([ax.transData.transform((0, c["y_end"]))[1] for c in candidates])
+    min_gap_px = font_pts * ax.figure.dpi / _POINTS_PER_INCH * _LABEL_GAP_FACTOR
+
+    order = np.argsort(initial_px)
+    bumped = initial_px.copy()
+    for k in range(1, n):
+        prev = order[k - 1]
+        curr = order[k]
+        bumped[curr] = max(bumped[curr], bumped[prev] + min_gap_px)
+
+    # If the topmost label was pushed past the data area, clamp it and squash downward.
+    y_top_px = ax.transData.transform((0, ax.get_ylim()[1]))[1]
+    top_idx = order[-1]
+    if bumped[top_idx] > y_top_px:
+        bumped[top_idx] = y_top_px
+        for k in range(n - 2, -1, -1):
+            curr = order[k]
+            nxt = order[k + 1]
+            bumped[curr] = min(bumped[curr], bumped[nxt] - min_gap_px)
+
+    # Symmetric clamp: if the back-propagation pushed the bottom label below the
+    # data area, clamp it up and re-run the upward bump.
+    y_bottom_px = ax.transData.transform((0, ax.get_ylim()[0]))[1]
+    bottom_idx = order[0]
+    if bumped[bottom_idx] < y_bottom_px:
+        bumped[bottom_idx] = y_bottom_px
+        for k in range(1, n):
+            curr = order[k]
+            prev = order[k - 1]
+            bumped[curr] = max(bumped[curr], bumped[prev] + min_gap_px)
+        if bumped[order[-1]] > y_top_px:
+            warnings.warn(
+                f"{n} end-of-line labels cannot fit between ylim[0] and ylim[1] given the current "
+                f"figure height and font size. Some labels render outside the data area; "
+                f"consider legend_style='box' or fewer series.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+    inv = ax.transData.inverted()
+    return [float(inv.transform((0, bumped[i]))[1]) for i in range(n)]
 
 
 def apply_hatches(ax: Axes, num_segments: int) -> Axes:
@@ -250,26 +374,10 @@ def apply_hatches(ax: Axes, num_segments: int) -> Axes:
     return ax
 
 
-def not_none(value1: Any, value2: Any) -> Any:  # noqa: ANN401
-    """Helper function that returns the first value that is not None.
-
-    Args:
-        value1: The first value.
-        value2: The second value.
-
-    Returns:
-        The first value that is not None.
-    """
-    if value1 is None:
-        return value2
-    return value1
-
-
 def get_decimals(axis_limits: tuple[float, float], tick_values: list[float], max_decimals: int = 10) -> int:
     """Pick the smallest decimal count that keeps `format_shorthand` tick labels distinct.
 
-    Used by `set_axis_format` when shorthand decimals are auto-derived for either
-    the x-axis or the y-axis.
+    Used by `set_axis_shorthand` when decimals are auto-derived for either the x-axis or the y-axis.
 
     Args:
         axis_limits (tuple[float, float]): The axis limits (xlim or ylim).
@@ -291,85 +399,47 @@ def get_decimals(axis_limits: tuple[float, float], tick_values: list[float], max
     return decimals
 
 
-def add_source_text(
-    ax: Axes,
-    source_text: str,
-    font_size: float | None = None,
-    vertical_padding: float = 2,
-    is_venn_diagram: bool = False,
-) -> Text:
-    """Add source text to the bottom left corner of a graph using styling helpers.
-
-    Args:
-        ax (Axes): The graph to add the source text to.
-        source_text (str): The source text.
-        font_size (float, optional): The font size of the source text. If None, uses styling context default.
-        vertical_padding (float, optional): The padding in ems below the x-axis label. Defaults to 2.
-        is_venn_diagram (bool, optional): Flag to indicate if the diagram is a Venn diagram.
-            If True, `x_norm` and `y_norm` will be set to fixed values. Defaults to False.
-
-    Returns:
-        Text: The source text.
-    """
-    plot_styler = PlotStyler()
-
-    return plot_styler.apply_source_text(
-        ax=ax,
-        text=source_text,
-        font_size=font_size,
-        vertical_padding=vertical_padding,
-        is_venn_diagram=is_venn_diagram,
-    )
-
-
-def set_axis_format(
+def set_axis_shorthand(
     fmt_axis: YAxis | XAxis,
-    format_type: Literal["shorthand", "percent"],
     decimals: int | None = None,
     prefix: str = "",
-    xmax: float = 1,
-    symbol: str | None = "%",
 ) -> None:
-    """Apply a named numeric format to a matplotlib axis.
+    """Apply shorthand (K/M/B/T/P) numeric formatting to a matplotlib axis.
 
     Args:
         fmt_axis (YAxis | XAxis): The axis to format (e.g. ``ax.xaxis`` or ``ax.yaxis``).
-        format_type (Literal["shorthand", "percent"]): Which formatter to apply:
-
-            - ``"shorthand"``: render numbers the way a person would write them, with
-              K/M/B/T/P magnitude suffixes (``500000 → "500K"``, ``1.4e7 → "14M"``).
-              Honours ``decimals`` and ``prefix``.
-            - ``"percent"``: render numbers as percentages using matplotlib's
-              ``PercentFormatter``. Honours ``decimals``, ``xmax``, and ``symbol``.
-        decimals (int | None, optional): Number of decimal places to display. ``None``
-            lets the formatter pick automatically — for ``"shorthand"`` the count is
-            derived from the current tick range so labels stay distinct; for ``"percent"``
-            matplotlib chooses based on the displayed values.
-        prefix (str, optional): Prepended to shorthand output (e.g. ``"$"``).
-            Ignored for ``"percent"``. Defaults to ``""``.
-        xmax (float, optional): Percent-only. The value that maps to 100%. Defaults to 1.
-        symbol (str | None, optional): Percent-only. The symbol shown after the number;
-            pass ``None`` for no symbol. Defaults to ``"%"``.
-
-    Raises:
-        ValueError: If ``format_type`` is not ``"shorthand"`` or ``"percent"``.
+        decimals (int | None, optional): Number of decimal places. ``None`` derives the
+            count from the current tick range so labels stay distinct. Defaults to None.
+        prefix (str, optional): Prepended to each formatted value (e.g. ``"$"``). Defaults to ``""``.
     """
-    if format_type == "percent":
-        fmt_axis.set_major_formatter(mtick.PercentFormatter(xmax=xmax, decimals=decimals, symbol=symbol))
-        return
-    if format_type == "shorthand":
-        if decimals is None:
-            parent_ax = fmt_axis.axes
-            is_xaxis = fmt_axis is parent_ax.xaxis
-            limits = parent_ax.get_xlim() if is_xaxis else parent_ax.get_ylim()
-            ticks = parent_ax.get_xticks() if is_xaxis else parent_ax.get_yticks()
-            decimals = get_decimals(limits, ticks)
-        fmt_axis.set_major_formatter(
-            lambda value, _pos=None: format_shorthand(value, decimals=decimals, prefix=prefix),
-        )
-        return
-    msg = f"Unsupported format_type {format_type!r}; must be 'shorthand' or 'percent'."
-    raise ValueError(msg)
+    if decimals is None:
+        parent_ax = fmt_axis.axes
+        is_xaxis = fmt_axis is parent_ax.xaxis
+        limits = parent_ax.get_xlim() if is_xaxis else parent_ax.get_ylim()
+        ticks = parent_ax.get_xticks() if is_xaxis else parent_ax.get_yticks()
+        decimals = get_decimals(limits, ticks)
+    fmt_axis.set_major_formatter(
+        lambda value, _pos=None: format_shorthand(value, decimals=decimals, prefix=prefix),
+    )
+
+
+def set_axis_percent(
+    fmt_axis: YAxis | XAxis,
+    decimals: int | None = None,
+    xmax: float = 1,
+    symbol: str | None = "%",
+) -> None:
+    """Apply percent formatting to a matplotlib axis using matplotlib's ``PercentFormatter``.
+
+    Args:
+        fmt_axis (YAxis | XAxis): The axis to format (e.g. ``ax.xaxis`` or ``ax.yaxis``).
+        decimals (int | None, optional): Number of decimal places. ``None`` lets matplotlib
+            choose based on the displayed values. Defaults to None.
+        xmax (float, optional): The value that maps to 100%. Defaults to 1.
+        symbol (str | None, optional): Symbol shown after the number; pass ``None`` for
+            no symbol. Defaults to ``"%"``.
+    """
+    fmt_axis.set_major_formatter(mtick.PercentFormatter(xmax=xmax, decimals=decimals, symbol=symbol))
 
 
 def _calculate_r_squared_original_space(y_actual: np.ndarray, y_predicted: np.ndarray) -> float:
@@ -581,7 +651,7 @@ def _add_equation_text(
         text_y,
         text,
         color=color,
-        fontsize=style.label_size,
+        fontsize=style.source_size,
         fontproperties=get_font_properties(style.source_font),
         bbox={"facecolor": "white", "alpha": 0.7, "edgecolor": "none"},
     )
@@ -612,12 +682,9 @@ def _extract_plot_data(ax: Axes) -> tuple[np.ndarray, np.ndarray]:
         y_data = lines[0].get_ydata()
     # Check for bar charts (patches)
     elif hasattr(ax, "patches") and len(ax.patches) > 0:
-        # Detect bar orientation using BarContainer (stable API)
-        is_vertical = True  # Default assumption
-        for container in ax.containers:
-            if hasattr(container, "orientation") and container.orientation:
-                is_vertical = container.orientation == "vertical"
-                break
+        # Detect bar orientation using BarContainer (stable API). Default covers
+        # the case where patches were added without a container via ax.add_patch.
+        is_vertical = ax.containers[0].orientation == "vertical" if len(ax.containers) > 0 else True
 
         if is_vertical:
             # Vertical bars: x is center position, y is height

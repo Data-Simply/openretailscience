@@ -17,15 +17,15 @@ def cleanup_figures():
 
 
 PERIODS = 6
-RNG = np.random.default_rng(42)
 
 
 @pytest.fixture
 def sample_dataframe():
     """A sample dataframe for Jeans sales data."""
+    rng = np.random.default_rng(42)
     data = {
         "transaction_date": np.repeat(pd.date_range("2023-01-01", periods=PERIODS, freq="ME"), 3),
-        "unit_spend": RNG.integers(1, 6, size=3 * PERIODS),
+        "unit_spend": rng.integers(1, 6, size=3 * PERIODS),
         "category": ["Jeans", "Shoes", "Dresses"] * PERIODS,
     }
     return pd.DataFrame(data)
@@ -43,7 +43,7 @@ def test_plot_single_column(sample_dataframe):
     )
 
     assert isinstance(result_ax, Axes)
-    assert len(result_ax.get_children()) > 0
+    assert len(result_ax.collections) == 1
 
 
 def test_plot_with_group_col(sample_dataframe):
@@ -59,15 +59,17 @@ def test_plot_with_group_col(sample_dataframe):
     )
 
     assert isinstance(result_ax, Axes)
-    assert len(result_ax.get_children()) > 0
+    assert len(result_ax.collections) == sample_dataframe["category"].nunique()
 
 
 def test_plot_multiple_columns(sample_dataframe):
     """Test the plot function with multiple columns as a stacked area chart."""
-    sample_dataframe["additional_spend"] = RNG.integers(1, 6, size=3 * PERIODS)
+    rng = np.random.default_rng(42)
+    sample_dataframe["additional_spend"] = rng.integers(1, 6, size=3 * PERIODS)
+    value_cols = ["unit_spend", "additional_spend"]
     result_ax = area.plot(
         df=sample_dataframe,
-        value_col=["unit_spend", "additional_spend"],
+        value_col=value_cols,
         x_label="Transaction Date",
         y_label="Sales",
         title="Sales by Product Category",
@@ -76,12 +78,13 @@ def test_plot_multiple_columns(sample_dataframe):
     )
 
     assert isinstance(result_ax, Axes)
-    assert len(result_ax.get_children()) > 0
+    assert len(result_ax.collections) == len(value_cols)
 
 
 def test_plot_multiple_columns_with_group_col(sample_dataframe):
     """Test the plot function when using multiple columns along with a group column."""
-    sample_dataframe["additional_spend"] = RNG.integers(1, 6, size=3 * PERIODS)
+    rng = np.random.default_rng(42)
+    sample_dataframe["additional_spend"] = rng.integers(1, 6, size=3 * PERIODS)
     with pytest.raises(ValueError, match=r"Cannot use both a list for `value_col` and a `group_col`. Choose one."):
         area.plot(
             df=sample_dataframe,
@@ -123,4 +126,16 @@ def test_plot_single_column_series(sample_dataframe):
     )
 
     assert isinstance(result_ax, Axes)
-    assert len(result_ax.get_children()) > 0
+    assert len(result_ax.collections) == 1
+
+
+@pytest.mark.parametrize("invalid_value", ["endofline", "box ", "", "BOX"])
+def test_plot_rejects_invalid_legend_style(sample_dataframe, invalid_value):
+    """area.plot raises ValueError for legend_style values outside the documented set."""
+    with pytest.raises(ValueError, match="legend_style"):
+        area.plot(
+            df=sample_dataframe,
+            value_col="unit_spend",
+            x_col="transaction_date",
+            legend_style=invalid_value,
+        )

@@ -33,9 +33,9 @@ import pandas as pd
 import textalloc as ta
 from matplotlib.axes import Axes, SubplotBase
 
-import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_plot_colors
+from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 
 def _handle_size_params(
@@ -190,7 +190,6 @@ def _add_point_labels(
     value_col: str,
     label_col: str,
     x_col: str | None = None,
-    group_col: str | None = None,
     label_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """Add text labels to scatter plot points with automatic positioning.
@@ -201,7 +200,6 @@ def _add_point_labels(
         value_col (str): Column name for y-values.
         label_col (str): Column name containing text labels.
         x_col (str | None): Column name for x-values. If None, uses index.
-        group_col (str | None): Column name for grouping. If None, treats as single series.
         label_kwargs (dict[str, Any] | None): Additional arguments passed to textalloc.allocate().
     """
     # Get style configuration for label styling
@@ -216,16 +214,9 @@ def _add_point_labels(
     # Get x-values (either from x_col or use index)
     x_values = data_with_labels_df[x_col] if x_col is not None else data_with_labels_df.index
 
-    if group_col is None:
-        # Single series - vectorized approach
-        all_x_coords = x_values.tolist()
-        all_y_coords = data_with_labels_df[value_col].tolist()
-        all_labels = data_with_labels_df[label_col].astype(str).tolist()
-    else:
-        # Multi-series with groups - vectorized approach
-        all_x_coords = data_with_labels_df.index.to_numpy() if x_col is None else data_with_labels_df[x_col].to_numpy()
-        all_y_coords = data_with_labels_df[value_col].to_numpy()
-        all_labels = data_with_labels_df[label_col].astype(str).to_numpy()
+    all_x_coords = x_values.tolist()
+    all_y_coords = data_with_labels_df[value_col].tolist()
+    all_labels = data_with_labels_df[label_col].astype(str).tolist()
 
     # Apply textalloc to avoid overlaps
     if len(all_x_coords) > 0 and len(all_y_coords) > 0 and len(all_labels) > 0:
@@ -251,12 +242,14 @@ def _add_point_labels(
         )
 
 
-def plot(
+def plot(  # noqa: PLR0913
     df: pd.DataFrame | pd.Series,
     value_col: str | list[str],
     x_label: str | None = None,
     y_label: str | None = None,
     title: str | None = None,
+    eyebrow: str | None = None,
+    subtitle: str | None = None,
     x_col: str | None = None,
     group_col: str | None = None,
     size_col: str | None = None,
@@ -277,6 +270,8 @@ def plot(
         x_label (str, optional): The x-axis label.
         y_label (str, optional): The y-axis label.
         title (str, optional): The title of the plot.
+        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
+        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
         x_col (str, optional): The column to be used as the x-axis. If None, the index is used.
         group_col (str, optional): The column used to define different scatter groups.
         size_col (str, optional): The column name containing values to determine point sizes.
@@ -363,20 +358,17 @@ def plot(
             value_col=value_col,
             label_col=label_col,
             x_col=x_col,
-            group_col=group_col,
             label_kwargs=label_kwargs,
         )
 
-    ax = gu.standard_graph_styles(
+    return standard_graph_styles(
         ax=ax,
         title=title,
+        eyebrow=eyebrow,
+        subtitle=subtitle,
         x_label=x_label,
         y_label=y_label,
         legend_title=legend_title,
         move_legend_outside=move_legend_outside,
+        source_text=source_text,
     )
-
-    if source_text is not None:
-        gu.add_source_text(ax=ax, source_text=source_text)
-
-    return gu.standard_tick_styles(ax)

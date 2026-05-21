@@ -1,5 +1,29 @@
 # OpenRetailScience Development Guide
 
+## Architecture & Design Principles
+
+### Simplicity Criterion
+
+All else being equal, simpler is better. Weigh every change as **improvement magnitude vs. complexity cost**: a
+marginal gain that drags in a new abstraction, an extra parameter, or another layer of indirection is rarely worth
+it. **Removing code while preserving or improving behavior is one of the best outcomes available** — a net-negative
+diff is a feature, not a sign of cut corners.
+
+Apply this lens to every change:
+
+- **Prefer deletion over addition** when both achieve the goal. If a requirement can be met by removing a code
+  path rather than guarding it, do that.
+- **Reject sunk-cost momentum.** If a refactor is getting uglier as you go — more special cases, more wrappers,
+  more comments needed to justify each step — stop and reconsider. The right answer is often a smaller change,
+  or a different shape of change entirely.
+- **No premature abstraction.** A helper for one caller has to be read every time too. Three similar lines beat
+  a wrapper introduced "just in case" a second use site appears.
+- **Default to the boring shape.** Flat functions beat dispatch tables for two cases; direct checks beat
+  extension points; explicit code beats clever code.
+
+When in doubt about whether a piece of complexity is earning its keep, leave it out. Adding it back when a real
+second use case demands it is cheap; removing an abstraction once code depends on its shape is not.
+
 ## Build & Test Commands
 
 - Install dependencies: `uv sync`
@@ -59,6 +83,10 @@
   not `\text{unit\_spend}` — the backslash-escaped form renders a visible backslash in the output.
 - Shared validation functions (e.g., `ensure_ibis_table`, `validate_columns`) belong in
   `openretailscience/utils/validation.py`. Do not place validation helpers in metric-specific modules.
+- **No nested function definitions.** A `def` (or `async def`) must not appear inside another function's body.
+  Lift inline helpers to module scope. If the helper genuinely needs to bind outer-scope state, take that state as
+  an explicit parameter rather than relying on a closure. Lambdas are exempt; the rule is specifically about
+  `def` / `async def` inside another `def`. (Ruff has no built-in rule for this; enforce by review.)
 
 ## Test Writing Guidelines
 
@@ -120,7 +148,10 @@ fails at runtime, and only "green" when it passes at runtime.
     - Assertions that can never fail (e.g., `assert x >= 0 or x < 0`)
     - Vague comparison assertions that only check "something changed" (e.g., `assert filtered_df.shape !=
       unfiltered_df.shape`). Better: verify the actual filtering behavior (e.g., `assert len(filtered_df) == 5` and
-      `assert (filtered_df['price'] > 100).all()`)
+      `assert (filtered_df['price'] > 100).all()`). This includes count-existence checks like `assert len(x) > 0`
+      or `>= 1` when the expected count is knowable (e.g., one label per bar, one legend entry per category). Pin
+      the count to its source: `assert len(bar_labels) == len(bars)`. A regression that drops all but one item
+      should fail the test.
 - **Don't duplicate tests**: If you are about to write a new test method whose body follows the same pattern as an
   existing method in the class (same assertion, same exception, same setup) but with different input values, stop and
   add a `pytest.mark.parametrize` entry to the existing method instead. This applies even when the methods test

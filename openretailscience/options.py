@@ -18,7 +18,6 @@ Example:
 
 from collections.abc import Generator
 from contextlib import contextmanager
-from functools import lru_cache
 from pathlib import Path
 
 import toml
@@ -77,48 +76,67 @@ class Options:
             "column.suffix.unknown_customer": "unknown",
             "column.suffix.total": "total",
             # Color palettes
-            "plot.color.mono_palette": [
-                COLORS["green"][500],
-                COLORS["green"][300],
-                COLORS["green"][700],
-            ],
+            # 27-color rotation: 9 curated hues at 3 shades. First 5 hues are max-separated on the
+            # hue wheel (~70 degrees apart) for 3-5 series. Order: primaries (500), lights (200),
+            # darks (700).
             "plot.color.multi_color_palette": [
-                COLORS[color][shade]
-                for shade in [500, 300, 700]
-                for color in ["green", "blue", "red", "orange", "yellow", "violet", "pink"]
+                COLORS[hue][shade]
+                for shade in (500, 200, 700)
+                for hue in ("green", "blue", "orange", "violet", "red", "cyan", "pink", "yellow", "teal")
             ],
             "plot.color.positive": COLORS["green"][500],
             "plot.color.negative": COLORS["red"][500],
             "plot.color.neutral": COLORS["gray"][500],
-            "plot.color.difference": COLORS["blue"][500],
-            "plot.color.context": COLORS["gray"][400],
-            "plot.color.primary": COLORS["green"][500],
-            "plot.color.heatmap": "green",
+            # Semantic colors (`primary`, `difference`) live one shade darker than their hue's
+            # categorical counterpart in `multi_color_palette` (which uses the 500-shade tier as
+            # its primary set). The extra weight signals "this means something specific" vs
+            # "one of N peers" — keeps the semantic role visually distinct while staying inside
+            # the same Tailwind hue family.
+            "plot.color.difference": COLORS["blue"][600],
+            "plot.color.context": COLORS["gray"][300],
+            "plot.color.primary": COLORS["green"][600],
+            "plot.color.sequential": "green",
+            # Chrome (eyebrow / title / subtitle / tab / source) colors
+            "plot.color.eyebrow": COLORS["neutral"][500],
+            "plot.color.subtitle": COLORS["neutral"][600],
+            "plot.color.title": COLORS["neutral"][950],
+            "plot.color.tab": COLORS["green"][600],
+            "plot.color.source": COLORS["neutral"][500],
             # Plot font options
             "plot.font.title_font": "poppins_semi_bold",
+            "plot.font.eyebrow_font": "poppins_semi_bold",
+            "plot.font.subtitle_font": "poppins_regular",
             "plot.font.label_font": "poppins_regular",
             "plot.font.tick_font": "poppins_regular",
             "plot.font.source_font": "poppins_light_italic",
-            "plot.font.data_label_font": "poppins_regular",
-            "plot.font.title_size": 20.0,
-            "plot.font.label_size": 12.0,
+            "plot.font.data_label_font": "poppins_medium",
+            "plot.font.legend_font": "poppins_regular",
+            "plot.font.title_size": 22.0,
+            "plot.font.eyebrow_size": 10.0,
+            "plot.font.subtitle_size": 12.0,
+            "plot.font.label_size": 11.0,
             "plot.font.tick_size": 10.0,
-            "plot.font.source_size": 10.0,
-            "plot.font.data_label_size": 8.0,
+            "plot.font.source_size": 9.0,
+            "plot.font.data_label_size": 10.0,
+            "plot.font.legend_size": 10.0,
             # Plot spacing options
-            "plot.spacing.title_pad": 10,
             "plot.spacing.x_label_pad": 10,
             "plot.spacing.y_label_pad": 10,
             # Plot style options
             "plot.style.background_color": "white",
-            "plot.style.grid_color": "#DAD8D7",
-            "plot.style.grid_alpha": 0.5,
+            "plot.style.grid_color": COLORS["neutral"][200],
+            "plot.style.grid_alpha": 1.0,
             "plot.style.show_top_spine": False,
             "plot.style.show_right_spine": False,
             "plot.style.show_bottom_spine": True,
             "plot.style.show_left_spine": True,
-            "plot.style.legend_bbox_to_anchor": [1.05, 1.0],
+            "plot.style.legend_bbox_to_anchor": [1.02, 1.0],
             "plot.style.legend_loc": "upper left",
+            "plot.style.cell_corner_radius": 0.05,
+            "plot.style.cell_gap": 3.0,
+            "plot.style.auto_rotate_x_ticks": True,
+            "plot.style.auto_wrap_x_ticks": True,
+            "plot.style.show_tab": True,
         }
         self._descriptions: dict[str, str] = {
             # Database columns
@@ -167,7 +185,9 @@ class Options:
             "column.calc.spend_per_transaction": "The name of the column containing the spend per transaction.",
             "column.calc.transactions_per_customer": "The name of the column containing the transactions per customer.",
             "column.calc.price_elasticity": "The name of the column containing the price elasticity calculation.",
-            "column.calc.frequency_elasticity": "The name of the column containing the price frequency calculation.",
+            "column.calc.frequency_elasticity": (
+                "The name of the column containing the frequency elasticity calculation."
+            ),
             # Abbreviation suffixes
             "column.suffix.count": "The suffix to use for count columns.",
             "column.suffix.percent": "The suffix to use for percentage columns.",
@@ -183,11 +203,9 @@ class Options:
             "column.suffix.unknown_customer": "The suffix to use for unknown customer columns.",
             "column.suffix.total": "The suffix to use for total columns.",
             # Color options
-            "plot.color.mono_palette": (
-                "Monochromatic palette for plots with few series (default: 3 green shades). Set to [] to disable."
-            ),
             "plot.color.multi_color_palette": (
-                "Multi-color palette for plots with many series (default: 21 Tailwind colors)"
+                "Multi-color palette for plots with many series (default: 27 Tailwind colors, "
+                "9 curated hues at shades 500 / 200 / 700)."
             ),
             "plot.color.positive": "Color for positive values (e.g., gains, increases)",
             "plot.color.negative": "Color for negative values (e.g., losses, decreases)",
@@ -195,23 +213,33 @@ class Options:
             "plot.color.difference": "Color for difference values (e.g., waterfall transitions, tree differences)",
             "plot.color.context": "Color for de-emphasized context lines",
             "plot.color.primary": "Default color for single-series plots",
-            "plot.color.heatmap": (
+            "plot.color.sequential": (
                 "Tailwind color name (e.g., 'green', 'blue') or matplotlib colormap name"
-                " (e.g., 'Greens', 'viridis') for heatmaps"
+                " (e.g., 'Greens', 'viridis') for sequential ramps (heatmaps, cohort tables, period-on-period)"
             ),
+            "plot.color.eyebrow": "Color for the small uppercase eyebrow text above the title.",
+            "plot.color.subtitle": "Color for the subtitle text below the title.",
+            "plot.color.title": "Color for the main plot title.",
+            "plot.color.tab": "Color for the small rectangular tab mark above the title block.",
+            "plot.color.source": "Color for the source text rendered below the plot.",
             # Plot font descriptions
             "plot.font.title_font": "The font family to use for plot titles.",
+            "plot.font.eyebrow_font": "The font family to use for the eyebrow text above the title.",
+            "plot.font.subtitle_font": "The font family to use for the subtitle text below the title.",
             "plot.font.label_font": "The font family to use for axis labels.",
             "plot.font.tick_font": "The font family to use for axis tick labels.",
             "plot.font.source_font": "The font family to use for source text.",
             "plot.font.data_label_font": "The font family to use for data point labels.",
+            "plot.font.legend_font": "The font family to use for legend title and entry text.",
             "plot.font.title_size": "The font size for plot titles (in points).",
+            "plot.font.eyebrow_size": "The font size for the eyebrow text above the title (in points).",
+            "plot.font.subtitle_size": "The font size for the subtitle text (in points).",
             "plot.font.label_size": "The font size for axis labels (in points).",
             "plot.font.tick_size": "The font size for axis tick labels (in points).",
             "plot.font.source_size": "The font size for source text (in points).",
             "plot.font.data_label_size": "The font size for data point labels (in points).",
+            "plot.font.legend_size": "The font size for legend entry text (in points).",
             # Plot spacing descriptions
-            "plot.spacing.title_pad": "The padding above the title (in points).",
             "plot.spacing.x_label_pad": "The padding below the x-axis label (in points).",
             "plot.spacing.y_label_pad": "The padding to the left of the y-axis label (in points).",
             # Plot style descriptions
@@ -224,6 +252,31 @@ class Options:
             "plot.style.show_left_spine": "Whether to show the left border of the plot.",
             "plot.style.legend_bbox_to_anchor": "The bounding box anchor for legend positioning when moved outside.",
             "plot.style.legend_loc": "The location of the legend when moved outside the plot.",
+            "plot.style.cell_corner_radius": (
+                "Corner radius (in cell-size data units) for cell-based plots like heatmap and cohort. "
+                "Values around 0.03 give a subtle softening; larger values produce a pill-chip look."
+            ),
+            "plot.style.cell_gap": (
+                "Width (in points) of the visual gap between adjacent cells in cell-based plots. "
+                "Drawn as a background-coloured edge on each cell so the gap stays a fixed pixel size "
+                "regardless of axes aspect or grid dimensions."
+            ),
+            "plot.style.auto_rotate_x_ticks": (
+                "When True, categorical x-axis tick labels render horizontal and only rotate "
+                "to 45° or 90° when neighbouring labels would overlap. When False, the rotation "
+                "set by matplotlib (or pandas, for bar plots) is left unchanged."
+            ),
+            "plot.style.auto_wrap_x_ticks": (
+                "When True, multi-word categorical x-tick labels are split onto two balanced "
+                "lines before falling back to rotation when neighbours would overlap (e.g. "
+                "'Camden High St' becomes 'Camden\\nHigh St'). Single-word labels are left "
+                "alone and proceed straight to rotation."
+            ),
+            "plot.style.show_tab": (
+                "When True (default), the small green tab mark renders above the title block "
+                "on charts with header chrome. Set to False to suppress the tab project-wide; "
+                "use ``option_context`` to scope the change to a block."
+            ),
         }
         self._default_options: dict[str, OptionTypes] = self._options.copy()
 
@@ -363,7 +416,6 @@ class Options:
         return options_instance
 
 
-@lru_cache
 def find_project_root() -> str | None:
     """Returns the directory containing .git, .hg, or pyproject.toml, starting from the current working directory."""
     current_dir = Path.cwd()
@@ -807,7 +859,7 @@ class PlotStyleHelper:
 
     Access patterns:
     - Font options: style.title_font, style.title_size, etc.
-    - Spacing options: style.title_pad, style.x_label_pad, etc.
+    - Spacing options: style.x_label_pad, style.y_label_pad, etc.
     - Style options: style.background_color, style.grid_alpha, etc.
     """
 
@@ -815,18 +867,30 @@ class PlotStyleHelper:
         """Initialize plot style helper with font, spacing, and style options."""
         # Font options
         self.title_font: str = get_option("plot.font.title_font")
+        self.eyebrow_font: str = get_option("plot.font.eyebrow_font")
+        self.subtitle_font: str = get_option("plot.font.subtitle_font")
         self.label_font: str = get_option("plot.font.label_font")
         self.tick_font: str = get_option("plot.font.tick_font")
         self.source_font: str = get_option("plot.font.source_font")
         self.data_label_font: str = get_option("plot.font.data_label_font")
+        self.legend_font: str = get_option("plot.font.legend_font")
         self.title_size: float = get_option("plot.font.title_size")
+        self.eyebrow_size: float = get_option("plot.font.eyebrow_size")
+        self.subtitle_size: float = get_option("plot.font.subtitle_size")
         self.label_size: float = get_option("plot.font.label_size")
         self.tick_size: float = get_option("plot.font.tick_size")
         self.source_size: float = get_option("plot.font.source_size")
         self.data_label_size: float = get_option("plot.font.data_label_size")
+        self.legend_size: float = get_option("plot.font.legend_size")
+
+        # Chrome colors
+        self.eyebrow_color: str = get_option("plot.color.eyebrow")
+        self.subtitle_color: str = get_option("plot.color.subtitle")
+        self.title_color: str = get_option("plot.color.title")
+        self.tab_color: str = get_option("plot.color.tab")
+        self.source_color: str = get_option("plot.color.source")
 
         # Spacing options
-        self.title_pad: int = get_option("plot.spacing.title_pad")
         self.x_label_pad: int = get_option("plot.spacing.x_label_pad")
         self.y_label_pad: int = get_option("plot.spacing.y_label_pad")
 
@@ -838,5 +902,10 @@ class PlotStyleHelper:
         self.show_right_spine: bool = get_option("plot.style.show_right_spine")
         self.show_bottom_spine: bool = get_option("plot.style.show_bottom_spine")
         self.show_left_spine: bool = get_option("plot.style.show_left_spine")
-        self.legend_bbox_to_anchor: list = get_option("plot.style.legend_bbox_to_anchor")
+        self.legend_bbox_to_anchor: list[float] = get_option("plot.style.legend_bbox_to_anchor")
         self.legend_loc: str = get_option("plot.style.legend_loc")
+        self.cell_corner_radius: float = get_option("plot.style.cell_corner_radius")
+        self.cell_gap: float = get_option("plot.style.cell_gap")
+        self.show_tab: bool = get_option("plot.style.show_tab")
+        self.auto_rotate_x_ticks: bool = get_option("plot.style.auto_rotate_x_ticks")
+        self.auto_wrap_x_ticks: bool = get_option("plot.style.auto_wrap_x_ticks")

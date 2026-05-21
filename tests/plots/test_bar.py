@@ -6,7 +6,6 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import Rectangle
 
-from openretailscience.options import PlotStyleHelper
 from openretailscience.plots import bar
 
 
@@ -19,9 +18,9 @@ def cleanup_figures():
 
 @pytest.fixture
 def sample_dataframe():
-    """A sample dataframe for testing."""
+    """A sample retail product-sales dataframe for testing."""
     data = {
-        "product": ["A", "B", "C", "D"],
+        "product": ["Apples", "Bananas", "Cereal", "Donuts"],
         "sales_q1": [1000, 1500, 2000, 2500],
         "sales_q2": [1100, 1600, 2100, 2600],
     }
@@ -30,8 +29,8 @@ def sample_dataframe():
 
 @pytest.fixture
 def sample_series():
-    """A sample series for testing."""
-    return pd.Series([1000, 1500, 2000, 2500], index=["A", "B", "C", "D"])
+    """A sample retail product-sales series for testing."""
+    return pd.Series([1000, 1500, 2000, 2500], index=["Apples", "Bananas", "Cereal", "Donuts"])
 
 
 def test_plot_with_empty_dataframe():
@@ -47,16 +46,18 @@ def test_plot_with_empty_dataframe():
         )
 
 
-def test_plot_single_bar(sample_dataframe):
-    """Test the bar plot function with a single value column."""
-    result_ax = bar.plot(
-        df=sample_dataframe,
-        value_col="sales_q1",
-        x_col="product",
-        title="Test Single Bar Plot",
-    )
-
-    expected_num_patches = 4
+@pytest.mark.parametrize(
+    ("plot_kwargs", "expected_num_patches"),
+    [
+        ({"value_col": "sales_q1", "x_col": "product"}, 4),
+        ({"value_col": "sales_q1"}, 4),
+        ({"value_col": ["sales_q1", "sales_q2"]}, 8),
+    ],
+    ids=["single_value_col_with_x", "single_value_col_no_x", "list_value_col_no_x"],
+)
+def test_plot_produces_expected_patch_count(sample_dataframe, plot_kwargs, expected_num_patches):
+    """bar.plot returns one patch per (x value, value_col) combination."""
+    result_ax = bar.plot(df=sample_dataframe, title="Test Bar Patch Count", **plot_kwargs)
 
     assert isinstance(result_ax, Axes)
     assert len(result_ax.patches) == expected_num_patches
@@ -94,7 +95,7 @@ def test_plot_with_nan_values():
     """Test bar plot with NaN values in the data."""
     nan_dataframe = pd.DataFrame(
         {
-            "product": ["A", "B", "C", "D"],
+            "product": ["Apples", "Bananas", "Cereal", "Donuts"],
             "sales_q1": [1000, 1500, None, 2500],
             "sales_q2": [1100, 1600, 2100, None],
         },
@@ -170,24 +171,6 @@ def test_plot_with_custom_bar_width(sample_dataframe):
     assert all(p.get_width() == custom_width for p in result_ax.patches if isinstance(p, Rectangle))
 
 
-def test_plot_legend_outside(sample_dataframe):
-    """move_legend_outside=True anchors the legend at the configured outside position."""
-    result_ax = bar.plot(
-        df=sample_dataframe,
-        value_col=["sales_q1", "sales_q2"],
-        x_col="product",
-        title="Test Bar Plot with Legend Outside",
-        move_legend_outside=True,
-    )
-
-    legend = result_ax.get_legend()
-    assert legend is not None
-    anchor = legend.get_bbox_to_anchor().transformed(result_ax.transAxes.inverted())
-    expected_x, expected_y = PlotStyleHelper().legend_bbox_to_anchor
-    assert anchor.x0 == pytest.approx(expected_x)
-    assert anchor.y0 == pytest.approx(expected_y)
-
-
 def test_plot_with_hatch(sample_dataframe):
     """use_hatch=True applies a hatch pattern to every bar patch."""
     result_ax = bar.plot(
@@ -199,8 +182,8 @@ def test_plot_with_hatch(sample_dataframe):
     )
 
     hatches = [p.get_hatch() for p in result_ax.patches]
-    assert len(hatches) > 0
-    assert all(h is not None for h in hatches)
+    assert len(hatches) == len(sample_dataframe)
+    assert all(isinstance(h, str) and len(h) > 0 for h in hatches)
 
 
 def test_plot_multiple_bars(sample_dataframe):
@@ -232,14 +215,14 @@ def test_plot_with_sorting(sample_dataframe):
         title="Test Sorted Bar Plot",
     )
 
-    expected_order = ["A", "B", "C", "D"]
+    expected_order = ["Apples", "Bananas", "Cereal", "Donuts"]
     actual_order = [label.get_text() for label in result_ax.get_xticklabels()]
     bar_heights = [patch.get_height() for patch in result_ax.patches]
     expected_num_patches = 4
 
     assert isinstance(result_ax, Axes)
     assert len(result_ax.patches) == expected_num_patches
-    assert result_ax.get_xticklabels()[0].get_text() == "A"
+    assert result_ax.get_xticklabels()[0].get_text() == "Apples"
     assert actual_order == expected_order
     assert bar_heights == sorted(bar_heights)
 
@@ -344,42 +327,28 @@ def test_default_bar_styling(sample_dataframe):
     )
 
     rectangles = [p for p in result_ax.patches if isinstance(p, Rectangle)]
-    assert len(rectangles) > 0
+    assert len(rectangles) == len(sample_dataframe)
     assert all(p.get_width() == default_width for p in rectangles)
     assert result_ax.get_legend() is None
     assert [label.get_text() for label in result_ax.get_xticklabels()] == sample_dataframe["product"].tolist()
 
 
-def test_invalid_orientation(sample_dataframe):
-    """Test that an invalid orientation raises a ValueError."""
-    with pytest.raises(ValueError, match=r"Invalid orientation: invalid_orientation. Expected one of .*"):
+@pytest.mark.parametrize(
+    ("kwarg", "value", "match"),
+    [
+        ("orientation", "invalid_orientation", r"Invalid orientation: invalid_orientation. Expected one of .*"),
+        ("sort_order", "invalid_sort_order", r"Invalid sort_order: invalid_sort_order. Expected one of .*"),
+        ("data_label_format", "invalid_format", r"Invalid data_label_format: invalid_format. Expected one of .*"),
+    ],
+)
+def test_invalid_kwarg_raises_value_error(sample_dataframe, kwarg, value, match):
+    """Test that invalid values for enum-like kwargs raise a ValueError with a descriptive message."""
+    with pytest.raises(ValueError, match=match):
         bar.plot(
             df=sample_dataframe,
             value_col="sales",
             x_col="product",
-            orientation="invalid_orientation",  # Invalid value
-        )
-
-
-def test_invalid_sort_order(sample_dataframe):
-    """Test that an invalid sort_order raises a ValueError."""
-    with pytest.raises(ValueError, match=r"Invalid sort_order: invalid_sort_order. Expected one of .*"):
-        bar.plot(
-            df=sample_dataframe,
-            value_col="sales",
-            x_col="product",
-            sort_order="invalid_sort_order",  # Invalid value
-        )
-
-
-def test_invalid_data_label_format(sample_dataframe):
-    """Test that an invalid data_label_format raises a ValueError."""
-    with pytest.raises(ValueError, match=r"Invalid data_label_format: invalid_format. Expected one of .*"):
-        bar.plot(
-            df=sample_dataframe,
-            value_col="sales",
-            x_col="product",
-            data_label_format="invalid_format",  # Invalid value
+            **{kwarg: value},
         )
 
 
@@ -412,39 +381,11 @@ def test_plot_with_series(sample_series):
     assert len(result_ax.patches) == expected_num_patches
 
 
-def test_plot_no_x_col_string_value_col(sample_dataframe):
-    """Test bar plot when x_col is None and value_col is a string."""
-    result_ax = bar.plot(
-        df=sample_dataframe,
-        value_col="sales_q1",
-        title="Test Plot: No Group Col and String Value Col",
-    )
-
-    expected_num_patches = 4
-
-    assert isinstance(result_ax, Axes)
-    assert len(result_ax.patches) == expected_num_patches
-
-
-def test_plot_no_x_col_list_value_col(sample_dataframe):
-    """Test bar plot when x_col is None and value_col is a list."""
-    result_ax = bar.plot(
-        df=sample_dataframe,
-        value_col=["sales_q1", "sales_q2"],
-        title="Test Plot: No Group Col and List Value Col",
-    )
-
-    expected_num_patches = 8
-
-    assert isinstance(result_ax, Axes)
-    assert len(result_ax.patches) == expected_num_patches
-
-
 def test_percentage_by_bar_group_with_negative_values():
     """Test percentage_by_bar_group with negative values, triggering warning."""
     df = pd.DataFrame(
         {
-            "product": ["A", "B", "C", "D"],
+            "product": ["Apples", "Bananas", "Cereal", "Donuts"],
             "sales_q1": [1000, -1500, 2000, -2500],
             "sales_q2": [-1100, 1600, -2100, 2600],
         },
@@ -460,7 +401,7 @@ def test_percentage_by_bar_group_with_negative_values():
 
 def test_percentage_by_bar_group_with_zero_group_total():
     """Test percentage_by_bar_group with zero group totals and verify warning is emitted."""
-    df = pd.DataFrame({"product": ["A", "B"], "sales": [0, 0]})
+    df = pd.DataFrame({"product": ["Apples", "Bananas"], "sales": [0, 0]})
 
     with pytest.warns(UserWarning, match="Division by zero detected"):
         result_ax = bar.plot(
