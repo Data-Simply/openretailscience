@@ -7,10 +7,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: "bigquery-tests"
-  cancel-in-progress: true
-
 jobs:
   integration-tests:
     name: Run BigQuery Integration Tests
