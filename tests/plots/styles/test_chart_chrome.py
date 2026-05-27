@@ -12,12 +12,17 @@ from openretailscience.plots import heatmap, line
 from openretailscience.plots.styles.styling_helpers import apply_chart_chrome, apply_legend, standard_graph_styles
 
 
+@pytest.fixture(autouse=True)
+def cleanup_figures():
+    """Clean up matplotlib figures after each test."""
+    yield
+    plt.close("all")
+
+
 @pytest.fixture
 def fig_ax():
     """Provide a fresh figure and axes for each test."""
-    fig, ax = plt.subplots(figsize=(10, 5))
-    yield fig, ax
-    plt.close(fig)
+    return plt.subplots(figsize=(10, 5))
 
 
 def _texts_with(fig, text: str) -> list:
@@ -45,7 +50,7 @@ def _measure_chrome_spacing(figheight: float) -> dict[str, float]:
     sub = _texts_with(fig, subtitle)[0].get_window_extent(renderer=renderer)
     src = _texts_with(fig, source)[0].get_window_extent(renderer=renderer)
     axes_pos = ax.get_position()
-    measurements = {
+    return {
         "top_margin_px": fig.bbox.height - eye.y1,
         "eye_to_title_px": eye.y0 - ttl.y1,
         "title_to_sub_px": ttl.y0 - sub.y1,
@@ -53,8 +58,6 @@ def _measure_chrome_spacing(figheight: float) -> dict[str, float]:
         "source_to_axes_px": axes_pos.y0 * fig.bbox.height - src.y1,
         "bottom_margin_px": src.y0,
     }
-    plt.close(fig)
-    return measurements
 
 
 _CHROME_TEST_FIGHEIGHT_IN = 5.0
@@ -79,9 +82,7 @@ def _topmost_axes_content_fig_y(*, labeltop: bool) -> float:
         for t in [*ax.xaxis.get_major_ticks(), *ax.yaxis.get_major_ticks()]
         if t.label2.get_visible() and t.label2.get_text() != ""
     ]
-    topmost_fig = max([spine_top_fig, *top_label_tops_fig])
-    plt.close(fig)
-    return topmost_fig
+    return max([spine_top_fig, *top_label_tops_fig])
 
 
 class TestApplyChartChrome:
@@ -186,19 +187,16 @@ class TestApplyChartChrome:
         Freezing the wrap ensures the layout stays correct across redraws.
         """
         fig, ax = plt.subplots(figsize=(6.4, 4.8))
-        try:
-            long_title = "High-AOV stores convert fewer visits but earn the most revenue per day"
-            apply_chart_chrome(ax, title=long_title)
+        long_title = "High-AOV stores convert fewer visits but earn the most revenue per day"
+        apply_chart_chrome(ax, title=long_title)
 
-            title_artist = fig.texts[0]
-            # Wrap must be off so the text doesn't re-wrap on subsequent draws.
-            assert title_artist.get_wrap() is False
-            # The wrapped form is baked into the text content as explicit newlines.
-            assert "\n" in title_artist.get_text()
-            # All original words preserved, only whitespace replaced with newlines.
-            assert title_artist.get_text().replace("\n", " ") == long_title
-        finally:
-            plt.close(fig)
+        title_artist = fig.texts[0]
+        # Wrap must be off so the text doesn't re-wrap on subsequent draws.
+        assert title_artist.get_wrap() is False
+        # The wrapped form is baked into the text content as explicit newlines.
+        assert "\n" in title_artist.get_text()
+        # All original words preserved, only whitespace replaced with newlines.
+        assert title_artist.get_text().replace("\n", " ") == long_title
 
     def test_chrome_spacing_is_absolute_across_figure_heights(self):
         """Vertical chrome spacing must stay at the same pixel distance regardless of figure height.
@@ -288,25 +286,22 @@ class TestApplyChartChrome:
 
     def test_multi_axes_chrome_warns_once_on_second_axes(self):
         """Applying chrome to a second axes on the same figure warns once; same-axes repeats do not warn."""
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-        try:
-            with warnings.catch_warnings(record=True) as first_call:
-                warnings.simplefilter("always")
-                apply_chart_chrome(ax1, title="First axes")
-            assert [w for w in first_call if "subplot-aware" in str(w.message)] == []
+        _, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+        with warnings.catch_warnings(record=True) as first_call:
+            warnings.simplefilter("always")
+            apply_chart_chrome(ax1, title="First axes")
+        assert [w for w in first_call if "subplot-aware" in str(w.message)] == []
 
-            with warnings.catch_warnings(record=True) as second_call:
-                warnings.simplefilter("always")
-                apply_chart_chrome(ax2, title="Second axes")
-            second_warnings = [w for w in second_call if "subplot-aware" in str(w.message)]
-            assert len(second_warnings) == 1
+        with warnings.catch_warnings(record=True) as second_call:
+            warnings.simplefilter("always")
+            apply_chart_chrome(ax2, title="Second axes")
+        second_warnings = [w for w in second_call if "subplot-aware" in str(w.message)]
+        assert len(second_warnings) == 1
 
-            with warnings.catch_warnings(record=True) as repeat_call:
-                warnings.simplefilter("always")
-                apply_chart_chrome(ax1, title="First axes again")
-            assert [w for w in repeat_call if "subplot-aware" in str(w.message)] == []
-        finally:
-            plt.close(fig)
+        with warnings.catch_warnings(record=True) as repeat_call:
+            warnings.simplefilter("always")
+            apply_chart_chrome(ax1, title="First axes again")
+        assert [w for w in repeat_call if "subplot-aware" in str(w.message)] == []
 
     def test_top_tick_labels_reserve_extra_header_gap(self):
         """Top-rendered tick labels (heatmap/cohort) reserve one tick-label line-height of extra headroom.
