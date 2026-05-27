@@ -7,10 +7,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: "snowflake-tests"
-  cancel-in-progress: true
-
 jobs:
   integration-tests:
     name: Run Snowflake Integration Tests

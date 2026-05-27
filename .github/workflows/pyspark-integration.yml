@@ -7,10 +7,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: "pyspark-tests"
-  cancel-in-progress: true
-
 jobs:
   integration-tests:
     name: Run PySpark Integration Tests
