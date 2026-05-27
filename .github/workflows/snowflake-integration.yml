@@ -2,26 +2,7 @@ name: Snowflake Integration Tests
 
 on:
   workflow_dispatch:
-    inputs:
-      test_suite:
-        type: choice
-        description: Test Suite to Run
-        default: "all"
-        options:
-          - all
-          - cohort_analysis
-          - composite_rank
-          - cross_shop
-          - customer_decision_hierarchy
-          - date
-          - filter_and_label
-          - haversine
-          - hml_segmentation
-          - product_association
-          - revenue_tree
-          - rfm_segmentation
-          - segstats_segmentation
-          - threshold_segmentation
+  workflow_call:
 
 permissions:
   contents: read
@@ -59,15 +40,16 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Fetch Snowflake CI Key
+        env:
+          GCP_INFRA_PROJECT_ID: ${{ secrets.GCP_INFRA_PROJECT_ID }}
         run: |
           umask 077
           gcloud secrets versions access latest \
             --secret=snowflake-ci-private-key \
-            --project=pyretailscience-infra > /tmp/snowflake_ci_key.p8
+            --project="$GCP_INFRA_PROJECT_ID" > /tmp/snowflake_ci_key.p8
 
       - name: Run Integration Tests
         env:
-          TEST_SUITE: ${{ inputs.test_suite }}
           SNOWFLAKE_CI_ACCOUNT: ${{ secrets.SNOWFLAKE_CI_ACCOUNT }}
           SNOWFLAKE_CI_USER: ${{ secrets.SNOWFLAKE_CI_USER }}
           SNOWFLAKE_CI_WAREHOUSE: ${{ secrets.SNOWFLAKE_CI_WAREHOUSE }}
@@ -75,11 +57,7 @@ jobs:
           SNOWFLAKE_CI_SCHEMA: ${{ secrets.SNOWFLAKE_CI_SCHEMA }}
           SNOWFLAKE_CI_PRIVATE_KEY_PATH: /tmp/snowflake_ci_key.p8
         run: |
-          if [ "$TEST_SUITE" == "all" ]; then
-            uv run pytest tests/integration -k "snowflake" -v
-          else
-            uv run pytest tests/integration -k "snowflake and $TEST_SUITE" -v
-          fi
+          uv run pytest tests/integration -k "snowflake" -v
 
       - name: Cleanup private key
         if: always()

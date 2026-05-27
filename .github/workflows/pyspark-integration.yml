@@ -2,26 +2,7 @@ name: PySpark Integration Tests
 
 on:
   workflow_dispatch:
-    inputs:
-      test_suite:
-        type: choice
-        description: Test Suite to Run
-        default: "all"
-        options:
-          - all
-          - cohort_analysis
-          - composite_rank
-          - cross_shop
-          - customer_decision_hierarchy
-          - date
-          - filter_and_label
-          - haversine
-          - hml_segmentation
-          - product_association
-          - revenue_tree
-          - rfm_segmentation
-          - segstats_segmentation
-          - threshold_segmentation
+  workflow_call:
 
 permissions:
   contents: read
@@ -34,6 +15,7 @@ jobs:
   integration-tests:
     name: Run PySpark Integration Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,11 +35,5 @@ jobs:
           uv sync
 
       - name: Run Integration Tests
-        env:
-          TEST_SUITE: ${{ inputs.test_suite }}
         run: |
-          if [ "$TEST_SUITE" == "all" ]; then
-            uv run pytest tests/integration -k "pyspark" -v
-          else
-            uv run pytest tests/integration -k "pyspark and $TEST_SUITE" -v
-          fi
+          uv run pytest tests/integration -k "pyspark" -v
