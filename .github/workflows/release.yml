@@ -21,6 +21,7 @@ jobs:
   pre-commit:
     name: Pre-Commit Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,55 +41,23 @@ jobs:
 
   bigquery-integration-tests:
     name: BigQuery Integration Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install uv Package
-        run: |
-          pip install --upgrade pip
-          pip install uv==0.5.30
-      - name: Install Dependencies
-        run: |
-          uv sync
-      - name: Set up GCP Authentication
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - name: Run BigQuery Integration Tests
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        run: |
-          uv run pytest tests/integration -k "bigquery" -v
+    uses: ./.github/workflows/bigquery-integration.yml
+    secrets: inherit
 
   pyspark-integration-tests:
     name: PySpark Integration Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install uv Package
-        run: |
-          pip install --upgrade pip
-          pip install uv==0.5.30
-      - name: Install Dependencies
-        run: |
-          uv sync
-      - name: Run PySpark Integration Tests
-        run: |
-          uv run pytest tests/integration -k "pyspark" -v
+    uses: ./.github/workflows/pyspark-integration.yml
+    secrets: inherit
+
+  snowflake-integration-tests:
+    name: Snowflake Integration Tests
+    uses: ./.github/workflows/snowflake-integration.yml
+    secrets: inherit
 
   multi-python-tests:
     name: Multi-Python Version Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -114,7 +83,8 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [pre-commit, bigquery-integration-tests, pyspark-integration-tests, multi-python-tests]
+    timeout-minutes: 15
+    needs: [pre-commit, bigquery-integration-tests, pyspark-integration-tests, snowflake-integration-tests, multi-python-tests]
     env:
       CI_COMMIT_MESSAGE: Continuous Integration Version Bump ${{ inputs.release }}
     steps:
@@ -196,6 +166,7 @@ jobs:
   pypi-publish:
     name: Upload release to PyPI
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: build
     environment:
       name: production
