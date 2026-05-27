@@ -12,6 +12,13 @@ from openretailscience.analysis.revenue_tree import RevenueTree, calc_tree_kpis
 from openretailscience.options import ColumnHelper, option_context
 
 
+@pytest.fixture(autouse=True)
+def cleanup_figures():
+    """Clean up matplotlib figures after each test."""
+    yield
+    plt.close("all")
+
+
 class TestRevenueTree:
     """Test the RevenueTree class."""
 
@@ -575,15 +582,11 @@ class TestRevenueTree:
         assert isinstance(ax, Axes)
         assert ax.get_title() == ""  # TreeGrid doesn't set a title by default
 
-        # Clean up
-        plt.close()
-
         # Test with custom value labels
         ax = rt.draw_tree(value_labels=("Current", "Previous"))
         rendered = " ".join(t.get_text() for t in ax.texts)
         assert "Current" in rendered
         assert "Previous" in rendered
-        plt.close()
 
         # Test with custom node labels
         custom_node_labels = [
@@ -604,7 +607,6 @@ class TestRevenueTree:
         )
         rendered_labels = {t.get_text() for t in ax.texts}
         assert set(custom_node_labels).issubset(rendered_labels)
-        plt.close()
 
     def test_draw_tree_with_row_index(self, cols: ColumnHelper):
         """Test that draw_tree() can visualize a specific row from a multi-group RevenueTree."""
@@ -640,7 +642,6 @@ class TestRevenueTree:
         # North P2 revenue is 120, P1 revenue is 250 (100 + 150)
         # The formatted values should appear in the text
         assert "120" in text_strings, f"North region P2 revenue '120' should appear in {text_strings}"
-        plt.close()
 
         # Draw second row (South region)
         ax = rt.draw_tree(row_index=1)
@@ -648,7 +649,6 @@ class TestRevenueTree:
         text_strings = [t.get_text() for t in ax.texts]
         # South P2 revenue is 220, P1 revenue is 450 (200 + 250)
         assert "220" in text_strings, f"South region P2 revenue '220' should appear in {text_strings}"
-        plt.close()
 
         # Test that out of bounds raises IndexError
         with pytest.raises(IndexError):

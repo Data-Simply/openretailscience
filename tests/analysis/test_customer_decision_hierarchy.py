@@ -13,6 +13,13 @@ from openretailscience.options import ColumnHelper, option_context
 cols = ColumnHelper()
 
 
+@pytest.fixture(autouse=True)
+def cleanup_figures():
+    """Clean up matplotlib figures after each test."""
+    yield
+    plt.close("all")
+
+
 class TestCustomerDecisionHierarchy:
     """Tests for the CustomerDecisionHierarchy class."""
 
@@ -233,22 +240,17 @@ class TestPlot:
         were clipped.
         """
         fig, ax = plt.subplots(figsize=(10, 5))
-        try:
-            long_label_cdh.plot(title="Substitutability", ax=ax, orientation="top")
-            fig.canvas.draw()
-            renderer = fig.canvas.get_renderer()
-            label_y0_fig = [
-                t.get_window_extent(renderer=renderer).y0 / fig.bbox.height
-                for t in ax.get_xticklabels()
-                if t.get_text()
-            ]
-            assert len(label_y0_fig) == len(self.LONG_PRODUCT_NAMES)
-            assert min(label_y0_fig) >= 0.0, (
-                f"rotated x-tick labels extend below the figure (min y0={min(label_y0_fig):.3f}); "
-                "chrome layout must run after the dendrogram so tight_layout reserves space for them"
-            )
-        finally:
-            plt.close(fig)
+        long_label_cdh.plot(title="Substitutability", ax=ax, orientation="top")
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        label_y0_fig = [
+            t.get_window_extent(renderer=renderer).y0 / fig.bbox.height for t in ax.get_xticklabels() if t.get_text()
+        ]
+        assert len(label_y0_fig) == len(self.LONG_PRODUCT_NAMES)
+        assert min(label_y0_fig) >= 0.0, (
+            f"rotated x-tick labels extend below the figure (min y0={min(label_y0_fig):.3f}); "
+            "chrome layout must run after the dendrogram so tight_layout reserves space for them"
+        )
 
     def test_short_labels_render_horizontally_via_auto_rotate(self, short_label_cdh):
         """Short product names should be left horizontal by _auto_rotate_categorical_x_ticks.
@@ -259,15 +261,12 @@ class TestPlot:
         helper own rotation produces 0° here since five short names fit at this figsize.
         """
         fig, ax = plt.subplots(figsize=(12, 5))
-        try:
-            short_label_cdh.plot(title="Substitutability", ax=ax, orientation="top")
-            fig.canvas.draw()
-            rotations = {t.get_rotation() for t in ax.get_xticklabels() if t.get_text()}
-            assert rotations == {0.0}, (
-                f"expected horizontal labels for short product names at generous figsize, got {rotations}"
-            )
-        finally:
-            plt.close(fig)
+        short_label_cdh.plot(title="Substitutability", ax=ax, orientation="top")
+        fig.canvas.draw()
+        rotations = {t.get_rotation() for t in ax.get_xticklabels() if t.get_text()}
+        assert rotations == {0.0}, (
+            f"expected horizontal labels for short product names at generous figsize, got {rotations}"
+        )
 
     def test_distances_form_valid_distance_matrix(self, short_label_cdh):
         """The distance matrix must have a zero diagonal and values in [0, 1].

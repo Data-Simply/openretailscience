@@ -908,7 +908,7 @@ class TestVisualRegression:
 
     def test_visual_regression_standard_graph_styles_basic(self):
         """Ensure standard_graph_styles produces consistent visual output."""
-        fig, ax = plt.subplots(figsize=(8, 6))
+        _, ax = plt.subplots(figsize=(8, 6))
         rng = np.random.default_rng(42)
         x = np.linspace(0, 10, 50)
         y = np.sin(x) + 0.1 * rng.standard_normal(50)
@@ -929,8 +929,6 @@ class TestVisualRegression:
         assert ax.get_facecolor() == self.WHITE_RGBA
         assert not ax.spines["top"].get_visible()
         assert not ax.spines["right"].get_visible()
-
-        plt.close(fig)
 
     @pytest.mark.parametrize(
         ("plot_type", "data_generator"),
@@ -954,7 +952,7 @@ class TestVisualRegression:
     )
     def test_visual_regression_all_plot_types(self, plot_type, data_generator):
         """Test visual consistency across different plot types."""
-        fig, ax = plt.subplots(figsize=(8, 6))
+        _, ax = plt.subplots(figsize=(8, 6))
 
         x, y = data_generator()
 
@@ -975,5 +973,3 @@ class TestVisualRegression:
         assert ax.get_facecolor() == self.WHITE_RGBA
         assert not ax.spines["top"].get_visible()
         assert not ax.spines["right"].get_visible()
-
-        plt.close(fig)
