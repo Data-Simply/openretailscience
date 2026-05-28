@@ -93,7 +93,7 @@ class TestAcv:
     def test_acv_missing_group_col_raises(self):
         """Test that missing group_col column raises ValueError naming group_col."""
         df = pd.DataFrame({cols.unit_spend: [100.0, 200.0]})
-        with pytest.raises(ValueError, match="group_col references columns not present in the DataFrame"):
+        with pytest.raises(ValueError, match="group_col references columns not present in the data"):
             Acv(df, group_col=cols.store_id)
 
     def test_acv_custom_scale_factor(self):

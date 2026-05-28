@@ -400,7 +400,7 @@ If changes in `openretailscience.toml` are not taking effect:
 **Error:**
 
 ```python
-ValueError: The following columns are required but missing: {'customer_id'}
+ValueError: Input data is missing required columns: ['customer_id']
 ```
 
 **Solution:** Either configure the option to match your column name, or rename your column to match the expected name:

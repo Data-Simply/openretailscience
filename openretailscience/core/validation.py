@@ -81,7 +81,7 @@ def ensure_columns(
 
     missing_cols = sorted(set(normalized) - set(df.columns))
     if len(missing_cols) > 0:
-        msg = f"{param_name} references columns not present in the DataFrame: {missing_cols}"
+        msg = f"{param_name} references columns not present in the data: {missing_cols}"
         raise ValueError(msg)
 
     return normalized

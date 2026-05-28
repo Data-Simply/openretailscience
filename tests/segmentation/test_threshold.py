@@ -283,7 +283,7 @@ class TestThresholdSegmentationGroupCol:
             },
         )
 
-        with pytest.raises(ValueError, match="group_col references columns not present in the DataFrame"):
+        with pytest.raises(ValueError, match="group_col references columns not present in the data"):
             ThresholdSegmentation(
                 df=df,
                 value_col=cols.unit_spend,

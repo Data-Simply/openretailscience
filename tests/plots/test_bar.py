@@ -74,6 +74,12 @@ def test_missing_x_col_in_dataframe(sample_dataframe):
         )
 
 
+def test_x_col_with_series_input_raises_clear_error(sample_series):
+    """When df is a pd.Series, passing x_col raises a clear ValueError rather than an opaque AttributeError."""
+    with pytest.raises(ValueError, match=r"x_col cannot be provided when df is a pd\.Series"):
+        bar.plot(df=sample_series, x_col="anything")
+
+
 def test_plot_with_none_value_col(sample_dataframe):
     """Test bar plot with None for value_col (default 'Value' column)."""
     result_ax = bar.plot(
