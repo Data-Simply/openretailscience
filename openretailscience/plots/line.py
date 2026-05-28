@@ -107,7 +107,7 @@ def _validate_highlight_parameter(
     if is_single_line:
         raise ValueError("highlight parameter cannot be used with single-line plots")
 
-    return ensure_columns(pivot_df, highlight)
+    return ensure_columns(pivot_df, highlight, "highlight")
 
 
 def _create_pivot_dataframe(

@@ -37,10 +37,10 @@ class TestRevenueTree:
         df = pd.DataFrame(data)
         with pytest.raises(ValueError) as excinfo:
             RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2")
-        assert "The following columns are required but missing:" in str(excinfo.value)
+        assert "required_cols references columns not present in the DataFrame" in str(excinfo.value)
 
     def test_dataframe_missing_group_col(self, cols: ColumnHelper):
-        """Test that an error is raised when the DataFrame is missing the group_col."""
+        """Test that an error naming group_col is raised when a single group_col is missing."""
         data = {
             cols.customer_id: [1, 2, 3],
             cols.unit_spend: [100, 200, 300],
@@ -51,7 +51,8 @@ class TestRevenueTree:
 
         with pytest.raises(ValueError) as excinfo:
             RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2", group_col="group_id")
-        assert "The following columns are required but missing:" in str(excinfo.value)
+        assert "group_col references columns not present in the DataFrame" in str(excinfo.value)
+        assert "group_id" in str(excinfo.value)
 
     def test_dataframe_missing_group_cols_list(self, cols: ColumnHelper):
         """Test that an error is raised when the DataFrame is missing group_col columns from a list."""
@@ -67,7 +68,8 @@ class TestRevenueTree:
 
         with pytest.raises(ValueError) as excinfo:
             RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2", group_col=["region", "store"])
-        assert "The following columns are required but missing:" in str(excinfo.value)
+        assert "group_col references columns not present in the DataFrame" in str(excinfo.value)
+        assert "store" in str(excinfo.value)
         assert "store" in str(excinfo.value)
 
     @pytest.mark.parametrize("include_quantity", [True, False])

@@ -75,7 +75,7 @@ class GainLoss:
             )
 
         required_cols = [get_option("column.customer_id"), value_col] + ([group_col] if group_col is not None else [])
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         self.focus_group_name = focus_group_name
         self.comparison_group_name = comparison_group_name

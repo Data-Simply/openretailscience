@@ -102,7 +102,7 @@ class ThresholdSegmentation:
         if isinstance(df, pd.DataFrame):
             df: ibis.Table = ibis.memtable(df)
 
-        self._group_col = ensure_columns(df, group_col) if group_col is not None else None
+        self._group_col = ensure_columns(df, group_col, "group_col") if group_col is not None else None
 
         value_col = cols.unit_spend if value_col is None else value_col
 
@@ -110,7 +110,7 @@ class ThresholdSegmentation:
         if self._group_col is not None:
             required_cols.extend(self._group_col)
 
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         # Build group_by columns: customer_id + optional group columns
         group_by_cols = [cols.customer_id]

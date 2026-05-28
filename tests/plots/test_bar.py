@@ -205,13 +205,14 @@ def test_plot_multiple_bars(sample_dataframe):
     assert actual_heights == pytest.approx(expected_heights)
 
 
-def test_plot_with_sorting(sample_dataframe):
-    """Test the bar plot function with sorting in ascending order."""
+@pytest.mark.parametrize("sort_order", ["ascending", "asc", "ASC", "Ascending"])
+def test_plot_with_sorting(sample_dataframe, sort_order):
+    """Test that all ascending sort_order aliases produce identical sorted bar plots."""
     result_ax = bar.plot(
         df=sample_dataframe,
         value_col="sales_q1",
         x_col="product",
-        sort_order="ascending",
+        sort_order=sort_order,
         title="Test Sorted Bar Plot",
     )
 

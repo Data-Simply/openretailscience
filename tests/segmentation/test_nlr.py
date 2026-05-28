@@ -134,18 +134,18 @@ class TestNLRSegmentation:
         assert result.loc[1001, "segment_name"] == SEGMENT_NEW
 
     @pytest.mark.parametrize(
-        ("columns", "match_text"),
+        "columns",
         [
-            ({cols.unit_spend: [100.00], "year": [2023]}, "missing"),
-            ({cols.customer_id: [1001], "year": [2023]}, "missing"),
-            ({cols.customer_id: [1001], cols.unit_spend: [100.00]}, "missing"),
+            {cols.unit_spend: [100.00], "year": [2023]},
+            {cols.customer_id: [1001], "year": [2023]},
+            {cols.customer_id: [1001], cols.unit_spend: [100.00]},
         ],
         ids=["missing_customer_id", "missing_value_col", "missing_period_col"],
     )
-    def test_raises_on_missing_required_column(self, columns, match_text):
-        """Test that ValueError is raised when a required column is missing."""
+    def test_raises_on_missing_required_column(self, columns):
+        """Test that ValueError naming required_cols is raised when a required column is missing."""
         df = pd.DataFrame(columns)
-        with pytest.raises(ValueError, match=match_text):
+        with pytest.raises(ValueError, match="required_cols references columns not present in the DataFrame"):
             NLRSegmentation(df=df, period_col="year", p1_value=2023, p2_value=2024)
 
     @pytest.mark.parametrize(
@@ -383,7 +383,7 @@ class TestNLRSegmentationGroupCol:
                 "year": [2023],
             },
         )
-        with pytest.raises(ValueError, match="missing"):
+        with pytest.raises(ValueError, match="group_col references columns not present in the DataFrame"):
             NLRSegmentation(
                 df=df,
                 period_col="year",

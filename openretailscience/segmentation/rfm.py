@@ -99,7 +99,7 @@ class RFMSegmentation:
         ]
         df = ensure_ibis_table(df)
 
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         if isinstance(current_date, str):
             current_date = datetime.date.fromisoformat(current_date)

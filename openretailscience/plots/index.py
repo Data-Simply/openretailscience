@@ -209,7 +209,7 @@ def plot(  # noqa: C901, PLR0913
     move_legend_outside: bool = False,
     highlight_range: Literal["default"] | tuple[float, float] | None = "default",
     sort_by: Literal["group", "value"] | None = "group",
-    sort_order: Literal["ascending", "descending"] = "ascending",
+    sort_order: Literal["asc", "ascending", "desc", "descending"] = "ascending",
     ax: Axes | None = None,
     source_text: str | None = None,
     exclude_groups: list[Any] | None = None,

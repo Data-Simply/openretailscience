@@ -203,7 +203,7 @@ class CompositeRank:
             ValueError: If any specified group columns are not found in the DataFrame.
         """
         if group_col is not None:
-            ensure_columns(df, group_col)
+            ensure_columns(df, group_col, "group_col")
 
     def _process_rank_columns(
         self,
@@ -243,7 +243,7 @@ class CompositeRank:
         for col_spec in rank_cols:
             col_name, sort_order = self._parse_column_spec(col_spec)
 
-            ensure_columns(df, col_name)
+            ensure_columns(df, col_name, "rank_cols")
             sort_order = ensure_value_choice(sort_order, valid_sort_orders, "sort_order")
 
             order_by = ibis.asc(df[col_name]) if sort_order in ["asc", "ascending"] else ibis.desc(df[col_name])

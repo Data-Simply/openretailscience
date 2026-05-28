@@ -57,12 +57,12 @@ class Acv:
         unit_spend_col = get_option("column.unit_spend")
 
         if group_col is not None:
-            group_col = ensure_columns(df, group_col)
+            group_col = ensure_columns(df, group_col, "group_col")
 
         required_cols = [unit_spend_col]
         if group_col is not None:
             required_cols.extend(group_col)
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         if group_col is not None:
             df = df.group_by(group_col)

@@ -172,24 +172,24 @@ class TestBrokenTimelinePlot:
         assert segments["D"] == expected_daily_segments
         assert segments["W"] == expected_weekly_segments
 
-    def test_lowercase_period_handling(self, sample_dataframe):
-        """A lowercase period parameter produces the same segments as its uppercase equivalent."""
-        ax_lower = broken_timeline.plot(
-            df=sample_dataframe,
-            category_col="category",
-            value_col="value",
-            period="d",
-        )
-        ax_upper = broken_timeline.plot(
-            df=sample_dataframe,
-            category_col="category",
-            value_col="value",
-            period="D",
-        )
-
-        lower_segments = sum(len(c.get_paths()) for c in ax_lower.collections)
-        upper_segments = sum(len(c.get_paths()) for c in ax_upper.collections)
-        assert lower_segments == upper_segments
+    @pytest.mark.parametrize(
+        ("canonical", "alias"),
+        [
+            ("D", "d"),
+            ("D", "day"),
+            ("D", "DAY"),
+            ("W", "w"),
+            ("W", "week"),
+            ("W", "WEEK"),
+        ],
+    )
+    def test_period_aliases_produce_same_output_as_canonical(self, sample_dataframe, canonical, alias):
+        """Test that period aliases (case-insensitive short and long forms) match the canonical short form."""
+        ax_canonical = broken_timeline.plot(sample_dataframe, "category", "value", period=canonical)
+        ax_alias = broken_timeline.plot(sample_dataframe, "category", "value", period=alias)
+        canonical_segments = sum(len(c.get_paths()) for c in ax_canonical.collections)
+        alias_segments = sum(len(c.get_paths()) for c in ax_alias.collections)
+        assert canonical_segments == alias_segments
 
     def test_with_source_text(self, sample_dataframe):
         """Test adding source text appears in plot."""
@@ -333,7 +333,7 @@ class TestBrokenTimelinePlot:
     def test_bar_width_calculation_for_different_periods(self, period, dates, num_periods):
         """Test that bar widths are calculated correctly for different time periods."""
         date_col = get_option("column.transaction_date")
-        expected_width = num_periods * broken_timeline.PERIOD_CONFIG[period]
+        expected_width = num_periods * broken_timeline.PERIOD_GAP_DAYS[period]
 
         data = {
             date_col: pd.to_datetime(dates),

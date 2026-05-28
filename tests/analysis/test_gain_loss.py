@@ -165,7 +165,7 @@ def test_missing_required_column_raises():
             "group": ["Brand A", "Brand B"],
         },
     )
-    with pytest.raises(ValueError, match="columns are required but missing"):
+    with pytest.raises(ValueError, match="required_cols references columns not present in the DataFrame"):
         GainLoss(
             df=df,
             p1_index=[True, False],
