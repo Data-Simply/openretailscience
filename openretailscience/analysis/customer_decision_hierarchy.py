@@ -72,9 +72,9 @@ from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.sparse import csr_matrix
 from scipy.spatial.distance import squareform
 
+from openretailscience.core.validation import ensure_columns
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
-from openretailscience.utils.validation import validate_columns
 
 
 class CustomerDecisionHierarchy:
@@ -158,7 +158,7 @@ class CustomerDecisionHierarchy:
         """
         cols = ColumnHelper()
         required_cols = [cols.customer_id, cols.transaction_id, product_col]
-        validate_columns(df, required_cols)
+        ensure_columns(df, required_cols)
 
         self.random_state = random_state
         self.product_col = product_col

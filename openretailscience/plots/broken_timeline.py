@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
+from openretailscience.core.validation import ensure_value_choice
 from openretailscience.options import get_option
 from openretailscience.plots.styles.colors import get_named_color
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
@@ -61,11 +62,7 @@ def _validate_inputs(df: pd.DataFrame, category_col: str, value_col: str, date_c
             msg = f"Required column '{col}' not found in DataFrame"
             raise KeyError(msg)
 
-    # Validate period parameter
-    valid_periods = list(PERIOD_CONFIG.keys())
-    if period not in valid_periods:
-        msg = f"Invalid period '{period}'. Must be one of {valid_periods}."
-        raise ValueError(msg)
+    ensure_value_choice(period, list(PERIOD_CONFIG.keys()), "period")
 
 
 def plot(

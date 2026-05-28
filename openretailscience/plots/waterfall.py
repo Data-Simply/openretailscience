@@ -42,6 +42,7 @@ import pandas as pd
 from matplotlib.axes import Axes
 
 import openretailscience.plots.styles.graph_utils as gu
+from openretailscience.core.validation import ensure_value_choice
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_named_color
 from openretailscience.plots.styles.font_utils import get_font_properties
@@ -98,14 +99,12 @@ def plot(
     if len(amounts) != len(labels):
         raise ValueError("The lengths of amounts and labels must be the same")
 
-    data_label_format = data_label_format.lower() if data_label_format is not None else None
-    if data_label_format is not None and data_label_format not in [
-        "absolute",
-        "percentage",
-        "both",
-    ]:
-        raise ValueError(
-            "data_label_format must be either 'absolute', 'percentage', 'both', or None.",
+    if data_label_format is not None:
+        data_label_format = ensure_value_choice(
+            data_label_format,
+            ["absolute", "percentage", "both"],
+            "data_label_format",
+            case_insensitive=True,
         )
 
     df = pd.DataFrame({"labels": labels, "amounts": amounts})

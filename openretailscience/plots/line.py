@@ -50,6 +50,7 @@ from typing import Any, Literal
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
+from openretailscience.core.validation import ensure_columns
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
@@ -100,25 +101,13 @@ def _validate_highlight_parameter(
     if highlight is None:
         return None
 
-    if isinstance(highlight, str):
-        highlight = [highlight]
-
-    if len(highlight) == 0:
-        raise ValueError("highlight cannot be empty; pass None to disable highlighting")
-
     is_single_line = group_col is None and (
         isinstance(value_col, str) or (isinstance(value_col, list) and len(value_col) == 1)
     )
     if is_single_line:
         raise ValueError("highlight parameter cannot be used with single-line plots")
 
-    available_columns = list(pivot_df.columns)
-    invalid_highlights = [h for h in highlight if h not in available_columns]
-    if invalid_highlights:
-        error_msg = f"highlight values {invalid_highlights} not found in available columns {available_columns}"
-        raise ValueError(error_msg)
-
-    return highlight
+    return ensure_columns(pivot_df, highlight)
 
 
 def _create_pivot_dataframe(

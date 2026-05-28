@@ -14,9 +14,9 @@ from ibis import _
 if TYPE_CHECKING:
     import pandas as pd
 
+from openretailscience.core.validation import ensure_columns, ensure_ibis_table
 from openretailscience.metrics.base import ratio_metric
 from openretailscience.options import ColumnHelper, get_option
-from openretailscience.utils.validation import ensure_ibis_table, validate_columns
 
 _TEMP_TOTAL_STORES = "__prs_temp_total_stores__"
 
@@ -64,13 +64,10 @@ class PctOfStores:
 
         store_id_col = get_option("column.store_id")
 
-        if product_col is None:
-            product_col = [get_option("column.product_id")]
-        elif isinstance(product_col, str):
-            product_col = [product_col]
+        product_col = ensure_columns(df, product_col if product_col is not None else get_option("column.product_id"))
 
-        if isinstance(group_col, str):
-            group_col = [group_col]
+        if group_col is not None:
+            group_col = ensure_columns(df, group_col)
 
         required_cols = [store_id_col, *product_col]
         group_cols = list(product_col)
@@ -81,7 +78,7 @@ class PctOfStores:
                 raise ValueError(msg)
             required_cols.extend(group_col)
             group_cols.extend(group_col)
-        validate_columns(df, required_cols)
+        ensure_columns(df, required_cols)
 
         store_product = df.select([store_id_col, *group_cols]).distinct()
 

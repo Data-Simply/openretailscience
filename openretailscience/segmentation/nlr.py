@@ -52,8 +52,8 @@ from __future__ import annotations
 import ibis
 import pandas as pd
 
+from openretailscience.core.validation import ensure_columns
 from openretailscience.options import ColumnHelper
-from openretailscience.utils.validation import validate_columns
 
 SEGMENT_NEW = "New"
 SEGMENT_REPEATING = "Repeating"
@@ -140,17 +140,16 @@ class NLRSegmentation:
         cols = ColumnHelper()
         value_col = cols.unit_spend if value_col is None else value_col
 
-        self._group_col: list[str] | None = [group_col] if isinstance(group_col, str) else group_col
-
         if isinstance(df, pd.DataFrame):
             df = ibis.memtable(df)
 
-        # Validate required columns
+        self._group_col: list[str] | None = ensure_columns(df, group_col) if group_col is not None else None
+
         required_cols = [cols.customer_id, value_col, period_col]
         if self._group_col is not None:
             required_cols.extend(self._group_col)
 
-        validate_columns(df, required_cols)
+        ensure_columns(df, required_cols)
 
         p1_expr = p1_value if isinstance(p1_value, ibis.Expr) else ibis.literal(p1_value)
         p2_expr = p2_value if isinstance(p2_value, ibis.Expr) else ibis.literal(p2_value)

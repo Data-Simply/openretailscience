@@ -79,15 +79,11 @@ class TestCohortAnalysis:
 
     def test_invalid_period(self, transactions_df):
         """Test if an invalid period raises an error."""
-        invalid_period = "m"
-        with pytest.raises(
-            ValueError,
-            match=f"Invalid period '{invalid_period}'. Allowed values: {CohortAnalysis.VALID_PERIODS}",
-        ):
+        with pytest.raises(ValueError, match=r"period must be one of .*'m'"):
             CohortAnalysis(
                 df=transactions_df,
                 aggregation_column="unit_spend",
-                period=invalid_period,
+                period="m",
             )
 
     def test_cohort_percentage_normalizes_each_cohort_to_own_period_zero(self, transactions_df):

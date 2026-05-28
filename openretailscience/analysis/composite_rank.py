@@ -67,6 +67,8 @@ import ibis
 import ibis.expr.types as ir
 import pandas as pd
 
+from openretailscience.core.validation import ensure_columns, ensure_value_choice
+
 
 class CompositeRank:
     """Creates multi-factor composite rankings for retail decision-making.
@@ -200,23 +202,8 @@ class CompositeRank:
             ValueError: If group_col is an empty list.
             ValueError: If any specified group columns are not found in the DataFrame.
         """
-        if group_col is None:
-            return
-
-        if isinstance(group_col, str):
-            group_col = [group_col]
-        elif not isinstance(group_col, list):
-            msg = f"group_col must be a string or list of strings. Got {type(group_col).__name__}."
-            raise TypeError(msg)
-
-        if len(group_col) == 0:
-            msg = "group_col must not be an empty list. Use None for global ranking."
-            raise ValueError(msg)
-
-        missing_cols = sorted(set(group_col) - set(df.columns))
-        if len(missing_cols) > 0:
-            msg = f"Group column(s) {missing_cols} not found in the DataFrame"
-            raise ValueError(msg)
+        if group_col is not None:
+            ensure_columns(df, group_col)
 
     def _process_rank_columns(
         self,
@@ -256,13 +243,8 @@ class CompositeRank:
         for col_spec in rank_cols:
             col_name, sort_order = self._parse_column_spec(col_spec)
 
-            # Validate column exists and sort order is valid
-            if col_name not in df.columns:
-                msg = f"Column '{col_name}' not found in the DataFrame"
-                raise ValueError(msg)
-            if sort_order.lower() not in valid_sort_orders:
-                msg = f"Sort order must be one of {valid_sort_orders}. Got '{sort_order}'"
-                raise ValueError(msg)
+            ensure_columns(df, col_name)
+            sort_order = ensure_value_choice(sort_order, valid_sort_orders, "sort_order", case_insensitive=True)
 
             order_by = ibis.asc(df[col_name]) if sort_order in ["asc", "ascending"] else ibis.desc(df[col_name])
             window = self._create_window(group_col, df, order_by)
@@ -351,10 +333,7 @@ class CompositeRank:
             "max": ibis.greatest(*column_refs),
         }
 
-        if agg_func.lower() not in agg_expr:
-            msg = f"Aggregation function must be one of {list(agg_expr.keys())}. Got '{agg_func}'"
-            raise ValueError(msg)
-
+        agg_func = ensure_value_choice(agg_func, list(agg_expr.keys()), "agg_func", case_insensitive=True)
         return df.mutate(composite_rank=agg_expr[agg_func])
 
     @property

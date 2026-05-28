@@ -40,8 +40,8 @@ import ibis
 import numpy as np
 import pandas as pd
 
+from openretailscience.core.validation import ensure_columns, ensure_value_choice
 from openretailscience.options import ColumnHelper
-from openretailscience.utils.validation import validate_columns
 
 
 class CohortAnalysis:
@@ -73,16 +73,14 @@ class CohortAnalysis:
         """
         cols = ColumnHelper()
 
-        if period not in self.VALID_PERIODS:
-            error_message = f"Invalid period '{period}'. Allowed values: {self.VALID_PERIODS}."
-            raise ValueError(error_message)
+        ensure_value_choice(period, sorted(self.VALID_PERIODS), "period")
 
         required_cols = [
             cols.customer_id,
             cols.transaction_date,
             aggregation_column,
         ]
-        validate_columns(df, required_cols)
+        ensure_columns(df, required_cols)
 
         self.df = self._calculate_cohorts(
             df=df,

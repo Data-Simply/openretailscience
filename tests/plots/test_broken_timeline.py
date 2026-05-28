@@ -238,7 +238,7 @@ class TestBrokenTimelinePlot:
 
     def test_invalid_period_raises_error(self, sample_dataframe):
         """Test that invalid period raises ValueError."""
-        with pytest.raises(ValueError, match=r"Invalid period 'X'. Must be one of"):
+        with pytest.raises(ValueError, match=r"period must be one of"):
             broken_timeline.plot(
                 df=sample_dataframe,
                 category_col="category",

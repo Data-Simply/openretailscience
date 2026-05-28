@@ -69,7 +69,7 @@ def test_get_indexes_invalid_agg_func():
         },
     )
 
-    with pytest.raises(ValueError, match="Unsupported aggregation function"):
+    with pytest.raises(ValueError, match="agg_func must be one of"):
         get_indexes(
             df,
             value_to_index="Bakery",
