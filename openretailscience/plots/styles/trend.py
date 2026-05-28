@@ -20,12 +20,16 @@ _POSITIVE_X_FLOOR = 1e-6
 _VARIANCE_THRESHOLD = 1e-10
 _TEXT_X_PADDING = 0.05  # 5% from left
 
-# Map trend_type -> (check_x_positive, check_y_positive)
-_POSITIVITY_REQUIREMENTS: dict[str, tuple[bool, bool]] = {
+TrendType = Literal["linear", "power", "logarithmic", "exponential"]
+
+_POSITIVITY_REQUIREMENTS: dict[TrendType, tuple[bool, bool]] = {
     "power": (True, True),
     "logarithmic": (True, False),
     "exponential": (False, True),
 }
+
+# Types whose closed-form curve can overflow float64 at large inputs and need finite-mask filtering.
+_OVERFLOW_SENSITIVE_TYPES: frozenset[TrendType] = frozenset({"power", "exponential"})
 
 
 def _calculate_r_squared_original_space(y_actual: np.ndarray, y_predicted: np.ndarray) -> float:
@@ -49,7 +53,7 @@ def _calculate_r_squared_original_space(y_actual: np.ndarray, y_predicted: np.nd
 
 
 def _perform_trend_calculation(
-    trend_type: str,
+    trend_type: TrendType,
     x_filtered: np.ndarray,
     y_filtered: np.ndarray,
 ) -> tuple[float, float, float]:
@@ -110,7 +114,7 @@ def _perform_trend_calculation(
 
 
 def _generate_trend_line(
-    trend_type: str,
+    trend_type: TrendType,
     param1: float,
     param2: float,
     x_min: float,
@@ -161,8 +165,7 @@ def _generate_trend_line(
         msg = f"Unsupported trend type for line generation: {trend_type}"
         raise ValueError(msg)
 
-    # Filter out infinite/NaN values for types susceptible to overflow
-    if trend_type in ("power", "exponential"):
+    if trend_type in _OVERFLOW_SENSITIVE_TYPES:
         finite_mask = np.isfinite(y_line)
         if not np.all(finite_mask):
             x_line = x_line[finite_mask]
@@ -180,7 +183,7 @@ def _add_equation_text(
     text_position: float,
     show_equation: bool,
     show_r2: bool,
-    trend_type: str = "linear",
+    trend_type: TrendType = "linear",
 ) -> None:
     """Add equation and R² text to the plot.
 
@@ -193,11 +196,8 @@ def _add_equation_text(
         text_position (float): The relative y-position of the text.
         show_equation (bool): Whether to display the equation.
         show_r2 (bool): Whether to display the R² value.
-        trend_type (str): The type of trend for equation formatting.
+        trend_type (TrendType): The type of trend for equation formatting.
     """
-    if not (show_equation or show_r2):
-        return
-
     style = PlotStyleHelper()
 
     equation_parts = []
@@ -267,7 +267,7 @@ def _extract_plot_data(ax: Axes) -> tuple[np.ndarray, np.ndarray]:
         x_data = lines[0].get_xdata()
         y_data = lines[0].get_ydata()
     # Check for bar charts (patches)
-    elif hasattr(ax, "patches") and len(ax.patches) > 0:
+    elif len(ax.patches) > 0:
         # Detect bar orientation using BarContainer (stable API). Default covers
         # the case where patches were added without a container via ax.add_patch.
         is_vertical = ax.containers[0].orientation == "vertical" if len(ax.containers) > 0 else True
@@ -283,7 +283,7 @@ def _extract_plot_data(ax: Axes) -> tuple[np.ndarray, np.ndarray]:
         bar_data.sort(key=lambda point: point[0])
         x_data, y_data = np.array(bar_data).T
     # If no lines or bars, check for scatter plots (or other collections)
-    elif hasattr(ax, "collections") and len(ax.collections) > 0:
+    elif len(ax.collections) > 0:
         # Extract data from the first collection (e.g., scatter plot)
         collection = ax.collections[0]
         # Get the offsets which contain the x,y coordinates
@@ -365,7 +365,7 @@ def _prepare_numeric_data(x_data: np.ndarray, y_data: np.ndarray) -> tuple[np.nd
 def _validate_trend_data(
     x_data: np.ndarray,
     y_data: np.ndarray,
-    trend_type: str,
+    trend_type: TrendType,
 ) -> None:
     """Validate data for specific trend types.
 
@@ -411,7 +411,7 @@ def _validate_trend_data(
 
 def add_trend_line(
     ax: Axes,
-    trend_type: Literal["linear", "power", "logarithmic", "exponential"] = "linear",
+    trend_type: TrendType = "linear",
     color: str = "red",
     linestyle: str = "--",
     text_position: float = 0.6,
@@ -434,7 +434,7 @@ def add_trend_line(
 
     Args:
         ax (Axes): The matplotlib axes object containing the plot (line, scatter, or bar).
-        trend_type (Literal["linear", "power", "logarithmic", "exponential"], optional):
+        trend_type (TrendType, optional):
             Trend algorithm to use. Supported values:
             - "linear": y = mx + b (default, OLS fit)
             - "power": y = ax^b (elasticity analysis, log-log transformation)
