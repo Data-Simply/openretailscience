@@ -228,8 +228,8 @@ class TestBrokenTimelinePlot:
             )
 
     def test_missing_column_raises_error(self, sample_dataframe):
-        """Test that missing columns raise KeyError."""
-        with pytest.raises(KeyError, match="Required column 'nonexistent' not found"):
+        """Test that missing columns raise ValueError naming the missing column."""
+        with pytest.raises(ValueError, match=r"\['nonexistent'\]"):
             broken_timeline.plot(
                 df=sample_dataframe,
                 category_col="nonexistent",
