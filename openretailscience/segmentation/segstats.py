@@ -210,6 +210,7 @@ class SegTransactionStats:
         rollup_value: Any | list[Any] = "Total",  # noqa: ANN401 - Any is required for ibis.literal typing
         unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None = None,
         grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None = None,
+        sort_by: bool = False,
     ) -> None:
         """Calculates transaction statistics by segment.
 
@@ -258,6 +259,8 @@ class SegTransactionStats:
                   represents grand total. Automatically deduplicates and validates column names.
                 - None: Use calc_total/calc_rollup behavior (default).
                 Defaults to None.
+            sort_by (bool, optional): When True, sort the output rows ascending by ``segment_col`` using
+                ibis ``.order_by()`` so the sort runs at the backend. Defaults to False (no ordering applied).
 
         Raises:
             ValueError: If grouping_sets is used with explicit calc_total or calc_rollup.
@@ -340,6 +343,9 @@ class SegTransactionStats:
             unknown_customer_value,
             grouping_sets,
         )
+
+        if sort_by:
+            self.table = self.table.order_by(segment_col)
 
     @staticmethod
     def _get_col_order(include_quantity: bool, include_customer: bool, include_unknown: bool = False) -> list[str]:

@@ -148,6 +148,26 @@ class TestCalcSegStats:
 
         pd.testing.assert_frame_equal(segment_stats, expected_output)
 
+    def test_sort_by_true_orders_segment_column_ascending(self, base_df):
+        """Test that sort_by=True returns rows ordered ascending by the segment column."""
+        result = SegTransactionStats(base_df, "segment_name", sort_by=True).df
+
+        assert result["segment_name"].tolist() == ["Premium", "Standard", "Total"]
+
+    def test_sort_by_true_orders_multiple_segment_columns_ascending(self, base_df):
+        """Test that sort_by=True orders rows ascending by each segment column in turn."""
+        df = base_df.assign(region=["North", "South", "East", "South", "East"])
+
+        result = SegTransactionStats(df, ["segment_name", "region"], sort_by=True).df
+
+        expected_pairs = [
+            ("Premium", "East"),
+            ("Premium", "North"),
+            ("Standard", "South"),
+            ("Total", "Total"),
+        ]
+        assert list(zip(result["segment_name"], result["region"], strict=True)) == expected_pairs
+
     def test_calculates_segment_stats_without_customer_data(self, base_df):
         """Test that the method correctly calculates segment statistics without customer data."""
         df_without_customer = base_df.drop(columns=[cols.customer_id])

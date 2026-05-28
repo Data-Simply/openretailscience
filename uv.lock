@@ -1025,7 +1025,7 @@ wheels = [
 
 [[package]]
 name = "ibis-framework"
-version = "10.8.0"
+version = "12.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "atpublic" },
@@ -1037,9 +1037,9 @@ dependencies = [
     { name = "typing-extensions", version = "4.15.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "tzdata" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/95/02/868f297791d26937956466d68a5135411e69a6e6f0bd4e1569a99c70cc76/ibis_framework-10.8.0.tar.gz", hash = "sha256:3cf330c1f786b9d5c425f96df79cc09af7f55c63fd923bd749547c4b1bd03ae4", size = 1238317, upload-time = "2025-07-28T21:28:41.159Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f2/8e/2e7ad9bdeaf45350da7beeb67a0d4317d400dac882825eb7c3bd4d3c6ae1/ibis_framework-12.0.0.tar.gz", hash = "sha256:238624f2c14fdab8382ca2f4f667c3cdb81e29844cd5f8db8a325d0743767c61", size = 1351369, upload-time = "2026-02-07T14:31:13.171Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/6c/5e45e5946be73214c9a7e9be09476407ddd55aa9edc58056775ec591549c/ibis_framework-10.8.0-py3-none-any.whl", hash = "sha256:17014772b8ba3a69336601af097e3f968e8cbef6e90c0b416e60c459ea1a0aae", size = 1941834, upload-time = "2025-07-28T21:28:38.757Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/b3/11d406849715b47c9d69bb22f50874f80caee96bd1cbe7b61abbebbf5a05/ibis_framework-12.0.0-py3-none-any.whl", hash = "sha256:0bbd790f268da9cb87926d5eaad2b827a573927113c4ed3be5095efa89b9e512", size = 2079219, upload-time = "2026-02-07T14:31:10.646Z" },
 ]
 
 [package.optional-dependencies]
@@ -2030,7 +2030,7 @@ examples = [
 [package.metadata]
 requires-dist = [
     { name = "duckdb", specifier = ">=1.1.0,<1.6" },
-    { name = "ibis-framework", extras = ["duckdb"], specifier = ">=10.0.0,<11" },
+    { name = "ibis-framework", extras = ["duckdb"], specifier = ">=10.0.0,<13" },
     { name = "matplotlib", specifier = ">=3.9.1,<4" },
     { name = "matplotlib-set-diagrams", specifier = ">=0.0.2,<0.3.0" },
     { name = "numpy", specifier = ">=1.26.3,<3" },
@@ -2046,7 +2046,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "freezegun", specifier = ">=1.5.1,<2" },
-    { name = "ibis-framework", extras = ["bigquery", "pyspark", "snowflake"], specifier = ">=10.0.0,<11" },
+    { name = "ibis-framework", extras = ["bigquery", "pyspark", "snowflake"], specifier = ">=10.0.0,<13" },
     { name = "nbstripout", specifier = ">=0.7.1,<0.8" },
     { name = "pre-commit", specifier = ">=3.6.2,<4" },
     { name = "pytest", specifier = ">=8.0.0,<9" },
