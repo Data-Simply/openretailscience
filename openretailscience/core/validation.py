@@ -84,6 +84,27 @@ def ensure_columns(
     return normalized
 
 
+def ensure_data_has_columns(df: pd.DataFrame | ibis.Table, columns: list[str]) -> None:
+    """Verify the input data contains every column the function requires.
+
+    Use when the column list is built internally from defaults or aggregated from
+    multiple sources (i.e. there is no single user-facing parameter to blame).
+    For validating a single column parameter supplied by the caller, use
+    ``ensure_columns`` instead so the parameter name appears in error messages.
+
+    Args:
+        df (pd.DataFrame | ibis.Table): The data being inspected.
+        columns (list[str]): Column names that must be present in ``df``.
+
+    Raises:
+        ValueError: If any of the listed columns is missing from ``df``.
+    """
+    missing = sorted(set(columns) - set(df.columns))
+    if len(missing) > 0:
+        msg = f"Input data is missing required columns: {missing}"
+        raise ValueError(msg)
+
+
 def ensure_value_choice(
     value: str,
     choices: Sequence[str],

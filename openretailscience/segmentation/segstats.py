@@ -52,7 +52,7 @@ from typing import Any, Literal
 import ibis
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns
+from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
 from openretailscience.options import ColumnHelper, get_option
 
 __all__ = ["SegTransactionStats", "cube", "rollup"]
@@ -319,7 +319,7 @@ class SegTransactionStats:
             *filter(lambda x: x in data.columns, [cols.unit_qty, cols.customer_id]),
         ]
 
-        ensure_columns(data, required_cols, "required_cols")
+        ensure_data_has_columns(data, required_cols)
 
         # Validate extra_aggs if provided
         self._validate_extra_aggs(data, extra_aggs)

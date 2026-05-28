@@ -120,8 +120,9 @@ def plot(  # noqa: PLR0913
         orientation (Literal["horizontal", "h", "vertical", "v"], optional): Orientation of the bars. Can be
                                                                              "horizontal", "h", "vertical", or "v".
                                                                              Defaults to "vertical".
-        sort_order (Literal["ascending", "descending"] | None, optional): Sorting order for the bars. Can be
-                                                                          "ascending" or "descending". Defaults to None.
+        sort_order (Literal["asc", "ascending", "desc", "descending"] | None, optional): Sorting order for the
+                                                                          bars. Accepts short or long forms, case-
+                                                                          insensitive. Defaults to None.
         data_label_format (Literal["absolute", "percentage"] | None, optional): Format for displaying data labels.
                                                                                 "absolute" shows raw values,
                                                                                 "percentage" shows percentage.

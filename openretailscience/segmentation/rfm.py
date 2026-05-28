@@ -28,7 +28,7 @@ import datetime
 import ibis
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns, ensure_ibis_table
+from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import ColumnHelper, get_option
 
 
@@ -99,7 +99,7 @@ class RFMSegmentation:
         ]
         df = ensure_ibis_table(df)
 
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         if isinstance(current_date, str):
             current_date = datetime.date.fromisoformat(current_date)

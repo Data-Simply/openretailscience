@@ -65,7 +65,7 @@ import ibis
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-from openretailscience.core.validation import ensure_columns
+from openretailscience.core.validation import ensure_data_has_columns
 from openretailscience.options import get_option
 from openretailscience.plots import venn
 
@@ -181,7 +181,7 @@ class CrossShop:
             group_3_col = group_1_col
 
         required_cols = [group_col, value_col]
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         self.group_count = 2 if group_3_col is None else 3
 

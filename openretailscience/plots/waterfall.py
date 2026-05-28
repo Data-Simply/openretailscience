@@ -48,6 +48,8 @@ from openretailscience.plots.styles.colors import get_named_color
 from openretailscience.plots.styles.font_utils import get_font_properties
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
+VALID_DATA_LABEL_FORMATS = ("absolute", "percentage", "both")
+
 
 def plot(
     amounts: list[float],
@@ -100,11 +102,7 @@ def plot(
         raise ValueError("The lengths of amounts and labels must be the same")
 
     if data_label_format is not None:
-        data_label_format = ensure_value_choice(
-            data_label_format,
-            ["absolute", "percentage", "both"],
-            "data_label_format",
-        )
+        data_label_format = ensure_value_choice(data_label_format, VALID_DATA_LABEL_FORMATS, "data_label_format")
 
     df = pd.DataFrame({"labels": labels, "amounts": amounts})
 

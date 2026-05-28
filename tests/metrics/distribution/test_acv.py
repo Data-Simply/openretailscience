@@ -87,7 +87,7 @@ class TestAcv:
     def test_acv_missing_column_raises(self):
         """Test that missing unit_spend column raises ValueError naming required_cols."""
         df = pd.DataFrame({cols.customer_id: [1, 2], cols.store_id: [101, 102]})
-        with pytest.raises(ValueError, match="required_cols references columns not present in the DataFrame"):
+        with pytest.raises(ValueError, match="Input data is missing required columns"):
             Acv(df)
 
     def test_acv_missing_group_col_raises(self):

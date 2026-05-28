@@ -260,7 +260,7 @@ def test_calc_cross_shop_invalid_group_3(sample_data):
 def test_missing_columns_raises(sample_data):
     """Test that ValueError is raised when required columns are missing in df."""
     bad_data = sample_data.drop(columns=[cols.unit_spend])
-    with pytest.raises(ValueError, match="required_cols references columns not present in the DataFrame"):
+    with pytest.raises(ValueError, match="Input data is missing required columns"):
         CrossShop(
             df=bad_data,
             group_1_col="category_1_name",

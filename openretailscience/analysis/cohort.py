@@ -40,7 +40,7 @@ import ibis
 import numpy as np
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns, ensure_value_choice
+from openretailscience.core.validation import ensure_data_has_columns, ensure_value_choice
 from openretailscience.options import ColumnHelper
 
 
@@ -80,7 +80,7 @@ class CohortAnalysis:
             cols.transaction_date,
             aggregation_column,
         ]
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         self.df = self._calculate_cohorts(
             df=df,

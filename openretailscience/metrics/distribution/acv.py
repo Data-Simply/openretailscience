@@ -14,7 +14,7 @@ from ibis import _
 if TYPE_CHECKING:
     import pandas as pd
 
-from openretailscience.core.validation import ensure_columns, ensure_ibis_table
+from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import get_option
 
 
@@ -62,7 +62,7 @@ class Acv:
         required_cols = [unit_spend_col]
         if group_col is not None:
             required_cols.extend(group_col)
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         if group_col is not None:
             df = df.group_by(group_col)
