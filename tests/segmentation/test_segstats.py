@@ -148,11 +148,27 @@ class TestCalcSegStats:
 
         pd.testing.assert_frame_equal(segment_stats, expected_output)
 
-    def test_sort_by_true_orders_segment_column_ascending(self, base_df):
-        """Test that sort_by=True returns rows ordered ascending by the segment column."""
-        result = SegTransactionStats(base_df, "segment_name", sort_by=True).df
+    @pytest.mark.parametrize(
+        ("sort_by", "expected_order"),
+        [
+            (False, ["Apple", "Zebra", "Mango", "Total"]),
+            (True, ["Apple", "Mango", "Total", "Zebra"]),
+        ],
+    )
+    def test_sort_by_controls_output_order(self, sort_by, expected_order):
+        """Test that sort_by=True imposes ascending segment order, while sort_by=False does not."""
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [1, 2, 3, 4, 5, 6],
+                cols.unit_spend: [100.0, 200.0, 150.0, 300.0, 250.0, 175.0],
+                cols.transaction_id: [101, 102, 103, 104, 105, 106],
+                "segment_name": ["Zebra", "Apple", "Mango", "Zebra", "Apple", "Mango"],
+            },
+        )
 
-        assert result["segment_name"].tolist() == ["Premium", "Standard", "Total"]
+        result = SegTransactionStats(df, "segment_name", sort_by=sort_by).df
+
+        assert result["segment_name"].tolist() == expected_order
 
     def test_sort_by_true_orders_multiple_segment_columns_ascending(self, base_df):
         """Test that sort_by=True orders rows ascending by each segment column in turn."""
