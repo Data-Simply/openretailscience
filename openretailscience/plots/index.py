@@ -58,7 +58,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-from openretailscience.core.validation import ensure_value_choice
+from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_value_choice
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
@@ -66,7 +66,6 @@ BASELINE_INDEX = 100
 DEFAULT_HIGHLIGHT_RANGE = (80, 120)
 
 VALID_SORT_BY = ("group", "value")
-VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
 VALID_AGG_FUNCS = ("sum", "mean", "max", "min", "nunique")
 
 

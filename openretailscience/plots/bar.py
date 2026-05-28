@@ -43,14 +43,13 @@ from matplotlib.container import BarContainer
 from matplotlib.patches import Rectangle
 
 import openretailscience.plots.styles.graph_utils as gu
-from openretailscience.core.validation import ensure_columns, ensure_value_choice
+from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_columns, ensure_value_choice
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_plot_colors
 from openretailscience.plots.styles.font_utils import get_font_properties
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 VALID_ORIENTATIONS = ("horizontal", "h", "vertical", "v")
-VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
 VALID_DATA_LABEL_FORMATS = ("absolute", "percentage_by_bar_group", "percentage_by_series")
 DEFAULT_BAR_WIDTH = 0.8
 

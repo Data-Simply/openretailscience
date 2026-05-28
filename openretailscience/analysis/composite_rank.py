@@ -67,9 +67,8 @@ import ibis
 import ibis.expr.types as ir
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns, ensure_value_choice
+from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_columns, ensure_value_choice
 
-VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
 VALID_AGG_FUNCS = ("mean", "sum", "min", "max")
 
 
