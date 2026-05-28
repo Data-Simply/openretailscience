@@ -43,8 +43,7 @@ class TestTrendLine:
     """Test class for the add_trend_line function."""
 
     # Constants to avoid magic numbers
-    ORIGINAL_LINE_COUNT = 1
-    EXPECTED_LINE_COUNT_AFTER_REGRESSION = 2
+    EXPECTED_LINE_COUNT_AFTER_TREND = 2
     STACKED_PATCH_COUNT = 8  # 4 bars + 4 stacked bars
     GROUPED_PATCH_COUNT = 8  # 4 bars + 4 grouped bars
     TREND_LINE_POINTS = 2  # Trend line has 2 endpoints
@@ -63,7 +62,7 @@ class TestTrendLine:
         trend.add_trend_line(ax, color="blue", show_equation=True, show_r2=True)
 
         # Check that a line was added (should now have 2 lines)
-        assert len(ax.get_lines()) == self.EXPECTED_LINE_COUNT_AFTER_REGRESSION
+        assert len(ax.get_lines()) == self.EXPECTED_LINE_COUNT_AFTER_TREND
 
     def test_line_plot_with_datetime_data(self):
         """Trend on datetime x-axis fits in date2num space and slopes with the data."""
@@ -79,7 +78,7 @@ class TestTrendLine:
 
         trend.add_trend_line(ax, show_equation=True, show_r2=False)
 
-        assert len(ax.get_lines()) == self.EXPECTED_LINE_COUNT_AFTER_REGRESSION
+        assert len(ax.get_lines()) == self.EXPECTED_LINE_COUNT_AFTER_TREND
 
         trend_line = ax.get_lines()[1]
         line_x = trend_line.get_xdata()
@@ -102,8 +101,8 @@ class TestTrendLine:
 
         trend.add_trend_line(ax, color="green", linestyle="-.")
 
-        # Check that a line was added to the scatter plot
-        assert len(ax.get_lines()) == self.ORIGINAL_LINE_COUNT
+        # Scatter starts at 0 lines; the trend line brings the count to 1.
+        assert len(ax.get_lines()) == 1
 
     def test_large_numbers(self):
         """Test trend line with very large numbers (billions)."""
@@ -115,7 +114,7 @@ class TestTrendLine:
         trend.add_trend_line(ax, color="purple", show_equation=True, show_r2=True)
 
         # Check that a line was added
-        assert len(ax.get_lines()) == self.EXPECTED_LINE_COUNT_AFTER_REGRESSION
+        assert len(ax.get_lines()) == self.EXPECTED_LINE_COUNT_AFTER_TREND
 
     def test_bar_plot(self):
         """Test trend line with a vertical bar chart."""
