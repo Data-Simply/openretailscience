@@ -62,17 +62,11 @@ class GainLoss:
             value_col (str, optional): The column to calculate the gain loss from. Defaults to option column.unit_spend.
             agg_func (str, optional): The aggregation function to use. Defaults to "sum".
         """
-        # # Ensure no overlap between p1 and p2
         if not df[p1_index].index.intersection(df[p2_index].index).empty:
             raise ValueError("p1_index and p2_index should not overlap")
 
         if not df[focus_group_index].index.intersection(df[comparison_group_index].index).empty:
             raise ValueError("focus_group_index and comparison_group_index should not overlap")
-
-        if not len(p1_index) == len(p2_index) == len(focus_group_index) == len(comparison_group_index):
-            raise ValueError(
-                "p1_index, p2_index, focus_group_index, and comparison_group_index should have the same length",
-            )
 
         required_cols = [get_option("column.customer_id"), value_col] + ([group_col] if group_col is not None else [])
         validate_columns(df, required_cols)
