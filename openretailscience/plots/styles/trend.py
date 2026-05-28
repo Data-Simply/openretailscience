@@ -2,7 +2,7 @@
 
 import warnings
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 import numpy as np
 import pandas as pd
@@ -467,10 +467,9 @@ def add_trend_line(
         >>> ax = df.plot.bar(x='category', y='sales')
         >>> add_trend_line(ax, trend_type="linear")
     """
-    # Validate trend type
-    supported_types = ["linear", "power", "logarithmic", "exponential"]
+    supported_types = get_args(TrendType)
     if trend_type not in supported_types:
-        error_msg = f"Unsupported trend_type '{trend_type}'. Supported types: {supported_types}"
+        error_msg = f"Unsupported trend_type '{trend_type}'. Supported types: {list(supported_types)}"
         raise ValueError(error_msg)
 
     # Extract data from the plot
