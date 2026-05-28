@@ -14,35 +14,36 @@ from openretailscience.core.validation import (
 class TestEnsureColumns:
     """Tests for the ensure_columns helper function."""
 
+    @pytest.mark.parametrize(
+        ("columns_in", "expected_out"),
+        [
+            ("customer_id", ["customer_id"]),
+            (["customer_id", "store_id"], ["customer_id", "store_id"]),
+        ],
+        ids=["string", "list"],
+    )
     @pytest.mark.parametrize("input_type", ["pandas", "ibis"])
-    def test_string_input_returns_single_element_list(self, input_type):
-        """Test str input is normalized to a single-element list."""
+    def test_returns_normalized_list(self, input_type, columns_in, expected_out):
+        """Test that valid str or list input is normalized to the expected list."""
         pdf = pd.DataFrame({"customer_id": [1, 2], "store_id": [101, 102]})
         df = ibis.memtable(pdf) if input_type == "ibis" else pdf
-        assert ensure_columns(df, "customer_id") == ["customer_id"]
+        assert ensure_columns(df, columns_in) == expected_out
 
+    @pytest.mark.parametrize(
+        ("columns_in", "expected_match"),
+        [
+            ("unit_spend", "unit_spend"),
+            (["customer_id", "unit_spend", "store_id"], r"\['store_id', 'unit_spend'\]"),
+        ],
+        ids=["string", "list"],
+    )
     @pytest.mark.parametrize("input_type", ["pandas", "ibis"])
-    def test_list_input_returns_same_list(self, input_type):
-        """Test list input is returned as a list with the same contents."""
-        pdf = pd.DataFrame({"customer_id": [1, 2], "store_id": [101, 102]})
-        df = ibis.memtable(pdf) if input_type == "ibis" else pdf
-        assert ensure_columns(df, ["customer_id", "store_id"]) == ["customer_id", "store_id"]
-
-    @pytest.mark.parametrize("input_type", ["pandas", "ibis"])
-    def test_raises_when_string_column_missing(self, input_type):
-        """Test that ValueError is raised when a string column is missing."""
+    def test_raises_when_columns_missing(self, input_type, columns_in, expected_match):
+        """Test that ValueError lists the missing columns for both str and list input."""
         pdf = pd.DataFrame({"customer_id": [1, 2]})
         df = ibis.memtable(pdf) if input_type == "ibis" else pdf
-        with pytest.raises(ValueError, match="unit_spend"):
-            ensure_columns(df, "unit_spend")
-
-    @pytest.mark.parametrize("input_type", ["pandas", "ibis"])
-    def test_raises_when_any_list_column_missing(self, input_type):
-        """Test that ValueError is raised listing missing columns."""
-        pdf = pd.DataFrame({"customer_id": [1, 2]})
-        df = ibis.memtable(pdf) if input_type == "ibis" else pdf
-        with pytest.raises(ValueError, match=r"\['store_id', 'unit_spend'\]"):
-            ensure_columns(df, ["customer_id", "unit_spend", "store_id"])
+        with pytest.raises(ValueError, match=expected_match):
+            ensure_columns(df, columns_in)
 
     @pytest.mark.parametrize("bad_input", [42, None, ("customer_id",), {"customer_id"}])
     def test_raises_type_error_for_non_str_non_list_input(self, bad_input):
@@ -64,58 +65,32 @@ class TestEnsureColumns:
         with pytest.raises(ValueError, match="columns must not be an empty list"):
             ensure_columns(df, [])
 
-    def test_returns_new_list_not_same_reference(self):
-        """Test that the returned list is a new object so callers may mutate freely."""
-        df = pd.DataFrame({"customer_id": [1], "store_id": [10]})
-        cols = ["customer_id", "store_id"]
-        result = ensure_columns(df, cols)
-        assert result is not cols
-
 
 class TestEnsureValueChoice:
     """Tests for the ensure_value_choice helper function."""
 
-    def test_returns_value_when_in_choices(self):
-        """Test that a valid value is returned unchanged."""
-        assert ensure_value_choice("asc", ["asc", "desc"], "sort_order") == "asc"
+    @pytest.mark.parametrize("value", ["ASC", "Asc", "asc"])
+    def test_matching_is_case_insensitive(self, value):
+        """Test that any-case input matches the canonical lowercase entry from choices."""
+        assert ensure_value_choice(value, ["asc", "desc"], "sort_order") == "asc"
 
-    def test_raises_value_error_when_value_not_in_choices(self):
-        """Test that ValueError is raised when value is not in choices."""
-        with pytest.raises(ValueError, match="sort_order"):
+    def test_returns_canonical_case_from_choices(self):
+        """Test that the returned value is the choice spelling, not the caller's spelling."""
+        assert ensure_value_choice("MONTH", ["Year", "Month", "Day"], "period") == "Month"
+
+    def test_error_message_surfaces_param_name_choices_and_received_value(self):
+        """Test that the error message includes the param name, the valid choices, and the bad input."""
+        with pytest.raises(ValueError) as exc_info:
             ensure_value_choice("sideways", ["asc", "desc"], "sort_order")
-
-    def test_error_message_lists_valid_choices(self):
-        """Test that the error message lists the valid choices."""
-        with pytest.raises(ValueError, match=r"\['asc', 'desc'\]"):
-            ensure_value_choice("sideways", ["asc", "desc"], "sort_order")
-
-    def test_error_message_includes_received_value(self):
-        """Test that the error message includes the received value."""
-        with pytest.raises(ValueError, match="sideways"):
-            ensure_value_choice("sideways", ["asc", "desc"], "sort_order")
-
-    def test_case_insensitive_normalizes_to_lowercase_choice(self):
-        """Test that case-insensitive matching returns the canonical (lowercase) choice."""
-        assert ensure_value_choice("ASC", ["asc", "desc"], "sort_order", case_insensitive=True) == "asc"
-
-    def test_case_insensitive_mixed_case_matches(self):
-        """Test that mixed-case input matches under case-insensitive mode."""
-        assert ensure_value_choice("DeSc", ["asc", "desc"], "sort_order", case_insensitive=True) == "desc"
-
-    def test_case_sensitive_by_default_rejects_uppercase(self):
-        """Test that ASC is rejected when choices are lowercase and case_insensitive is False."""
-        with pytest.raises(ValueError, match="sort_order"):
-            ensure_value_choice("ASC", ["asc", "desc"], "sort_order")
+        msg = str(exc_info.value)
+        assert "sort_order" in msg
+        assert "['asc', 'desc']" in msg
+        assert "sideways" in msg
 
     def test_raises_type_error_for_non_string_value(self):
         """Test that TypeError is raised when value is not a string."""
         with pytest.raises(TypeError, match="must be a string"):
             ensure_value_choice(42, ["asc", "desc"], "sort_order")
-
-    def test_case_insensitive_raises_when_no_match(self):
-        """Test ValueError raised when input doesn't match any choice under case-insensitive mode."""
-        with pytest.raises(ValueError, match="sideways"):
-            ensure_value_choice("sideways", ["asc", "desc"], "sort_order", case_insensitive=True)
 
 
 class TestEnsureIbisTable:

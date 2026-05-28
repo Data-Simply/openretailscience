@@ -104,7 +104,6 @@ def plot(
             data_label_format,
             ["absolute", "percentage", "both"],
             "data_label_format",
-            case_insensitive=True,
         )
 
     df = pd.DataFrame({"labels": labels, "amounts": amounts})

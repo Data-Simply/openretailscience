@@ -81,25 +81,20 @@ def ensure_value_choice(
     value: str,
     choices: Sequence[str],
     param_name: str,
-    *,
-    case_insensitive: bool = False,
 ) -> str:
     """Validate a string parameter against a fixed set of allowed values.
 
-    Returns the validated, canonical value. When ``case_insensitive`` is True the
-    return value is the matching entry from ``choices`` (so callers can use it
-    directly in branching/lookup logic without further normalization).
+    Matching is case-insensitive; the returned value is the canonical entry
+    from ``choices`` (so callers can use it directly in branching or lookup
+    logic without further normalization).
 
     Args:
         value (str): The value supplied by the caller.
         choices (Sequence[str]): The full set of allowed values.
         param_name (str): The parameter name to surface in error messages.
-        case_insensitive (bool): When True, match ``value`` against ``choices`` regardless of case
-            and return the canonical entry from ``choices``. Defaults to False.
 
     Returns:
-        str: The canonical value from ``choices`` (identical to ``value`` unless
-        ``case_insensitive`` is True and the input differed in case).
+        str: The canonical entry from ``choices`` matching ``value``.
 
     Raises:
         TypeError: If ``value`` is not a string.
@@ -109,13 +104,10 @@ def ensure_value_choice(
         msg = f"{param_name} must be a string. Got {type(value).__name__}."
         raise TypeError(msg)
 
-    if case_insensitive:
-        lowered = value.lower()
-        for choice in choices:
-            if choice.lower() == lowered:
-                return choice
-    elif value in choices:
-        return value
+    lowered = value.lower()
+    for choice in choices:
+        if choice.lower() == lowered:
+            return choice
 
     msg = f"{param_name} must be one of {list(choices)}. Got '{value}'."
     raise ValueError(msg)
