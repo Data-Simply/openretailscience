@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Check user permissions
         id: check_permissions
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             let actor;
@@ -60,7 +60,7 @@ jobs:
 
       - name: Comment on permission denied
         if: steps.check_permissions.outputs.has_permission == 'false'
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             let issueNumber;
@@ -85,14 +85,14 @@ jobs:
 
       - name: Checkout repository
         if: steps.check_permissions.outputs.has_permission == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
 
       - name: Run Claude Code
         if: steps.check_permissions.outputs.has_permission == 'true'
         id: claude
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
