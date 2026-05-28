@@ -6,6 +6,7 @@ import pytest
 
 from openretailscience.core.validation import (
     ensure_columns,
+    ensure_data_has_columns,
     ensure_ibis_table,
     ensure_value_choice,
 )
@@ -67,6 +68,25 @@ class TestEnsureColumns:
         df = pd.DataFrame({"customer_id": [1]})
         with pytest.raises(ValueError, match="group_col must not be an empty list"):
             ensure_columns(df, [], "group_col")
+
+
+class TestEnsureDfHasColumns:
+    """Tests for the ensure_data_has_columns helper function."""
+
+    @pytest.mark.parametrize("input_type", ["pandas", "ibis"])
+    def test_no_op_when_all_columns_present(self, input_type):
+        """Test that no error is raised when every column exists in df."""
+        pdf = pd.DataFrame({"customer_id": [1], "unit_spend": [10.0], "store_id": [101]})
+        df = ibis.memtable(pdf) if input_type == "ibis" else pdf
+        assert ensure_data_has_columns(df, ["customer_id", "unit_spend"]) is None
+
+    @pytest.mark.parametrize("input_type", ["pandas", "ibis"])
+    def test_error_lists_only_missing_columns_in_sorted_order(self, input_type):
+        """Test that the error lists only the missing columns, sorted."""
+        pdf = pd.DataFrame({"customer_id": [1]})
+        df = ibis.memtable(pdf) if input_type == "ibis" else pdf
+        with pytest.raises(ValueError, match=r"Input data is missing required columns: \['store_id', 'unit_spend'\]"):
+            ensure_data_has_columns(df, ["customer_id", "unit_spend", "store_id"])
 
 
 class TestEnsureValueChoice:

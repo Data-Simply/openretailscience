@@ -43,7 +43,7 @@ import operator
 
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns
+from openretailscience.core.validation import ensure_data_has_columns
 from openretailscience.options import ColumnHelper
 
 
@@ -68,7 +68,7 @@ class PurchasesPerCustomer:
         """
         cols = ColumnHelper()
         required_cols = [cols.customer_id, cols.transaction_id]
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         self.cust_purchases_s = df.groupby(cols.customer_id)[cols.transaction_id].nunique()
 
@@ -133,7 +133,7 @@ class DaysBetweenPurchases:
         """
         cols = ColumnHelper()
         required_cols = [cols.customer_id, cols.transaction_date]
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         self.purchase_dist_s = self._calculate_days_between_purchases(df)
 
@@ -150,7 +150,7 @@ class DaysBetweenPurchases:
         """
         cols = ColumnHelper()
         required_cols = [cols.customer_id, cols.transaction_date]
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         purchase_dist_df = df[[cols.customer_id, cols.transaction_date]].copy()
         purchase_dist_df[cols.transaction_date] = df[cols.transaction_date].dt.floor("D")
@@ -194,7 +194,7 @@ class TransactionChurn:
         """
         cols = ColumnHelper()
         required_cols = [cols.customer_id, cols.transaction_date]
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         purchase_dist_df = df[[cols.customer_id, cols.transaction_date]].copy()
         # Truncate the transaction_date to the day

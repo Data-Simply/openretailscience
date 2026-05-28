@@ -28,7 +28,7 @@ class TestRevenueTree:
         return ColumnHelper()
 
     def test_dataframe_missing_required_columns(self, cols: ColumnHelper):
-        """Test that an error is raised when the DataFrame is missing required columns."""
+        """Test that an error is raised when the Input data is missing required columns."""
         data = {
             cols.customer_id: [1, 2, 3],
             cols.transaction_date: ["2023-01-01", "2023-06-02", "2023-01-03"],
@@ -37,7 +37,7 @@ class TestRevenueTree:
         df = pd.DataFrame(data)
         with pytest.raises(ValueError) as excinfo:
             RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2")
-        assert "required_cols references columns not present in the DataFrame" in str(excinfo.value)
+        assert "Input data is missing required columns" in str(excinfo.value)
 
     def test_dataframe_missing_group_col(self, cols: ColumnHelper):
         """Test that an error naming group_col is raised when a single group_col is missing."""

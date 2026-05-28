@@ -145,7 +145,7 @@ class TestNLRSegmentation:
     def test_raises_on_missing_required_column(self, columns):
         """Test that ValueError naming required_cols is raised when a required column is missing."""
         df = pd.DataFrame(columns)
-        with pytest.raises(ValueError, match="required_cols references columns not present in the DataFrame"):
+        with pytest.raises(ValueError, match="Input data is missing required columns"):
             NLRSegmentation(df=df, period_col="year", p1_value=2023, p2_value=2024)
 
     @pytest.mark.parametrize(

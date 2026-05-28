@@ -52,7 +52,7 @@ from __future__ import annotations
 import ibis
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns
+from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
 from openretailscience.options import ColumnHelper
 
 SEGMENT_NEW = "New"
@@ -151,7 +151,7 @@ class NLRSegmentation:
         if self._group_col is not None:
             required_cols.extend(self._group_col)
 
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         p1_expr = p1_value if isinstance(p1_value, ibis.Expr) else ibis.literal(p1_value)
         p2_expr = p2_value if isinstance(p2_value, ibis.Expr) else ibis.literal(p2_value)

@@ -14,7 +14,7 @@ from ibis import _
 if TYPE_CHECKING:
     import pandas as pd
 
-from openretailscience.core.validation import ensure_columns, ensure_ibis_table
+from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
 from openretailscience.metrics.base import ratio_metric
 from openretailscience.options import ColumnHelper, get_option
 
@@ -82,7 +82,7 @@ class PctOfStores:
                 raise ValueError(msg)
             required_cols.extend(group_col)
             group_cols.extend(group_col)
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         store_product = df.select([store_id_col, *group_cols]).distinct()
 

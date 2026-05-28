@@ -192,7 +192,7 @@ class TestRFMSegmentation:
             },
         )
 
-        with pytest.raises(ValueError, match="required_cols references columns not present in the DataFrame"):
+        with pytest.raises(ValueError, match="Input data is missing required columns"):
             RFMSegmentation(df=incomplete_df, current_date="2025-03-17")
 
     @pytest.mark.parametrize(

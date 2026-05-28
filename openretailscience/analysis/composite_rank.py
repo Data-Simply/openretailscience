@@ -69,6 +69,9 @@ import pandas as pd
 
 from openretailscience.core.validation import ensure_columns, ensure_value_choice
 
+VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
+VALID_AGG_FUNCS = ("mean", "sum", "min", "max")
+
 
 class CompositeRank:
     """Creates multi-factor composite rankings for retail decision-making.
@@ -237,14 +240,13 @@ class CompositeRank:
             msg = "rank_cols must contain at least one column specification"
             raise ValueError(msg)
 
-        valid_sort_orders = ["asc", "ascending", "desc", "descending"]
         rank_mutates = {}
 
         for col_spec in rank_cols:
             col_name, sort_order = self._parse_column_spec(col_spec)
 
             ensure_columns(df, col_name, "rank_cols")
-            sort_order = ensure_value_choice(sort_order, valid_sort_orders, "sort_order")
+            sort_order = ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
 
             order_by = ibis.asc(df[col_name]) if sort_order in ["asc", "ascending"] else ibis.desc(df[col_name])
             window = self._create_window(group_col, df, order_by)
@@ -325,6 +327,8 @@ class CompositeRank:
         Raises:
             ValueError: If agg_func is not one of the supported aggregation functions.
         """
+        agg_func = ensure_value_choice(agg_func, VALID_AGG_FUNCS, "agg_func")
+
         column_refs = [df[col] for col in rank_mutates]
         agg_expr = {
             "mean": sum(column_refs) / len(column_refs),
@@ -332,8 +336,6 @@ class CompositeRank:
             "min": ibis.least(*column_refs),
             "max": ibis.greatest(*column_refs),
         }
-
-        agg_func = ensure_value_choice(agg_func, list(agg_expr.keys()), "agg_func")
         return df.mutate(composite_rank=agg_expr[agg_func])
 
     @property

@@ -65,6 +65,10 @@ from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 BASELINE_INDEX = 100
 DEFAULT_HIGHLIGHT_RANGE = (80, 120)
 
+VALID_SORT_BY = ("group", "value")
+VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
+VALID_AGG_FUNCS = ("sum", "mean", "max", "min", "nunique")
+
 
 def filter_by_groups(
     df: pd.DataFrame,
@@ -264,7 +268,8 @@ def plot(  # noqa: C901, PLR0913
         sort_by (Literal["group", "value"] | None, optional): The column to sort by. Defaults to "group". When None the
             data is not sorted. When "group" the data is sorted by group_col. When "value" the data is sorted by
             the value_col. When series_col is not None this option is ignored.
-        sort_order (Literal["ascending", "descending"], optional): The order to sort the data. Defaults to "ascending".
+        sort_order (Literal["asc", "ascending", "desc", "descending"], optional): The order to sort the data. Accepts
+            short or long forms, case-insensitive. Defaults to "ascending".
         ax (Axes, optional): The matplotlib axes object to plot on. Defaults to None.
         source_text (str, optional): The source text to add to the plot. Defaults to None.
         exclude_groups (list[Any], optional): The groups to exclude from the plot. Defaults to None.
@@ -295,7 +300,7 @@ def plot(  # noqa: C901, PLR0913
 
     Raises:
         ValueError: If sort_by is not either "group" or "value" or None.
-        ValueError: If sort_order is not either "ascending" or "descending".
+        ValueError: If sort_order is not one of "asc", "ascending", "desc", or "descending".
         ValueError: If exclude_groups and include_only_groups are used together.
         ValueError: If both top_n and bottom_n are provided but their sum exceeds the total number of groups.
         ValueError: If top_n or bottom_n exceed the number of available groups.
@@ -306,10 +311,10 @@ def plot(  # noqa: C901, PLR0913
         ValueError: If filtering results in an empty dataset.
     """
     if sort_by is not None:
-        ensure_value_choice(sort_by, ["group", "value"], "sort_by")
+        ensure_value_choice(sort_by, VALID_SORT_BY, "sort_by")
     if series_col is not None and sort_by == "value":
         raise ValueError("sort_by cannot be 'value' when series_col is provided")
-    ensure_value_choice(sort_order, ["asc", "ascending", "desc", "descending"], "sort_order")
+    ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
     if exclude_groups is not None and include_only_groups is not None:
         raise ValueError("exclude_groups and include_only_groups cannot be used together")
     if series_col is not None and (
@@ -479,11 +484,7 @@ def get_indexes(
     else:
         table = df
 
-    agg_func = ensure_value_choice(
-        agg_func,
-        ["sum", "mean", "max", "min", "nunique"],
-        "agg_func",
-    )
+    agg_func = ensure_value_choice(agg_func, VALID_AGG_FUNCS, "agg_func")
 
     agg_fn = lambda x: getattr(x, agg_func)()  # noqa: E731
 

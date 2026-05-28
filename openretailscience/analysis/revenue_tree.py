@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 
-from openretailscience.core.validation import ensure_columns
+from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles import graph_utils as gu
 from openretailscience.plots.tree_diagram import DetailedTreeNode, TreeGrid
@@ -253,7 +253,7 @@ class RevenueTree:
         if group_col is not None:
             required_cols.extend(group_col)
 
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         df, p1_index, p2_index = self._agg_data(df, period_col, p1_value, p2_value, group_col)
 

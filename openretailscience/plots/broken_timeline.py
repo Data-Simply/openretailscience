@@ -100,7 +100,8 @@ def plot(
         y_label (str, optional): The label for the y-axis. Defaults to None.
         ax (Axes, optional): The Matplotlib Axes object to plot on. Defaults to None.
         source_text (str, optional): Text to be displayed as a source at the bottom of the plot. Defaults to None.
-        period (str, optional): Period for aggregating data using pandas to_period ("D", "W").
+        period (str, optional): Period for aggregating data. Accepts "D"/"day" or "W"/"week"
+            (case-insensitive); resolved to the corresponding pandas frequency code internally.
             Defaults to "D".
         agg_func (str, optional): The aggregation function to apply to the value_col when grouping by period.
             Defaults to "sum".

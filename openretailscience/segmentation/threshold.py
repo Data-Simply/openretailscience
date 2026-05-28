@@ -48,7 +48,7 @@ from typing import Literal
 import ibis
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns
+from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
 from openretailscience.options import ColumnHelper
 
 
@@ -110,7 +110,7 @@ class ThresholdSegmentation:
         if self._group_col is not None:
             required_cols.extend(self._group_col)
 
-        ensure_columns(df, required_cols, "required_cols")
+        ensure_data_has_columns(df, required_cols)
 
         # Build group_by columns: customer_id + optional group columns
         group_by_cols = [cols.customer_id]
