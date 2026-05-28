@@ -8,7 +8,7 @@ import ibis
 import pandas as pd
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable
 
 
 VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
@@ -115,7 +115,7 @@ def ensure_data_has_columns(df: pd.DataFrame | ibis.Table, columns: list[str]) -
 
 def ensure_value_choice(
     value: str,
-    choices: Sequence[str],
+    choices: Iterable[str],
     param_name: str,
 ) -> str:
     """Validate a string parameter against a fixed set of allowed values.
@@ -126,7 +126,10 @@ def ensure_value_choice(
 
     Args:
         value (str): The value supplied by the caller.
-        choices (Sequence[str]): The full set of allowed values.
+        choices (Iterable[str]): The full set of allowed values. Any iterable of
+            strings — list, tuple, dict (iteration yields keys), set, etc. —
+            is accepted; the iterable is materialized into a list once so a
+            one-shot iterator works as well.
         param_name (str): The parameter name to surface in error messages.
 
     Returns:
@@ -140,10 +143,11 @@ def ensure_value_choice(
         msg = f"{param_name} must be a string. Got {type(value).__name__}."
         raise TypeError(msg)
 
+    choices_list = list(choices)
     lowered = value.lower()
-    for choice in choices:
+    for choice in choices_list:
         if choice.lower() == lowered:
             return choice
 
-    msg = f"{param_name} must be one of {list(choices)}. Got '{value}'."
+    msg = f"{param_name} must be one of {choices_list}. Got '{value}'."
     raise ValueError(msg)

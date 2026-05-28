@@ -212,7 +212,7 @@ def test_plot_multiple_bars(sample_dataframe):
 
 
 @pytest.mark.parametrize("sort_order", ["ascending", "asc", "ASC", "Ascending"])
-def test_plot_with_sorting(sample_dataframe, sort_order):
+def test_plot_with_ascending_sorting(sample_dataframe, sort_order):
     """Test that all ascending sort_order aliases produce identical sorted bar plots."""
     result_ax = bar.plot(
         df=sample_dataframe,
@@ -232,6 +232,26 @@ def test_plot_with_sorting(sample_dataframe, sort_order):
     assert result_ax.get_xticklabels()[0].get_text() == "Apples"
     assert actual_order == expected_order
     assert bar_heights == sorted(bar_heights)
+
+
+@pytest.mark.parametrize("sort_order", ["descending", "desc", "DESC", "Descending"])
+def test_plot_with_descending_sorting(sample_dataframe, sort_order):
+    """Test that all descending sort_order aliases produce identical reverse-sorted bar plots."""
+    result_ax = bar.plot(
+        df=sample_dataframe,
+        value_col="sales_q1",
+        x_col="product",
+        sort_order=sort_order,
+        title="Test Sorted Bar Plot",
+    )
+
+    expected_order = ["Donuts", "Cereal", "Bananas", "Apples"]
+    actual_order = [label.get_text() for label in result_ax.get_xticklabels()]
+    bar_heights = [patch.get_height() for patch in result_ax.patches]
+
+    assert isinstance(result_ax, Axes)
+    assert actual_order == expected_order
+    assert bar_heights == sorted(bar_heights, reverse=True)
 
 
 def test_plot_with_data_labels(sample_dataframe):
