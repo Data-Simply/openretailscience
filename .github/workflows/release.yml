@@ -139,30 +139,10 @@ jobs:
           echo "Tagging new version: $RELEASE_TAG"
           git tag -a "$RELEASE_TAG" -m "Auto-generated tag"
           git push origin "$RELEASE_TAG"
-      - name: "Create release"
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          script: |
-            if (!process.env.RELEASE_TAG) {
-              core.setFailed("The environment variable RELEASE_TAG is not defined.");
-              return;
-            }
-            try {
-              const response = await github.rest.repos.createRelease({
-                draft: false,
-                generate_release_notes: true,
-                name: process.env.RELEASE_TAG,
-                owner: context.repo.owner,
-                prerelease: false,
-                repo: context.repo.repo,
-                tag_name: process.env.RELEASE_TAG,
-              });
-              core.exportVariable('RELEASE_ID', response.data.id);
-              core.exportVariable('RELEASE_UPLOAD_URL', response.data.upload_url);
-            } catch (error) {
-              core.setFailed(error.message);
-            }
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$RELEASE_TAG" --generate-notes
   pypi-publish:
     name: Upload release to PyPI
     runs-on: ubuntu-latest
