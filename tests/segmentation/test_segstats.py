@@ -154,6 +154,20 @@ class TestCalcSegStats:
 
         assert result["segment_name"].tolist() == ["Premium", "Standard", "Total"]
 
+    def test_sort_by_true_orders_multiple_segment_columns_ascending(self, base_df):
+        """Test that sort_by=True orders rows ascending by each segment column in turn."""
+        df = base_df.assign(region=["North", "South", "East", "South", "East"])
+
+        result = SegTransactionStats(df, ["segment_name", "region"], sort_by=True).df
+
+        expected_pairs = [
+            ("Premium", "East"),
+            ("Premium", "North"),
+            ("Standard", "South"),
+            ("Total", "Total"),
+        ]
+        assert list(zip(result["segment_name"], result["region"], strict=True)) == expected_pairs
+
     def test_calculates_segment_stats_without_customer_data(self, base_df):
         """Test that the method correctly calculates segment statistics without customer data."""
         df_without_customer = base_df.drop(columns=[cols.customer_id])
@@ -721,35 +735,6 @@ class TestSegTransactionStats:
         # Verify all rows are detail rows (no "Total" values)
         assert "Total" not in result_df["category"].to_numpy()
         assert "Total" not in result_df["subcategory"].to_numpy()
-
-    def test_sort_by_true_orders_multiple_segment_columns_ascending(self):
-        """Test that sort_by=True orders rows ascending by each segment column in turn."""
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 2, 3, 4, 5, 6],
-                cols.unit_spend: [100.0, 150.0, 200.0, 250.0, 300.0, 350.0],
-                cols.transaction_id: [101, 102, 103, 104, 105, 106],
-                "segment_name": [
-                    "High Value",
-                    "High Value",
-                    "Medium Value",
-                    "Medium Value",
-                    "High Value",
-                    "High Value",
-                ],
-                "region": ["North", "North", "South", "South", "East", "East"],
-            },
-        )
-
-        result = SegTransactionStats(df, ["segment_name", "region"], sort_by=True).df
-
-        expected_pairs = [
-            ("High Value", "East"),
-            ("High Value", "North"),
-            ("Medium Value", "South"),
-            ("Total", "Total"),
-        ]
-        assert list(zip(result["segment_name"], result["region"], strict=True)) == expected_pairs
 
 
 @pytest.mark.filterwarnings("ignore::FutureWarning")
