@@ -547,7 +547,7 @@ class TestHighlightFeature:
 
     def test_highlight_invalid_values_raises_error(self, multi_category_dataframe):
         """Test that highlight raises error for invalid values."""
-        with pytest.raises(ValueError, match=r"highlight values .* not found in available columns"):
+        with pytest.raises(ValueError, match=r"\['AlsoNotThere', 'NonExistent'\]"):
             line.plot(
                 df=multi_category_dataframe,
                 x_col="month",
@@ -558,7 +558,7 @@ class TestHighlightFeature:
 
     def test_highlight_empty_list_raises_error(self, multi_category_dataframe):
         """Test that highlight=[] raises a clear error rather than silently double-drawing context lines."""
-        with pytest.raises(ValueError, match="highlight cannot be empty"):
+        with pytest.raises(ValueError, match="columns must not be an empty list"):
             line.plot(
                 df=multi_category_dataframe,
                 x_col="month",

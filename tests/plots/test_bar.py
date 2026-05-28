@@ -65,7 +65,7 @@ def test_plot_produces_expected_patch_count(sample_dataframe, plot_kwargs, expec
 
 def test_missing_x_col_in_dataframe(sample_dataframe):
     """Test bar plot when the provided x_col does not exist in the DataFrame."""
-    with pytest.raises(ValueError, match="x_col 'missing_col' not found in DataFrame"):
+    with pytest.raises(ValueError, match=r"\['missing_col'\]"):
         bar.plot(
             df=sample_dataframe,
             value_col="sales_q1",
@@ -336,9 +336,9 @@ def test_default_bar_styling(sample_dataframe):
 @pytest.mark.parametrize(
     ("kwarg", "value", "match"),
     [
-        ("orientation", "invalid_orientation", r"Invalid orientation: invalid_orientation. Expected one of .*"),
-        ("sort_order", "invalid_sort_order", r"Invalid sort_order: invalid_sort_order. Expected one of .*"),
-        ("data_label_format", "invalid_format", r"Invalid data_label_format: invalid_format. Expected one of .*"),
+        ("orientation", "invalid_orientation", r"orientation must be one of .*'invalid_orientation'"),
+        ("sort_order", "invalid_sort_order", r"sort_order must be one of .*'invalid_sort_order'"),
+        ("data_label_format", "invalid_format", r"data_label_format must be one of .*'invalid_format'"),
     ],
 )
 def test_invalid_kwarg_raises_value_error(sample_dataframe, kwarg, value, match):

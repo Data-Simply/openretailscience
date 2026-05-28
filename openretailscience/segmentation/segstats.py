@@ -52,8 +52,8 @@ from typing import Any, Literal
 import ibis
 import pandas as pd
 
+from openretailscience.core.validation import ensure_columns
 from openretailscience.options import ColumnHelper, get_option
-from openretailscience.utils.validation import validate_columns
 
 __all__ = ["SegTransactionStats", "cube", "rollup"]
 
@@ -306,12 +306,11 @@ class SegTransactionStats:
 
         cols = ColumnHelper()
 
-        if isinstance(segment_col, str):
-            segment_col = [segment_col]
-
-        if len(segment_col) == 0:
+        if isinstance(segment_col, list) and len(segment_col) == 0:
             msg = "segment_col cannot be an empty list. At least one segment column must be specified."
             raise ValueError(msg)
+
+        segment_col = ensure_columns(data, segment_col)
 
         required_cols = [
             cols.unit_spend,
@@ -320,7 +319,7 @@ class SegTransactionStats:
             *filter(lambda x: x in data.columns, [cols.unit_qty, cols.customer_id]),
         ]
 
-        validate_columns(data, required_cols)
+        ensure_columns(data, required_cols)
 
         # Validate extra_aggs if provided
         self._validate_extra_aggs(data, extra_aggs)
@@ -925,8 +924,7 @@ class SegTransactionStats:
         """
         cols = ColumnHelper()
 
-        # Ensure segment_col is a list
-        segment_col = [segment_col] if isinstance(segment_col, str) else segment_col
+        segment_col = ensure_columns(data, segment_col)
 
         # Normalize rollup_value to always be a list matching segment_col length
         rollup_value = [rollup_value] * len(segment_col) if not isinstance(rollup_value, list) else rollup_value

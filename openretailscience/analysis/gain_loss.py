@@ -23,10 +23,10 @@ from typing import Any
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
+from openretailscience.core.validation import ensure_columns
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots import bar
 from openretailscience.plots.styles.colors import COLORS
-from openretailscience.utils.validation import validate_columns
 
 
 class GainLoss:
@@ -75,7 +75,7 @@ class GainLoss:
             )
 
         required_cols = [get_option("column.customer_id"), value_col] + ([group_col] if group_col is not None else [])
-        validate_columns(df, required_cols)
+        ensure_columns(df, required_cols)
 
         self.focus_group_name = focus_group_name
         self.comparison_group_name = comparison_group_name

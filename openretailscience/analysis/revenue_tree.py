@@ -30,11 +30,11 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 
+from openretailscience.core.validation import ensure_columns
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles import graph_utils as gu
 from openretailscience.plots.tree_diagram import DetailedTreeNode, TreeGrid
 from openretailscience.plugin import plugin_manager
-from openretailscience.utils.validation import validate_columns
 
 
 @plugin_manager.extensible
@@ -239,9 +239,8 @@ class RevenueTree:
         """
         cols = ColumnHelper()
 
-        # Normalize group_col: str -> list[str], None -> None, list[str] -> list[str]
-        if isinstance(group_col, str):
-            group_col = [group_col]
+        if group_col is not None:
+            group_col = ensure_columns(df, group_col)
 
         required_cols = [
             cols.customer_id,
@@ -254,7 +253,7 @@ class RevenueTree:
         if group_col is not None:
             required_cols.extend(group_col)
 
-        validate_columns(df, required_cols)
+        ensure_columns(df, required_cols)
 
         df, p1_index, p2_index = self._agg_data(df, period_col, p1_value, p2_value, group_col)
 

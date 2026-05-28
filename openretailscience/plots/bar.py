@@ -43,14 +43,15 @@ from matplotlib.container import BarContainer
 from matplotlib.patches import Rectangle
 
 import openretailscience.plots.styles.graph_utils as gu
+from openretailscience.core.validation import ensure_columns, ensure_value_choice
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_plot_colors
 from openretailscience.plots.styles.font_utils import get_font_properties
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 VALID_ORIENTATIONS = ("horizontal", "h", "vertical", "v")
-VALID_SORT_ORDERS = ("ascending", "descending", None)
-VALID_DATA_LABEL_FORMATS = ("absolute", "percentage_by_bar_group", "percentage_by_series", None)
+VALID_SORT_ORDERS = ("ascending", "descending")
+VALID_DATA_LABEL_FORMATS = ("absolute", "percentage_by_bar_group", "percentage_by_series")
 DEFAULT_BAR_WIDTH = 0.8
 
 
@@ -64,18 +65,13 @@ def _validate_bar_inputs(
     """Validate ``plot`` arguments up-front so the body can stay focused on rendering."""
     if df.empty:
         raise ValueError("Cannot plot with empty DataFrame")
-    if x_col is not None and x_col not in df.columns:
-        msg = f"x_col '{x_col}' not found in DataFrame"
-        raise ValueError(msg)
-    if orientation not in VALID_ORIENTATIONS:
-        msg = f"Invalid orientation: {orientation}. Expected one of {list(VALID_ORIENTATIONS)}"
-        raise ValueError(msg)
-    if sort_order not in VALID_SORT_ORDERS:
-        msg = f"Invalid sort_order: {sort_order}. Expected one of {list(VALID_SORT_ORDERS)}"
-        raise ValueError(msg)
-    if data_label_format not in VALID_DATA_LABEL_FORMATS:
-        msg = f"Invalid data_label_format: {data_label_format}. Expected one of {list(VALID_DATA_LABEL_FORMATS)}"
-        raise ValueError(msg)
+    if x_col is not None:
+        ensure_columns(df, x_col)
+    ensure_value_choice(orientation, VALID_ORIENTATIONS, "orientation")
+    if sort_order is not None:
+        ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
+    if data_label_format is not None:
+        ensure_value_choice(data_label_format, VALID_DATA_LABEL_FORMATS, "data_label_format")
 
 
 def plot(  # noqa: PLR0913

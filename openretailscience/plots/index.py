@@ -58,6 +58,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
+from openretailscience.core.validation import ensure_value_choice
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
@@ -304,12 +305,11 @@ def plot(  # noqa: C901, PLR0913
         ValueError: If ``filter_above`` is not strictly less than ``filter_below``.
         ValueError: If filtering results in an empty dataset.
     """
-    if sort_by not in ["group", "value", None]:
-        raise ValueError("sort_by must be either 'group' or 'value' or None")
+    if sort_by is not None:
+        ensure_value_choice(sort_by, ["group", "value"], "sort_by")
     if series_col is not None and sort_by == "value":
         raise ValueError("sort_by cannot be 'value' when series_col is provided")
-    if sort_order not in ["ascending", "descending"]:
-        raise ValueError("sort_order must be either 'ascending' or 'descending'")
+    ensure_value_choice(sort_order, ["ascending", "descending"], "sort_order")
     if exclude_groups is not None and include_only_groups is not None:
         raise ValueError("exclude_groups and include_only_groups cannot be used together")
     if series_col is not None and (
@@ -479,9 +479,12 @@ def get_indexes(
     else:
         table = df
 
-    agg_func = agg_func.lower()
-    if agg_func not in {"sum", "mean", "max", "min", "nunique"}:
-        raise ValueError("Unsupported aggregation function.")
+    agg_func = ensure_value_choice(
+        agg_func,
+        ["sum", "mean", "max", "min", "nunique"],
+        "agg_func",
+        case_insensitive=True,
+    )
 
     agg_fn = lambda x: getattr(x, agg_func)()  # noqa: E731
 

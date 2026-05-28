@@ -179,12 +179,12 @@ class TestCompositeRank:
             (
                 [("spend", "desc"), ("non_existent_column", "asc")],
                 "mean",
-                "Column 'non_existent_column' not found",
+                r"\['non_existent_column'\]",
             ),
             (
                 [("spend", "invalid_sort_order")],
                 "mean",
-                "Sort order must be one of",
+                "sort_order must be one of",
             ),
             (
                 [("spend", "desc", "extra_value")],
@@ -194,7 +194,7 @@ class TestCompositeRank:
             (
                 [("spend", "desc")],
                 "invalid_func",
-                "Aggregation function must be one of",
+                "agg_func must be one of",
             ),
         ],
     )
@@ -202,6 +202,20 @@ class TestCompositeRank:
         """Test behavior with various invalid inputs."""
         with pytest.raises(ValueError, match=expected_error_pattern):
             CompositeRank(df=simple_df, rank_cols=rank_cols, agg_func=agg_func, ignore_ties=False)
+
+    @pytest.mark.parametrize("sort_order", ["ASC", "Asc", "ASCENDING"])
+    def test_sort_order_case_insensitive_ascending(self, simple_df, sort_order):
+        """Uppercase ascending sort_order values produce true ascending ranks (regression for #429 bug)."""
+        cr = CompositeRank(df=simple_df, rank_cols=[("spend", sort_order)], agg_func="mean")
+        result = cr.df.sort_values("product_id").reset_index(drop=True)
+        # spend = [100, 150, 75] → ascending ranks are [2, 3, 1]
+        assert result["spend_rank"].tolist() == [2, 3, 1]
+
+    @pytest.mark.parametrize("agg_func", ["MEAN", "Mean", "SUM", "Min", "MAX"])
+    def test_agg_func_case_insensitive(self, simple_df, agg_func):
+        """Uppercase agg_func values are accepted without raising KeyError (regression for #429 bug)."""
+        cr = CompositeRank(df=simple_df, rank_cols=[("spend", "desc")], agg_func=agg_func)
+        assert "composite_rank" in cr.df.columns
 
     def test_ibis_table_input(self, simple_df):
         """Test that the class works with Ibis table input."""
@@ -299,7 +313,7 @@ class TestCompositeRank:
 
     def test_invalid_group_col(self, simple_df):
         """Test behavior with an invalid group column."""
-        with pytest.raises(ValueError, match=r"Group column\(s\) \['non_existent_group'\] not found"):
+        with pytest.raises(ValueError, match=r"\['non_existent_group'\]"):
             CompositeRank(
                 df=simple_df,
                 rank_cols=[("spend", "desc")],
@@ -313,7 +327,7 @@ class TestCompositeRank:
     )
     def test_invalid_group_col_type(self, simple_df, invalid_group_col):
         """Test behavior with invalid group_col type."""
-        with pytest.raises(TypeError, match="group_col must be a string or list of strings"):
+        with pytest.raises(TypeError, match="columns must be a string or list of strings"):
             CompositeRank(
                 df=simple_df,
                 rank_cols=[("spend", "desc")],
@@ -324,8 +338,8 @@ class TestCompositeRank:
     @pytest.mark.parametrize(
         ("invalid_group_col", "expected_error_message"),
         [
-            ([], "group_col must not be an empty list. Use None for global ranking."),
-            (["invalid"], r"Group column\(s\) \['invalid'\] not found in the DataFrame"),
+            ([], "columns must not be an empty list"),
+            (["invalid"], r"\['invalid'\]"),
         ],
     )
     def test_invalid_group_col_value(self, simple_df, invalid_group_col, expected_error_message):

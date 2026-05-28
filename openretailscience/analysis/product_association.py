@@ -110,8 +110,8 @@ import ibis
 import pandas as pd
 from ibis import _
 
+from openretailscience.core.validation import ensure_columns
 from openretailscience.options import get_option
-from openretailscience.utils.validation import validate_columns
 
 
 class ProductAssociation:
@@ -195,7 +195,7 @@ class ProductAssociation:
         self._df: pd.DataFrame | None = None
         group_col = group_col or get_option("column.customer_id")
         required_cols = [group_col, value_col]
-        validate_columns(df, required_cols)
+        ensure_columns(df, required_cols)
 
         self.table = self._calc_association(
             df=df,
