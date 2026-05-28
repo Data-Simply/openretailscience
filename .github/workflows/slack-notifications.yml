@@ -1,7 +1,12 @@
 name: Slack Failure Notifications
 
 on:
-  workflow_run:
+  # workflow_run is required to react to other workflows finishing. The risk
+  # it warns about (attacker-controllable input running in a trusted context)
+  # is mitigated below: no GITHUB_TOKEN permissions are granted, and every
+  # event value is routed via env: + jq --arg rather than ${{ }} interpolation
+  # into shell or action inputs.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows:
       - "Tests"
       - "PyPi Package Deploy"
@@ -11,101 +16,89 @@ on:
       - "Snowflake Integration Tests"
     types: [completed]
 
+permissions: {}
+
 jobs:
   notify-failure:
     if: >-
       ${{ github.event.workflow_run.conclusion == 'failure'
       && github.event.workflow_run.event != 'pull_request' }}
     runs-on: ubuntu-latest
-
+    permissions: {}
     steps:
       - name: Send Slack notification
-        uses: 8398a7/action-slack@77eaa4f1c608a7d68b38af4e3f739dcd8cba273e # v3.19.0
-        with:
-          status: failure
-          webhook_url: ${{ secrets.GH_ACTIONS_SLACK_WEBHOOK_URL }}
-          channel: '#github-actions-notifications'
-          username: 'GitHub Actions'
-          icon_emoji: ':warning:'
-          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
-          custom_payload: |
-            {
-              "attachments": [
-                {
-                  "color": "danger",
-                  "fallback": "Workflow failure notification",
-                  "blocks": [
-                    {
-                      "type": "header",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "❌ GitHub Action Failed"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.GH_ACTIONS_SLACK_WEBHOOK_URL }}
+          REPO_FULL_NAME: ${{ github.event.workflow_run.repository.full_name }}
+          REPO_URL: ${{ github.event.workflow_run.repository.html_url }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_NAME: ${{ github.event.workflow_run.event }}
+          AUTHOR_NAME: ${{ github.event.workflow_run.head_commit.author.name }}
+          COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
+        run: |
+          payload=$(jq -n \
+            --arg repo "$REPO_FULL_NAME" \
+            --arg repo_url "$REPO_URL" \
+            --arg workflow "$WORKFLOW_NAME" \
+            --arg workflow_url "$WORKFLOW_URL" \
+            --arg branch "$HEAD_BRANCH" \
+            --arg sha "$HEAD_SHA" \
+            --arg event "$EVENT_NAME" \
+            --arg author "$AUTHOR_NAME" \
+            --arg message "$COMMIT_MESSAGE" \
+            '{
+              attachments: [{
+                color: "danger",
+                fallback: "Workflow failure notification",
+                blocks: [
+                  {
+                    type: "header",
+                    text: {type: "plain_text", text: "❌ GitHub Action Failed"}
+                  },
+                  {
+                    type: "section",
+                    fields: [
+                      {type: "mrkdwn", text: ("*Repository:*\n" + $repo)},
+                      {type: "mrkdwn", text: ("*Workflow:*\n" + $workflow)},
+                      {type: "mrkdwn", text: ("*Branch:*\n" + $branch)},
+                      {type: "mrkdwn", text: ("*Event:*\n" + $event)}
+                    ]
+                  },
+                  {
+                    type: "section",
+                    fields: [
+                      {type: "mrkdwn", text: ("*Commit:*\n<" + $repo_url + "/commit/" + $sha + "|" + $sha + ">")},
+                      {type: "mrkdwn", text: ("*Author:*\n" + $author)}
+                    ]
+                  },
+                  {
+                    type: "section",
+                    text: {type: "mrkdwn", text: ("*Commit Message:*\n```" + $message + "```")}
+                  },
+                  {
+                    type: "actions",
+                    elements: [
+                      {
+                        type: "button",
+                        text: {type: "plain_text", text: "🔍 View Failed Workflow"},
+                        url: $workflow_url,
+                        style: "danger"
+                      },
+                      {
+                        type: "button",
+                        text: {type: "plain_text", text: "📝 View Commit"},
+                        url: ($repo_url + "/commit/" + $sha)
                       }
-                    },
-                    {
-                      "type": "section",
-                      "fields": [
-                        {
-                          "type": "mrkdwn",
-                          "text": "*Repository:*\n${{ github.event.workflow_run.repository.full_name }}"
-                        },
-                        {
-                          "type": "mrkdwn",
-                          "text": "*Workflow:*\n${{ github.event.workflow_run.name }}"
-                        },
-                        {
-                          "type": "mrkdwn",
-                          "text": "*Branch:*\n${{ github.event.workflow_run.head_branch }}"
-                        },
-                        {
-                          "type": "mrkdwn",
-                          "text": "*Event:*\n${{ github.event.workflow_run.event }}"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "section",
-                      "fields": [
-                        {
-                          "type": "mrkdwn",
-                          "text": "*Commit:*\n<${{ github.event.workflow_run.repository.html_url }}/commit/${{ github.event.workflow_run.head_sha }}|${{ github.event.workflow_run.head_sha }}>"
-                        },
-                        {
-                          "type": "mrkdwn",
-                          "text": "*Author:*\n${{ github.event.workflow_run.head_commit.author.name }}"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "section",
-                      "text": {
-                        "type": "mrkdwn",
-                        "text": "*Commit Message:*\n```${{ github.event.workflow_run.head_commit.message }}```"
-                      }
-                    },
-                    {
-                      "type": "actions",
-                      "elements": [
-                        {
-                          "type": "button",
-                          "text": {
-                            "type": "plain_text",
-                            "text": "🔍 View Failed Workflow"
-                          },
-                          "url": "${{ github.event.workflow_run.html_url }}",
-                          "style": "danger"
-                        },
-                        {
-                          "type": "button",
-                          "text": {
-                            "type": "plain_text",
-                            "text": "📝 View Commit"
-                          },
-                          "url": "${{ github.event.workflow_run.repository.html_url }}/commit/${{ github.event.workflow_run.head_sha }}"
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
+                    ]
+                  }
+                ]
+              }]
+            }')
+          curl --silent --show-error --fail \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            "$SLACK_WEBHOOK_URL"
