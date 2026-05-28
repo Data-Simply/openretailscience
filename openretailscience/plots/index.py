@@ -310,10 +310,10 @@ def plot(  # noqa: C901, PLR0913
         ValueError: If filtering results in an empty dataset.
     """
     if sort_by is not None:
-        ensure_value_choice(sort_by, VALID_SORT_BY, "sort_by")
+        sort_by = ensure_value_choice(sort_by, VALID_SORT_BY, "sort_by")
     if series_col is not None and sort_by == "value":
         raise ValueError("sort_by cannot be 'value' when series_col is provided")
-    ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
+    sort_order = ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
     if exclude_groups is not None and include_only_groups is not None:
         raise ValueError("exclude_groups and include_only_groups cannot be used together")
     if series_col is not None and (

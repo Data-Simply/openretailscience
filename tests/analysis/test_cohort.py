@@ -86,6 +86,13 @@ class TestCohortAnalysis:
                 period="m",
             )
 
+    @pytest.mark.parametrize("period", ["MONTH", "Month", "MoNtH"])
+    def test_period_case_insensitive_matches_lowercase(self, transactions_df, period):
+        """Mixed-case period values produce identical output to the lowercase form."""
+        lower = CohortAnalysis(df=transactions_df, aggregation_column="unit_spend", period=period.lower()).df
+        upper = CohortAnalysis(df=transactions_df, aggregation_column="unit_spend", period=period).df
+        pdt.assert_frame_equal(upper, lower)
+
     def test_cohort_percentage_normalizes_each_cohort_to_own_period_zero(self, transactions_df):
         """Tests that percentage=True normalizes each cohort row by its own period-0 value.
 

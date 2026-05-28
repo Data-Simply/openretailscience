@@ -644,6 +644,52 @@ class TestIndexPlot:
         y_labels = [t.get_text() for t in ax.get_yticklabels()]
         assert y_labels == expected_y_labels
 
+    @pytest.mark.parametrize("sort_order", ["ASC", "Asc", "ASCENDING"])
+    def test_plot_sort_order_case_insensitive_ascending(self, test_data, sort_order):
+        """Mixed-case ascending sort_order values produce the same y-axis ordering as 'ascending'."""
+        lower = plot(
+            test_data,
+            value_col="sales",
+            group_col="category",
+            index_col="category",
+            value_to_index="Bakery",
+            sort_by="value",
+            sort_order="ascending",
+        )
+        upper = plot(
+            test_data,
+            value_col="sales",
+            group_col="category",
+            index_col="category",
+            value_to_index="Bakery",
+            sort_by="value",
+            sort_order=sort_order,
+        )
+        assert [t.get_text() for t in upper.get_yticklabels()] == [t.get_text() for t in lower.get_yticklabels()]
+
+    @pytest.mark.parametrize("sort_by", ["GROUP", "Group", "VALUE"])
+    def test_plot_sort_by_case_insensitive(self, test_data, sort_by):
+        """Mixed-case sort_by values produce the same y-axis ordering as the lowercase form."""
+        lower = plot(
+            test_data,
+            value_col="sales",
+            group_col="category",
+            index_col="category",
+            value_to_index="Bakery",
+            sort_by=sort_by.lower(),
+            sort_order="ascending",
+        )
+        upper = plot(
+            test_data,
+            value_col="sales",
+            group_col="category",
+            index_col="category",
+            value_to_index="Bakery",
+            sort_by=sort_by,
+            sort_order="ascending",
+        )
+        assert [t.get_text() for t in upper.get_yticklabels()] == [t.get_text() for t in lower.get_yticklabels()]
+
     def test_error_with_series_and_filtering(self, test_data):
         """Test that appropriate error is raised when using filtering with series_col."""
         df = test_data
