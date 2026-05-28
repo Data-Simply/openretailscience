@@ -10,7 +10,7 @@ classifiers = [
 ]
 dependencies = [
     "duckdb>=1.1.0,<1.4",
-    "ibis-framework[duckdb]>=10.0.0,<11",
+    "ibis-framework[duckdb]>=10.0.0,<13",
     "matplotlib-set-diagrams>=0.0.2,<0.3.0",
     "matplotlib>=3.9.1,<4",
     "numpy>=1.26.3,<3",
@@ -35,7 +35,7 @@ name  = "Murray Vanwyk"
 [dependency-groups]
 dev = [
     "freezegun>=1.5.1,<2",
-    "ibis-framework[bigquery,pyspark,snowflake]>=10.0.0,<11",
+    "ibis-framework[bigquery,pyspark,snowflake]>=10.0.0,<13",
     "nbstripout>=0.7.1,<0.8",
     "pre-commit>=3.6.2,<4",
     "pytest-cov>=4.1.0,<5",
