@@ -124,10 +124,10 @@ def plot(  # noqa: PLR0913
         sort_order (Literal["asc", "ascending", "desc", "descending"] | None, optional): Sorting order for the
                                                                           bars. Accepts short or long forms, case-
                                                                           insensitive. Defaults to None.
-        data_label_format (Literal["absolute", "percentage"] | None, optional): Format for displaying data labels.
-                                                                                "absolute" shows raw values,
-                                                                                "percentage" shows percentage.
-                                                                                Defaults to None.
+        data_label_format (Literal["absolute", "percentage_by_bar_group", "percentage_by_series"] | None, optional):
+            Format for the data labels. "absolute" shows the raw value of each bar;
+            "percentage_by_bar_group" shows each bar's share of its x-axis group;
+            "percentage_by_series" shows each bar's share of its value-column series. Defaults to None.
         use_hatch (bool, optional): Whether to apply hatch patterns to the bars. Defaults to False.
         num_digits (int, optional): The number of digits to display in the data labels. Defaults to 3.
         **kwargs (Any): Additional keyword arguments for the Pandas `plot` function.

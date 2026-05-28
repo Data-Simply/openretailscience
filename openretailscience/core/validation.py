@@ -81,7 +81,7 @@ def ensure_columns(
 
     missing_cols = sorted(set(normalized) - set(df.columns))
     if len(missing_cols) > 0:
-        msg = f"{param_name} references columns not present in the data: {missing_cols}"
+        msg = f"{param_name} references columns not present in the data: {missing_cols}."
         raise ValueError(msg)
 
     return normalized
@@ -104,7 +104,7 @@ def ensure_data_has_columns(df: pd.DataFrame | ibis.Table, columns: list[str]) -
     """
     missing = sorted(set(columns) - set(df.columns))
     if len(missing) > 0:
-        msg = f"Input data is missing required columns: {missing}"
+        msg = f"Input data is missing required columns: {missing}."
         raise ValueError(msg)
 
 

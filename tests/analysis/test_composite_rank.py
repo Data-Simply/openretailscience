@@ -234,22 +234,10 @@ class TestCompositeRank:
 
         assert all(col in cr.df.columns for col in ["spend_rank", "customers_rank", "composite_rank"])
 
-    def test_df_cache(self, simple_df):
-        """Test that the df property caches results."""
-        # Create instance
+    def test_df_property_returns_same_object_on_repeated_access(self, simple_df):
+        """Test that repeated access to .df returns the same cached DataFrame instance."""
         cr = CompositeRank(df=simple_df, rank_cols=[("spend", "desc")], agg_func="mean", ignore_ties=False)
-
-        # Access df property to populate cache
-        result1 = cr.df
-
-        # Verify _df is populated
-        assert cr._df is not None
-
-        # Access df property again to use cache
-        result2 = cr.df
-
-        # Verify both results are the same object (cached)
-        assert result1 is result2
+        assert cr.df is cr.df
 
     def test_group_vs_global_ranking_difference(self):
         """Test that group-based ranking produces different results than global ranking."""

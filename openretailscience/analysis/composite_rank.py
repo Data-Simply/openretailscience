@@ -186,32 +186,17 @@ class CompositeRank:
         if isinstance(df, pd.DataFrame):
             df = ibis.memtable(df)
 
-        self._validate_group_col(group_col, df)
+        if group_col is not None:
+            group_col = ensure_columns(df, group_col, "group_col")
         rank_mutates = self._process_rank_columns(rank_cols, df, group_col, ignore_ties)
         df = df.mutate(**rank_mutates)
         self.table = self._create_composite_ranking(df, rank_mutates, agg_func)
-
-    def _validate_group_col(self, group_col: str | list[str] | None, df: ibis.Table) -> None:
-        """Validate group_col parameter against the DataFrame columns.
-
-        Args:
-            group_col (str | list[str] | None): Column name or list of column names to partition rankings by.
-                None skips validation entirely.
-            df (ibis.Table): The table whose columns are validated against.
-
-        Raises:
-            TypeError: If group_col is not a string, list, or None.
-            ValueError: If group_col is an empty list.
-            ValueError: If any specified group columns are not found in the DataFrame.
-        """
-        if group_col is not None:
-            ensure_columns(df, group_col, "group_col")
 
     def _process_rank_columns(
         self,
         rank_cols: list[tuple[str, str] | str],
         df: ibis.Table,
-        group_col: str | list[str] | None,
+        group_col: list[str] | None,
         ignore_ties: bool,
     ) -> dict[str, ir.IntegerColumn]:
         """Process rank columns and create ranking expressions.
@@ -223,8 +208,8 @@ class CompositeRank:
             rank_cols (list[tuple[str, str] | str]): Column specifications to rank. Each element is
                 either a string (column name, defaults to ascending) or a tuple of (column_name, sort_order).
             df (ibis.Table): The table containing the columns to rank.
-            group_col (str | list[str] | None): Column(s) to partition the ranking window by,
-                or None for global ranking.
+            group_col (list[str] | None): Columns to partition the ranking window by, or None
+                for global ranking. Pre-normalized to a list by the caller.
             ignore_ties (bool): If True, uses row_number for unique ranks. If False, uses rank
                 which assigns the same rank to tied values.
 
@@ -278,7 +263,7 @@ class CompositeRank:
 
     def _create_window(
         self,
-        group_col: str | list[str] | None,
+        group_col: list[str] | None,
         df: ibis.Table,
         order_by: ir.Column,
     ) -> Any:  # noqa: ANN401 - WindowedExpr is an internal ibis type; Any is safest here
@@ -288,8 +273,9 @@ class CompositeRank:
         global or partitioned by group column(s).
 
         Args:
-            group_col (str | list[str] | None): Column(s) to partition the window by.
-                None creates a global window, a string or list creates a grouped window.
+            group_col (list[str] | None): Columns to partition the window by, or None for a
+                global window. Always a list (or None) — the caller normalizes single strings
+                via ``ensure_columns``.
             df (ibis.Table): The table containing the group columns.
             order_by (ir.Column): An ibis ordering expression (e.g., ibis.asc or ibis.desc) for the window.
 
@@ -298,8 +284,6 @@ class CompositeRank:
         """
         if group_col is None:
             return ibis.window(order_by=order_by)
-        if isinstance(group_col, str):
-            return ibis.window(group_by=df[group_col], order_by=order_by)
         return ibis.window(group_by=[df[col] for col in group_col], order_by=order_by)
 
     def _create_composite_ranking(
