@@ -309,7 +309,7 @@ def plot(  # noqa: C901, PLR0913
         ensure_value_choice(sort_by, ["group", "value"], "sort_by")
     if series_col is not None and sort_by == "value":
         raise ValueError("sort_by cannot be 'value' when series_col is provided")
-    ensure_value_choice(sort_order, ["ascending", "descending"], "sort_order")
+    ensure_value_choice(sort_order, ["asc", "ascending", "desc", "descending"], "sort_order")
     if exclude_groups is not None and include_only_groups is not None:
         raise ValueError("exclude_groups and include_only_groups cannot be used together")
     if series_col is not None and (
@@ -367,7 +367,7 @@ def plot(  # noqa: C901, PLR0913
         if sort_by in ["group", "value"]:
             index_df = index_df.sort_values(
                 by=group_col if sort_by == "group" else "index",
-                ascending=sort_order == "ascending",
+                ascending=sort_order in ("asc", "ascending"),
             )
 
     else:
@@ -375,7 +375,7 @@ def plot(  # noqa: C901, PLR0913
         default_colors = get_plot_colors(int(df[series_col].nunique()))
 
         if sort_by == "group":
-            index_df = index_df.sort_values(by=[group_col, series_col], ascending=sort_order == "ascending")
+            index_df = index_df.sort_values(by=[group_col, series_col], ascending=sort_order in ("asc", "ascending"))
 
         index_df = index_df.pivot_table(
             index=group_col,
@@ -483,7 +483,6 @@ def get_indexes(
         agg_func,
         ["sum", "mean", "max", "min", "nunique"],
         "agg_func",
-        case_insensitive=True,
     )
 
     agg_fn = lambda x: getattr(x, agg_func)()  # noqa: E731

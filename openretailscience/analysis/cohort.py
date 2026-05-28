@@ -47,7 +47,7 @@ from openretailscience.options import ColumnHelper
 class CohortAnalysis:
     """Class for performing cohort analysis and visualization."""
 
-    VALID_PERIODS: ClassVar[set[str]] = {"year", "quarter", "month", "week", "day"}
+    VALID_PERIODS: ClassVar[tuple[str, ...]] = ("year", "quarter", "month", "week", "day")
 
     def __init__(
         self,
@@ -73,7 +73,7 @@ class CohortAnalysis:
         """
         cols = ColumnHelper()
 
-        ensure_value_choice(period, sorted(self.VALID_PERIODS), "period")
+        ensure_value_choice(period, self.VALID_PERIODS, "period")
 
         required_cols = [
             cols.customer_id,

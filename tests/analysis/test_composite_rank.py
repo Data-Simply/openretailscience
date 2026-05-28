@@ -213,9 +213,11 @@ class TestCompositeRank:
 
     @pytest.mark.parametrize("agg_func", ["MEAN", "Mean", "SUM", "Min", "MAX"])
     def test_agg_func_case_insensitive(self, simple_df, agg_func):
-        """Uppercase agg_func values are accepted without raising KeyError (regression for #429 bug)."""
-        cr = CompositeRank(df=simple_df, rank_cols=[("spend", "desc")], agg_func=agg_func)
-        assert "composite_rank" in cr.df.columns
+        """Mixed-case agg_func produces identical output to the lowercase form (regression for #429 bug)."""
+        rank_cols = [("spend", "desc"), ("customers", "desc")]
+        upper = CompositeRank(df=simple_df, rank_cols=rank_cols, agg_func=agg_func).df
+        lower = CompositeRank(df=simple_df, rank_cols=rank_cols, agg_func=agg_func.lower()).df
+        pd.testing.assert_frame_equal(upper, lower)
 
     def test_ibis_table_input(self, simple_df):
         """Test that the class works with Ibis table input."""

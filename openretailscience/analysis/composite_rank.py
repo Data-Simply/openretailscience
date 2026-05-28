@@ -244,7 +244,7 @@ class CompositeRank:
             col_name, sort_order = self._parse_column_spec(col_spec)
 
             ensure_columns(df, col_name)
-            sort_order = ensure_value_choice(sort_order, valid_sort_orders, "sort_order", case_insensitive=True)
+            sort_order = ensure_value_choice(sort_order, valid_sort_orders, "sort_order")
 
             order_by = ibis.asc(df[col_name]) if sort_order in ["asc", "ascending"] else ibis.desc(df[col_name])
             window = self._create_window(group_col, df, order_by)
@@ -333,7 +333,7 @@ class CompositeRank:
             "max": ibis.greatest(*column_refs),
         }
 
-        agg_func = ensure_value_choice(agg_func, list(agg_expr.keys()), "agg_func", case_insensitive=True)
+        agg_func = ensure_value_choice(agg_func, list(agg_expr.keys()), "agg_func")
         return df.mutate(composite_rank=agg_expr[agg_func])
 
     @property
