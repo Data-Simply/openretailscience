@@ -1,4 +1,4 @@
-"""Regression line fitting and plotting helpers for matplotlib axes."""
+"""Trend line fitting and plotting helpers for matplotlib axes."""
 
 import warnings
 from datetime import datetime
@@ -20,7 +20,7 @@ _POSITIVE_X_FLOOR = 1e-6
 _VARIANCE_THRESHOLD = 1e-10
 _TEXT_X_PADDING = 0.05  # 5% from left
 
-# Map regression_type -> (check_x_positive, check_y_positive)
+# Map trend_type -> (check_x_positive, check_y_positive)
 _POSITIVITY_REQUIREMENTS: dict[str, tuple[bool, bool]] = {
     "power": (True, True),
     "logarithmic": (True, False),
@@ -33,7 +33,7 @@ def _calculate_r_squared_original_space(y_actual: np.ndarray, y_predicted: np.nd
 
     Args:
         y_actual (np.ndarray): Actual y values.
-        y_predicted (np.ndarray): Predicted y values from regression model.
+        y_predicted (np.ndarray): Predicted y values from trend model.
 
     Returns:
         float: R² value calculated in original data space.
@@ -48,28 +48,28 @@ def _calculate_r_squared_original_space(y_actual: np.ndarray, y_predicted: np.nd
     return 1 - (ss_res / ss_tot)
 
 
-def _perform_regression_calculation(
-    regression_type: str,
+def _perform_trend_calculation(
+    trend_type: str,
     x_filtered: np.ndarray,
     y_filtered: np.ndarray,
 ) -> tuple[float, float, float]:
-    """Perform regression calculation and return coefficients and R² in original data space.
+    """Perform trend calculation and return coefficients and R² in original data space.
 
     Args:
-        regression_type (str): Type of regression to perform.
+        trend_type (str): Type of trend to fit.
         x_filtered (np.ndarray): Filtered x data.
         y_filtered (np.ndarray): Filtered y data.
 
     Returns:
         tuple[float, float, float]: param1, param2, r_squared (calculated in original data space)
     """
-    if regression_type == "linear":
-        # Linear regression: y = mx + b
+    if trend_type == "linear":
+        # Linear trend: y = mx + b
         slope, intercept, r_value, _, _ = stats.linregress(x_filtered, y_filtered)
         return slope, intercept, r_value**2
 
-    if regression_type == "power":
-        # Power law regression: y = ax^b → log(y) = log(a) + b*log(x)
+    if trend_type == "power":
+        # Power law trend: y = ax^b → log(y) = log(a) + b*log(x)
         log_x = np.log(x_filtered)
         log_y = np.log(y_filtered)
         slope, intercept, _, _, _ = stats.linregress(log_x, log_y)
@@ -81,8 +81,8 @@ def _perform_regression_calculation(
         r_squared = _calculate_r_squared_original_space(y_filtered, y_predicted)
         return a, b, r_squared
 
-    if regression_type == "logarithmic":
-        # Logarithmic regression: y = a*ln(x) + b
+    if trend_type == "logarithmic":
+        # Logarithmic trend: y = a*ln(x) + b
         log_x = np.log(x_filtered)
         slope, intercept, _, _, _ = stats.linregress(log_x, y_filtered)
         a = slope  # a = slope, b = intercept
@@ -93,8 +93,8 @@ def _perform_regression_calculation(
         r_squared = _calculate_r_squared_original_space(y_filtered, y_predicted)
         return a, b, r_squared
 
-    if regression_type == "exponential":
-        # Exponential regression: y = ae^(bx) → ln(y) = ln(a) + bx
+    if trend_type == "exponential":
+        # Exponential trend: y = ae^(bx) → ln(y) = ln(a) + bx
         log_y = np.log(y_filtered)
         slope, intercept, _, _, _ = stats.linregress(x_filtered, log_y)
         a = np.exp(intercept)  # Convert back: a = exp(intercept), b = slope
@@ -105,22 +105,22 @@ def _perform_regression_calculation(
         r_squared = _calculate_r_squared_original_space(y_filtered, y_predicted)
         return a, b, r_squared
 
-    msg = f"Unsupported regression type: {regression_type}"
+    msg = f"Unsupported trend type: {trend_type}"
     raise ValueError(msg)
 
 
-def _generate_regression_line(
-    regression_type: str,
+def _generate_trend_line(
+    trend_type: str,
     param1: float,
     param2: float,
     x_min: float,
     x_max: float,
     data_size: int = 50,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate regression line points for plotting with adaptive point calculation.
+    """Generate trend line points for plotting with adaptive point calculation.
 
     Args:
-        regression_type (str): Type of regression.
+        trend_type (str): Type of trend.
         param1 (float): First parameter (slope/a coefficient).
         param2 (float): Second parameter (intercept/b coefficient).
         x_min (float): Minimum x value for line.
@@ -130,7 +130,7 @@ def _generate_regression_line(
     Returns:
         tuple[np.ndarray, np.ndarray]: x_line, y_line arrays for plotting.
     """
-    if regression_type == "linear":
+    if trend_type == "linear":
         # Linear: use endpoints for efficiency
         x_line = np.array([x_min, x_max])
         y_line = param1 * x_line + param2
@@ -142,27 +142,27 @@ def _generate_regression_line(
     num_points = min(adaptive_points, _MAX_LINE_POINTS)
 
     # Derive from the single source of truth
-    requirements = _POSITIVITY_REQUIREMENTS.get(regression_type)
+    requirements = _POSITIVITY_REQUIREMENTS.get(trend_type)
     requires_positive_x = requirements is not None and requirements[0]
     x_start = max(x_min, _POSITIVE_X_FLOOR) if requires_positive_x else x_min
     x_line = np.linspace(x_start, x_max, num_points)
 
-    if regression_type == "power":
+    if trend_type == "power":
         # Suppress overflow warning — large exponents can overflow to inf, which is filtered below
         with np.errstate(over="ignore"):
             y_line = param1 * (x_line**param2)
-    elif regression_type == "logarithmic":
+    elif trend_type == "logarithmic":
         y_line = param1 * np.log(x_line) + param2
-    elif regression_type == "exponential":
+    elif trend_type == "exponential":
         # Suppress overflow warning — large x values can overflow exp() to inf, which is filtered below
         with np.errstate(over="ignore"):
             y_line = param1 * np.exp(param2 * x_line)
     else:
-        msg = f"Unsupported regression type for line generation: {regression_type}"
+        msg = f"Unsupported trend type for line generation: {trend_type}"
         raise ValueError(msg)
 
     # Filter out infinite/NaN values for types susceptible to overflow
-    if regression_type in ("power", "exponential"):
+    if trend_type in ("power", "exponential"):
         finite_mask = np.isfinite(y_line)
         if not np.all(finite_mask):
             x_line = x_line[finite_mask]
@@ -180,20 +180,20 @@ def _add_equation_text(
     text_position: float,
     show_equation: bool,
     show_r2: bool,
-    regression_type: str = "linear",
+    trend_type: str = "linear",
 ) -> None:
     """Add equation and R² text to the plot.
 
     Args:
         ax (Axes): The matplotlib axes object.
-        param1 (float): First regression parameter (slope/a coefficient).
-        param2 (float): Second regression parameter (intercept/b coefficient).
-        r_squared (float): The R² value of the regression.
+        param1 (float): First trend parameter (slope/a coefficient).
+        param2 (float): Second trend parameter (intercept/b coefficient).
+        r_squared (float): The R² value of the trend fit.
         color (str): The color of the text.
         text_position (float): The relative y-position of the text.
         show_equation (bool): Whether to display the equation.
         show_r2 (bool): Whether to display the R² value.
-        regression_type (str): The type of regression for equation formatting.
+        trend_type (str): The type of trend for equation formatting.
     """
     if not (show_equation or show_r2):
         return
@@ -203,19 +203,19 @@ def _add_equation_text(
     equation_parts = []
 
     if show_equation:
-        if regression_type == "linear":
+        if trend_type == "linear":
             sign = "+" if param2 >= 0 else "-"
             equation = f"y = {param1:.4g}x {sign} {abs(param2):.4g}"
-        elif regression_type == "power":
+        elif trend_type == "power":
             exp_str = f"({param2:.4g})" if param2 < 0 else f"{param2:.4g}"
             equation = f"y = {param1:.4g}x^{exp_str}"
-        elif regression_type == "logarithmic":
+        elif trend_type == "logarithmic":
             sign = "+" if param2 >= 0 else "-"
             equation = f"y = {param1:.4g}ln(x) {sign} {abs(param2):.4g}"
-        elif regression_type == "exponential":
+        elif trend_type == "exponential":
             equation = f"y = {param1:.4g}e^({param2:.4g}x)"
         else:
-            msg = f"Unsupported regression type for equation formatting: {regression_type}"
+            msg = f"Unsupported trend type for equation formatting: {trend_type}"
             raise ValueError(msg)
 
         equation_parts.append(equation)
@@ -303,7 +303,7 @@ def _extract_plot_data(ax: Axes) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _prepare_numeric_data(x_data: np.ndarray, y_data: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Convert plot data to numeric arrays suitable for regression analysis.
+    """Convert plot data to numeric arrays suitable for trend analysis.
 
     Args:
         x_data (np.ndarray): The raw x-axis data from the plot.
@@ -339,45 +339,45 @@ def _prepare_numeric_data(x_data: np.ndarray, y_data: np.ndarray) -> tuple[np.nd
     try:
         y_numeric = np.array(y_data, dtype=float)
     except (TypeError, ValueError) as err:
-        raise ValueError("Cannot convert y-axis values to numeric format for regression") from err
+        raise ValueError("Cannot convert y-axis values to numeric format for trend fit") from err
 
     # Create mask to filter out NaN values
     valid_mask = ~np.isnan(x_numeric) & ~np.isnan(y_numeric)
     if not np.any(valid_mask):
-        raise ValueError("No valid (non-NaN) data points for regression")
+        raise ValueError("No valid (non-NaN) data points for trend fit")
 
-    # Check that we have enough valid data points for regression
-    min_points_for_regression = 2
-    if np.sum(valid_mask) < min_points_for_regression:
-        error_msg = f"At least {min_points_for_regression} valid data points are required for regression analysis"
+    # Check that we have enough valid data points for a trend fit
+    min_points_for_trend_fit = 2
+    if np.sum(valid_mask) < min_points_for_trend_fit:
+        error_msg = f"At least {min_points_for_trend_fit} valid data points are required for trend analysis"
         raise ValueError(error_msg)
 
     x_filtered = x_numeric[valid_mask]
     y_filtered = y_numeric[valid_mask]
 
-    # Check for zero variance in x — invalid for all regression types
+    # Check for zero variance in x — invalid for all trend types
     if np.var(x_filtered) < _VARIANCE_THRESHOLD:
-        raise ValueError("Cannot perform regression: all x values are identical (zero variance)")
+        raise ValueError("Cannot fit trend: all x values are identical (zero variance)")
 
     return x_filtered, y_filtered
 
 
-def _validate_regression_data(
+def _validate_trend_data(
     x_data: np.ndarray,
     y_data: np.ndarray,
-    regression_type: str,
+    trend_type: str,
 ) -> None:
-    """Validate data for specific regression types.
+    """Validate data for specific trend types.
 
     Args:
         x_data (np.ndarray): The x-axis data.
         y_data (np.ndarray): The y-axis data.
-        regression_type (str): The regression type being used.
+        trend_type (str): The trend type being used.
 
     Raises:
-        ValueError: If data contains values incompatible with the regression type.
+        ValueError: If data contains values incompatible with the trend type.
     """
-    requirements = _POSITIVITY_REQUIREMENTS.get(regression_type)
+    requirements = _POSITIVITY_REQUIREMENTS.get(trend_type)
     if requirements is None:
         # Linear and other types use all data without positivity checks
         return
@@ -398,20 +398,20 @@ def _validate_regression_data(
 
     if len(error_parts) > 0:
         error_msg = (
-            f"{regression_type.capitalize()} regression requires all {axes_desc} values to be positive. "
+            f"{trend_type.capitalize()} trend requires all {axes_desc} values to be positive. "
             f"Found {' and '.join(error_parts)}. "
-            f"Please remove or transform these values before applying {regression_type} regression."
+            f"Please remove or transform these values before applying a {trend_type} trend."
         )
         raise ValueError(error_msg)
 
-    # Zero variance in y produces identical log(y) values, making regression meaningless
+    # Zero variance in y produces identical log(y) values, making the trend fit meaningless
     if check_y and np.var(y_data) < _VARIANCE_THRESHOLD:
-        raise ValueError("Cannot perform regression: all y values are identical (zero variance)")
+        raise ValueError("Cannot fit trend: all y values are identical (zero variance)")
 
 
-def add_regression_line(
+def add_trend_line(
     ax: Axes,
-    regression_type: Literal["linear", "power", "logarithmic", "exponential"] = "linear",
+    trend_type: Literal["linear", "power", "logarithmic", "exponential"] = "linear",
     color: str = "red",
     linestyle: str = "--",
     text_position: float = 0.6,
@@ -419,10 +419,10 @@ def add_regression_line(
     show_r2: bool = True,
     **kwargs: Any,  # noqa: ANN401 - forwarded to matplotlib's ax.plot()
 ) -> Axes:
-    """Add a regression line with configurable algorithm to a matplotlib plot.
+    """Add a trend line with configurable algorithm to a matplotlib plot.
 
     This function examines the data in a matplotlib Axes object and adds a
-    regression line to it. It supports line plots, scatter plots, and bar charts
+    trend line to it. It supports line plots, scatter plots, and bar charts
     (both vertical and horizontal), and can handle both numeric and datetime x-axis values.
 
     For bar charts, the function automatically detects orientation using matplotlib's
@@ -430,47 +430,47 @@ def add_regression_line(
 
     Note: If an axes contains multiple plot types (e.g., both lines and bars), the function
     processes them in priority order: lines first, then bars, then scatter plots. Only the
-    first available plot type will be used for regression analysis.
+    first available plot type will be used for trend analysis.
 
     Args:
         ax (Axes): The matplotlib axes object containing the plot (line, scatter, or bar).
-        regression_type (Literal["linear", "power", "logarithmic", "exponential"], optional):
-            Regression algorithm to use. Supported values:
-            - "linear": y = mx + b (default, OLS regression)
+        trend_type (Literal["linear", "power", "logarithmic", "exponential"], optional):
+            Trend algorithm to use. Supported values:
+            - "linear": y = mx + b (default, OLS fit)
             - "power": y = ax^b (elasticity analysis, log-log transformation)
             - "logarithmic": y = a*ln(x) + b (diminishing returns analysis)
             - "exponential": y = ae^(bx) (growth/decay patterns)
             Defaults to "linear".
-        color (str, optional): Color of the regression line. Defaults to "red".
-        linestyle (str, optional): Style of the regression line. Defaults to "--".
+        color (str, optional): Color of the trend line. Defaults to "red".
+        linestyle (str, optional): Style of the trend line. Defaults to "--".
         text_position (float, optional): Relative position (0-1) for the equation text. Defaults to 0.6.
         show_equation (bool, optional): Whether to display the equation on the plot. Defaults to True.
         show_r2 (bool, optional): Whether to display the R² value on the plot. Defaults to True.
         kwargs: Additional keyword arguments to pass to the plot function.
 
     Returns:
-        Axes: The matplotlib axes with the regression line added.
+        Axes: The matplotlib axes with the trend line added.
 
     Raises:
         ValueError: If the plot contains no visible lines, scatter points, or bar patches, or if
-            regression_type is not supported.
+            trend_type is not supported.
 
     Examples:
-        Basic linear regression (backward compatible):
+        Basic linear trend:
         >>> ax = data.plot.scatter(x='price', y='demand')
-        >>> add_regression_line(ax)
+        >>> add_trend_line(ax)
 
-        Power law regression for price elasticity:
-        >>> add_regression_line(ax, regression_type="power")
+        Power law trend for price elasticity:
+        >>> add_trend_line(ax, trend_type="power")
 
-        Bar chart with regression line:
+        Bar chart with trend line:
         >>> ax = df.plot.bar(x='category', y='sales')
-        >>> add_regression_line(ax, regression_type="linear")
+        >>> add_trend_line(ax, trend_type="linear")
     """
-    # Validate regression type
+    # Validate trend type
     supported_types = ["linear", "power", "logarithmic", "exponential"]
-    if regression_type not in supported_types:
-        error_msg = f"Unsupported regression_type '{regression_type}'. Supported types: {supported_types}"
+    if trend_type not in supported_types:
+        error_msg = f"Unsupported trend_type '{trend_type}'. Supported types: {supported_types}"
         raise ValueError(error_msg)
 
     # Extract data from the plot
@@ -480,30 +480,30 @@ def add_regression_line(
     x_numeric, y_numeric = _prepare_numeric_data(x_data, y_data)
 
     # Apply algorithm-specific data validation
-    _validate_regression_data(x_numeric, y_numeric, regression_type)
+    _validate_trend_data(x_numeric, y_numeric, trend_type)
 
-    # Perform regression calculation
-    param1, param2, r_squared = _perform_regression_calculation(regression_type, x_numeric, y_numeric)
+    # Perform trend calculation
+    param1, param2, r_squared = _perform_trend_calculation(trend_type, x_numeric, y_numeric)
 
-    # Generate regression line points
+    # Generate trend line points
     x_min, x_max = ax.get_xlim()
     data_size = len(x_numeric)
-    x_line, y_line = _generate_regression_line(regression_type, param1, param2, x_min, x_max, data_size)
+    x_line, y_line = _generate_trend_line(trend_type, param1, param2, x_min, x_max, data_size)
 
     if len(x_line) == 0:
         warnings.warn(
-            f"Regression line for '{regression_type}' produced no finite values in the visible range. "
-            "Consider adjusting axis limits or using a different regression type.",
+            f"Trend line for '{trend_type}' produced no finite values in the visible range. "
+            "Consider adjusting axis limits or using a different trend type.",
             UserWarning,
             stacklevel=2,
         )
         return ax
 
-    # Plot the regression line
+    # Plot the trend line
     ax.plot(x_line, y_line, color=color, linestyle=linestyle, **kwargs)
 
     # Add equation and R² text if either is requested
     if show_equation or show_r2:
-        _add_equation_text(ax, param1, param2, r_squared, color, text_position, show_equation, show_r2, regression_type)
+        _add_equation_text(ax, param1, param2, r_squared, color, text_position, show_equation, show_r2, trend_type)
 
     return ax
