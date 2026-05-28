@@ -45,24 +45,6 @@ PERIOD_GAP_DAYS = {
 }
 
 
-def _validate_inputs(df: pd.DataFrame, category_col: str, value_col: str, date_col: str) -> None:
-    """Validate DataFrame contents for the plot function.
-
-    Args:
-        df: Input DataFrame
-        category_col: Category column name
-        value_col: Value column name
-        date_col: Date column name
-
-    Raises:
-        ValueError: If DataFrame is empty, or if required columns don't exist.
-    """
-    if df.empty:
-        raise ValueError("Cannot plot with empty DataFrame")
-
-    ensure_data_has_columns(df, [date_col, category_col, value_col])
-
-
 def plot(
     df: pd.DataFrame,
     category_col: str,
@@ -114,8 +96,10 @@ def plot(
     """
     date_col = get_option("column.transaction_date")
 
-    _validate_inputs(df, category_col, value_col, date_col)
-    period = PERIOD_ALIASES[ensure_value_choice(period, list(PERIOD_ALIASES.keys()), "period")]
+    if df.empty:
+        raise ValueError("Cannot plot with empty DataFrame")
+    ensure_data_has_columns(df, [date_col, category_col, value_col])
+    period = PERIOD_ALIASES[ensure_value_choice(period, PERIOD_ALIASES, "period")]
 
     # Create a copy of the data and ensure date column is datetime
     df_copy = df.copy()

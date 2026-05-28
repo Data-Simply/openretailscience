@@ -155,11 +155,8 @@ class NLRSegmentation:
             ensure_columns(df, group_col, "group_col") if group_col is not None else None
         )
 
-        required_cols = [cols.customer_id, value_col, period_col]
-        if self._group_col is not None:
-            required_cols.extend(self._group_col)
-
-        ensure_data_has_columns(df, required_cols)
+        # group_col is already validated above; only the function's hard-coded requirements remain.
+        ensure_data_has_columns(df, [cols.customer_id, value_col, period_col])
 
         p1_expr = p1_value if isinstance(p1_value, ibis.Expr) else ibis.literal(p1_value)
         p2_expr = p2_value if isinstance(p2_value, ibis.Expr) else ibis.literal(p2_value)

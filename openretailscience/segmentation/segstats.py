@@ -304,14 +304,15 @@ class SegTransactionStats:
 
         segment_col = ensure_columns(data, segment_col, "segment_col")
 
-        required_cols = [
-            cols.unit_spend,
-            cols.transaction_id,
-            *segment_col,
-            *filter(lambda x: x in data.columns, [cols.unit_qty, cols.customer_id]),
-        ]
-
-        ensure_data_has_columns(data, required_cols)
+        # segment_col is already validated above; only the function's hard-coded requirements remain.
+        ensure_data_has_columns(
+            data,
+            [
+                cols.unit_spend,
+                cols.transaction_id,
+                *filter(lambda x: x in data.columns, [cols.unit_qty, cols.customer_id]),
+            ],
+        )
 
         # Validate extra_aggs if provided
         self._validate_extra_aggs(data, extra_aggs)
@@ -876,7 +877,7 @@ class SegTransactionStats:
     @staticmethod
     def _calc_seg_stats(
         data: ibis.Table,
-        segment_col: str | list[str],
+        segment_col: list[str],
         calc_total: bool | None,
         extra_aggs: dict[str, tuple[str, str]] | None = None,
         calc_rollup: bool | None = None,
@@ -916,8 +917,7 @@ class SegTransactionStats:
         """
         cols = ColumnHelper()
 
-        segment_col = ensure_columns(data, segment_col, "segment_col")
-
+        # segment_col arrives pre-validated from __init__; no re-validation needed here.
         # Normalize rollup_value to always be a list matching segment_col length
         rollup_value = [rollup_value] * len(segment_col) if not isinstance(rollup_value, list) else rollup_value
 
