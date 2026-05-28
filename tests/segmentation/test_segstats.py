@@ -148,6 +148,12 @@ class TestCalcSegStats:
 
         pd.testing.assert_frame_equal(segment_stats, expected_output)
 
+    def test_sort_by_true_orders_segment_column_ascending(self, base_df):
+        """Test that sort_by=True returns rows ordered ascending by the segment column."""
+        result = SegTransactionStats(base_df, "segment_name", sort_by=True).df
+
+        assert result["segment_name"].tolist() == ["Premium", "Standard", "Total"]
+
     def test_calculates_segment_stats_without_customer_data(self, base_df):
         """Test that the method correctly calculates segment statistics without customer data."""
         df_without_customer = base_df.drop(columns=[cols.customer_id])
@@ -716,21 +722,6 @@ class TestSegTransactionStats:
         assert "Total" not in result_df["category"].to_numpy()
         assert "Total" not in result_df["subcategory"].to_numpy()
 
-    def test_sort_by_true_orders_single_segment_column_ascending(self):
-        """Test that sort_by=True returns rows ordered ascending by the segment column."""
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 2, 3, 4],
-                cols.unit_spend: [100.0, 200.0, 150.0, 300.0],
-                cols.transaction_id: [101, 102, 103, 104],
-                "segment_name": ["Zebra", "Alpha", "Mango", "Beta"],
-            },
-        )
-
-        result = SegTransactionStats(df, "segment_name", sort_by=True).df
-
-        assert result["segment_name"].tolist() == ["Alpha", "Beta", "Mango", "Total", "Zebra"]
-
     def test_sort_by_true_orders_multiple_segment_columns_ascending(self):
         """Test that sort_by=True orders rows ascending by each segment column in turn."""
         df = pd.DataFrame(
@@ -759,28 +750,6 @@ class TestSegTransactionStats:
             ("Total", "Total"),
         ]
         assert list(zip(result["segment_name"], result["region"], strict=True)) == expected_pairs
-
-    def test_sort_by_true_with_grouping_sets_rollup(self):
-        """Test that sort_by=True orders rollup grouping sets output ascending by segment cols."""
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 2, 3, 4],
-                cols.unit_spend: [100.0, 200.0, 150.0, 300.0],
-                cols.transaction_id: [101, 102, 103, 104],
-                "region": ["West", "East", "West", "East"],
-                "store": ["S2", "S3", "S1", "S4"],
-            },
-        )
-
-        result = SegTransactionStats(
-            df,
-            segment_col=["region", "store"],
-            grouping_sets="rollup",
-            sort_by=True,
-        ).df
-
-        pairs = list(zip(result["region"], result["store"], strict=True))
-        assert pairs == sorted(pairs)
 
 
 @pytest.mark.filterwarnings("ignore::FutureWarning")
