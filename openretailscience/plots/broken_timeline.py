@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-from openretailscience.core.validation import ensure_value_choice
+from openretailscience.core.validation import ensure_data_has_columns, ensure_value_choice
 from openretailscience.options import get_option
 from openretailscience.plots.styles.colors import get_named_color
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
@@ -55,16 +55,12 @@ def _validate_inputs(df: pd.DataFrame, category_col: str, value_col: str, date_c
         date_col: Date column name
 
     Raises:
-        ValueError: If DataFrame is empty
-        KeyError: If required columns don't exist
+        ValueError: If DataFrame is empty, or if required columns don't exist.
     """
     if df.empty:
         raise ValueError("Cannot plot with empty DataFrame")
 
-    for col in [date_col, category_col, value_col]:
-        if col not in df.columns:
-            msg = f"Required column '{col}' not found in DataFrame"
-            raise KeyError(msg)
+    ensure_data_has_columns(df, [date_col, category_col, value_col])
 
 
 def plot(
@@ -115,7 +111,6 @@ def plot(
 
     Raises:
         ValueError: If DataFrame is empty, required columns are missing, or invalid period specified.
-        KeyError: If specified columns don't exist in the DataFrame.
     """
     date_col = get_option("column.transaction_date")
 
