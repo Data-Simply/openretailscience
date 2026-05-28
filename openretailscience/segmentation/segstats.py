@@ -52,7 +52,7 @@ from typing import Any, Literal
 import ibis
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
+from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import ColumnHelper, get_option
 
 __all__ = ["SegTransactionStats", "cube", "rollup"]
@@ -298,11 +298,7 @@ class SegTransactionStats:
             ... )
         """
         self._df: pd.DataFrame | None = None
-        # Convert data to ibis.Table if it's a pandas DataFrame
-        if isinstance(data, pd.DataFrame):
-            data = ibis.memtable(data)
-        elif not isinstance(data, ibis.Table):
-            raise TypeError("data must be either a pandas DataFrame or an ibis Table")
+        data = ensure_ibis_table(data, "data")
 
         cols = ColumnHelper()
 

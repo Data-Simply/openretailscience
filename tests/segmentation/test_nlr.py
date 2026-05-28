@@ -191,6 +191,17 @@ class TestNLRSegmentation:
         with pytest.raises(ValueError, match="agg_func"):
             NLRSegmentation(df=transaction_df, period_col="year", p1_value=2023, p2_value=2024, agg_func=agg_func)
 
+    @pytest.mark.parametrize("agg_func", ["SUM", "Sum", "MEAN", "MAX", "Count", "NUnique"])
+    def test_agg_func_case_insensitive(self, transaction_df, agg_func):
+        """Mixed-case agg_func produces identical output to the lowercase form."""
+        lower = NLRSegmentation(
+            df=transaction_df, period_col="year", p1_value=2023, p2_value=2024, agg_func=agg_func.lower()
+        ).df.sort_index()
+        upper = NLRSegmentation(
+            df=transaction_df, period_col="year", p1_value=2023, p2_value=2024, agg_func=agg_func
+        ).df.sort_index()
+        assert_frame_equal(upper, lower)
+
     def test_alternate_value_col(self):
         """Test segmentation with a non-default value column."""
         df = pd.DataFrame(

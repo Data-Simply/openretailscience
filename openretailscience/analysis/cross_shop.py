@@ -65,7 +65,7 @@ import ibis
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-from openretailscience.core.validation import ensure_data_has_columns
+from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import get_option
 from openretailscience.plots import venn
 
@@ -244,8 +244,7 @@ class CrossShop:
         Raises:
             ValueError: If group_3_col or group_3_val is populated, then the other must be as well.
         """
-        if isinstance(df, pd.DataFrame):
-            df: ibis.Table = ibis.memtable(df)
+        df = ensure_ibis_table(df)
         if (group_3_col is None) != (group_3_val is None):
             raise ValueError("If group_3_col or group_3_val is populated, then the other must be as well")
 

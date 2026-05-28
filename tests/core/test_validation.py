@@ -70,7 +70,7 @@ class TestEnsureColumns:
             ensure_columns(df, [], "group_col")
 
 
-class TestEnsureDfHasColumns:
+class TestEnsureDataHasColumns:
     """Tests for the ensure_data_has_columns helper function."""
 
     @pytest.mark.parametrize("input_type", ["pandas", "ibis"])
@@ -87,6 +87,13 @@ class TestEnsureDfHasColumns:
         df = ibis.memtable(pdf) if input_type == "ibis" else pdf
         with pytest.raises(ValueError, match=r"Input data is missing required columns: \['store_id', 'unit_spend'\]"):
             ensure_data_has_columns(df, ["customer_id", "unit_spend", "store_id"])
+
+    @pytest.mark.parametrize("bad_input", ["unit_spend", ("unit_spend",), {"unit_spend"}, None])
+    def test_raises_type_error_when_columns_is_not_a_list(self, bad_input):
+        """A bare string (or other non-list) would otherwise iterate as characters; surface a clean TypeError."""
+        df = pd.DataFrame({"customer_id": [1]})
+        with pytest.raises(TypeError, match="columns must be a list of column names"):
+            ensure_data_has_columns(df, bad_input)
 
 
 class TestEnsureValueChoice:

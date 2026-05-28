@@ -100,8 +100,13 @@ def ensure_data_has_columns(df: pd.DataFrame | ibis.Table, columns: list[str]) -
         columns (list[str]): Column names that must be present in ``df``.
 
     Raises:
+        TypeError: If ``columns`` is not a list (e.g. a bare string would otherwise be
+            iterated as characters and silently produce a meaningless "missing columns" error).
         ValueError: If any of the listed columns is missing from ``df``.
     """
+    if not isinstance(columns, list):
+        msg = f"columns must be a list of column names. Got {type(columns).__name__}."
+        raise TypeError(msg)
     missing = sorted(set(columns) - set(df.columns))
     if len(missing) > 0:
         msg = f"Input data is missing required columns: {missing}."

@@ -50,7 +50,6 @@ from typing import Any, Literal
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-from openretailscience.core.validation import ensure_columns
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
@@ -97,7 +96,13 @@ def _validate_highlight_parameter(
     group_col: str | None,
     pivot_df: pd.DataFrame,
 ) -> list[str] | None:
-    """Validate and normalize the highlight parameter against available columns."""
+    """Validate and normalize the highlight parameter against the pivot's available columns.
+
+    Avoid ``ensure_columns`` here: after pivoting on a non-string ``group_col`` (e.g. integer
+    store ids), ``pivot_df.columns`` can hold non-string labels and ``ensure_columns`` would
+    reject the matching highlight values purely on type. Membership against the actual pivot
+    columns is the right check.
+    """
     if highlight is None:
         return None
 
@@ -107,7 +112,16 @@ def _validate_highlight_parameter(
     if is_single_line:
         raise ValueError("highlight parameter cannot be used with single-line plots")
 
-    return ensure_columns(pivot_df, highlight, "highlight")
+    normalized = [highlight] if isinstance(highlight, str) else list(highlight)
+    if len(normalized) == 0:
+        raise ValueError("highlight must not be an empty list; pass None to disable highlighting.")
+
+    invalid = [h for h in normalized if h not in pivot_df.columns]
+    if len(invalid) > 0:
+        msg = f"highlight references values not present in the pivoted columns: {invalid}."
+        raise ValueError(msg)
+
+    return normalized
 
 
 def _create_pivot_dataframe(

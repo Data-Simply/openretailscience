@@ -110,7 +110,7 @@ import ibis
 import pandas as pd
 from ibis import _
 
-from openretailscience.core.validation import ensure_data_has_columns
+from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import get_option
 
 
@@ -316,8 +316,7 @@ class ProductAssociation:
             if len(target_item) == 0:
                 raise ValueError("target_item cannot be an empty list")
 
-        if isinstance(df, pd.DataFrame):
-            df = ibis.memtable(df)
+        df = ensure_ibis_table(df)
 
         unique_transactions = df.select(_[group_col], _[value_col]).distinct()
         total_transactions = unique_transactions.alias("t")[group_col].nunique().name("total_count")

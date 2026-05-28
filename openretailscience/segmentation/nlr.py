@@ -49,17 +49,26 @@ rather than spend.
 
 from __future__ import annotations
 
-import ibis
-import pandas as pd
+from typing import TYPE_CHECKING
 
-from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
+import ibis
+
+from openretailscience.core.validation import (
+    ensure_columns,
+    ensure_data_has_columns,
+    ensure_ibis_table,
+    ensure_value_choice,
+)
 from openretailscience.options import ColumnHelper
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 SEGMENT_NEW = "New"
 SEGMENT_REPEATING = "Repeating"
 SEGMENT_LAPSED = "Lapsed"
 
-_VALID_AGG_FUNCS = {"sum", "mean", "max", "count", "nunique"}
+VALID_AGG_FUNCS = ("sum", "mean", "max", "count", "nunique")
 
 
 class NLRSegmentation:
@@ -140,8 +149,7 @@ class NLRSegmentation:
         cols = ColumnHelper()
         value_col = cols.unit_spend if value_col is None else value_col
 
-        if isinstance(df, pd.DataFrame):
-            df = ibis.memtable(df)
+        df = ensure_ibis_table(df)
 
         self._group_col: list[str] | None = (
             ensure_columns(df, group_col, "group_col") if group_col is not None else None
@@ -159,9 +167,7 @@ class NLRSegmentation:
             msg = f"p1_value and p2_value must be different, got '{p1_value}' for both"
             raise ValueError(msg)
 
-        if agg_func not in _VALID_AGG_FUNCS:
-            msg = f"agg_func must be one of {sorted(_VALID_AGG_FUNCS)}, got '{agg_func}'"
-            raise ValueError(msg)
+        agg_func = ensure_value_choice(agg_func, VALID_AGG_FUNCS, "agg_func")
 
         # Filter to only P1 and P2 rows
         df = df.filter((df[period_col] == p1_value) | (df[period_col] == p2_value))

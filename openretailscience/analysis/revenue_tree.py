@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 
-from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
+from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles import graph_utils as gu
 from openretailscience.plots.tree_diagram import DetailedTreeNode, TreeGrid
@@ -285,8 +285,7 @@ class RevenueTree:
         """
         cols = ColumnHelper()
 
-        if isinstance(df, pd.DataFrame):
-            df: ibis.Table = ibis.memtable(df)
+        df = ensure_ibis_table(df)
 
         aggs = {
             cols.agg.customer_id: df[cols.customer_id].nunique(),

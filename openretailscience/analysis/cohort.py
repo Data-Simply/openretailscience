@@ -40,7 +40,7 @@ import ibis
 import numpy as np
 import pandas as pd
 
-from openretailscience.core.validation import ensure_data_has_columns, ensure_value_choice
+from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table, ensure_value_choice
 from openretailscience.options import ColumnHelper
 
 
@@ -140,7 +140,7 @@ class CohortAnalysis:
         """
         cols = ColumnHelper()
 
-        ibis_table = ibis.memtable(df) if isinstance(df, pd.DataFrame) else df
+        ibis_table = ensure_ibis_table(df)
 
         filtered_table = ibis_table.mutate(
             period_shopped=ibis_table[cols.transaction_date].truncate(period),

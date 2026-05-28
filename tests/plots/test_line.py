@@ -547,7 +547,7 @@ class TestHighlightFeature:
 
     def test_highlight_invalid_values_raises_error(self, multi_category_dataframe):
         """Test that highlight raises error for invalid values."""
-        with pytest.raises(ValueError, match=r"\['AlsoNotThere', 'NonExistent'\]"):
+        with pytest.raises(ValueError, match=r"\['NonExistent', 'AlsoNotThere'\]"):
             line.plot(
                 df=multi_category_dataframe,
                 x_col="month",
@@ -555,6 +555,19 @@ class TestHighlightFeature:
                 group_col="category",
                 highlight=["NonExistent", "AlsoNotThere"],
             )
+
+    def test_highlight_accepts_non_string_pivot_column_labels(self):
+        """Pivoting on an int-valued group_col yields int column labels; highlight must accept them."""
+        df = pd.DataFrame(
+            {
+                "month": [1, 1, 2, 2, 3, 3],
+                "store_id": [10, 20, 10, 20, 10, 20],
+                "revenue": [100, 200, 110, 210, 120, 220],
+            },
+        )
+        ax = line.plot(df=df, x_col="month", value_col="revenue", group_col="store_id", highlight=[10])
+        # Sanity: plot rendered without raising.
+        assert ax is not None
 
     def test_highlight_empty_list_raises_error(self, multi_category_dataframe):
         """Test that highlight=[] raises a clear error rather than silently double-drawing context lines."""
