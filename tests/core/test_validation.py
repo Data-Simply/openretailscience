@@ -122,6 +122,24 @@ class TestEnsureValueChoice:
         with pytest.raises(TypeError, match="must be a string"):
             ensure_value_choice(42, ["asc", "desc"], "sort_order")
 
+    @pytest.mark.parametrize(
+        "choices_factory",
+        [
+            lambda: ("asc", "desc"),
+            lambda: {"asc": 1, "desc": 2},
+            lambda: (c for c in ["asc", "desc"]),
+        ],
+        ids=["tuple", "dict", "generator"],
+    )
+    def test_accepts_any_iterable_of_choices(self, choices_factory):
+        """Tuple, dict (yields keys), and one-shot generator are all valid ``choices`` inputs."""
+        assert ensure_value_choice("ASC", choices_factory(), "sort_order") == "asc"
+
+    def test_generator_choices_still_render_in_error_message(self):
+        """Materializing ``choices`` once means a generator's contents appear in the error too."""
+        with pytest.raises(ValueError, match=r"\['asc', 'desc'\]"):
+            ensure_value_choice("bogus", (c for c in ["asc", "desc"]), "sort_order")
+
 
 class TestEnsureIbisTable:
     """Tests for the ensure_ibis_table helper after the move to core."""
