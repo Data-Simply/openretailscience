@@ -227,7 +227,7 @@ class RevenueTree:
                 column name (str) or a list of column names (list[str]). Defaults to None.
 
         Raises:
-            ValueError: If the required columns are not present in the DataFrame.
+            ValueError: If the required columns are not present in the data.
 
         Examples:
             Single column grouping:

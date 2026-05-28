@@ -51,7 +51,7 @@ class TestRevenueTree:
 
         with pytest.raises(ValueError) as excinfo:
             RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2", group_col="group_id")
-        assert "group_col references columns not present in the DataFrame" in str(excinfo.value)
+        assert "group_col references columns not present in the data" in str(excinfo.value)
         assert "group_id" in str(excinfo.value)
 
     def test_dataframe_missing_group_cols_list(self, cols: ColumnHelper):
@@ -68,7 +68,7 @@ class TestRevenueTree:
 
         with pytest.raises(ValueError) as excinfo:
             RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2", group_col=["region", "store"])
-        assert "group_col references columns not present in the DataFrame" in str(excinfo.value)
+        assert "group_col references columns not present in the data" in str(excinfo.value)
         assert "store" in str(excinfo.value)
         assert "store" in str(excinfo.value)
 

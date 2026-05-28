@@ -64,6 +64,8 @@ def _validate_bar_inputs(
     """Validate ``plot`` arguments up-front and return the case-normalized enum values."""
     if df.empty:
         raise ValueError("Cannot plot with empty DataFrame")
+    if isinstance(df, pd.Series) and x_col is not None:
+        raise ValueError("x_col cannot be provided when df is a pd.Series; the Series index is used as the x-axis.")
     if x_col is not None:
         ensure_columns(df, x_col, "x_col")
     orientation = ensure_value_choice(orientation, VALID_ORIENTATIONS, "orientation")

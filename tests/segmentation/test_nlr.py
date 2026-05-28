@@ -383,7 +383,7 @@ class TestNLRSegmentationGroupCol:
                 "year": [2023],
             },
         )
-        with pytest.raises(ValueError, match="group_col references columns not present in the DataFrame"):
+        with pytest.raises(ValueError, match="group_col references columns not present in the data"):
             NLRSegmentation(
                 df=df,
                 period_col="year",
