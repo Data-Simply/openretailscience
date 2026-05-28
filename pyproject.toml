@@ -9,13 +9,13 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "duckdb>=1.1.0,<1.4",
+    "duckdb>=1.1.0,<1.6",
     "ibis-framework[duckdb]>=10.0.0,<11",
     "matplotlib-set-diagrams>=0.0.2,<0.3.0",
     "matplotlib>=3.9.1,<4",
     "numpy>=1.26.3,<3",
     "pandas>=2.2.3,<3",
-    "pyarrow>=18.0.0,<24",
+    "pyarrow>=18.0.0,<25",
     "scikit-learn>=1.4.2,<2",
     "scipy>=1.14.1,<2",
     "textalloc>=1.2.1",
