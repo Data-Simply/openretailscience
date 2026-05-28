@@ -8,6 +8,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from matplotlib.axes import Axes
 from scipy import stats
 
 from openretailscience.options import get_option
@@ -21,11 +22,11 @@ def cleanup_figures():
     plt.close("all")
 
 
-def _extract_r2_from_plot(ax: plt.Axes) -> float:
+def _extract_r2_from_plot(ax: Axes) -> float:
     """Extract R² value from plot text annotations.
 
     Args:
-        ax (plt.Axes): The matplotlib axes containing the R² annotation.
+        ax (Axes): The matplotlib axes containing the R² annotation.
 
     Returns:
         float: The extracted R² value.
@@ -157,53 +158,49 @@ class TestTrendLine:
         assert "trend" in str(excinfo.value).lower()
 
     def test_bar_plot_negative_values(self):
-        """Test trend line correctly handles negative bar values."""
+        """Trend on vertical bars matches OLS on bar centers, including negative heights."""
         _, ax = plt.subplots()
         x = np.array([1, 2, 3, 4, 5])
-        y = np.array([-2, 4, -1, 3, -5])  # Mix of positive and negative values
+        y = np.array([-2, 4, -1, 3, -5])
         ax.bar(x, y)
+        xlim_before = ax.get_xlim()
 
         trend.add_trend_line(ax, color="red")
 
-        # Verify trend line was added
         assert len(ax.get_lines()) == 1
+        line_x, line_y = ax.get_lines()[0].get_xdata(), ax.get_lines()[0].get_ydata()
 
-        # Get the trend line data
-        line = ax.get_lines()[0]
-        line_x = line.get_xdata()
-        line_y = line.get_ydata()
+        # Linear fit emits two endpoints spanning the axis x-range at the time of fitting.
+        assert tuple(line_x) == pytest.approx(xlim_before)
 
-        # Verify the line spans a reasonable range (uses axis limits, not exact data range)
-        assert line_x[0] < min(x)  # Line starts before first bar
-        assert line_x[1] > max(x)  # Line ends after last bar
-
-        # Verify line handles negative values (should not be all zeros)
-        assert not all(val == 0 for val in line_y)
+        # Slope and intercept match OLS on the input (bar centers = x, heights = y).
+        expected_slope, expected_intercept = np.polyfit(x, y, 1)
+        actual_slope = (line_y[1] - line_y[0]) / (line_x[1] - line_x[0])
+        assert actual_slope == pytest.approx(expected_slope)
+        assert line_y[0] == pytest.approx(expected_slope * line_x[0] + expected_intercept)
 
     def test_barh_plot_negative_values(self):
-        """Test trend line correctly handles negative horizontal bar values."""
+        """Trend on horizontal bars matches OLS on (width, position) pairs, including negative widths."""
         _, ax = plt.subplots()
-        y = np.array([1, 2, 3, 4, 5])
-        x = np.array([-2, 4, -1, 3, -5])  # Mix of positive and negative values
-        ax.barh(y, x)
+        positions = np.array([1, 2, 3, 4, 5])
+        widths = np.array([-2, 4, -1, 3, -5])
+        ax.barh(positions, widths)
+        xlim_before = ax.get_xlim()
 
         trend.add_trend_line(ax, color="purple")
 
-        # Verify trend line was added
         assert len(ax.get_lines()) == 1
+        line_x, line_y = ax.get_lines()[0].get_xdata(), ax.get_lines()[0].get_ydata()
 
-        # Get the trend line data
-        line = ax.get_lines()[0]
-        line_x = line.get_xdata()
-        line_y = line.get_ydata()
+        # Linear fit emits two endpoints spanning the axis x-range at the time of fitting.
+        assert tuple(line_x) == pytest.approx(xlim_before)
 
-        # For horizontal bars, verify the line spans the value range reasonably
-        # Line should encompass the data range (may extend beyond due to axis limits)
-        assert min(line_x) <= max(x)  # Line should reach at least the max value
-        assert max(line_x) >= min(x)  # Line should reach at least the min value
-
-        # Verify line handles negative values (should not be all zeros)
-        assert not all(val == 0 for val in line_y)
+        # For horizontal bars, the trend extracts (width, position) pairs sorted by width.
+        sort_idx = np.argsort(widths)
+        expected_slope, expected_intercept = np.polyfit(widths[sort_idx], positions[sort_idx], 1)
+        actual_slope = (line_y[1] - line_y[0]) / (line_x[1] - line_x[0])
+        assert actual_slope == pytest.approx(expected_slope)
+        assert line_y[0] == pytest.approx(expected_slope * line_x[0] + expected_intercept)
 
     def test_bar_plot_stacked(self):
         """Test trend line with stacked bar chart uses correct data ordering."""
@@ -284,7 +281,7 @@ class TestTrendLine:
 
     # Algorithm Tests - Trend types with known data (parametrized to eliminate duplication)
     @pytest.mark.parametrize(
-        ("trend_type", "x_data", "y_data", "description"),
+        ("trend_type", "x_data", "y_fn", "description"),
         [
             ("linear", np.array([1, 2, 3, 4, 5]), lambda x: 2 * x + 1, "y = 2x + 1"),
             ("power", np.array([1, 2, 3, 4, 5]), lambda x: 2 * (x**1.5), "y = 2x^1.5"),
@@ -292,10 +289,10 @@ class TestTrendLine:
             ("exponential", np.array([0, 1, 2, 3, 4]), lambda x: 2 * np.exp(0.5 * x), "y = 2*e^(0.5x)"),
         ],
     )
-    def test_trend_known_data(self, trend_type, x_data, y_data, description):
+    def test_trend_known_data(self, trend_type, x_data, y_fn, description):
         """Test trend types with known relationships and validate line correctness."""
         # Generate perfect data based on known relationship
-        y = y_data(x_data)
+        y = y_fn(x_data)
 
         # Create plot
         _, ax = plt.subplots()
@@ -320,7 +317,7 @@ class TestTrendLine:
             x_val = line_x[idx]
             y_val = line_y[idx]
             # Calculate expected y value based on the known relationship
-            expected_y = y_data(np.array([x_val]))[0]
+            expected_y = y_fn(np.array([x_val]))[0]
             # Perfect data should yield near-exact fit (within floating-point precision)
             tolerance = max(abs(expected_y) * 1e-6, 1e-10)  # Relative 0.0001% with absolute floor
             assert abs(y_val - expected_y) < tolerance, (
