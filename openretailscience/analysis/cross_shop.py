@@ -181,7 +181,7 @@ class CrossShop:
             group_3_col = group_1_col
 
         required_cols = [group_col, value_col]
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         self.group_count = 2 if group_3_col is None else 3
 

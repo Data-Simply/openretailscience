@@ -30,39 +30,41 @@ from openretailscience.options import get_option
 from openretailscience.plots.styles.colors import get_named_color
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
-# Period configurations: gap threshold and duration (in days)
-PERIOD_CONFIG = {
-    "D": 1,  # Daily: 1 day gap and duration
-    "W": 7,  # Weekly: 1 week gap and duration
+# Map period aliases (short and long forms) to the canonical pandas frequency code
+PERIOD_ALIASES = {
+    "D": "D",
+    "day": "D",
+    "W": "W",
+    "week": "W",
+}
+
+# Gap threshold and bar duration (in days) keyed by canonical pandas frequency code
+PERIOD_GAP_DAYS = {
+    "D": 1,
+    "W": 7,
 }
 
 
-def _validate_inputs(df: pd.DataFrame, category_col: str, value_col: str, date_col: str, period: str) -> None:
-    """Validate input parameters for the plot function.
+def _validate_inputs(df: pd.DataFrame, category_col: str, value_col: str, date_col: str) -> None:
+    """Validate DataFrame contents for the plot function.
 
     Args:
         df: Input DataFrame
         category_col: Category column name
         value_col: Value column name
         date_col: Date column name
-        period: Time period for aggregation
 
     Raises:
-        ValueError: If DataFrame is empty or invalid period specified
+        ValueError: If DataFrame is empty
         KeyError: If required columns don't exist
     """
     if df.empty:
         raise ValueError("Cannot plot with empty DataFrame")
 
-    # Validate required columns exist
-    required_cols = [date_col, category_col, value_col]
-
-    for col in required_cols:
+    for col in [date_col, category_col, value_col]:
         if col not in df.columns:
             msg = f"Required column '{col}' not found in DataFrame"
             raise KeyError(msg)
-
-    ensure_value_choice(period, list(PERIOD_CONFIG.keys()), "period")
 
 
 def plot(
@@ -116,11 +118,8 @@ def plot(
     """
     date_col = get_option("column.transaction_date")
 
-    # Convert period to uppercase to handle lowercase inputs
-    period = period.upper()
-
-    # Validate required columns exist
-    _validate_inputs(df, category_col, value_col, date_col, period)
+    _validate_inputs(df, category_col, value_col, date_col)
+    period = PERIOD_ALIASES[ensure_value_choice(period, list(PERIOD_ALIASES.keys()), "period")]
 
     # Create a copy of the data and ensure date column is datetime
     df_copy = df.copy()
@@ -144,7 +143,7 @@ def plot(
     if ax is None:
         _, ax = plt.subplots(figsize=figsize)
 
-    period_days = PERIOD_CONFIG[period]
+    period_days = PERIOD_GAP_DAYS[period]
     bar_color = kwargs.pop("color", get_named_color("primary"))
     bar_offset = bar_height / 2
 

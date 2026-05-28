@@ -240,7 +240,7 @@ class RevenueTree:
         cols = ColumnHelper()
 
         if group_col is not None:
-            group_col = ensure_columns(df, group_col)
+            group_col = ensure_columns(df, group_col, "group_col")
 
         required_cols = [
             cols.customer_id,
@@ -253,7 +253,7 @@ class RevenueTree:
         if group_col is not None:
             required_cols.extend(group_col)
 
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         df, p1_index, p2_index = self._agg_data(df, period_col, p1_value, p2_value, group_col)
 

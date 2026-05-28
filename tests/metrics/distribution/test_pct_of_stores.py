@@ -88,7 +88,7 @@ class TestPctOfStores:
                 cols.unit_spend: [5.99, 3.49],
             }
         )
-        with pytest.raises(ValueError, match="missing"):
+        with pytest.raises(ValueError, match="required_cols references columns not present in the DataFrame"):
             PctOfStores(df)
 
     def test_invalid_type_raises(self):

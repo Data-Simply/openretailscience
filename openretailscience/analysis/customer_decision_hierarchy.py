@@ -158,7 +158,7 @@ class CustomerDecisionHierarchy:
         """
         cols = ColumnHelper()
         required_cols = [cols.customer_id, cols.transaction_id, product_col]
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         self.random_state = random_state
         self.product_col = product_col

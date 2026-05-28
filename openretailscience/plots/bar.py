@@ -50,7 +50,7 @@ from openretailscience.plots.styles.font_utils import get_font_properties
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 VALID_ORIENTATIONS = ("horizontal", "h", "vertical", "v")
-VALID_SORT_ORDERS = ("ascending", "descending")
+VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
 VALID_DATA_LABEL_FORMATS = ("absolute", "percentage_by_bar_group", "percentage_by_series")
 DEFAULT_BAR_WIDTH = 0.8
 
@@ -61,17 +61,18 @@ def _validate_bar_inputs(
     orientation: str,
     sort_order: str | None,
     data_label_format: str | None,
-) -> None:
-    """Validate ``plot`` arguments up-front so the body can stay focused on rendering."""
+) -> tuple[str, str | None, str | None]:
+    """Validate ``plot`` arguments up-front and return the case-normalized enum values."""
     if df.empty:
         raise ValueError("Cannot plot with empty DataFrame")
     if x_col is not None:
-        ensure_columns(df, x_col)
-    ensure_value_choice(orientation, VALID_ORIENTATIONS, "orientation")
+        ensure_columns(df, x_col, "x_col")
+    orientation = ensure_value_choice(orientation, VALID_ORIENTATIONS, "orientation")
     if sort_order is not None:
-        ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
+        sort_order = ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
     if data_label_format is not None:
-        ensure_value_choice(data_label_format, VALID_DATA_LABEL_FORMATS, "data_label_format")
+        data_label_format = ensure_value_choice(data_label_format, VALID_DATA_LABEL_FORMATS, "data_label_format")
+    return orientation, sort_order, data_label_format
 
 
 def plot(  # noqa: PLR0913
@@ -89,7 +90,7 @@ def plot(  # noqa: PLR0913
     source_text: str | None = None,
     move_legend_outside: bool = False,
     orientation: Literal["horizontal", "h", "vertical", "v"] = "vertical",
-    sort_order: Literal["ascending", "descending"] | None = None,
+    sort_order: Literal["asc", "ascending", "desc", "descending"] | None = None,
     data_label_format: Literal["absolute", "percentage_by_bar_group", "percentage_by_series"] | None = None,
     use_hatch: bool = False,
     num_digits: int = 3,
@@ -132,7 +133,13 @@ def plot(  # noqa: PLR0913
     Returns:
         SubplotBase: The Matplotlib Axes object with the generated plot.
     """
-    _validate_bar_inputs(df, x_col, orientation, sort_order, data_label_format)
+    orientation, sort_order, data_label_format = _validate_bar_inputs(
+        df,
+        x_col,
+        orientation,
+        sort_order,
+        data_label_format,
+    )
 
     width = kwargs.pop("width", DEFAULT_BAR_WIDTH)
 
@@ -151,7 +158,7 @@ def plot(  # noqa: PLR0913
             stacklevel=2,
         )
 
-    df = df.sort_values(by=value_col[0], ascending=sort_order == "ascending") if sort_order is not None else df
+    df = df.sort_values(by=value_col[0], ascending=sort_order in ("asc", "ascending")) if sort_order is not None else df
 
     default_colors = get_plot_colors(len(value_col))
 

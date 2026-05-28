@@ -310,7 +310,7 @@ class SegTransactionStats:
             msg = "segment_col cannot be an empty list. At least one segment column must be specified."
             raise ValueError(msg)
 
-        segment_col = ensure_columns(data, segment_col)
+        segment_col = ensure_columns(data, segment_col, "segment_col")
 
         required_cols = [
             cols.unit_spend,
@@ -319,7 +319,7 @@ class SegTransactionStats:
             *filter(lambda x: x in data.columns, [cols.unit_qty, cols.customer_id]),
         ]
 
-        ensure_columns(data, required_cols)
+        ensure_columns(data, required_cols, "required_cols")
 
         # Validate extra_aggs if provided
         self._validate_extra_aggs(data, extra_aggs)
@@ -924,7 +924,7 @@ class SegTransactionStats:
         """
         cols = ColumnHelper()
 
-        segment_col = ensure_columns(data, segment_col)
+        segment_col = ensure_columns(data, segment_col, "segment_col")
 
         # Normalize rollup_value to always be a list matching segment_col length
         rollup_value = [rollup_value] * len(segment_col) if not isinstance(rollup_value, list) else rollup_value

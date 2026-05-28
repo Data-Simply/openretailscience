@@ -64,10 +64,14 @@ class PctOfStores:
 
         store_id_col = get_option("column.store_id")
 
-        product_col = ensure_columns(df, product_col if product_col is not None else get_option("column.product_id"))
+        product_col = ensure_columns(
+            df,
+            product_col if product_col is not None else get_option("column.product_id"),
+            "product_col",
+        )
 
         if group_col is not None:
-            group_col = ensure_columns(df, group_col)
+            group_col = ensure_columns(df, group_col, "group_col")
 
         required_cols = [store_id_col, *product_col]
         group_cols = list(product_col)
@@ -78,7 +82,7 @@ class PctOfStores:
                 raise ValueError(msg)
             required_cols.extend(group_col)
             group_cols.extend(group_col)
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         store_product = df.select([store_id_col, *group_cols]).distinct()
 

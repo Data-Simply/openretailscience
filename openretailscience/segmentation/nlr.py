@@ -143,13 +143,15 @@ class NLRSegmentation:
         if isinstance(df, pd.DataFrame):
             df = ibis.memtable(df)
 
-        self._group_col: list[str] | None = ensure_columns(df, group_col) if group_col is not None else None
+        self._group_col: list[str] | None = (
+            ensure_columns(df, group_col, "group_col") if group_col is not None else None
+        )
 
         required_cols = [cols.customer_id, value_col, period_col]
         if self._group_col is not None:
             required_cols.extend(self._group_col)
 
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         p1_expr = p1_value if isinstance(p1_value, ibis.Expr) else ibis.literal(p1_value)
         p2_expr = p2_value if isinstance(p2_value, ibis.Expr) else ibis.literal(p2_value)

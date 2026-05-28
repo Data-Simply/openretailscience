@@ -11,11 +11,13 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-def ensure_ibis_table(df: pd.DataFrame | ibis.Table) -> ibis.Table:
+def ensure_ibis_table(df: pd.DataFrame | ibis.Table, param_name: str = "df") -> ibis.Table:
     """Convert pandas DataFrame to ibis Table, or validate input is an ibis Table.
 
     Args:
         df (pd.DataFrame | ibis.Table): Input data to convert or validate.
+        param_name (str): The caller's parameter name to surface in error messages.
+            Defaults to ``"df"``.
 
     Returns:
         ibis.Table: An ibis Table representation of the input data.
@@ -27,12 +29,14 @@ def ensure_ibis_table(df: pd.DataFrame | ibis.Table) -> ibis.Table:
         return ibis.memtable(df)
     if isinstance(df, ibis.Table):
         return df
-    raise TypeError("df must be either a pandas DataFrame or an Ibis Table.")
+    msg = f"{param_name} must be either a pandas DataFrame or an Ibis Table."
+    raise TypeError(msg)
 
 
 def ensure_columns(
     df: pd.DataFrame | ibis.Table,
     columns: str | list[str],
+    param_name: str,
 ) -> list[str]:
     """Normalize a column parameter to a list and validate it against a DataFrame/Table.
 
@@ -43,6 +47,8 @@ def ensure_columns(
     Args:
         df (pd.DataFrame | ibis.Table): The data whose columns must contain the requested names.
         columns (str | list[str]): Column name or list of column names to validate.
+        param_name (str): The caller's parameter name to surface in error messages
+            (e.g. ``"group_col"`` or ``"segment_col"``).
 
     Returns:
         list[str]: A fresh list of validated column names.
@@ -58,20 +64,21 @@ def ensure_columns(
     elif isinstance(columns, list):
         normalized = list(columns)
     else:
-        msg = f"columns must be a string or list of strings. Got {type(columns).__name__}."
+        msg = f"{param_name} must be a string or list of strings. Got {type(columns).__name__}."
         raise TypeError(msg)
 
     if len(normalized) == 0:
-        raise ValueError("columns must not be an empty list.")
+        msg = f"{param_name} must not be an empty list."
+        raise ValueError(msg)
 
     if not all(isinstance(col, str) for col in normalized):
         bad_types = sorted({type(col).__name__ for col in normalized if not isinstance(col, str)})
-        msg = f"columns must contain only strings. Got element types: {bad_types}."
+        msg = f"{param_name} must contain only strings. Got element types: {bad_types}."
         raise TypeError(msg)
 
     missing_cols = sorted(set(normalized) - set(df.columns))
     if len(missing_cols) > 0:
-        msg = f"The following columns are required but missing: {missing_cols}"
+        msg = f"{param_name} references columns not present in the DataFrame: {missing_cols}"
         raise ValueError(msg)
 
     return normalized

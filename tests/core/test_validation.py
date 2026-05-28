@@ -27,43 +27,46 @@ class TestEnsureColumns:
         """Test that valid str or list input is normalized to the expected list."""
         pdf = pd.DataFrame({"customer_id": [1, 2], "store_id": [101, 102]})
         df = ibis.memtable(pdf) if input_type == "ibis" else pdf
-        assert ensure_columns(df, columns_in) == expected_out
+        assert ensure_columns(df, columns_in, "group_col") == expected_out
 
     @pytest.mark.parametrize(
         ("columns_in", "expected_match"),
         [
-            ("unit_spend", "unit_spend"),
-            (["customer_id", "unit_spend", "store_id"], r"\['store_id', 'unit_spend'\]"),
+            ("unit_spend", r"group_col references columns not present.*unit_spend"),
+            (
+                ["customer_id", "unit_spend", "store_id"],
+                r"group_col references columns not present.*\['store_id', 'unit_spend'\]",
+            ),
         ],
         ids=["string", "list"],
     )
     @pytest.mark.parametrize("input_type", ["pandas", "ibis"])
     def test_raises_when_columns_missing(self, input_type, columns_in, expected_match):
-        """Test that ValueError lists the missing columns for both str and list input."""
+        """Test that ValueError surfaces param name and lists the missing columns."""
         pdf = pd.DataFrame({"customer_id": [1, 2]})
         df = ibis.memtable(pdf) if input_type == "ibis" else pdf
         with pytest.raises(ValueError, match=expected_match):
-            ensure_columns(df, columns_in)
+            ensure_columns(df, columns_in, "group_col")
 
     @pytest.mark.parametrize("bad_input", [42, None, ("customer_id",), {"customer_id"}])
     def test_raises_type_error_for_non_str_non_list_input(self, bad_input):
-        """Test that TypeError is raised for inputs that are neither str nor list."""
+        """Test that TypeError surfacing the caller's param name is raised for inputs that are neither str nor list."""
         df = pd.DataFrame({"customer_id": [1]})
-        with pytest.raises(TypeError, match="columns must be a string or list of strings"):
-            ensure_columns(df, bad_input)
+        with pytest.raises(TypeError, match="segment_col must be a string or list of strings"):
+            ensure_columns(df, bad_input, "segment_col")
 
     @pytest.mark.parametrize("bad_list", [[1, 2], ["customer_id", 5], [None, "customer_id"]])
     def test_raises_type_error_when_list_contains_non_string(self, bad_list):
-        """Test that TypeError is raised when list contains non-string elements."""
+        """Test that TypeError surfacing the caller's param name is raised when list contains non-string elements."""
         df = pd.DataFrame({"customer_id": [1]})
-        with pytest.raises(TypeError, match="must contain only strings"):
-            ensure_columns(df, bad_list)
+        with pytest.raises(TypeError, match="segment_col must contain only strings"):
+            ensure_columns(df, bad_list, "segment_col")
 
     def test_raises_value_error_for_empty_list(self):
-        """Test that ValueError is raised for an empty list."""
+        """Test that ValueError surfacing the caller's param name is raised for an empty list."""
         df = pd.DataFrame({"customer_id": [1]})
-        with pytest.raises(ValueError, match="columns must not be an empty list"):
-            ensure_columns(df, [])
+        with pytest.raises(ValueError, match="group_col must not be an empty list"):
+            ensure_columns(df, [], "group_col")
 
 
 class TestEnsureValueChoice:
@@ -121,6 +124,11 @@ class TestEnsureIbisTable:
         ids=["dict", "list", "None", "string", "int"],
     )
     def test_invalid_input_raises_type_error(self, invalid_input):
-        """Test that invalid input types raise TypeError with correct message."""
+        """Test that invalid input types raise TypeError with the default param name."""
         with pytest.raises(TypeError, match="df must be either a pandas DataFrame or an Ibis Table"):
             ensure_ibis_table(invalid_input)
+
+    def test_error_surfaces_caller_param_name(self):
+        """Test that a caller-supplied param_name appears in the TypeError message."""
+        with pytest.raises(TypeError, match="data must be either a pandas DataFrame or an Ibis Table"):
+            ensure_ibis_table("not a dataframe", param_name="data")

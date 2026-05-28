@@ -85,15 +85,15 @@ class TestAcv:
         assert_frame_equal(result, expected)
 
     def test_acv_missing_column_raises(self):
-        """Test that missing unit_spend column raises ValueError."""
+        """Test that missing unit_spend column raises ValueError naming required_cols."""
         df = pd.DataFrame({cols.customer_id: [1, 2], cols.store_id: [101, 102]})
-        with pytest.raises(ValueError, match="missing"):
+        with pytest.raises(ValueError, match="required_cols references columns not present in the DataFrame"):
             Acv(df)
 
     def test_acv_missing_group_col_raises(self):
-        """Test that missing group_col column raises ValueError."""
+        """Test that missing group_col column raises ValueError naming group_col."""
         df = pd.DataFrame({cols.unit_spend: [100.0, 200.0]})
-        with pytest.raises(ValueError, match="missing"):
+        with pytest.raises(ValueError, match="group_col references columns not present in the DataFrame"):
             Acv(df, group_col=cols.store_id)
 
     def test_acv_custom_scale_factor(self):

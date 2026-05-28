@@ -80,7 +80,7 @@ class CohortAnalysis:
             cols.transaction_date,
             aggregation_column,
         ]
-        ensure_columns(df, required_cols)
+        ensure_columns(df, required_cols, "required_cols")
 
         self.df = self._calculate_cohorts(
             df=df,

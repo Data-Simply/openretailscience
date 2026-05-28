@@ -329,7 +329,7 @@ class TestCompositeRank:
     )
     def test_invalid_group_col_type(self, simple_df, invalid_group_col):
         """Test behavior with invalid group_col type."""
-        with pytest.raises(TypeError, match="columns must be a string or list of strings"):
+        with pytest.raises(TypeError, match="group_col must be a string or list of strings"):
             CompositeRank(
                 df=simple_df,
                 rank_cols=[("spend", "desc")],
@@ -340,7 +340,7 @@ class TestCompositeRank:
     @pytest.mark.parametrize(
         ("invalid_group_col", "expected_error_message"),
         [
-            ([], "columns must not be an empty list"),
+            ([], "group_col must not be an empty list"),
             (["invalid"], r"\['invalid'\]"),
         ],
     )
