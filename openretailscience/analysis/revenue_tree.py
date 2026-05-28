@@ -34,6 +34,7 @@ from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles import graph_utils as gu
 from openretailscience.plots.tree_diagram import DetailedTreeNode, TreeGrid
 from openretailscience.plugin import plugin_manager
+from openretailscience.utils.validation import validate_columns
 
 
 @plugin_manager.extensible
@@ -253,10 +254,7 @@ class RevenueTree:
         if group_col is not None:
             required_cols.extend(group_col)
 
-        missing_cols = set(required_cols) - set(df.columns)
-        if len(missing_cols) > 0:
-            msg = f"The following columns are required but missing: {missing_cols}"
-            raise ValueError(msg)
+        validate_columns(df, required_cols)
 
         df, p1_index, p2_index = self._agg_data(df, period_col, p1_value, p2_value, group_col)
 
