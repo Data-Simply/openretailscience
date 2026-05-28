@@ -67,6 +67,7 @@ from matplotlib.axes import Axes, SubplotBase
 
 from openretailscience.options import get_option
 from openretailscience.plots import venn
+from openretailscience.utils.validation import validate_columns
 
 
 class CrossShop:
@@ -180,10 +181,7 @@ class CrossShop:
             group_3_col = group_1_col
 
         required_cols = [group_col, value_col]
-        missing_cols = set(required_cols) - set(df.columns)
-        if len(missing_cols) > 0:
-            msg = f"The following columns are required but missing: {missing_cols}"
-            raise ValueError(msg)
+        validate_columns(df, required_cols)
 
         self.group_count = 2 if group_3_col is None else 3
 

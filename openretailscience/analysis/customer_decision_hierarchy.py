@@ -74,6 +74,7 @@ from scipy.spatial.distance import squareform
 
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
+from openretailscience.utils.validation import validate_columns
 
 
 class CustomerDecisionHierarchy:
@@ -157,10 +158,7 @@ class CustomerDecisionHierarchy:
         """
         cols = ColumnHelper()
         required_cols = [cols.customer_id, cols.transaction_id, product_col]
-        missing_cols = set(required_cols) - set(df.columns)
-        if len(missing_cols) > 0:
-            msg = f"The following columns are required but missing: {missing_cols}"
-            raise ValueError(msg)
+        validate_columns(df, required_cols)
 
         self.random_state = random_state
         self.product_col = product_col

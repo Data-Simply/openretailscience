@@ -53,6 +53,7 @@ import ibis
 import pandas as pd
 
 from openretailscience.options import ColumnHelper, get_option
+from openretailscience.utils.validation import validate_columns
 
 __all__ = ["SegTransactionStats", "cube", "rollup"]
 
@@ -319,10 +320,7 @@ class SegTransactionStats:
             *filter(lambda x: x in data.columns, [cols.unit_qty, cols.customer_id]),
         ]
 
-        missing_cols = set(required_cols) - set(data.columns)
-        if len(missing_cols) > 0:
-            msg = f"The following columns are required but missing: {missing_cols}"
-            raise ValueError(msg)
+        validate_columns(data, required_cols)
 
         # Validate extra_aggs if provided
         self._validate_extra_aggs(data, extra_aggs)

@@ -71,7 +71,7 @@ class TestCohortAnalysis:
     def test_missing_columns(self):
         """Test if missing columns raise an error."""
         df = pd.DataFrame({"customer_id": [1, 2, 3], "unit_spend": [10, 20, 30]})
-        with pytest.raises(ValueError, match="Missing required columns"):
+        with pytest.raises(ValueError, match="The following columns are required but missing"):
             CohortAnalysis(
                 df=df,
                 aggregation_column="unit_spend",

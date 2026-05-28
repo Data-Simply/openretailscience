@@ -26,6 +26,7 @@ from matplotlib.axes import Axes, SubplotBase
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots import bar
 from openretailscience.plots.styles.colors import COLORS
+from openretailscience.utils.validation import validate_columns
 
 
 class GainLoss:
@@ -74,10 +75,7 @@ class GainLoss:
             )
 
         required_cols = [get_option("column.customer_id"), value_col] + ([group_col] if group_col is not None else [])
-        missing_cols = set(required_cols) - set(df.columns)
-        if len(missing_cols) > 0:
-            msg = f"The following columns are required but missing: {missing_cols}"
-            raise ValueError(msg)
+        validate_columns(df, required_cols)
 
         self.focus_group_name = focus_group_name
         self.comparison_group_name = comparison_group_name

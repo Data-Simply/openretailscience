@@ -53,6 +53,7 @@ import ibis
 import pandas as pd
 
 from openretailscience.options import ColumnHelper
+from openretailscience.utils.validation import validate_columns
 
 SEGMENT_NEW = "New"
 SEGMENT_REPEATING = "Repeating"
@@ -149,10 +150,7 @@ class NLRSegmentation:
         if self._group_col is not None:
             required_cols.extend(self._group_col)
 
-        missing_cols = set(required_cols) - set(df.columns)
-        if len(missing_cols) > 0:
-            msg = f"The following columns are required but missing: {missing_cols}"
-            raise ValueError(msg)
+        validate_columns(df, required_cols)
 
         p1_expr = p1_value if isinstance(p1_value, ibis.Expr) else ibis.literal(p1_value)
         p2_expr = p2_value if isinstance(p2_value, ibis.Expr) else ibis.literal(p2_value)

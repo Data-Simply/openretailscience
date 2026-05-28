@@ -41,6 +41,7 @@ import numpy as np
 import pandas as pd
 
 from openretailscience.options import ColumnHelper
+from openretailscience.utils.validation import validate_columns
 
 
 class CohortAnalysis:
@@ -81,11 +82,7 @@ class CohortAnalysis:
             cols.transaction_date,
             aggregation_column,
         ]
-        missing_cols = [col for col in required_cols if col not in df.columns]
-
-        if missing_cols:
-            error_message = f"Missing required columns: {missing_cols}"
-            raise ValueError(error_message)
+        validate_columns(df, required_cols)
 
         self.df = self._calculate_cohorts(
             df=df,

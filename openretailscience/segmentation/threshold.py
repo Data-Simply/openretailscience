@@ -49,6 +49,7 @@ import ibis
 import pandas as pd
 
 from openretailscience.options import ColumnHelper
+from openretailscience.utils.validation import validate_columns
 
 
 class ThresholdSegmentation:
@@ -110,10 +111,7 @@ class ThresholdSegmentation:
         if self._group_col is not None:
             required_cols.extend(self._group_col)
 
-        missing_cols = set(required_cols) - set(df.columns)
-        if len(missing_cols) > 0:
-            msg = f"The following columns are required but missing: {missing_cols}"
-            raise ValueError(msg)
+        validate_columns(df, required_cols)
 
         # Build group_by columns: customer_id + optional group columns
         group_by_cols = [cols.customer_id]
