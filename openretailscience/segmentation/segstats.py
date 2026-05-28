@@ -306,10 +306,6 @@ class SegTransactionStats:
 
         cols = ColumnHelper()
 
-        if isinstance(segment_col, list) and len(segment_col) == 0:
-            msg = "segment_col cannot be an empty list. At least one segment column must be specified."
-            raise ValueError(msg)
-
         segment_col = ensure_columns(data, segment_col, "segment_col")
 
         required_cols = [

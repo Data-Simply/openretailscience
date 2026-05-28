@@ -73,7 +73,7 @@ class CohortAnalysis:
         """
         cols = ColumnHelper()
 
-        ensure_value_choice(period, self.VALID_PERIODS, "period")
+        period = ensure_value_choice(period, self.VALID_PERIODS, "period")
 
         required_cols = [
             cols.customer_id,

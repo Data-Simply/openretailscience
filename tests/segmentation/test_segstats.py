@@ -197,7 +197,7 @@ class TestSegTransactionStats:
         with pytest.raises(ValueError) as excinfo:
             SegTransactionStats(df, segment_col=[])
 
-        assert "segment_col cannot be an empty list" in str(excinfo.value)
+        assert "segment_col must not be an empty list" in str(excinfo.value)
 
     def test_multiple_segment_columns(self):
         """Test that the class correctly handles multiple segment columns."""
