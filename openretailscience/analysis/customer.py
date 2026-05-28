@@ -39,185 +39,252 @@ This module computes purchase-frequency statistics that can be visualized with
 the plotting helpers in `openretailscience.plots`.
 """
 
+from __future__ import annotations
+
 import operator
+from typing import TYPE_CHECKING
 
-import pandas as pd
+import ibis
 
-from openretailscience.core.validation import ensure_data_has_columns
-from openretailscience.options import ColumnHelper
+from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
+from openretailscience.options import ColumnHelper, get_option
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+_COMPARISONS = {
+    "less_than": operator.lt,
+    "less_than_equal_to": operator.le,
+    "equal_to": operator.eq,
+    "not_equal_to": operator.ne,
+    "greater_than": operator.gt,
+    "greater_than_equal_to": operator.ge,
+}
 
 
 class PurchasesPerCustomer:
-    """Computes the number of purchases per customer.
+    """Computes the number of distinct purchases per customer.
 
     Attributes:
-        cust_purchases_s (pd.Series): The number of purchases per customer.
+        table (ibis.Table): One row per customer with columns ``customer_id``
+            and ``purchase_count``.
+        df (pd.DataFrame): Materialized view of ``table`` indexed by
+            ``customer_id``. Lazily computed on first access.
     """
 
-    def __init__(self, df: pd.DataFrame) -> None:
+    def __init__(self, df: pd.DataFrame | ibis.Table) -> None:
         """Initialize the PurchasesPerCustomer class.
 
         Args:
-            df (pd.DataFrame): A dataframe with the transaction data. The dataframe must comply with the
-                contain customer_id and transaction_id columns, which must be non-null.
+            df (pd.DataFrame | ibis.Table): Transaction data containing the
+                ``customer_id`` and ``transaction_id`` columns.
 
         Raises:
-            ValueError: If the dataframe doesn't contain the columns customer_id and transaction_id, or if the columns
-                are null.
-
+            ValueError: If the required columns are missing.
+            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table.
         """
         cols = ColumnHelper()
-        required_cols = [cols.customer_id, cols.transaction_id]
-        ensure_data_has_columns(df, required_cols)
+        df = ensure_ibis_table(df)
+        ensure_data_has_columns(df, [cols.customer_id, cols.transaction_id])
 
-        self.cust_purchases_s = df.groupby(cols.customer_id)[cols.transaction_id].nunique()
+        self.table = df.group_by(cols.customer_id).aggregate(
+            purchase_count=df[cols.transaction_id].nunique(),
+        )
+        self._df: pd.DataFrame | None = None
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Materialized purchase counts indexed by customer_id."""
+        if self._df is None:
+            customer_id_col = get_option("column.customer_id")
+            self._df = self.table.execute().set_index(customer_id_col).sort_index()
+        return self._df
 
     def purchases_percentile(self, percentile: float = 0.5) -> float:
-        """Get the number of purchases at a given percentile.
+        """Return the purchase count at the given percentile across customers.
 
         Args:
-            percentile (float): The percentile to get the number of purchases at.
+            percentile (float): Percentile in [0, 1]. Defaults to 0.5 (median).
 
         Returns:
-            float: The number of purchases at the given percentile.
+            float: The purchase count at that percentile, using linear interpolation.
         """
-        return self.cust_purchases_s.quantile(percentile)
+        return float(self.table.purchase_count.quantile(percentile).execute())
 
-    def find_purchase_percentile(self, number_of_purchases: int, comparison: str = "less_than_equal_to") -> float:
-        """Find the percentile of the number of purchases.
+    def find_purchase_percentile(
+        self,
+        number_of_purchases: int,
+        comparison: str = "less_than_equal_to",
+    ) -> float:
+        """Return the share of customers whose purchase count matches a comparison.
 
         Args:
-            number_of_purchases (int): The number of purchases to find the percentile of.
-            comparison (str, optional): The comparison to use. Defaults to "less_than_equal_to". Must be one of
-                less_than, less_than_equal_to, equal_to, not_equal_to, greater_than, or greater_than_equal_to.
+            number_of_purchases (int): Threshold to compare against.
+            comparison (str): One of ``less_than``, ``less_than_equal_to``,
+                ``equal_to``, ``not_equal_to``, ``greater_than``,
+                ``greater_than_equal_to``. Defaults to ``less_than_equal_to``.
 
         Returns:
-            float: The percentile of the number of purchases.
-        """
-        ops = {
-            "less_than": operator.lt,
-            "less_than_equal_to": operator.le,
-            "equal_to": operator.eq,
-            "not_equal_to": operator.ne,
-            "greater_than": operator.gt,
-            "greater_than_equal_to": operator.ge,
-        }
+            float: Fraction of customers satisfying the comparison.
 
-        if comparison not in ops:
-            msg = f"Comparison must be one of {', '.join(repr(k) for k in ops)}"
+        Raises:
+            ValueError: If ``comparison`` is not a recognized operator name.
+        """
+        if comparison not in _COMPARISONS:
+            msg = f"Comparison must be one of {', '.join(repr(k) for k in _COMPARISONS)}"
             raise ValueError(msg)
 
-        return len(self.cust_purchases_s[ops[comparison](self.cust_purchases_s, number_of_purchases)]) / len(
-            self.cust_purchases_s,
-        )
+        op = _COMPARISONS[comparison]
+        matched = self.table.filter(op(self.table.purchase_count, number_of_purchases)).count().execute()
+        total = self.table.count().execute()
+        return matched / total
 
 
 class DaysBetweenPurchases:
     """Computes the average number of days between purchases per customer.
 
+    Single-purchase-day customers are excluded.
+
     Attributes:
-        purchase_dist_s (pd.Series): The average number of days between purchases per customer.
+        table (ibis.Table): One row per customer with columns ``customer_id``
+            and ``avg_days_between_purchases``.
+        df (pd.DataFrame): Materialized view of ``table`` indexed by
+            ``customer_id``. Lazily computed on first access.
     """
 
-    def __init__(self, df: pd.DataFrame) -> None:
+    def __init__(self, df: pd.DataFrame | ibis.Table) -> None:
         """Initialize the DaysBetweenPurchases class.
 
         Args:
-            df (pd.DataFrame): A dataframe with the transaction data. The dataframe must have the columns customer_id
-                and transaction_date, which must be non-null.
+            df (pd.DataFrame | ibis.Table): Transaction data containing the
+                ``customer_id`` and ``transaction_date`` columns.
 
         Raises:
-            ValueError: If the dataframe doesn't contain the columns customer_id and transaction_date, or if the
-                columns are null.
-
+            ValueError: If the required columns are missing.
+            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table.
         """
         cols = ColumnHelper()
-        required_cols = [cols.customer_id, cols.transaction_date]
-        ensure_data_has_columns(df, required_cols)
+        df = ensure_ibis_table(df)
+        ensure_data_has_columns(df, [cols.customer_id, cols.transaction_date])
+        self.table = self._calculate(df)
+        self._df: pd.DataFrame | None = None
 
-        self.purchase_dist_s = self._calculate_days_between_purchases(df)
+    @property
+    def df(self) -> pd.DataFrame:
+        """Materialized per-customer mean gaps indexed by customer_id."""
+        if self._df is None:
+            customer_id_col = get_option("column.customer_id")
+            self._df = self.table.execute().set_index(customer_id_col).sort_index()
+        return self._df
 
     @staticmethod
-    def _calculate_days_between_purchases(df: pd.DataFrame) -> pd.Series:
-        """Calculate the average number of days between purchases per customer.
-
-        Args:
-            df (pd.DataFrame): A dataframe with the transaction data. The dataframe must have the columns customer_id
-                and transaction_date, which must be non-null.
-
-        Returns:
-            pd.Series: The average number of days between purchases per customer.
-        """
+    def _calculate(df: ibis.Table) -> ibis.Table:
         cols = ColumnHelper()
-        purchase_dist_df = df[[cols.customer_id, cols.transaction_date]].copy()
-        purchase_dist_df[cols.transaction_date] = df[cols.transaction_date].dt.floor("D")
-        purchase_dist_df = purchase_dist_df.drop_duplicates().sort_values([cols.customer_id, cols.transaction_date])
-        purchase_dist_df["diff"] = purchase_dist_df[cols.transaction_date].diff()
-        new_cust_mask = purchase_dist_df[cols.customer_id] != purchase_dist_df[cols.customer_id].shift(1)
-        purchase_dist_df = purchase_dist_df[~new_cust_mask]
-        purchase_dist_df["diff"] = purchase_dist_df["diff"].dt.days
-        return purchase_dist_df.groupby(cols.customer_id)["diff"].mean()
+
+        per_customer_day = df.select(
+            df[cols.customer_id],
+            transaction_day=df[cols.transaction_date].truncate("D"),
+        ).distinct()
+
+        window = ibis.window(
+            group_by=per_customer_day[cols.customer_id],
+            order_by=per_customer_day.transaction_day,
+        )
+        with_prev = per_customer_day.mutate(
+            prev_day=per_customer_day.transaction_day.lag(1).over(window),
+        )
+        with_gap = with_prev.mutate(
+            gap_days=with_prev.transaction_day.delta(with_prev.prev_day, unit="day"),
+        )
+        return (
+            with_gap.filter(with_gap.gap_days.notnull())  # noqa: PD004 (ibis API, not pandas)
+            .group_by(cols.customer_id)
+            .aggregate(avg_days_between_purchases=with_gap.gap_days.mean())
+        )
 
     def purchases_percentile(self, percentile: float = 0.5) -> float:
-        """Get the average number of days between purchases at a given percentile.
+        """Return the average inter-purchase gap (in days) at the given percentile.
 
         Args:
-            percentile (float): The percentile to get the average number of days between purchases at.
+            percentile (float): Percentile in [0, 1]. Defaults to 0.5 (median).
 
         Returns:
-            float: The average number of days between purchases at the given percentile.
+            float: The average gap at that percentile, using linear interpolation.
         """
-        return self.purchase_dist_s.quantile(percentile)
+        return float(self.table.avg_days_between_purchases.quantile(percentile).execute())
 
 
 class TransactionChurn:
-    """Computes the churn rate by number of purchases.
+    """Computes the churn rate by transaction number.
+
+    A customer is "churned" at their N-th transaction if it is their final
+    transaction and occurred strictly before ``max(transaction_date) -
+    churn_period`` days.
 
     Attributes:
-        purchase_dist_df (pd.DataFrame): The churn rate by number of purchases.
-        n_unique_customers (int): The number of unique customers in the dataframe.
+        table (ibis.Table): Per-``transaction_number`` ``retained``,
+            ``churned``, and ``churned_pct`` columns.
+        df (pd.DataFrame): Materialized view of ``table`` indexed by
+            ``transaction_number`` and sorted ascending. Lazily computed on
+            first access.
+        n_unique_customers (int): Distinct customers in the input data.
     """
 
-    def __init__(self, df: pd.DataFrame, churn_period: float) -> None:
+    def __init__(self, df: pd.DataFrame | ibis.Table, churn_period: int) -> None:
         """Initialize the TransactionChurn class.
 
         Args:
-            df (pd.DataFrame): A dataframe with the transaction data. The dataframe must have the columns customer_id
-                and transaction_date.
-            churn_period (float): The number of days to consider a customer churned.
+            df (pd.DataFrame | ibis.Table): Transaction data containing the
+                ``customer_id`` and ``transaction_date`` columns.
+            churn_period (int): Number of days of inactivity after which a
+                customer is considered churned.
 
         Raises:
-            ValueError: If the dataframe doesn't contain the columns customer_id and transaction_date.
+            ValueError: If the required columns are missing.
+            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table.
         """
         cols = ColumnHelper()
-        required_cols = [cols.customer_id, cols.transaction_date]
-        ensure_data_has_columns(df, required_cols)
+        df = ensure_ibis_table(df)
+        ensure_data_has_columns(df, [cols.customer_id, cols.transaction_date])
 
-        purchase_dist_df = df[[cols.customer_id, cols.transaction_date]].copy()
-        # Truncate the transaction_date to the day
-        purchase_dist_df[cols.transaction_date] = df[cols.transaction_date].dt.floor("D")
-        purchase_dist_df = purchase_dist_df.drop_duplicates()
-        purchase_dist_df = purchase_dist_df.sort_values([cols.customer_id, cols.transaction_date])
-        purchase_dist_df["transaction_number"] = purchase_dist_df.groupby(cols.customer_id).cumcount() + 1
+        self.n_unique_customers = int(df[cols.customer_id].nunique().execute())
+        self.table = self._calculate(df, churn_period)
+        self._df: pd.DataFrame | None = None
 
-        purchase_dist_df["last_transaction"] = (
-            purchase_dist_df.groupby(cols.customer_id)[cols.transaction_date].shift(-1).isna()
-        )
-        purchase_dist_df["transaction_before_churn_window"] = purchase_dist_df[cols.transaction_date] < (
-            purchase_dist_df[cols.transaction_date].max() - pd.Timedelta(days=churn_period)
-        )
-        purchase_dist_df["churned"] = (
-            purchase_dist_df["last_transaction"] & purchase_dist_df["transaction_before_churn_window"]
+    @property
+    def df(self) -> pd.DataFrame:
+        """Materialized churn table indexed by transaction_number."""
+        if self._df is None:
+            self._df = self.table.execute().set_index("transaction_number").sort_index()
+        return self._df
+
+    @staticmethod
+    def _calculate(df: ibis.Table, churn_period: int) -> ibis.Table:
+        cols = ColumnHelper()
+
+        per_customer_day = df.select(
+            df[cols.customer_id],
+            transaction_day=df[cols.transaction_date].truncate("D"),
+        ).distinct()
+
+        cust_window = ibis.window(
+            group_by=per_customer_day[cols.customer_id],
+            order_by=per_customer_day.transaction_day,
         )
 
-        purchase_dist_df = (
-            purchase_dist_df[purchase_dist_df["transaction_before_churn_window"]]
-            .groupby(["transaction_number"])["churned"]
-            .value_counts()
-            .unstack()
-        )
-        purchase_dist_df.columns = ["retained", "churned"]
-        purchase_dist_df["churned_pct"] = purchase_dist_df["churned"].div(purchase_dist_df.sum(axis=1))
-        self.purchase_dist_df = purchase_dist_df
+        churn_boundary = per_customer_day.transaction_day.max() - ibis.interval(days=churn_period)
 
-        self.n_unique_customers = df[cols.customer_id].nunique()
+        annotated = per_customer_day.mutate(
+            transaction_number=ibis.row_number().over(cust_window) + 1,
+            is_last_transaction=per_customer_day.transaction_day.lead(1).over(cust_window).isnull(),  # noqa: PD003 (ibis API, not pandas)
+            in_window=per_customer_day.transaction_day < churn_boundary,
+        )
+
+        in_window = annotated.filter(annotated.in_window)
+        grouped = in_window.group_by(in_window.transaction_number).aggregate(
+            retained=(~in_window.is_last_transaction).cast("int").sum(),
+            churned=in_window.is_last_transaction.cast("int").sum(),
+        )
+        return grouped.mutate(
+            churned_pct=grouped.churned / (grouped.churned + grouped.retained),
+        )
