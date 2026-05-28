@@ -276,7 +276,7 @@ class TestTrendLine:
         ax.scatter(x, y)
 
         # Should raise ValueError for unsupported type
-        with pytest.raises(ValueError, match="Unsupported trend_type"):
+        with pytest.raises(ValueError, match="trend_type must be one of"):
             trend.add_trend_line(ax, trend_type="unsupported")
 
     # Algorithm Tests - Trend types with known data (parametrized to eliminate duplication)
