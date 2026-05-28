@@ -11,6 +11,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
+VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
+
+
 def ensure_ibis_table(df: pd.DataFrame | ibis.Table, param_name: str = "df") -> ibis.Table:
     """Convert pandas DataFrame to ibis Table, or validate input is an ibis Table.
 
