@@ -9,7 +9,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "duckdb>=1.1.0,<1.4",
+    "duckdb>=1.1.0,<1.6",
     "ibis-framework[duckdb]>=10.0.0,<13",
     "matplotlib-set-diagrams>=0.0.2,<0.3.0",
     "matplotlib>=3.9.1,<4",
