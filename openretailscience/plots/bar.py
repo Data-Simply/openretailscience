@@ -182,8 +182,7 @@ def plot(  # noqa: PLR0913
     if use_hatch:
         ax = gu.apply_hatches(ax=ax, num_segments=len(value_col))
 
-    # Add data labels
-    if data_label_format:
+    if data_label_format is not None:
         _generate_bar_labels(
             ax=ax,
             plot_kind=plot_kind,
@@ -218,7 +217,6 @@ def _generate_bar_labels(
     df: pd.DataFrame,
     data_label_format: Literal[
         "absolute",
-        "percentage",
         "percentage_by_bar_group",
         "percentage_by_series",
     ],

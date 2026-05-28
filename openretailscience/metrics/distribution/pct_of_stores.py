@@ -64,25 +64,25 @@ class PctOfStores:
 
         store_id_col = get_option("column.store_id")
 
-        product_col = ensure_columns(
-            df,
-            product_col if product_col is not None else get_option("column.product_id"),
-            "product_col",
-        )
+        if product_col is None:
+            product_col = [get_option("column.product_id")]
+        else:
+            product_col = ensure_columns(df, product_col, "product_col")
 
         if group_col is not None:
             group_col = ensure_columns(df, group_col, "group_col")
 
-        required_cols = [store_id_col, *product_col]
         group_cols = list(product_col)
         if group_col is not None:
             overlap = set(product_col) & set(group_col)
             if len(overlap) > 0:
                 msg = f"product_col {overlap} must not also appear in group_col"
                 raise ValueError(msg)
-            required_cols.extend(group_col)
             group_cols.extend(group_col)
-        ensure_data_has_columns(df, required_cols)
+        # store_id_col + any unvalidated product_col defaults still need to exist in df;
+        # already-validated user inputs (group_col, an explicitly-passed product_col) are
+        # excluded to avoid redundant set-difference work.
+        ensure_data_has_columns(df, [store_id_col, *product_col])
 
         store_product = df.select([store_id_col, *group_cols]).distinct()
 

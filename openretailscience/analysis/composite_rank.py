@@ -67,7 +67,7 @@ import ibis
 import ibis.expr.types as ir
 import pandas as pd
 
-from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_columns, ensure_value_choice
+from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_columns, ensure_ibis_table, ensure_value_choice
 
 VALID_AGG_FUNCS = ("mean", "sum", "min", "max")
 
@@ -183,8 +183,7 @@ class CompositeRank:
             >>> # Apparel products ranked against other apparel
         """
         self._df: pd.DataFrame | None = None
-        if isinstance(df, pd.DataFrame):
-            df = ibis.memtable(df)
+        df = ensure_ibis_table(df)
 
         if group_col is not None:
             group_col = ensure_columns(df, group_col, "group_col")

@@ -48,7 +48,7 @@ from typing import Literal
 import ibis
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
+from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import ColumnHelper
 
 
@@ -99,8 +99,7 @@ class ThresholdSegmentation:
         # Initialize column helper
         cols = ColumnHelper()
 
-        if isinstance(df, pd.DataFrame):
-            df: ibis.Table = ibis.memtable(df)
+        df = ensure_ibis_table(df)
 
         self._group_col = ensure_columns(df, group_col, "group_col") if group_col is not None else None
 

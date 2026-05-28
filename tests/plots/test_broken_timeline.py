@@ -191,6 +191,17 @@ class TestBrokenTimelinePlot:
         alias_segments = sum(len(c.get_paths()) for c in ax_alias.collections)
         assert canonical_segments == alias_segments
 
+    def test_period_aliases_and_gap_days_stay_in_lockstep(self):
+        """Every alias must resolve to a key present in PERIOD_GAP_DAYS, and vice versa.
+
+        Guards against adding a new period to one dict and forgetting the other; without
+        this, ensure_value_choice succeeds and the next ``PERIOD_GAP_DAYS[period]`` lookup
+        raises KeyError at runtime.
+        """
+        alias_targets = set(broken_timeline.PERIOD_ALIASES.values())
+        gap_keys = set(broken_timeline.PERIOD_GAP_DAYS)
+        assert alias_targets == gap_keys
+
     def test_with_source_text(self, sample_dataframe):
         """Test adding source text appears in plot."""
         source_text = "Source: Test Data"

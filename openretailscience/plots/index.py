@@ -58,7 +58,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_value_choice
+from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_ibis_table, ensure_value_choice
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
@@ -477,11 +477,7 @@ def get_indexes(
     Returns:
         pd.DataFrame: The calculated index values with grouping columns.
     """
-    if isinstance(df, pd.DataFrame):
-        df = df.copy()
-        table = ibis.memtable(df)
-    else:
-        table = df
+    table = ensure_ibis_table(df)
 
     agg_func = ensure_value_choice(agg_func, VALID_AGG_FUNCS, "agg_func")
 
