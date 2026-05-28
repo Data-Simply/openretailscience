@@ -50,7 +50,7 @@ def _measure_chrome_spacing(figheight: float) -> dict[str, float]:
     sub = _texts_with(fig, subtitle)[0].get_window_extent(renderer=renderer)
     src = _texts_with(fig, source)[0].get_window_extent(renderer=renderer)
     axes_pos = ax.get_position()
-    return {
+    measurements = {
         "top_margin_px": fig.bbox.height - eye.y1,
         "eye_to_title_px": eye.y0 - ttl.y1,
         "title_to_sub_px": ttl.y0 - sub.y1,
@@ -58,6 +58,8 @@ def _measure_chrome_spacing(figheight: float) -> dict[str, float]:
         "source_to_axes_px": axes_pos.y0 * fig.bbox.height - src.y1,
         "bottom_margin_px": src.y0,
     }
+    plt.close(fig)
+    return measurements
 
 
 _CHROME_TEST_FIGHEIGHT_IN = 5.0
@@ -82,7 +84,9 @@ def _topmost_axes_content_fig_y(*, labeltop: bool) -> float:
         for t in [*ax.xaxis.get_major_ticks(), *ax.yaxis.get_major_ticks()]
         if t.label2.get_visible() and t.label2.get_text() != ""
     ]
-    return max([spine_top_fig, *top_label_tops_fig])
+    topmost_fig = max([spine_top_fig, *top_label_tops_fig])
+    plt.close(fig)
+    return topmost_fig
 
 
 class TestApplyChartChrome:
