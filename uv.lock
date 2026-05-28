@@ -1986,7 +1986,7 @@ wheels = [
 
 [[package]]
 name = "openretailscience"
-version = "0.45.0"
+version = "0.46.0"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
