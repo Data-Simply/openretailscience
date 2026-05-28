@@ -149,9 +149,6 @@ class DaysBetweenPurchases:
             pd.Series: The average number of days between purchases per customer.
         """
         cols = ColumnHelper()
-        required_cols = [cols.customer_id, cols.transaction_date]
-        ensure_data_has_columns(df, required_cols)
-
         purchase_dist_df = df[[cols.customer_id, cols.transaction_date]].copy()
         purchase_dist_df[cols.transaction_date] = df[cols.transaction_date].dt.floor("D")
         purchase_dist_df = purchase_dist_df.drop_duplicates().sort_values([cols.customer_id, cols.transaction_date])

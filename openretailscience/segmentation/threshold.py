@@ -105,11 +105,8 @@ class ThresholdSegmentation:
 
         value_col = cols.unit_spend if value_col is None else value_col
 
-        required_cols = [cols.customer_id, value_col]
-        if self._group_col is not None:
-            required_cols.extend(self._group_col)
-
-        ensure_data_has_columns(df, required_cols)
+        # group_col is already validated above; only the function's hard-coded requirements remain.
+        ensure_data_has_columns(df, [cols.customer_id, value_col])
 
         # Build group_by columns: customer_id + optional group columns
         group_by_cols = [cols.customer_id]

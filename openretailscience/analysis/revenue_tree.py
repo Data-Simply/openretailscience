@@ -242,17 +242,10 @@ class RevenueTree:
         if group_col is not None:
             group_col = ensure_columns(df, group_col, "group_col")
 
-        required_cols = [
-            cols.customer_id,
-            cols.transaction_id,
-            cols.unit_spend,
-        ]
+        required_cols = [cols.customer_id, cols.transaction_id, cols.unit_spend]
         if cols.unit_qty in df.columns:
             required_cols.append(cols.unit_qty)
-
-        if group_col is not None:
-            required_cols.extend(group_col)
-
+        # group_col is already validated above; only the function's hard-coded requirements remain.
         ensure_data_has_columns(df, required_cols)
 
         df, p1_index, p2_index = self._agg_data(df, period_col, p1_value, p2_value, group_col)

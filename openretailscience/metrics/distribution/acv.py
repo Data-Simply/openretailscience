@@ -59,10 +59,8 @@ class Acv:
         if group_col is not None:
             group_col = ensure_columns(df, group_col, "group_col")
 
-        required_cols = [unit_spend_col]
-        if group_col is not None:
-            required_cols.extend(group_col)
-        ensure_data_has_columns(df, required_cols)
+        # group_col is already validated above; only the function's hard-coded requirement remains.
+        ensure_data_has_columns(df, [unit_spend_col])
 
         if group_col is not None:
             df = df.group_by(group_col)

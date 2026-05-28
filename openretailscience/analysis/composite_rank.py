@@ -61,8 +61,6 @@ Key Features:
 - Utilizes Ibis for efficient query execution on large retail datasets
 """
 
-from typing import Any
-
 import ibis
 import ibis.expr.types as ir
 import pandas as pd
@@ -187,6 +185,8 @@ class CompositeRank:
 
         if group_col is not None:
             group_col = ensure_columns(df, group_col, "group_col")
+        # Validate agg_func up-front so an invalid value fails before any per-column work runs.
+        agg_func = ensure_value_choice(agg_func, VALID_AGG_FUNCS, "agg_func")
         rank_mutates = self._process_rank_columns(rank_cols, df, group_col, ignore_ties)
         df = df.mutate(**rank_mutates)
         self.table = self._create_composite_ranking(df, rank_mutates, agg_func)
@@ -232,7 +232,11 @@ class CompositeRank:
             sort_order = ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
 
             order_by = ibis.asc(df[col_name]) if sort_order in ["asc", "ascending"] else ibis.desc(df[col_name])
-            window = self._create_window(group_col, df, order_by)
+            window = (
+                ibis.window(order_by=order_by)
+                if group_col is None
+                else ibis.window(group_by=[df[col] for col in group_col], order_by=order_by)
+            )
 
             # Calculate rank based on ignore_ties parameter (using 1-based ranks)
             rank_col = ibis.row_number().over(window) + 1 if ignore_ties else ibis.rank().over(window) + 1
@@ -260,31 +264,6 @@ class CompositeRank:
             raise ValueError(msg)
         return col_spec
 
-    def _create_window(
-        self,
-        group_col: list[str] | None,
-        df: ibis.Table,
-        order_by: ir.Column,
-    ) -> Any:  # noqa: ANN401 - WindowedExpr is an internal ibis type; Any is safest here
-        """Create an ibis window specification for ranking.
-
-        Builds the appropriate window function based on whether rankings should be
-        global or partitioned by group column(s).
-
-        Args:
-            group_col (list[str] | None): Columns to partition the window by, or None for a
-                global window. Always a list (or None) — the caller normalizes single strings
-                via ``ensure_columns``.
-            df (ibis.Table): The table containing the group columns.
-            order_by (ir.Column): An ibis ordering expression (e.g., ibis.asc or ibis.desc) for the window.
-
-        Returns:
-            Any: An ibis window specification for use with ranking functions.
-        """
-        if group_col is None:
-            return ibis.window(order_by=order_by)
-        return ibis.window(group_by=[df[col] for col in group_col], order_by=order_by)
-
     def _create_composite_ranking(
         self,
         df: ibis.Table,
@@ -305,12 +284,7 @@ class CompositeRank:
 
         Returns:
             ibis.Table: The input table with an additional composite_rank column.
-
-        Raises:
-            ValueError: If agg_func is not one of the supported aggregation functions.
         """
-        agg_func = ensure_value_choice(agg_func, VALID_AGG_FUNCS, "agg_func")
-
         column_refs = [df[col] for col in rank_mutates]
         agg_expr = {
             "mean": sum(column_refs) / len(column_refs),
