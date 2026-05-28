@@ -2,7 +2,7 @@
 
 import warnings
 from datetime import datetime
-from typing import Any, Literal, get_args
+from typing import Any, Literal, cast, get_args
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,7 @@ from matplotlib.axes import Axes
 from matplotlib.dates import date2num
 from scipy import stats
 
+from openretailscience.core.validation import ensure_value_choice
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.font_utils import get_font_properties
 
@@ -467,10 +468,7 @@ def add_trend_line(
         >>> ax = df.plot.bar(x='category', y='sales')
         >>> add_trend_line(ax, trend_type="linear")
     """
-    supported_types = get_args(TrendType)
-    if trend_type not in supported_types:
-        error_msg = f"Unsupported trend_type '{trend_type}'. Supported types: {list(supported_types)}"
-        raise ValueError(error_msg)
+    trend_type = cast("TrendType", ensure_value_choice(trend_type, get_args(TrendType), "trend_type"))
 
     # Extract data from the plot
     x_data, y_data = _extract_plot_data(ax)
