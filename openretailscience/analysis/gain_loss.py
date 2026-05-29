@@ -45,7 +45,7 @@ class GainLoss:
         comparison_group_index: list[bool] | pd.Series,
         comparison_group_name: str,
         group_col: str | None = None,
-        value_col: str = get_option("column.unit_spend"),
+        value_col: str | None = None,
         agg_func: str = "sum",
     ) -> None:
         """Calculate the gain loss table for a given DataFrame at the customer level.
@@ -59,9 +59,12 @@ class GainLoss:
             comparison_group_index (list[bool]): The index for the comparison group.
             comparison_group_name (str): The name of the comparison group.
             group_col (str | None, optional): The column to group by. Defaults to None.
-            value_col (str, optional): The column to calculate the gain loss from. Defaults to option column.unit_spend.
+            value_col (str | None, optional): The column to calculate the gain loss from. Defaults to None,
+                in which case the value of the ``column.unit_spend`` option is used.
             agg_func (str, optional): The aggregation function to use. Defaults to "sum".
         """
+        if value_col is None:
+            value_col = get_option("column.unit_spend")
         if not df[p1_index].index.intersection(df[p2_index].index).empty:
             raise ValueError("p1_index and p2_index should not overlap")
 

@@ -3,7 +3,6 @@
 import datetime
 
 import matplotlib.pyplot as plt
-import matplotlib.text
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
@@ -18,13 +17,6 @@ P2_DATE = datetime.date(2024, 5, 15)
 PERIOD_BOUNDARY = datetime.date(2024, 4, 1)
 FOCUS_BRAND = "Brand A"
 COMPARISON_BRAND = "Brand B"
-
-
-@pytest.fixture(autouse=True)
-def cleanup_figures():
-    """Automatically close all matplotlib figures after each test."""
-    yield
-    plt.close("all")
 
 
 @pytest.fixture
@@ -90,6 +82,26 @@ def focus_group_index(transactions_df: pd.DataFrame) -> pd.Series:
 def comparison_group_index(transactions_df: pd.DataFrame) -> pd.Series:
     """Boolean mask selecting transactions belonging to the comparison brand."""
     return transactions_df["brand"] == COMPARISON_BRAND
+
+
+@pytest.fixture
+def gl(
+    transactions_df: pd.DataFrame,
+    p1_index: pd.Series,
+    p2_index: pd.Series,
+    focus_group_index: pd.Series,
+    comparison_group_index: pd.Series,
+) -> GainLoss:
+    """Default GainLoss built from transactions_df (no group_col, default agg_func)."""
+    return GainLoss(
+        df=transactions_df,
+        p1_index=p1_index,
+        p2_index=p2_index,
+        focus_group_index=focus_group_index,
+        focus_group_name=FOCUS_BRAND,
+        comparison_group_index=comparison_group_index,
+        comparison_group_name=COMPARISON_BRAND,
+    )
 
 
 @pytest.fixture
@@ -172,14 +184,52 @@ def expected_gain_loss_table_by_store() -> pd.DataFrame:
 
 
 @pytest.fixture
-def tiny_df() -> pd.DataFrame:
-    """Minimal two-row fixture for input-validation tests."""
+def expected_customer_level_gain_loss_by_store() -> pd.DataFrame:
+    """Expected per-customer gain/loss table for transactions_df grouped by store_id.
+
+    Same values as expected_customer_level_gain_loss but with (store_id, customer_id) MultiIndex,
+    sorted by store then customer (S1: 101, 103, 105, 107; S2: 102, 104, 106, 108).
+    """
     return pd.DataFrame(
         {
-            cols.customer_id: [1, 2],
-            cols.transaction_date: [P1_DATE, P2_DATE],
-            cols.unit_spend: [100, 200],
-            "brand": [FOCUS_BRAND, COMPARISON_BRAND],
+            "focus_p1": [0, 100, 100, 100, 80, 100, 100, 100],
+            "comparison_p1": [0, 100, 100, 100, 0, 100, 100, 100],
+            "total_p1": [0, 200, 200, 200, 80, 200, 200, 200],
+            "focus_p2": [100, 150, 150, 150, 0, 60, 50, 50],
+            "comparison_p2": [0, 120, 20, 80, 0, 80, 180, 110],
+            "total_p2": [100, 270, 170, 230, 0, 140, 230, 160],
+            "focus_diff": [100, 50, 50, 50, -80, -40, -50, -50],
+            "comparison_diff": [0, 20, -80, -20, 0, -20, 80, 10],
+            "total_diff": [100, 70, -30, 30, -80, -60, 30, -40],
+            "new": [100, 0, 0, 0, 0, 0, 0, 0],
+            "lost": [0, 0, 0, 0, -80, 0, 0, 0],
+            "increased_focus": [0, 50, 0, 30, 0, 0, 0, 0],
+            "decreased_focus": [0, 0, 0, 0, 0, -40, 0, -40],
+            "switch_from_comparison": [0, 0, 50, 20, 0, 0, 0, 0],
+            "switch_to_comparison": [0, 0, 0, 0, 0, 0, -50, -10],
+        },
+        index=pd.MultiIndex.from_arrays(
+            [
+                ["S1", "S1", "S1", "S1", "S2", "S2", "S2", "S2"],
+                pd.Categorical(
+                    [101, 103, 105, 107, 102, 104, 106, 108],
+                    categories=[101, 102, 103, 104, 105, 106, 107, 108],
+                ),
+            ],
+            names=[cols.store_id, cols.customer_id],
+        ),
+    )
+
+
+@pytest.fixture
+def tiny_df() -> pd.DataFrame:
+    """Three-row fixture for input-validation tests (three rows lets us craft partial-overlap masks)."""
+    return pd.DataFrame(
+        {
+            cols.customer_id: [1, 2, 3],
+            cols.transaction_date: [P1_DATE, P2_DATE, P2_DATE],
+            cols.unit_spend: [100, 200, 300],
+            "brand": [FOCUS_BRAND, COMPARISON_BRAND, FOCUS_BRAND],
         },
     )
 
@@ -253,58 +303,88 @@ class TestProcessCustomerGroup:
 class TestGainLossConstruction:
     """Input validation in GainLoss.__init__."""
 
-    def test_overlapping_p1_p2_indices_raises(self, tiny_df: pd.DataFrame) -> None:
-        """A row flagged in both p1 and p2 makes period assignment ambiguous and must raise."""
+    @pytest.mark.parametrize(
+        ("p1_mask", "p2_mask"),
+        [
+            # Partial overlap at row 1: p1={0,1}, p2={1,2}, intersection={1}
+            pytest.param([True, True, False], [False, True, True], id="partial_overlap_middle"),
+            # Identical masks (full equality is the strictest case of overlap)
+            pytest.param([True, True, False], [True, True, False], id="identical_masks"),
+        ],
+    )
+    def test_overlapping_p1_p2_indices_raises(
+        self,
+        tiny_df: pd.DataFrame,
+        p1_mask: list[bool],
+        p2_mask: list[bool],
+    ) -> None:
+        """Any shared row between p1 and p2 makes period assignment ambiguous and must raise."""
         with pytest.raises(ValueError, match="p1_index and p2_index should not overlap"):
             GainLoss(
                 df=tiny_df,
-                p1_index=pd.Series([True, True]),
-                p2_index=pd.Series([True, False]),
-                focus_group_index=pd.Series([True, False]),
+                p1_index=pd.Series(p1_mask),
+                p2_index=pd.Series(p2_mask),
+                focus_group_index=pd.Series([True, False, False]),
                 focus_group_name=FOCUS_BRAND,
-                comparison_group_index=pd.Series([False, True]),
+                comparison_group_index=pd.Series([False, True, False]),
                 comparison_group_name=COMPARISON_BRAND,
             )
 
-    def test_overlapping_focus_comparison_indices_raises(self, tiny_df: pd.DataFrame) -> None:
-        """A row flagged in both focus and comparison groups must raise."""
+    @pytest.mark.parametrize(
+        ("focus_mask", "comparison_mask"),
+        [
+            # Partial overlap at row 1: focus={0,1}, comparison={1,2}, intersection={1}
+            pytest.param([True, True, False], [False, True, True], id="partial_overlap_middle"),
+            # Identical masks (full equality)
+            pytest.param([True, False, False], [True, False, False], id="identical_masks"),
+        ],
+    )
+    def test_overlapping_focus_comparison_indices_raises(
+        self,
+        tiny_df: pd.DataFrame,
+        focus_mask: list[bool],
+        comparison_mask: list[bool],
+    ) -> None:
+        """Any shared row between focus and comparison groups must raise."""
         with pytest.raises(ValueError, match="focus_group_index and comparison_group_index should not overlap"):
             GainLoss(
                 df=tiny_df,
-                p1_index=pd.Series([True, False]),
-                p2_index=pd.Series([False, True]),
-                focus_group_index=pd.Series([True, False]),
+                p1_index=pd.Series([True, False, False]),
+                p2_index=pd.Series([False, True, True]),
+                focus_group_index=pd.Series(focus_mask),
                 focus_group_name=FOCUS_BRAND,
-                comparison_group_index=pd.Series([True, False]),
+                comparison_group_index=pd.Series(comparison_mask),
                 comparison_group_name=COMPARISON_BRAND,
             )
 
-    def test_missing_required_columns_raises(self) -> None:
-        """A DataFrame missing customer_id or value_col must raise with a clear error."""
-        df = pd.DataFrame({"spend": [100, 200], "brand": [FOCUS_BRAND, COMPARISON_BRAND]})
-        with pytest.raises(ValueError, match="columns are required but missing"):
+    @pytest.mark.parametrize(
+        ("df_columns", "group_col", "missing_substring"),
+        [
+            # customer_id absent → flagged
+            pytest.param(["spend", "brand"], None, "customer_id", id="customer_id_missing"),
+            # value_col 'unit_spend' absent (df has 'spend' instead) → flagged
+            pytest.param(["customer_id", "brand"], None, "unit_spend", id="value_col_missing"),
+            # group_col present in __init__ but absent from df → flagged by name
+            pytest.param(
+                ["customer_id", "unit_spend", "brand"], "not_a_real_column", "not_a_real_column", id="group_col_missing"
+            ),
+        ],
+    )
+    def test_missing_required_column_raises(
+        self, df_columns: list[str], group_col: str | None, missing_substring: str
+    ) -> None:
+        """validate_columns surfaces every missing required column by name (customer_id, value_col, or group_col)."""
+        df = pd.DataFrame({col: [100, 200, 300] for col in df_columns})
+        with pytest.raises(ValueError, match=f"columns are required but missing.*{missing_substring}"):
             GainLoss(
                 df=df,
-                p1_index=pd.Series([True, False]),
-                p2_index=pd.Series([False, True]),
-                focus_group_index=pd.Series([True, False]),
+                p1_index=pd.Series([True, False, False]),
+                p2_index=pd.Series([False, True, True]),
+                focus_group_index=pd.Series([True, False, False]),
                 focus_group_name=FOCUS_BRAND,
-                comparison_group_index=pd.Series([False, True]),
+                comparison_group_index=pd.Series([False, True, False]),
                 comparison_group_name=COMPARISON_BRAND,
-            )
-
-    def test_missing_group_col_raises(self, tiny_df: pd.DataFrame) -> None:
-        """If group_col is given but absent from df, the missing-column validation must fire."""
-        with pytest.raises(ValueError, match="columns are required but missing"):
-            GainLoss(
-                df=tiny_df,
-                p1_index=pd.Series([True, False]),
-                p2_index=pd.Series([False, True]),
-                focus_group_index=pd.Series([True, False]),
-                focus_group_name=FOCUS_BRAND,
-                comparison_group_index=pd.Series([False, True]),
-                comparison_group_name=COMPARISON_BRAND,
-                group_col="not_a_real_column",
+                group_col=group_col,
             )
 
 
@@ -313,44 +393,18 @@ class TestGainLossPipeline:
 
     def test_customer_level_table_matches_expected(
         self,
-        transactions_df: pd.DataFrame,
-        p1_index: pd.Series,
-        p2_index: pd.Series,
-        focus_group_index: pd.Series,
-        comparison_group_index: pd.Series,
+        gl: GainLoss,
         expected_customer_level_gain_loss: pd.DataFrame,
     ) -> None:
         """gain_loss_df contains the expected p1/p2/diff totals and category buckets per customer."""
-        gl = GainLoss(
-            df=transactions_df,
-            p1_index=p1_index,
-            p2_index=p2_index,
-            focus_group_index=focus_group_index,
-            focus_group_name=FOCUS_BRAND,
-            comparison_group_index=comparison_group_index,
-            comparison_group_name=COMPARISON_BRAND,
-        )
         assert_frame_equal(gl.gain_loss_df, expected_customer_level_gain_loss)
 
     def test_aggregated_table_matches_expected(
         self,
-        transactions_df: pd.DataFrame,
-        p1_index: pd.Series,
-        p2_index: pd.Series,
-        focus_group_index: pd.Series,
-        comparison_group_index: pd.Series,
+        gl: GainLoss,
         expected_gain_loss_table_no_group: pd.DataFrame,
     ) -> None:
         """gain_loss_table_df sums the customer-level table to a single row when no group is given."""
-        gl = GainLoss(
-            df=transactions_df,
-            p1_index=p1_index,
-            p2_index=p2_index,
-            focus_group_index=focus_group_index,
-            focus_group_name=FOCUS_BRAND,
-            comparison_group_index=comparison_group_index,
-            comparison_group_name=COMPARISON_BRAND,
-        )
         assert_frame_equal(gl.gain_loss_table_df, expected_gain_loss_table_no_group)
 
     def test_grouped_pipeline_aggregates_by_store(
@@ -360,9 +414,10 @@ class TestGainLossPipeline:
         p2_index: pd.Series,
         focus_group_index: pd.Series,
         comparison_group_index: pd.Series,
+        expected_customer_level_gain_loss_by_store: pd.DataFrame,
         expected_gain_loss_table_by_store: pd.DataFrame,
     ) -> None:
-        """With group_col=store_id, the aggregated table has one row per store with correct sums."""
+        """With group_col=store_id, both the per-customer MultiIndex df and the aggregated table are correct."""
         gl = GainLoss(
             df=transactions_df,
             p1_index=p1_index,
@@ -373,30 +428,111 @@ class TestGainLossPipeline:
             comparison_group_name=COMPARISON_BRAND,
             group_col=cols.store_id,
         )
+        assert_frame_equal(gl.gain_loss_df, expected_customer_level_gain_loss_by_store)
         assert_frame_equal(gl.gain_loss_table_df, expected_gain_loss_table_by_store)
 
     @pytest.mark.parametrize(
-        ("agg_func", "expected_p1_cust1", "expected_p2_cust2"),
+        ("agg_func", "expected_row"),
         [
-            ("sum", 300, 200),
-            ("max", 200, 120),
-            ("mean", 150, 100),
-            ("min", 100, 80),
+            (
+                "sum",
+                {
+                    "focus_p1": 300,
+                    "comparison_p1": 200,
+                    "total_p1": 500,
+                    "focus_p2": 200,
+                    "comparison_p2": 100,
+                    "total_p2": 300,
+                    "focus_diff": -100,
+                    "comparison_diff": -100,
+                    "total_diff": -200,
+                    "new": 0,
+                    "lost": 0,
+                    "increased_focus": 0,
+                    "decreased_focus": -100,
+                    "switch_from_comparison": 0,
+                    "switch_to_comparison": 0,
+                },
+            ),
+            (
+                "max",
+                {
+                    "focus_p1": 200,
+                    "comparison_p1": 150,
+                    "total_p1": 200,
+                    "focus_p2": 120,
+                    "comparison_p2": 60,
+                    "total_p2": 120,
+                    "focus_diff": -80,
+                    "comparison_diff": -90,
+                    "total_diff": -80,
+                    "new": 0,
+                    "lost": 0,
+                    "increased_focus": 0,
+                    "decreased_focus": -80,
+                    "switch_from_comparison": 0,
+                    "switch_to_comparison": 0,
+                },
+            ),
+            (
+                "mean",
+                {
+                    "focus_p1": 150,
+                    "comparison_p1": 100,
+                    "total_p1": 125,
+                    "focus_p2": 100,
+                    "comparison_p2": 50,
+                    "total_p2": 75,
+                    "focus_diff": -50,
+                    "comparison_diff": -50,
+                    "total_diff": -50,
+                    "new": 0,
+                    "lost": 0,
+                    "increased_focus": 0,
+                    "decreased_focus": -50,
+                    "switch_from_comparison": 0,
+                    "switch_to_comparison": 0,
+                },
+            ),
+            (
+                "min",
+                {
+                    "focus_p1": 100,
+                    "comparison_p1": 50,
+                    "total_p1": 50,
+                    "focus_p2": 80,
+                    "comparison_p2": 40,
+                    "total_p2": 40,
+                    "focus_diff": -20,
+                    "comparison_diff": -10,
+                    "total_diff": -10,
+                    "new": 0,
+                    "lost": 0,
+                    "increased_focus": 0,
+                    "decreased_focus": -20,
+                    "switch_from_comparison": 0,
+                    "switch_to_comparison": 0,
+                },
+            ),
         ],
     )
-    def test_agg_func_changes_per_customer_aggregation(
+    def test_agg_func_applies_to_focus_comparison_and_total_aggregates(
         self,
         agg_func: str,
-        expected_p1_cust1: float,
-        expected_p2_cust2: float,
+        expected_row: dict[str, float],
     ) -> None:
-        """The agg_func parameter governs how multi-transaction customer totals are aggregated."""
+        """agg_func is applied to focus, comparison, AND total aggregates, and the categorisation reflects the result.
+
+        Customer 1 has four focus and four comparison transactions split across p1 and p2 chosen so each agg_func
+        yields a distinct (focus, comparison, total) triple per period. Without exercising every column, a regression
+        that hardcoded 'sum' on any one of the three concat branches would slip through.
+        """
         df = pd.DataFrame(
             {
-                cols.customer_id: [1, 1, 2, 2],
-                cols.transaction_date: [P1_DATE, P1_DATE, P2_DATE, P2_DATE],
-                cols.unit_spend: [100, 200, 80, 120],
-                "brand": [FOCUS_BRAND] * 4,
+                cols.customer_id: [1] * 8,
+                cols.transaction_date: [P1_DATE] * 4 + [P2_DATE] * 4,
+                cols.unit_spend: [100, 200, 50, 150, 80, 120, 60, 40],
+                "brand": [FOCUS_BRAND, FOCUS_BRAND, COMPARISON_BRAND, COMPARISON_BRAND] * 2,
             },
         )
         gl = GainLoss(
@@ -409,11 +545,11 @@ class TestGainLossPipeline:
             comparison_group_name=COMPARISON_BRAND,
             agg_func=agg_func,
         )
-        # Customer 1 only has p1 activity (lost); customer 2 only has p2 activity (new).
-        assert gl.gain_loss_df.loc[1, "focus_p1"] == expected_p1_cust1
-        assert gl.gain_loss_df.loc[1, "lost"] == -expected_p1_cust1
-        assert gl.gain_loss_df.loc[2, "focus_p2"] == expected_p2_cust2
-        assert gl.gain_loss_df.loc[2, "new"] == expected_p2_cust2
+        actual = gl.gain_loss_df.loc[1]
+        for column, expected in expected_row.items():
+            assert actual[column] == expected, (
+                f"agg_func={agg_func!r} column={column!r}: got {actual[column]}, expected {expected}"
+            )
 
     def test_uses_configured_column_names(
         self,
@@ -440,28 +576,41 @@ class TestGainLossPipeline:
             )
         assert_frame_equal(gl.gain_loss_table_df, expected_gain_loss_table_no_group)
 
-
-class TestGainLossPlot:
-    """Plot rendering on top of the aggregated gain/loss table."""
-
-    def test_legend_labels_interpolate_group_names(
+    def test_value_col_default_is_resolved_at_call_time(
         self,
         transactions_df: pd.DataFrame,
         p1_index: pd.Series,
         p2_index: pd.Series,
         focus_group_index: pd.Series,
         comparison_group_index: pd.Series,
+        expected_gain_loss_table_no_group: pd.DataFrame,
     ) -> None:
+        """Omitting value_col under option_context picks up the configured column name, not an import-time default."""
+        renamed_df = transactions_df.rename(columns={cols.unit_spend: "total_revenue"})
+        with option_context("column.unit_spend", "total_revenue"):
+            gl = GainLoss(
+                df=renamed_df,
+                p1_index=p1_index,
+                p2_index=p2_index,
+                focus_group_index=focus_group_index,
+                focus_group_name=FOCUS_BRAND,
+                comparison_group_index=comparison_group_index,
+                comparison_group_name=COMPARISON_BRAND,
+            )
+        assert_frame_equal(gl.gain_loss_table_df, expected_gain_loss_table_no_group)
+
+
+class TestGainLossPlot:
+    """Plot rendering on top of the aggregated gain/loss table."""
+
+    @pytest.fixture(autouse=True)
+    def _cleanup_figures(self):
+        """Close all matplotlib figures after each plot test."""
+        yield
+        plt.close("all")
+
+    def test_legend_labels_interpolate_group_names(self, gl: GainLoss) -> None:
         """The legend has one entry per gain/loss segment, with focus/comparison names interpolated."""
-        gl = GainLoss(
-            df=transactions_df,
-            p1_index=p1_index,
-            p2_index=p2_index,
-            focus_group_index=focus_group_index,
-            focus_group_name=FOCUS_BRAND,
-            comparison_group_index=comparison_group_index,
-            comparison_group_name=COMPARISON_BRAND,
-        )
         ax = gl.plot()
         legend = ax.get_legend()
         assert legend is not None
@@ -474,51 +623,23 @@ class TestGainLossPlot:
             f"Switch To {COMPARISON_BRAND}",
         ]
 
-    def test_default_title_interpolates_focus_and_comparison_names(
+    @pytest.mark.parametrize(
+        ("title_arg", "expected_title", "absent_title"),
+        [
+            (None, f"Gain Loss from {FOCUS_BRAND} to {COMPARISON_BRAND}", None),
+            ("Q2 brand migration", "Q2 brand migration", f"Gain Loss from {FOCUS_BRAND} to {COMPARISON_BRAND}"),
+        ],
+    )
+    def test_title_is_rendered_in_figure_chrome(
         self,
-        transactions_df: pd.DataFrame,
-        p1_index: pd.Series,
-        p2_index: pd.Series,
-        focus_group_index: pd.Series,
-        comparison_group_index: pd.Series,
+        gl: GainLoss,
+        title_arg: str | None,
+        expected_title: str,
+        absent_title: str | None,
     ) -> None:
-        """With no explicit title, the figure renders 'Gain Loss from {focus} to {comparison}'."""
-        gl = GainLoss(
-            df=transactions_df,
-            p1_index=p1_index,
-            p2_index=p2_index,
-            focus_group_index=focus_group_index,
-            focus_group_name=FOCUS_BRAND,
-            comparison_group_index=comparison_group_index,
-            comparison_group_name=COMPARISON_BRAND,
-        )
-        ax = gl.plot()
-        figure_texts = {
-            artist.get_text() for artist in ax.figure.findobj(match=lambda obj: isinstance(obj, matplotlib.text.Text))
-        }
-        assert f"Gain Loss from {FOCUS_BRAND} to {COMPARISON_BRAND}" in figure_texts
-
-    def test_custom_title_overrides_default(
-        self,
-        transactions_df: pd.DataFrame,
-        p1_index: pd.Series,
-        p2_index: pd.Series,
-        focus_group_index: pd.Series,
-        comparison_group_index: pd.Series,
-    ) -> None:
-        """An explicit title argument replaces the default interpolated title."""
-        gl = GainLoss(
-            df=transactions_df,
-            p1_index=p1_index,
-            p2_index=p2_index,
-            focus_group_index=focus_group_index,
-            focus_group_name=FOCUS_BRAND,
-            comparison_group_index=comparison_group_index,
-            comparison_group_name=COMPARISON_BRAND,
-        )
-        ax = gl.plot(title="Q2 brand migration")
-        figure_texts = {
-            artist.get_text() for artist in ax.figure.findobj(match=lambda obj: isinstance(obj, matplotlib.text.Text))
-        }
-        assert "Q2 brand migration" in figure_texts
-        assert f"Gain Loss from {FOCUS_BRAND} to {COMPARISON_BRAND}" not in figure_texts
+        """Title is rendered as figure-level chrome (not a tick/axis label); custom title overrides default."""
+        ax = gl.plot() if title_arg is None else gl.plot(title=title_arg)
+        chrome_texts = [t.get_text() for t in ax.figure.texts]
+        assert expected_title in chrome_texts
+        if absent_title is not None:
+            assert absent_title not in chrome_texts
