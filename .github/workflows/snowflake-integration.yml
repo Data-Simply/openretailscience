@@ -3,6 +3,21 @@ name: Snowflake Integration Tests
 on:
   workflow_dispatch:
   workflow_call:
+    secrets:
+      GCP_SA_KEY:
+        required: true
+      GCP_INFRA_PROJECT_ID:
+        required: true
+      SNOWFLAKE_CI_ACCOUNT:
+        required: true
+      SNOWFLAKE_CI_USER:
+        required: true
+      SNOWFLAKE_CI_WAREHOUSE:
+        required: true
+      SNOWFLAKE_CI_DATABASE:
+        required: true
+      SNOWFLAKE_CI_SCHEMA:
+        required: true
 
 permissions:
   contents: read

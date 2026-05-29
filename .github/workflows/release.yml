@@ -11,9 +11,7 @@ on:
           - minor
           - patch
 permissions:
-  contents: write
-  deployments: write
-  packages: write
+  contents: read
 concurrency:
   group: "release"
   cancel-in-progress: false
@@ -25,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -42,17 +42,25 @@ jobs:
   bigquery-integration-tests:
     name: BigQuery Integration Tests
     uses: ./.github/workflows/bigquery-integration.yml
-    secrets: inherit
+    secrets:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
   pyspark-integration-tests:
     name: PySpark Integration Tests
     uses: ./.github/workflows/pyspark-integration.yml
-    secrets: inherit
 
   snowflake-integration-tests:
     name: Snowflake Integration Tests
     uses: ./.github/workflows/snowflake-integration.yml
-    secrets: inherit
+    secrets:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_INFRA_PROJECT_ID: ${{ secrets.GCP_INFRA_PROJECT_ID }}
+      SNOWFLAKE_CI_ACCOUNT: ${{ secrets.SNOWFLAKE_CI_ACCOUNT }}
+      SNOWFLAKE_CI_USER: ${{ secrets.SNOWFLAKE_CI_USER }}
+      SNOWFLAKE_CI_WAREHOUSE: ${{ secrets.SNOWFLAKE_CI_WAREHOUSE }}
+      SNOWFLAKE_CI_DATABASE: ${{ secrets.SNOWFLAKE_CI_DATABASE }}
+      SNOWFLAKE_CI_SCHEMA: ${{ secrets.SNOWFLAKE_CI_SCHEMA }}
 
   multi-python-tests:
     name: Multi-Python Version Tests
@@ -65,6 +73,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -85,10 +95,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [pre-commit, bigquery-integration-tests, pyspark-integration-tests, snowflake-integration-tests, multi-python-tests]
+    permissions:
+      contents: write
     env:
       CI_COMMIT_MESSAGE: Continuous Integration Version Bump ${{ inputs.release }}
     steps:
-      - name: Checkout
+      # zizmor: ignore[artipacked] this job pushes the version-bump commit and
+      # tag, so it requires the GITHUB_TOKEN persisted by actions/checkout. Only
+      # dist/ is uploaded as an artifact, not .git/, so the token is not exposed.
+      - name: Checkout # zizmor: ignore[artipacked]
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -134,7 +149,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add pyproject.toml
-          git commit -m "${{ env.CI_COMMIT_MESSAGE }}"
+          git commit -m "$CI_COMMIT_MESSAGE"
           git push
           echo "Tagging new version: $RELEASE_TAG"
           git tag -a "$RELEASE_TAG" -m "Auto-generated tag"
