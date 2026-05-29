@@ -41,13 +41,14 @@ the plotting helpers in `openretailscience.plots`.
 
 from __future__ import annotations
 
+import datetime
 import operator
 from typing import TYPE_CHECKING
 
 import ibis
 
 from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
-from openretailscience.options import ColumnHelper, get_option
+from openretailscience.options import ColumnHelper
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -60,6 +61,20 @@ _COMPARISONS = {
     "greater_than": operator.gt,
     "greater_than_equal_to": operator.ge,
 }
+
+
+def _distinct_customer_days(df: ibis.Table) -> ibis.Table:
+    """Project to (customer_id, transaction_day) and dedupe.
+
+    The day-level dedup defines what a "purchase day" means for this module — same-day
+    transactions collapse to a single purchase day. Both DaysBetweenPurchases and
+    TransactionChurn walk the customer history one row per purchase day.
+    """
+    cols = ColumnHelper()
+    return df.select(
+        df[cols.customer_id],
+        transaction_day=df[cols.transaction_date].truncate("D"),
+    ).distinct()
 
 
 class PurchasesPerCustomer:
@@ -87,6 +102,7 @@ class PurchasesPerCustomer:
         df = ensure_ibis_table(df)
         ensure_data_has_columns(df, [cols.customer_id, cols.transaction_id])
 
+        self._customer_id_col = cols.customer_id
         self.table = df.group_by(cols.customer_id).aggregate(
             purchase_count=df[cols.transaction_id].nunique(),
         )
@@ -96,8 +112,7 @@ class PurchasesPerCustomer:
     def df(self) -> pd.DataFrame:
         """Materialized purchase counts indexed by customer_id."""
         if self._df is None:
-            customer_id_col = get_option("column.customer_id")
-            self._df = self.table.execute().set_index(customer_id_col).sort_index()
+            self._df = self.table.execute().set_index(self._customer_id_col).sort_index()
         return self._df
 
     def purchases_percentile(self, percentile: float = 0.5) -> float:
@@ -135,9 +150,14 @@ class PurchasesPerCustomer:
             raise ValueError(msg)
 
         op = _COMPARISONS[comparison]
-        matched = self.table.filter(op(self.table.purchase_count, number_of_purchases)).count().execute()
-        total = self.table.count().execute()
-        return matched / total
+        agg = self.table.aggregate(
+            matched=op(self.table.purchase_count, number_of_purchases).cast("int").sum(),
+            total=self.table.count(),
+        ).execute()
+        total = int(agg["total"].iloc[0])
+        if total == 0:
+            return float("nan")
+        return float(agg["matched"].iloc[0]) / total
 
 
 class DaysBetweenPurchases:
@@ -166,6 +186,7 @@ class DaysBetweenPurchases:
         cols = ColumnHelper()
         df = ensure_ibis_table(df)
         ensure_data_has_columns(df, [cols.customer_id, cols.transaction_date])
+        self._customer_id_col = cols.customer_id
         self.table = self._calculate(df)
         self._df: pd.DataFrame | None = None
 
@@ -173,19 +194,13 @@ class DaysBetweenPurchases:
     def df(self) -> pd.DataFrame:
         """Materialized per-customer mean gaps indexed by customer_id."""
         if self._df is None:
-            customer_id_col = get_option("column.customer_id")
-            self._df = self.table.execute().set_index(customer_id_col).sort_index()
+            self._df = self.table.execute().set_index(self._customer_id_col).sort_index()
         return self._df
 
     @staticmethod
     def _calculate(df: ibis.Table) -> ibis.Table:
         cols = ColumnHelper()
-
-        per_customer_day = df.select(
-            df[cols.customer_id],
-            transaction_day=df[cols.transaction_date].truncate("D"),
-        ).distinct()
-
+        per_customer_day = _distinct_customer_days(df)
         window = ibis.window(
             group_by=per_customer_day[cols.customer_id],
             order_by=per_customer_day.transaction_day,
@@ -261,26 +276,28 @@ class TransactionChurn:
     @staticmethod
     def _calculate(df: ibis.Table, churn_period: int) -> ibis.Table:
         cols = ColumnHelper()
-
-        per_customer_day = df.select(
-            df[cols.customer_id],
-            transaction_day=df[cols.transaction_date].truncate("D"),
-        ).distinct()
-
+        per_customer_day = _distinct_customer_days(df)
         cust_window = ibis.window(
             group_by=per_customer_day[cols.customer_id],
             order_by=per_customer_day.transaction_day,
         )
 
-        churn_boundary = per_customer_day.transaction_day.max() - ibis.interval(days=churn_period)
+        # Materialize the scalar max once. On non-DuckDB backends, using a deferred
+        # reduction in a downstream `<` comparison can plan as a correlated subquery
+        # evaluated per row; passing a literal avoids that.
+        max_day = per_customer_day.transaction_day.max().execute()
+        churn_boundary = max_day - datetime.timedelta(days=churn_period)
 
+        # `is_last_transaction` must be computed BEFORE filtering to the churn window:
+        # the lead must look at the customer's full history. Filtering first would
+        # mark a customer's last in-window transaction as "last" even when they have
+        # later transactions outside the window — the opposite of the intended flag.
         annotated = per_customer_day.mutate(
             transaction_number=ibis.row_number().over(cust_window) + 1,
             is_last_transaction=per_customer_day.transaction_day.lead(1).over(cust_window).isnull(),  # noqa: PD003 (ibis API, not pandas)
-            in_window=per_customer_day.transaction_day < churn_boundary,
         )
 
-        in_window = annotated.filter(annotated.in_window)
+        in_window = annotated.filter(annotated.transaction_day < churn_boundary)
         grouped = in_window.group_by(in_window.transaction_number).aggregate(
             retained=(~in_window.is_last_transaction).cast("int").sum(),
             churned=in_window.is_last_transaction.cast("int").sum(),

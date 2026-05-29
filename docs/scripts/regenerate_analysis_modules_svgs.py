@@ -135,7 +135,7 @@ def regenerate_purchases_per_customer(transactions: pd.DataFrame) -> None:
     p80 = ppc.purchases_percentile(0.8)
     fig, ax = plt.subplots(figsize=(6.4, 4.8))
     histogram.plot(
-        df=ppc.cust_purchases_s,
+        df=ppc.df["purchase_count"],
         ax=ax,
         eyebrow="PURCHASE FREQUENCY",
         title=f"80% of customers make {int(p80)} purchases or fewer",
@@ -155,7 +155,7 @@ def regenerate_days_between_purchases(transactions: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(6.4, 4.8))
     # Trim the long right tail (a handful of customers with averages >200 days) so the
     # body of the distribution and the median line are easier to read.
-    series = dbp.purchase_dist_s
+    series = dbp.df["avg_days_between_purchases"]
     series = series[series <= 200]
     histogram.plot(
         df=series,
@@ -176,11 +176,9 @@ def regenerate_days_between_purchases(transactions: pd.DataFrame) -> None:
 def regenerate_transaction_churn(transactions: pd.DataFrame) -> None:
     churn_window_days = 60
     tc = TransactionChurn(transactions, churn_period=churn_window_days)
-    # cumsum on `churned` propagates NaN when a purchase index has no churners,
-    # leaving holes in the cumulative line. Fill them forward so the area renders
-    # as a single connected shape, and clip to the first 15 purchases — beyond that
-    # the per-bin customer count drops below 20 and the line is noisy.
-    cumulative = tc.purchase_dist_df["churned"].cumsum().ffill() / tc.n_unique_customers
+    # Clip to the first 15 purchases — beyond that the per-bin customer count drops
+    # below 20 and the line is noisy.
+    cumulative = tc.df["churned"].cumsum() / tc.n_unique_customers
     cumulative = cumulative.loc[:15].to_frame(name="cumulative_churn_rate")
     plateau_rate = cumulative["cumulative_churn_rate"].iloc[-1]
     fig, ax = plt.subplots(figsize=(6.4, 4.8))

@@ -1,5 +1,7 @@
 """Tests for openretailscience.analysis.customer."""
 
+import math
+
 import ibis
 import pandas as pd
 import pytest
@@ -175,6 +177,36 @@ class TestPurchasesPerCustomer:
         expected = expected_purchase_counts.rename_axis("cust_id")
         assert_frame_equal(actual, expected, check_dtype=False)
 
+    def test_find_purchase_percentile_returns_nan_on_empty_input(self):
+        """An empty input yields NaN rather than ZeroDivisionError (matches purchases_percentile)."""
+        empty = pd.DataFrame(
+            {
+                "customer_id": pd.Series([], dtype="int64"),
+                "transaction_id": pd.Series([], dtype="int64"),
+            },
+        )
+        ppc = PurchasesPerCustomer(empty)
+        assert math.isnan(ppc.find_purchase_percentile(1))
+
+    def test_df_access_under_option_context_uses_init_time_column(self, transactions_df):
+        """.df accessed inside a different option_context still resolves the init-time customer_id column."""
+        ppc = PurchasesPerCustomer(transactions_df)  # built under default "customer_id"
+        with option_context("column.customer_id", "cust_id"):
+            # Must not raise — the column was resolved at __init__ and is now baked into the cached frame.
+            result = ppc.df
+        assert result.index.name == "customer_id"
+
+    def test_df_after_option_context_exit_keeps_init_time_column(self, transactions_df):
+        """A .df built and materialized inside an option_context retains that column name after the context exits."""
+        renamed = transactions_df.rename(columns={"customer_id": "cust_id", "transaction_id": "txn_id"})
+        with option_context("column.customer_id", "cust_id", "column.transaction_id", "txn_id"):
+            ppc = PurchasesPerCustomer(renamed)
+            inside = ppc.df
+        outside = ppc.df
+        # Same cached object; the index name was fixed at __init__ to "cust_id" and does not silently revert.
+        assert inside.index.name == "cust_id"
+        assert outside.index.name == "cust_id"
+
 
 class TestDaysBetweenPurchases:
     """Behavioral tests for DaysBetweenPurchases."""
@@ -241,6 +273,13 @@ class TestDaysBetweenPurchases:
 
         expected = expected_days_between_purchases.rename_axis("cust_id")
         assert_frame_equal(actual, expected, check_dtype=False)
+
+    def test_df_access_under_option_context_uses_init_time_column(self, transactions_df):
+        """.df accessed inside a different option_context still resolves the init-time customer_id column."""
+        dbp = DaysBetweenPurchases(transactions_df)
+        with option_context("column.customer_id", "cust_id"):
+            result = dbp.df
+        assert result.index.name == "customer_id"
 
 
 class TestTransactionChurn:
