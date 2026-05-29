@@ -189,20 +189,24 @@ class CustomerDecisionHierarchy:
         """
         cols = ColumnHelper()
         if exclude_same_transaction_products:
-            txn_products = df.select(cols.customer_id, cols.transaction_id, product_col).distinct()
+            # Deduplicate to distinct (transaction, product) so a plain count() per transaction
+            # equals its distinct-product count -- avoids a COUNT DISTINCT over the base rows.
             multi_product_txns = (
-                txn_products.group_by(cols.transaction_id)
-                .aggregate(n_products=_[product_col].nunique())
+                df.select(cols.transaction_id, product_col)
+                .distinct()
+                .group_by(cols.transaction_id)
+                .aggregate(n_products=_.count())
                 .filter(_.n_products > 1)
             )
             # A customer/product is excluded if it ever appeared in a multi-product transaction.
             excluded = (
-                txn_products.join(multi_product_txns, cols.transaction_id)
+                df.select(cols.customer_id, cols.transaction_id, product_col)
+                .join(multi_product_txns, cols.transaction_id)
                 .select(cols.customer_id, product_col)
                 .distinct()
             )
             pairs = (
-                txn_products.select(cols.customer_id, product_col)
+                df.select(cols.customer_id, product_col)
                 .distinct()
                 .anti_join(excluded, [cols.customer_id, product_col])
             )
@@ -215,16 +219,27 @@ class CustomerDecisionHierarchy:
     def _get_yules_q_distances(pairs: ibis.Table, product_col: str) -> tuple[np.ndarray, list[str]]:
         """Calculate the Yule's Q distance matrix from distinct customer/product pairs.
 
-        Every entry of the 2x2 contingency table for a product pair is recoverable from cheap
-        per-product and per-pair customer counts, so the heavy customer-level scan stays in the
-        Ibis backend and only the small per-product (``n_products``) and co-occurring-pair
-        results are materialized. The square matrix is then assembled with vectorized numpy.
+        Every entry of the 2x2 contingency table for a product pair is recoverable from
+        per-product and per-pair customer counts, so the heavy customer-level work stays in the
+        Ibis backend and only the small per-product-pair result (at most ``n_products`` squared
+        rows) is materialized. The square matrix is then assembled with vectorized numpy.
 
         For products i and j with ``a`` customers buying both, ``occ_i``/``occ_j`` buying each,
         and ``N`` total customers: ``b = occ_i - a``, ``c = occ_j - a``, ``d = N - occ_i - occ_j
         + a``. Yule's Q is ``(ad - bc) / (ad + bc)``; where the denominator is zero (Q undefined,
         e.g. two products always bought together) Q is treated as 0 so the distance is well
         defined and scipy's ``linkage`` does not see a NaN.
+
+        Scaling notes for billion-row inputs:
+            - ``pairs`` is cached so the self-join and the customer count reuse one materialized
+              intermediate instead of re-deriving it (including the exclusion anti-join) from the
+              base table on every query.
+            - A single ``<=`` self-join yields both occurrences (the ``product == product``
+              diagonal) and co-occurrences (off-diagonal) in one pass.
+            - Because each join side is distinct on ``(customer, product)``, every
+              ``(product_1, product_2)`` cell counts each customer at most once, so a plain
+              ``count()`` already equals the distinct-customer count -- no ``COUNT DISTINCT`` over
+              the large pair table is needed.
 
         Args:
             pairs (ibis.Table): Distinct ``[customer_id, product_col]`` pairs.
@@ -237,32 +252,38 @@ class CustomerDecisionHierarchy:
         cols = ColumnHelper()
         cust = cols.customer_id
 
-        occurrences = pairs.group_by(product_col).aggregate(occ=_[cust].nunique())
+        pairs = pairs.cache()
 
         left = pairs.rename(product_1=product_col)
         right = pairs.rename(product_2=product_col)
-        cooccurrences = (
-            left.join(right, [(left[cust] == right[cust]), (left.product_1 < right.product_2)])
+        pair_counts = (
+            left.join(right, [(left[cust] == right[cust]), (left.product_1 <= right.product_2)])
             .group_by(["product_1", "product_2"])
-            .aggregate(cooc=_[cust].nunique())
+            .aggregate(n_customers=_.count())
         )
 
-        occ_df = occurrences.execute()
-        cooc_df = cooccurrences.execute()
-        n_customers = int(pairs.select(cust).distinct().count().execute())
+        counts_df = pair_counts.execute()
+        n_customers = int(pairs[cust].nunique().execute())
 
-        products = sorted(occ_df[product_col].tolist())
+        # The diagonal (product_1 == product_2) holds each product's occurrence count and, by
+        # construction, every product that any customer bought; off-diagonal cells hold pairwise
+        # co-occurrences.
+        is_diagonal = counts_df["product_1"] == counts_df["product_2"]
+        diagonal_df = counts_df[is_diagonal]
+        cooccurrence_df = counts_df[~is_diagonal]
+
+        products = sorted(diagonal_df["product_1"].tolist())
         index = {product: position for position, product in enumerate(products)}
         n_products = len(products)
 
         occ = np.zeros(n_products, dtype=float)
-        occ[occ_df[product_col].map(index).to_numpy()] = occ_df["occ"].to_numpy()
+        occ[diagonal_df["product_1"].map(index).to_numpy()] = diagonal_df["n_customers"].to_numpy()
 
         both = np.zeros((n_products, n_products), dtype=float)
-        if len(cooc_df) > 0:
-            rows = cooc_df["product_1"].map(index).to_numpy()
-            map_cols = cooc_df["product_2"].map(index).to_numpy()
-            both[rows, map_cols] = cooc_df["cooc"].to_numpy()
+        if len(cooccurrence_df) > 0:
+            rows = cooccurrence_df["product_1"].map(index).to_numpy()
+            map_cols = cooccurrence_df["product_2"].map(index).to_numpy()
+            both[rows, map_cols] = cooccurrence_df["n_customers"].to_numpy()
             both += both.T
 
         occ_i = occ[:, None]
