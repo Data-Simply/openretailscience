@@ -3,6 +3,11 @@ name: BigQuery Integration Tests
 on:
   workflow_dispatch:
   workflow_call:
+    secrets:
+      GCP_SA_KEY:
+        required: true
+      GCP_PROJECT_ID:
+        required: true
 
 permissions:
   contents: read
