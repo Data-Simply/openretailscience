@@ -62,19 +62,24 @@ The analysis examines customer purchase patterns to identify substitutability:
 - **Strategic Clarity**: Data-driven approach to range decisions
 """
 
-from typing import Any, Literal
+from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, Literal
+
+import ibis
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from ibis import _
 from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.sparse import csr_matrix
 from scipy.spatial.distance import squareform
 
-from openretailscience.core.validation import ensure_data_has_columns
-from openretailscience.options import ColumnHelper, get_option
+from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
+from openretailscience.options import ColumnHelper
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
+
+if TYPE_CHECKING:
+    import pandas as pd
+    from matplotlib.axes import Axes, SubplotBase
 
 
 class CustomerDecisionHierarchy:
@@ -120,7 +125,7 @@ class CustomerDecisionHierarchy:
 
     def __init__(
         self,
-        df: pd.DataFrame,
+        df: pd.DataFrame | ibis.Table,
         product_col: str,
         exclude_same_transaction_products: bool = True,
         method: Literal["yules_q"] = "yules_q",
@@ -129,7 +134,7 @@ class CustomerDecisionHierarchy:
         """Initialize customer decision hierarchy analysis for range optimization.
 
         Args:
-            df (pd.DataFrame): Transaction data with customer purchase history.
+            df (pd.DataFrame | ibis.Table): Transaction data with customer purchase history.
                 Must contain: customer_id, transaction_id, and product identifier.
             product_col (str): Column containing products to analyze for substitutability
                 (e.g., "product_name", "sku", "brand", "subcategory").
@@ -140,7 +145,10 @@ class CustomerDecisionHierarchy:
                 Defaults to True (recommended for most retail contexts).
             method (Literal["yules_q"], optional): Statistical method for measuring
                 substitutability. "yules_q" measures association strength between
-                binary purchase patterns. Defaults to "yules_q".
+                binary purchase patterns. Defaults to "yules_q". Additional distance
+                methods (e.g. AIDS or Rotterdam-model demand systems converted to
+                distances) are planned; each will be a new branch in
+                ``_calculate_distances`` returning its own square distance matrix.
             random_state (int, optional): Seed for reproducible clustering results.
                 Important for consistent range planning decisions. Defaults to 42.
 
@@ -162,134 +170,140 @@ class CustomerDecisionHierarchy:
 
         self.random_state = random_state
         self.product_col = product_col
-        self.pairs_df = self._get_pairs(df, exclude_same_transaction_products, product_col)
-        self.distances = self._calculate_distances(method=method)
+        pairs = self._get_pairs(ensure_ibis_table(df), exclude_same_transaction_products, product_col)
+        self.distances, self.products = self._calculate_distances(pairs, method=method)
 
     @staticmethod
-    def _get_pairs(df: pd.DataFrame, exclude_same_transaction_products: bool, product_col: str) -> pd.DataFrame:
-        cols = ColumnHelper()
-        if exclude_same_transaction_products:
-            pairs_df = df[[cols.customer_id, cols.transaction_id, product_col]].drop_duplicates()
-            pairs_to_exclude_df = (
-                pairs_df.groupby(cols.transaction_id)
-                .filter(lambda x: len(x) > 1)[[cols.customer_id, product_col]]
-                .drop_duplicates()
-            )
-            # Drop all rows from pairs_df where customer_id and product_name are in pairs_to_exclude_df
-            pairs_df = pairs_df.merge(
-                pairs_to_exclude_df,
-                on=[cols.customer_id, product_col],
-                how="left",
-                indicator=True,
-            )
-            pairs_df = pairs_df[pairs_df["_merge"] == "left_only"][[cols.customer_id, product_col]].drop_duplicates()
-        else:
-            pairs_df = df[[cols.customer_id, product_col]].drop_duplicates()
-
-        return pairs_df.reset_index(drop=True).astype("category")
-
-    @staticmethod
-    def _calculate_yules_q(bought_product_1: np.array, bought_product_2: np.array) -> float:
-        """Calculates the Yule's Q coefficient between two binary arrays.
+    def _get_pairs(df: ibis.Table, exclude_same_transaction_products: bool, product_col: str) -> ibis.Table:
+        """Reduce transactions to the distinct customer/product pairs used for substitutability.
 
         Args:
-            bought_product_1 (np.array): Binary array representing the first bought product. Each element is 1 if the
-                customer bought the product and 0 if they didn't.
-            bought_product_2 (np.array): Binary array representing the second bought product. Each element is 1 if the
-                customer bought the product and 0 if they didn't.
+            df (ibis.Table): Transaction data containing customer, transaction, and product columns.
+            exclude_same_transaction_products (bool): When True, drop every customer/product pair
+                belonging to a transaction that contained more than one distinct product, so
+                products bought together are not treated as substitutes.
+            product_col (str): Column identifying the products to analyze.
 
         Returns:
-            float: The Yule's Q coefficient.
-
-        Raises:
-            ValueError: If the lengths of `bought_product_1` and `bought_product_2` are not the same.
-            ValueError: If `bought_product_1` or `bought_product_2` is not a boolean array.
-
+            ibis.Table: Distinct ``[customer_id, product_col]`` pairs.
         """
-        if len(bought_product_1) != len(bought_product_2):
-            raise ValueError("The bought_product_1 and bought_product_2 must be the same length")
-        if len(bought_product_1) == 0:
-            return 0.0
-        if bought_product_1.dtype != bool or bought_product_2.dtype != bool:
-            raise ValueError("The bought_product_1 and bought_product_2 must be boolean arrays")
+        cols = ColumnHelper()
+        if exclude_same_transaction_products:
+            txn_products = df.select(cols.customer_id, cols.transaction_id, product_col).distinct()
+            multi_product_txns = (
+                txn_products.group_by(cols.transaction_id)
+                .aggregate(n_products=_[product_col].nunique())
+                .filter(_.n_products > 1)
+            )
+            # A customer/product is excluded if it ever appeared in a multi-product transaction.
+            excluded = (
+                txn_products.join(multi_product_txns, cols.transaction_id)
+                .select(cols.customer_id, product_col)
+                .distinct()
+            )
+            pairs = (
+                txn_products.select(cols.customer_id, product_col)
+                .distinct()
+                .anti_join(excluded, [cols.customer_id, product_col])
+            )
+        else:
+            pairs = df.select(cols.customer_id, product_col).distinct()
 
-        a = np.count_nonzero(bought_product_1 & bought_product_2)
-        b = np.count_nonzero(bought_product_1 & ~bought_product_2)
-        c = np.count_nonzero(~bought_product_1 & bought_product_2)
-        d = np.count_nonzero(~bought_product_1 & ~bought_product_2)
+        return pairs
 
-        # Calculate Yule's Q coefficient
-        denominator = a * d + b * c
-        if denominator == 0:
-            # Both a*d and b*c are zero, making Q mathematically undefined (0/0).
-            # Return 0.0 (no association) because NaN would break scipy's linkage() downstream.
-            return 0.0
+    @staticmethod
+    def _get_yules_q_distances(pairs: ibis.Table, product_col: str) -> tuple[np.ndarray, list[str]]:
+        """Calculate the Yule's Q distance matrix from distinct customer/product pairs.
 
-        return (a * d - b * c) / denominator
+        Every entry of the 2x2 contingency table for a product pair is recoverable from cheap
+        per-product and per-pair customer counts, so the heavy customer-level scan stays in the
+        Ibis backend and only the small per-product (``n_products``) and co-occurring-pair
+        results are materialized. The square matrix is then assembled with vectorized numpy.
 
-    def _get_yules_q_distances(self) -> np.ndarray:
-        """Calculate the Yule's Q distances between pairs of products.
+        For products i and j with ``a`` customers buying both, ``occ_i``/``occ_j`` buying each,
+        and ``N`` total customers: ``b = occ_i - a``, ``c = occ_j - a``, ``d = N - occ_i - occ_j
+        + a``. Yule's Q is ``(ad - bc) / (ad + bc)``; where the denominator is zero (Q undefined,
+        e.g. two products always bought together) Q is treated as 0 so the distance is well
+        defined and scipy's ``linkage`` does not see a NaN.
+
+        Args:
+            pairs (ibis.Table): Distinct ``[customer_id, product_col]`` pairs.
+            product_col (str): Column identifying the products.
 
         Returns:
-            np.ndarray: A square matrix of Yule's Q distances between pairs of products.
+            tuple[np.ndarray, list[str]]: A square ``[0, 1]`` distance matrix and the
+                alphabetically sorted product labels indexing its rows/columns.
         """
-        # Create a sparse matrix where the rows are the customers and the columns are the products
-        # The values are True if the customer bought the product and False if they didn't
-        product_matrix = csr_matrix(
-            (
-                [True] * len(self.pairs_df),
-                (
-                    self.pairs_df[self.product_col].cat.codes,
-                    self.pairs_df[get_option("column.customer_id")].cat.codes,
-                ),
-            ),
-            dtype=bool,
+        cols = ColumnHelper()
+        cust = cols.customer_id
+
+        occurrences = pairs.group_by(product_col).aggregate(occ=_[cust].nunique())
+
+        left = pairs.rename(product_1=product_col)
+        right = pairs.rename(product_2=product_col)
+        cooccurrences = (
+            left.join(right, [(left[cust] == right[cust]), (left.product_1 < right.product_2)])
+            .group_by(["product_1", "product_2"])
+            .aggregate(cooc=_[cust].nunique())
         )
 
-        # Calculate the number of customers and products
-        n_products = product_matrix.shape[0]
+        occ_df = occurrences.execute()
+        cooc_df = cooccurrences.execute()
+        n_customers = int(pairs.select(cust).distinct().count().execute())
 
-        # Create an empty matrix to store the yules q values
-        yules_q_matrix = np.zeros((n_products, n_products), dtype=float)
+        products = sorted(occ_df[product_col].tolist())
+        index = {product: position for position, product in enumerate(products)}
+        n_products = len(products)
 
-        # Loop through each pair of products
-        for i in range(n_products):
-            arr_i = product_matrix[i].toarray()
-            for j in range(i + 1, n_products):
-                # Calculate the yules q value for the pair of products
-                arr_j = product_matrix[j].toarray()
-                yules_q_dist = 1 - self._calculate_yules_q(arr_i, arr_j)
+        occ = np.zeros(n_products, dtype=float)
+        occ[occ_df[product_col].map(index).to_numpy()] = occ_df["occ"].to_numpy()
 
-                # Store the yules q value in the matrix
-                yules_q_matrix[i, j] = yules_q_dist
-                yules_q_matrix[j, i] = yules_q_dist
+        both = np.zeros((n_products, n_products), dtype=float)
+        if len(cooc_df) > 0:
+            rows = cooc_df["product_1"].map(index).to_numpy()
+            map_cols = cooc_df["product_2"].map(index).to_numpy()
+            both[rows, map_cols] = cooc_df["cooc"].to_numpy()
+            both += both.T
 
-        # yules_q_dist = 1 - Q lives in [0, 2]; halving rescales it into [0, 1] while
-        # preserving the zero diagonal so this is a valid distance matrix.
-        return yules_q_matrix / 2
+        occ_i = occ[:, None]
+        occ_j = occ[None, :]
+        b = occ_i - both
+        c = occ_j - both
+        d = n_customers - occ_i - occ_j + both
+
+        ad = both * d
+        bc = b * c
+        denominator = ad + bc
+        # Undefined Q (denominator 0) -> 0.0 so distance is 0.5 rather than NaN.
+        yules_q = np.divide(ad - bc, denominator, out=np.zeros_like(ad), where=denominator != 0)
+
+        # 1 - Q lives in [0, 2]; halving rescales into [0, 1]. Force an exact zero diagonal so
+        # the result is a valid distance matrix regardless of floating-point rounding.
+        distances = (1.0 - yules_q) / 2.0
+        np.fill_diagonal(distances, 0.0)
+        return distances, products
 
     def _calculate_distances(
         self,
+        pairs: ibis.Table,
         method: Literal["yules_q"],
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, list[str]]:
         """Calculates distances between items using the specified method.
 
         Args:
-            method (Literal["yules_q"], optional): The method to use for calculating distances.
+            pairs (ibis.Table): Distinct ``[customer_id, product_col]`` pairs.
+            method (Literal["yules_q"]): The method to use for calculating distances.
 
         Raises:
             ValueError: If the method is not valid.
 
         Returns:
-            np.ndarray: A square matrix of pairwise product distances.
+            tuple[np.ndarray, list[str]]: A square matrix of pairwise product distances and the
+                sorted product labels indexing it.
         """
-        # Check method is valid
         if method == "yules_q":
-            distances = self._get_yules_q_distances()
-        else:
-            raise ValueError("Method must be 'yules_q'")
-
-        return distances
+            return self._get_yules_q_distances(pairs, self.product_col)
+        raise ValueError("Method must be 'yules_q'")
 
     def _compute_linkage_matrix(self) -> np.ndarray:
         """Compute the hierarchical-clustering linkage matrix from precomputed distances.
@@ -330,7 +344,7 @@ class CustomerDecisionHierarchy:
             SubplotBase: The matplotlib SubplotBase object.
         """
         linkage_matrix = self._compute_linkage_matrix()
-        labels = self.pairs_df[self.product_col].cat.categories
+        labels = self.products
 
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)

@@ -1,9 +1,11 @@
 """Tests for the customer_decision_hierarchy module."""
 
+import ibis
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.testing import assert_frame_equal
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 
@@ -23,69 +25,91 @@ def cleanup_figures():
 class TestCustomerDecisionHierarchy:
     """Tests for the CustomerDecisionHierarchy class."""
 
-    @pytest.mark.parametrize(
-        ("bought_product_1", "bought_product_2", "expected_q"),
-        [
-            pytest.param(
-                np.array([1, 0, 1, 0, 1], dtype=bool),
-                np.array([1, 0, 1, 0, 1], dtype=bool),
-                1.0,
-                id="identical_arrays_return_one",
-            ),
-            pytest.param(
-                np.array([1, 0, 1, 0, 1], dtype=bool),
-                np.array([0, 1, 0, 1, 0], dtype=bool),
-                -1.0,
-                id="opposite_arrays_return_minus_one",
-            ),
-            pytest.param(
-                np.array([], dtype=bool),
-                np.array([], dtype=bool),
-                0.0,
-                id="empty_arrays_return_zero",
-            ),
-        ],
-    )
-    def test_calculate_yules_q_returns_expected_value(self, bought_product_1, bought_product_2, expected_q):
-        """Test that Yule's Q returns the expected value for identical, opposite, and empty arrays."""
-        assert rp.CustomerDecisionHierarchy._calculate_yules_q(bought_product_1, bought_product_2) == expected_q
+    def test_distances_match_known_yules_q_matrix(self):
+        """The full distance matrix must match hand-computed Yule's Q distances for a known pattern.
 
-    def test_calculate_yules_q_different_length_arrays(self):
-        """Test that the function raises a ValueError when the arrays have different lengths."""
-        bought_product_1 = np.array([1, 0, 1, 0, 1], dtype=bool)
-        bought_product_2 = np.array([1, 0, 1, 0], dtype=bool)
+        Worked from the deduplicated customer/product pairs over a five-customer population:
+        customers 1-4 buy one product each (A, B, C, D) and customer 5 buys both A and B. So
+        occ_A=2, occ_B=2, occ_C=occ_D=1, N=5. For A/B the 2x2 contingency table is a=1 (both),
+        b=1 (A only), c=1 (B only), d=2 (neither) -> Q=(2-1)/(2+1)=1/3, distance=(1-Q)/2=1/3.
+        Every pair with zero co-occurrence (e.g. A/C, C/D) has a=0 so Q=-1 and distance 1.0.
+        This pins the actual off-diagonal values, not just the matrix structure, so a transposed
+        or mislabeled reimplementation is caught.
+        """
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [1, 2, 3, 4, 5, 5],
+                cols.transaction_id: [1, 2, 3, 4, 5, 6],
+                "product_name": ["A", "B", "C", "D", "A", "B"],
+            },
+        )
 
-        with pytest.raises(ValueError):
-            rp.CustomerDecisionHierarchy._calculate_yules_q(bought_product_1, bought_product_2)
+        cdh = rp.CustomerDecisionHierarchy(df=df, product_col="product_name", exclude_same_transaction_products=False)
 
-    @pytest.mark.parametrize(
-        ("bought_product_1", "bought_product_2"),
-        [
-            pytest.param(
-                np.array([True, True, True]),
-                np.array([True, True, True]),
-                id="all_customers_buy_both",
-            ),
-            pytest.param(
-                np.array([True, True, True]),
-                np.array([False, False, False]),
-                id="no_overlap_no_neither",
-            ),
-        ],
-    )
-    def test_calculate_yules_q_zero_denominator_returns_zero(self, bought_product_1, bought_product_2):
-        """Test that Yule's Q returns 0.0 when the denominator is zero."""
-        result = rp.CustomerDecisionHierarchy._calculate_yules_q(bought_product_1, bought_product_2)
+        # Categories sort alphabetically: A, B, C, D.
+        one_third = 1.0 / 3.0
+        expected = np.array(
+            [
+                [0.0, one_third, 1.0, 1.0],
+                [one_third, 0.0, 1.0, 1.0],
+                [1.0, 1.0, 0.0, 1.0],
+                [1.0, 1.0, 1.0, 0.0],
+            ],
+        )
+        assert list(cdh.products) == ["A", "B", "C", "D"]
+        np.testing.assert_allclose(cdh.distances, expected)
 
-        assert result == 0.0
+    def test_undefined_yules_q_maps_to_half_distance(self):
+        """Pairs with a zero contingency denominator must yield distance 0.5, not NaN.
 
-    def test_get_yules_q_distances(self):
-        """Test that the function returns the correct Yules Q distances."""
-        bought_product_1 = np.array([1, 0, 1, 0, 0, 1, 1, 0, 1], dtype=bool)
-        bought_product_2 = np.array([0, 1, 0, 1, 0, 0, 1, 1, 1], dtype=bool)
-        expected_q = -0.6363636363636364
+        When two products are always bought together by every customer, the 2x2 table has
+        b=c=d=0, so a*d + b*c = 0 and Yule's Q is mathematically undefined (0/0). The module
+        substitutes Q=0 (no association) to keep scipy's linkage from breaking, giving a
+        distance of (1 - 0) / 2 = 0.5. A NaN here would propagate into the dendrogram.
+        """
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [1, 1, 2, 2, 3, 3],
+                cols.transaction_id: [1, 1, 2, 2, 3, 3],
+                "product_name": ["A", "B", "A", "B", "A", "B"],
+            },
+        )
 
-        assert rp.CustomerDecisionHierarchy._calculate_yules_q(bought_product_1, bought_product_2) == expected_q
+        cdh = rp.CustomerDecisionHierarchy(df=df, product_col="product_name", exclude_same_transaction_products=False)
+
+        assert not np.isnan(cdh.distances).any()
+        np.testing.assert_allclose(cdh.distances, np.array([[0.0, 0.5], [0.5, 0.0]]))
+
+    def test_distances_identical_for_pandas_and_ibis_input(self):
+        """Passing an ibis.Table must produce the same distance matrix as the equivalent DataFrame.
+
+        Guards the native-Ibis path: the constructor accepts an ibis.Table directly, and the
+        result must match the pandas input exactly (same product ordering, same distances).
+        """
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [1, 1, 2, 2, 3, 3, 4, 5, 6, 7],
+                cols.transaction_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                "product_name": [
+                    "Coke",
+                    "Pepsi",
+                    "Coke",
+                    "Pepsi",
+                    "Sprite",
+                    "Fanta",
+                    "Sprite",
+                    "Fanta",
+                    "Coke",
+                    "Sprite",
+                ],
+            },
+        )
+
+        from_pandas = rp.CustomerDecisionHierarchy(df=df, product_col="product_name")
+        from_ibis = rp.CustomerDecisionHierarchy(df=ibis.memtable(df), product_col="product_name")
+
+        assert list(from_pandas.products) == list(from_ibis.products)
+        np.testing.assert_allclose(from_ibis.distances, from_pandas.distances)
 
     def test_init_invalid_dataframe(self):
         """Test that the function raises a ValueError when the dataframe is invalid."""
@@ -101,8 +125,32 @@ class TestCustomerDecisionHierarchy:
         with pytest.raises(ValueError):
             rp.CustomerDecisionHierarchy(df, "invalid_product_col", exclude_same_transaction_products)
 
-    def test_init_exclude_same_transaction_products_true(self):
-        """Test that the function returns the correct pairs dataframe when exclude_same_transaction_products is True."""
+    @pytest.mark.parametrize(
+        ("exclude_same_transaction_products", "expected_pairs"),
+        [
+            pytest.param(
+                True,
+                {cols.customer_id: [1, 3], "product_name": ["Sprite", "Tonic"]},
+                id="exclude_same_transaction_products_true",
+            ),
+            pytest.param(
+                False,
+                {
+                    cols.customer_id: [1, 1, 1, 2, 2, 3],
+                    "product_name": ["Coke", "Pepsi", "Sprite", "Fanta", "Tonic", "Tonic"],
+                },
+                id="exclude_same_transaction_products_false",
+            ),
+        ],
+    )
+    def test_get_pairs_applies_same_transaction_exclusion(self, exclude_same_transaction_products, expected_pairs):
+        """`_get_pairs` keeps only customer/product pairs that survive the same-transaction rule.
+
+        With exclusion on, any customer/product whose product co-occurred with another product in
+        a single transaction is dropped entirely for that customer. Customer 1 buys Coke and Pepsi
+        together (txn 1), so only their solo Sprite survives; customer 2's Fanta/Tonic share txn 3,
+        leaving nothing; customer 3 only ever buys Tonic alone.
+        """
         df = pd.DataFrame(
             {
                 cols.customer_id: [1, 1, 1, 2, 2, 2, 3, 3],
@@ -110,45 +158,21 @@ class TestCustomerDecisionHierarchy:
                 "product_name": ["Coke", "Pepsi", "Sprite", "Fanta", "Tonic", "Tonic", "Tonic", "Tonic"],
             },
         )
-        exclude_same_transaction_products = True
 
-        pairs_df = rp.CustomerDecisionHierarchy._get_pairs(
-            df,
+        pairs_table = rp.CustomerDecisionHierarchy._get_pairs(
+            ibis.memtable(df),
             exclude_same_transaction_products,
             product_col="product_name",
         )
 
-        expected_pairs_df = pd.DataFrame(
-            {cols.customer_id: [1, 3], "product_name": ["Sprite", "Tonic"]},
-        ).astype("category")
-
-        assert pairs_df.equals(expected_pairs_df)
-
-    def test_init_exclude_same_transaction_products_false(self):
-        """Test correct pairs dataframe when exclude_same_transaction_products is False."""
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 1, 1, 2, 2, 2, 3, 3],
-                cols.transaction_id: [1, 1, 2, 3, 3, 4, 5, 6],
-                "product_name": ["Coke", "Pepsi", "Sprite", "Fanta", "Tonic", "Tonic", "Tonic", "Tonic"],
-            },
+        actual = (
+            pairs_table.execute()
+            .sort_values([cols.customer_id, "product_name"])
+            .reset_index(drop=True)
+            .astype({cols.customer_id: "int64", "product_name": "object"})
         )
-        exclude_same_transaction_products = False
-
-        pairs_df = rp.CustomerDecisionHierarchy._get_pairs(
-            df,
-            exclude_same_transaction_products,
-            product_col="product_name",
-        )
-
-        expected_pairs_df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 1, 1, 2, 2, 3],
-                "product_name": ["Coke", "Pepsi", "Sprite", "Fanta", "Tonic", "Tonic"],
-            },
-        ).astype("category")
-
-        assert pairs_df.equals(expected_pairs_df)
+        expected = pd.DataFrame(expected_pairs).astype({cols.customer_id: "int64", "product_name": "object"})
+        assert_frame_equal(actual, expected)
 
     def test_with_custom_column_names(self):
         """Test CustomerDecisionHierarchy with custom column names to ensure column overrides work correctly."""
@@ -173,8 +197,10 @@ class TestCustomerDecisionHierarchy:
                 method="yules_q",
             )
 
-            assert "cust_identifier" in hierarchy.pairs_df.columns, "Should handle custom customer_id column name"
-            assert "product_name" in hierarchy.pairs_df.columns, "Should handle product column"
+            # The custom customer_id/transaction_id options must be honored end-to-end: the analysis
+            # discovers the four products and produces a 4x4 distance matrix without error.
+            assert list(hierarchy.products) == ["Coke", "Fanta", "Pepsi", "Sprite"]
+            assert hierarchy.distances.shape == (4, 4)
 
 
 class TestPlot:
