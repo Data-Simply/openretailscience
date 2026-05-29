@@ -256,14 +256,18 @@ class CustomerDecisionHierarchy:
 
         left = pairs.rename(product_1=product_col)
         right = pairs.rename(product_2=product_col)
+        # Broadcast the distinct-customer total onto every row as a scalar subquery so the whole
+        # result -- per-pair counts and N -- comes back in a single execute(); the cached pairs
+        # table is scanned once for the self-join and once for this count, never re-derived.
         pair_counts = (
             left.join(right, [(left[cust] == right[cust]), (left.product_1 <= right.product_2)])
             .group_by(["product_1", "product_2"])
             .aggregate(n_customers=_.count())
+            .mutate(total_customers=pairs[cust].nunique())
         )
 
         counts_df = pair_counts.execute()
-        n_customers = int(pairs[cust].nunique().execute())
+        n_customers = int(counts_df["total_customers"].iloc[0])
 
         # The diagonal (product_1 == product_2) holds each product's occurrence count and, by
         # construction, every product that any customer bought; off-diagonal cells hold pairwise
