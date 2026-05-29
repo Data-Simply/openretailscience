@@ -605,7 +605,7 @@ from openretailscience.plots import histogram
 ppc = PurchasesPerCustomer(transactions)
 
 ax = histogram.plot(
-    df=ppc.cust_purchases_s,
+    df=ppc.df["purchase_count"],
     title="Purchases per Customer",
     x_label="Number of purchases",
     y_label="Number of customers",
@@ -645,7 +645,7 @@ from openretailscience.plots import histogram
 dbp = DaysBetweenPurchases(transactions)
 
 ax = histogram.plot(
-    df=dbp.purchase_dist_s,
+    df=dbp.df["avg_days_between_purchases"],
     bins=15,
     title="Average Days Between Customer Purchases",
     x_label="Average Number of Days Between Purchases",
@@ -674,7 +674,7 @@ from openretailscience.plots import area
 tc = TransactionChurn(transactions, churn_period=churn_period)
 
 cumulative_churn_rate = (
-    tc.purchase_dist_df["churned"].cumsum().div(tc.n_unique_customers).to_frame(name="cumulative_churn_rate")
+    tc.df["churned"].cumsum().div(tc.n_unique_customers).to_frame(name="cumulative_churn_rate")
 )
 area.plot(
     df=cumulative_churn_rate,

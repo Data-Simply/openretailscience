@@ -137,7 +137,7 @@ churn_period = dbp.purchases_percentile(0.8)
 ax.annotate(
     f"80% of customers made\nanother purchase within\n{round(churn_period)} days",
     xy=(churn_period, 0.81),
-    xytext=(dbp.purchase_dist_s.min(), 0.8),
+    xytext=(dbp.df["avg_days_between_purchases"].min(), 0.8),
     fontsize=15,
     ha="left",
     va="center",
