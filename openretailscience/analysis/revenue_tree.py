@@ -34,7 +34,6 @@ from openretailscience.core.validation import ensure_columns, ensure_data_has_co
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles import graph_utils as gu
 from openretailscience.plots.tree_diagram import DetailedTreeNode, TreeGrid
-from openretailscience.plugin import plugin_manager
 
 
 def calc_tree_kpis(
