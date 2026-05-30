@@ -234,9 +234,7 @@ class CustomerDecisionHierarchy:
             - The whole result -- per-pair counts and the customer total -- comes back in a single
               ``execute()``; ``pairs`` is referenced three times but the compiler factors it into
               one common subexpression (e.g. a single ``WITH`` CTE), so it is derived once,
-              including the exclusion anti-join. ``.cache()`` is deliberately not used: it is not
-              supported on every backend (e.g. Databricks), and the single-query plan already
-              avoids re-deriving ``pairs``.
+              including the exclusion anti-join.
             - A single ``<=`` self-join yields both occurrences (the ``product == product``
               diagonal) and co-occurrences (off-diagonal) in one pass.
             - Because each join side is distinct on ``(customer, product)``, every
