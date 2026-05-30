@@ -37,7 +37,6 @@ from openretailscience.plots.tree_diagram import DetailedTreeNode, TreeGrid
 from openretailscience.plugin import plugin_manager
 
 
-@plugin_manager.extensible
 def calc_tree_kpis(
     df: pd.DataFrame,
     p1_index: list[bool] | pd.Series,
@@ -204,7 +203,6 @@ def calc_tree_kpis(
     return df[cols]
 
 
-@plugin_manager.extensible
 class RevenueTree:
     """Revenue Tree Analysis Class."""
 
