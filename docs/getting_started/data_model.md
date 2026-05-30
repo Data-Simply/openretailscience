@@ -7,19 +7,22 @@ social:
 
 # Data Model
 
-OpenRetailScience works on **transaction-level data**: one row per product line within a transaction. This is the
-same grain most point-of-sale and e-commerce systems already produce, so in many cases your data is closer to ready
-than you might expect.
+OpenRetailScience works on **transaction-level data**: a flat table of sales, one row per transaction (or per
+product line within a transaction). This is the same shape most point-of-sale and e-commerce systems already
+produce, so in many cases your data is closer to ready than you might expect.
 
 This page describes the shape the modules expect, which columns you actually need, and how to reshape a typical
 retail star schema into that flat form. Once your data matches this model, see the
 [Options & Configuration](options_guide.md) guide to map your column names onto the defaults.
 
-## The grain: one row per transaction line item
+## The grain is flexible
 
-A single basket usually contains several products. OpenRetailScience expects one row for **each product within each
-transaction**, not one row per basket. A customer who buys three different products in one visit produces three rows
-that share the same `transaction_id`:
+There is no single mandatory grain. OpenRetailScience does not require you to pick one shape up front — each module
+reads only the columns it needs, so the right grain is whatever those columns imply.
+
+The **line-item grain** — one row per product within each transaction — is the richest common form and works across
+every module. A customer who buys three different products in one visit produces three rows that share the same
+`transaction_id`:
 
 | transaction_id | transaction_date | customer_id | product_id | unit_quantity | unit_spend | store_id |
 | -------------- | ---------------- | ----------- | ---------- | ------------- | ---------- | -------- |
@@ -27,14 +30,24 @@ that share the same `transaction_id`:
 | 16050          | 2023-01-12       | 1           | 1317       | 1             | 10.49      | 6        |
 | 20090          | 2023-02-05       | 1           | 509        | 3             | 360.00     | 4        |
 
-You can carry extra columns (product names, categories, brands, regions, etc.) alongside these — modules ignore
-columns they do not use, and you can pass them as grouping dimensions where a module supports it.
+But a coarser grain is fine when a module does not need the detail. For example,
+[`SegTransactionStats`](../api/segmentation/segstats.md) requires only `transaction_id` and `unit_spend` (it uses
+`customer_id` and `unit_quantity` if they are present), so it runs perfectly well on **transaction-level rows with
+no `product_id` or units column at all** — one row per transaction:
+
+| transaction_id | transaction_date | customer_id | unit_spend | store_id |
+| -------------- | ---------------- | ----------- | ---------- | -------- |
+| 16050          | 2023-01-12       | 1           | 66.47      | 6        |
+| 20090          | 2023-02-05       | 1           | 360.00     | 4        |
+
+You can also carry extra columns (product names, categories, brands, regions, etc.) alongside any of these — modules
+ignore columns they do not use, and you can pass them as grouping dimensions where a module supports it.
 
 !!! tip "No pre-aggregation needed"
     You do **not** build a per-customer or per-segment summary table first. Tools such as
     [`SegTransactionStats`](../api/segmentation/segstats.md) take transaction-level rows directly and compute
     aggregates — spend per customer, transaction frequency, average basket size — internally. Hand them the raw
-    lines and let the library do the rollup.
+    rows and let the library do the rollup.
 
 ## Column reference
 
