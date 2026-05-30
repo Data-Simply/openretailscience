@@ -231,9 +231,12 @@ class CustomerDecisionHierarchy:
         defined and scipy's ``linkage`` does not see a NaN.
 
         Scaling notes for billion-row inputs:
-            - ``pairs`` is cached so the self-join and the customer count reuse one materialized
-              intermediate instead of re-deriving it (including the exclusion anti-join) from the
-              base table on every query.
+            - The whole result -- per-pair counts and the customer total -- comes back in a single
+              ``execute()``; ``pairs`` is referenced three times but the compiler factors it into
+              one common subexpression (e.g. a single ``WITH`` CTE), so it is derived once,
+              including the exclusion anti-join. ``.cache()`` is deliberately not used: it is not
+              supported on every backend (e.g. Databricks), and the single-query plan already
+              avoids re-deriving ``pairs``.
             - A single ``<=`` self-join yields both occurrences (the ``product == product``
               diagonal) and co-occurrences (off-diagonal) in one pass.
             - Because each join side is distinct on ``(customer, product)``, every
@@ -252,13 +255,10 @@ class CustomerDecisionHierarchy:
         cols = ColumnHelper()
         cust = cols.customer_id
 
-        pairs = pairs.cache()
-
         left = pairs.rename(product_1=product_col)
         right = pairs.rename(product_2=product_col)
         # Broadcast the distinct-customer total onto every row as a scalar subquery so the whole
-        # result -- per-pair counts and N -- comes back in a single execute(); the cached pairs
-        # table is scanned once for the self-join and once for this count, never re-derived.
+        # result -- per-pair counts and N -- comes back in a single execute().
         pair_counts = (
             left.join(right, [(left[cust] == right[cust]), (left.product_1 <= right.product_2)])
             .group_by(["product_1", "product_2"])
