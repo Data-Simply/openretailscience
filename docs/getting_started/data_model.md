@@ -83,9 +83,9 @@ configurable for the same reason the base columns are — so output matches your
 No single column is required for everything. Each module validates just the columns it uses and raises a clear error
 if one is missing, so you can start with a minimal dataset and add columns as your analysis grows. For example:
 
-- **Cohort analysis** needs `customer_id` and `transaction_date`.
+- **Cohort analysis** needs `customer_id`, `transaction_date`, and the column you aggregate (e.g. `unit_spend`).
 - **Gain/loss analysis** needs `customer_id` and a value column (`unit_spend` by default).
-- **ACV** needs `store_id` and `unit_spend`.
+- **ACV** needs only `unit_spend`; grouping by `store_id` is optional.
 
 If your data is missing a column a module needs, you will see an error naming the missing columns rather than a
 silent wrong answer.
