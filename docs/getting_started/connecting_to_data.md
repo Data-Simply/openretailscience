@@ -1,6 +1,6 @@
 # Connecting to Your Data
 
-OpenRetailScience is built on [Apache Ibis](https://ibis-project.org/), so every analysis and plot accepts either a
+OpenRetailScience is built on [Apache Ibis](https://ibis-project.org/), so most analyses and plots accept either a
 **pandas DataFrame** or an **Ibis table**. Passing an Ibis table means the work is pushed down to your database engine
 and only the results come back to Python — which matters when your transaction tables are in the 1B–10B row range.
 
@@ -18,15 +18,16 @@ Ibis table for you.
 
 ```python
 import pandas as pd
-from openretailscience.analysis.gain_loss import GainLoss
+from openretailscience.analysis.cohort import CohortAnalysis
 
 df = pd.read_parquet("transactions.parquet")
 
-gl = GainLoss(df, ...)
+cohorts = CohortAnalysis(df, aggregation_column="unit_spend")
 ```
 
-This is ideal for samples, tests, and small extracts. For larger datasets, connect to one of the backends below and
-let the database do the heavy lifting.
+The same analysis classes accept an Ibis table instead of a DataFrame, so you can develop against an in-memory sample
+and later swap in one of the backends below — no change to the analysis code. For larger datasets, connect to a backend
+and let the database do the heavy lifting.
 
 ## DuckDB
 
