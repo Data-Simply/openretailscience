@@ -45,6 +45,10 @@ repos:
       - id: markdownlint
         args: ["--config", ".markdownlint.json"]
         exclude: ^\.claude/
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.25.2
+    hooks:
+      - id: zizmor
   - repo: local
     hooks:
       - id: pytest
