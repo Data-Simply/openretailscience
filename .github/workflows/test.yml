@@ -29,7 +29,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install uv==0.5.30
-          uv sync
+          uv sync --locked
       - name: Install Pre-commit in uv environment
         run: uv run pip install pre-commit
       - name: Run Pre-commit
@@ -71,7 +71,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync
+          uv sync --locked
 
       - name: Run tests
         run: |

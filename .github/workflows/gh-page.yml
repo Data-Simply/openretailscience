@@ -34,7 +34,7 @@ jobs:
       - name: Install Pre-commit in uv environment
         run: uv run pip install pre-commit
       - name: Install Dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Build docs
         run: uv run mkdocs build
       - name: Setup Pages
