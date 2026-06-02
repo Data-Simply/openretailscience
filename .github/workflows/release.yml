@@ -33,7 +33,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install uv==0.5.30
-          uv sync
+          uv sync --locked
       - name: Install Pre-commit in uv environment
         run: uv run pip install pre-commit
       - name: Run Pre-commit
@@ -85,7 +85,7 @@ jobs:
           pip install uv==0.5.30
       - name: Install dependencies
         run: |
-          uv sync
+          uv sync --locked
       - name: Run tests (excluding integration)
         run: |
           uv run pytest tests/ --ignore=tests/integration --tb=short -v
@@ -115,7 +115,7 @@ jobs:
           pip install build
           pip install uv==0.5.30
       - name: Install Dependencies
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
       - name: Bump Version
         run: |
           uv run python - <<EOF

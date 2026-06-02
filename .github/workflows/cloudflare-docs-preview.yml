@@ -36,7 +36,7 @@ jobs:
           pip install uv==0.5.30
 
       - name: Install Dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Build docs
         run: uv run mkdocs build
