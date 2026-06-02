@@ -76,9 +76,11 @@ jobs:
       - name: Enforce gate
         # Pull requests are advisory only (results still post to code scanning);
         # every other trigger is a hard gate. Fail closed: block unless the scan
-        # completed successfully, so a failed, errored, or cancelled scan never
-        # passes the gate.
-        if: always() && github.event_name != 'pull_request' && steps.osv.outcome != 'success'
+        # completed successfully, so a failed, errored, or skipped scan never
+        # passes the gate. !cancelled() (rather than always()) avoids marking a
+        # concurrency-superseded run as failed; a real timeout still blocks
+        # downstream via the job's needs dependency.
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.osv.outcome != 'success' }}
         run: |
           echo "::error::OSV-Scanner did not complete cleanly (vulnerabilities found or scan failed) — see the SARIF results in the Security tab."
           exit 1
