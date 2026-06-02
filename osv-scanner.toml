@@ -12,8 +12,8 @@
 # released, so this suppression is permanent (no ignoreUntil).
 [[IgnoredVulns]]
 id     = "PYSEC-2024-277"
-reason = "joblib CVE-2024-34997: disputed false positive; deserializes only trusted cache content. No fix planned."
+reason = "joblib CVE-2024-34997: disputed false positive (https://github.com/joblib/joblib/issues/1588); deserializes only trusted cache content. No fix planned."
 
 [[IgnoredVulns]]
 id     = "CVE-2024-34997"
-reason = "joblib CVE-2024-34997: disputed false positive; deserializes only trusted cache content. No fix planned."
+reason = "joblib CVE-2024-34997: disputed false positive (https://github.com/joblib/joblib/issues/1588); deserializes only trusted cache content. No fix planned."
