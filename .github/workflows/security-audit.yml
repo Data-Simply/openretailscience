@@ -1,0 +1,70 @@
+name: Security Audit
+
+# Scans the resolved dependency lockfile (uv.lock) for known vulnerabilities
+# using OSV-Scanner. Because it reads uv.lock statically, it audits every pinned
+# version across all supported Python versions (3.10-3.13) and platforms.
+# Results are uploaded to GitHub code scanning (Security tab) as SARIF, so a
+# newly-disclosed CVE in a pinned dependency surfaces as a failing check and a
+# code-scanning alert rather than a passive Dependabot alert.
+#
+# Suppressions (each with a rationale, and an ignoreUntil expiry where a fix may
+# yet appear) live in osv-scanner.toml at the repo root.
+#
+# On pull requests the scan runs only when dependencies or this workflow change,
+# and is advisory (results still post to code scanning); scheduled runs, manual
+# dispatches, and release calls are hard gates.
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - "uv.lock"
+      - "pyproject.toml"
+      - "osv-scanner.toml"
+      - ".github/workflows/security-audit.yml"
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+  workflow_call:
+
+permissions: {}
+
+concurrency:
+  group: "security-audit-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  osv-scan:
+    name: OSV-Scanner (uv.lock)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run OSV-Scanner
+        id: osv
+        continue-on-error: true # gate is enforced explicitly below, after SARIF upload
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --format=sarif
+            --output=results.sarif
+            --lockfile=uv.lock
+      - name: Upload results to code scanning
+        if: always()
+        continue-on-error: true # never let SARIF upload (e.g. missing perms) break the gate
+        uses: github/codeql-action/upload-sarif@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4.36.1
+        with:
+          sarif_file: results.sarif
+      - name: Enforce gate
+        # Pull requests are advisory only (results still post to code scanning);
+        # every other trigger is a hard gate.
+        if: steps.osv.outcome == 'failure' && github.event_name != 'pull_request'
+        run: |
+          echo "::error::OSV-Scanner found known vulnerabilities — see the SARIF results in the Security tab."
+          exit 1

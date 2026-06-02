@@ -38,6 +38,13 @@ jobs:
       - name: Run Pre-commit
         run: uv run pre-commit run --all-files
 
+  security-audit:
+    name: Dependency Security Audit
+    uses: ./.github/workflows/security-audit.yml
+    permissions:
+      contents: read
+      security-events: write
+
   bigquery-integration-tests:
     name: BigQuery Integration Tests
     uses: ./.github/workflows/bigquery-integration.yml
@@ -93,7 +100,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [pre-commit, bigquery-integration-tests, pyspark-integration-tests, snowflake-integration-tests, multi-python-tests]
+    needs: [security-audit, pre-commit, bigquery-integration-tests, pyspark-integration-tests, snowflake-integration-tests, multi-python-tests]
     permissions:
       contents: write
     env:
