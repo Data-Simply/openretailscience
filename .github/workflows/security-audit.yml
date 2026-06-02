@@ -38,7 +38,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: "security-audit-${{ github.ref }}"
+  group: "security-audit-${{ github.ref }}-${{ github.event_name }}"
   cancel-in-progress: true
 
 jobs:
@@ -75,8 +75,10 @@ jobs:
           category: osv-scanner
       - name: Enforce gate
         # Pull requests are advisory only (results still post to code scanning);
-        # every other trigger is a hard gate.
-        if: steps.osv.outcome == 'failure' && github.event_name != 'pull_request'
+        # every other trigger is a hard gate. Fail closed: block unless the scan
+        # completed successfully, so a failed, errored, or cancelled scan never
+        # passes the gate.
+        if: always() && github.event_name != 'pull_request' && steps.osv.outcome != 'success'
         run: |
-          echo "::error::OSV-Scanner found known vulnerabilities — see the SARIF results in the Security tab."
+          echo "::error::OSV-Scanner did not complete cleanly (vulnerabilities found or scan failed) — see the SARIF results in the Security tab."
           exit 1
