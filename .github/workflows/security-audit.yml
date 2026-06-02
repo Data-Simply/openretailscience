@@ -11,12 +11,20 @@ name: Security Audit
 # yet appear) live in osv-scanner.toml at the repo root.
 #
 # On pull requests the scan runs only when dependencies or this workflow change,
-# and is advisory (results still post to code scanning); scheduled runs, manual
-# dispatches, and release calls are hard gates.
+# and is advisory (results still post to code scanning); pushes to main (same
+# path filter) refresh the default-branch code-scanning state, and scheduled
+# runs, manual dispatches, and release calls are hard gates.
 
 on:
   pull_request:
     types: [opened, synchronize]
+    paths:
+      - "uv.lock"
+      - "pyproject.toml"
+      - "osv-scanner.toml"
+      - ".github/workflows/security-audit.yml"
+  push:
+    branches: [main]
     paths:
       - "uv.lock"
       - "pyproject.toml"
@@ -57,11 +65,14 @@ jobs:
             --output=results.sarif
             --lockfile=uv.lock
       - name: Upload results to code scanning
-        if: always()
+        # Skip cleanly if the scanner errored before writing the SARIF, rather
+        # than erroring and being swallowed by continue-on-error.
+        if: always() && hashFiles('results.sarif') != ''
         continue-on-error: true # never let SARIF upload (e.g. missing perms) break the gate
         uses: github/codeql-action/upload-sarif@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4.36.1
         with:
           sarif_file: results.sarif
+          category: osv-scanner
       - name: Enforce gate
         # Pull requests are advisory only (results still post to code scanning);
         # every other trigger is a hard gate.
