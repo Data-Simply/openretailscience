@@ -103,6 +103,8 @@ jobs:
     needs: [security-audit, pre-commit, bigquery-integration-tests, pyspark-integration-tests, snowflake-integration-tests, multi-python-tests]
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     env:
       CI_COMMIT_MESSAGE: Continuous Integration Version Bump ${{ inputs.release }}
     steps:
@@ -144,6 +146,10 @@ jobs:
           echo "RELEASE_TAG=$(uv run python -c 'from tomlkit.toml_file import TOMLFile; print(TOMLFile("pyproject.toml").read()["project"]["version"])')" >> $GITHUB_ENV
       - name: Build package
         run: uv build
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: "dist/*"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: build
@@ -180,6 +186,8 @@ jobs:
           path: dist
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          attestations: true
   deploy-docs:
     name: Deploy Documentation
     needs: pypi-publish
