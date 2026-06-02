@@ -1,0 +1,19 @@
+# OSV-Scanner vulnerability suppressions.
+#
+# Every entry must carry a `reason`. Entries for advisories that may eventually
+# ship a fix carry an `ignoreUntil` date so the suppression expires and the
+# advisory resurfaces for re-review; entries for permanent false positives omit
+# it. Both the PyPI (PYSEC) and GitHub/CVE identifiers are listed per advisory so
+# the ignore matches whichever id OSV-Scanner surfaces.
+
+# joblib CVE-2024-34997 / PYSEC-2024-277 — disputed by the maintainer as a false
+# positive (https://github.com/joblib/joblib/issues/1588). NumpyArrayWrapper
+# deserializes only trusted cached content, never untrusted input. No fix will be
+# released, so this suppression is permanent (no ignoreUntil).
+[[IgnoredVulns]]
+id     = "PYSEC-2024-277"
+reason = "joblib CVE-2024-34997: disputed false positive; deserializes only trusted cache content. No fix planned."
+
+[[IgnoredVulns]]
+id     = "CVE-2024-34997"
+reason = "joblib CVE-2024-34997: disputed false positive; deserializes only trusted cache content. No fix planned."
