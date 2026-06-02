@@ -31,8 +31,6 @@ jobs:
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
-      - name: Install Pre-commit in uv environment
-        run: uv run pip install pre-commit
       - name: Install Dependencies
         run: uv sync --locked
       - name: Build docs

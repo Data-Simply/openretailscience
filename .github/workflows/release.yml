@@ -35,10 +35,8 @@ jobs:
           enable-cache: true
       - name: Install dependencies
         run: uv sync --locked
-      - name: Install Pre-commit in uv environment
-        run: uv run pip install pre-commit
       - name: Run Pre-commit
-        run: pre-commit run --all-files
+        run: uv run pre-commit run --all-files
 
   bigquery-integration-tests:
     name: BigQuery Integration Tests
