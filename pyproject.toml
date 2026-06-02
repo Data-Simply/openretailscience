@@ -58,7 +58,8 @@ build-backend = "hatchling.build"
 requires      = [ "hatchling" ]
 
 [tool.uv]
-default-groups = [ "dev", "docs", "examples" ]
+default-groups   = [ "dev", "docs", "examples" ]
+required-version = ">=0.8.0,<0.9.0"
 
 [tool.ruff]
 line-length    = 120
