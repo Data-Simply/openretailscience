@@ -153,8 +153,9 @@ class TestRFMSegmentation:
                 "fm_segment": [0],
             },
         ).set_index(cols.customer_id)
+        expected_df["recency_days"] = expected_df["recency_days"].astype(result_df["recency_days"].dtype)
 
-        pd.testing.assert_frame_equal(result_df, expected_df, check_like=True, check_dtype=False)
+        pd.testing.assert_frame_equal(result_df, expected_df, check_like=True)
 
     def test_ibis_table_input_matches_dataframe_input(self, base_df):
         """Ibis-table input produces the same segmentation as the equivalent DataFrame input."""
@@ -296,12 +297,12 @@ class TestRFMSegmentation:
                 "fm_segment": [0, 11, 0, 11],
             },
         ).set_index(cols.customer_id)
+        expected_df["recency_days"] = expected_df["recency_days"].astype(result_df["recency_days"].dtype)
 
         pd.testing.assert_frame_equal(
             result_df.sort_index(),
             expected_df.sort_index(),
             check_like=True,
-            check_dtype=False,
         )
 
     def test_single_bin_segments(self, larger_df):
@@ -335,6 +336,8 @@ class TestRFMSegmentation:
             ),
             ("r_segments", [0.5, 1.5], "All cut points in r_segments must be between 0 and 1"),
             ("f_segments", [-0.1, 0.5], "All cut points in f_segments must be between 0 and 1"),
+            ("r_segments", [0.0, 0.5], "All cut points in r_segments must be between 0 and 1"),
+            ("m_segments", [0.5, 1.0], "All cut points in m_segments must be between 0 and 1"),
             ("m_segments", [0.5, "invalid"], "All cut points in m_segments must be numeric"),
             ("r_segments", [0.3, 0.5, 0.3], "Cut points in r_segments must be unique"),
             ("f_segments", [0.7, 0.3, 0.9], "Cut points in f_segments must be in ascending order"),

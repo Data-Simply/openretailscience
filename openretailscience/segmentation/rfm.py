@@ -152,8 +152,8 @@ class RFMSegmentation:
             if not all(isinstance(x, int | float) for x in segments):  # UP038
                 msg = f"All cut points in {param_name} must be numeric"
                 raise ValueError(msg)
-            if not all(0 <= x <= 1 for x in segments):
-                msg = f"All cut points in {param_name} must be between 0 and 1"
+            if not all(0 < x < 1 for x in segments):
+                msg = f"All cut points in {param_name} must be between 0 and 1 (exclusive)"
                 raise ValueError(msg)
             if len(segments) != len(set(segments)):
                 msg = f"Cut points in {param_name} must be unique"
@@ -285,12 +285,14 @@ class RFMSegmentation:
         percentile = ibis.percent_rank().over(window)
 
         sorted_segments = sorted(segments)
-        case_expr = ibis.literal(0).cast("int32")
+        # Match the int64 scores produced by the ntile branch so _compute_score returns a
+        # consistent dtype regardless of whether segments is an int or a list of cut points.
+        case_expr = ibis.literal(0).cast("int64")
 
         for i, cutpoint in enumerate(sorted_segments):
             condition = percentile > ibis.literal(cutpoint)
             case_expr = condition.ifelse(
-                ibis.literal(i + 1).cast("int32"),
+                ibis.literal(i + 1).cast("int64"),
                 case_expr,
             )
 
