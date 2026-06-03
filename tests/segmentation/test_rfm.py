@@ -1,5 +1,7 @@
 """Tests for the RFMSegmentation class."""
 
+import datetime
+
 import ibis
 import pandas as pd
 import pytest
@@ -84,9 +86,13 @@ class TestRFMSegmentation:
         ]
         return pd.DataFrame(data)
 
-    def test_correct_rfm_segmentation(self, base_df, expected_df):
-        """Test that the RFM segmentation correctly calculates the RFM scores and segments."""
-        current_date = "2025-03-17"
+    @pytest.mark.parametrize("current_date", ["2025-03-17", datetime.date(2025, 3, 17)])
+    def test_correct_rfm_segmentation(self, base_df, expected_df, current_date):
+        """Test that RFM segmentation calculates scores and segments for string and date inputs.
+
+        Parameterizing current_date covers both the string ("YYYY-MM-DD") and datetime.date
+        input paths, which must produce identical results for the same calendar date.
+        """
         rfm_segmentation = RFMSegmentation(df=base_df, current_date=current_date)
         result_df = rfm_segmentation.df
         expected_df["recency_days"] = [16, 30, 46, 7, 25]
@@ -143,19 +149,35 @@ class TestRFMSegmentation:
                 ],
             },
         )
-        current_date = "2025-03-17"
-        rfm_segmentation = RFMSegmentation(df=df_multiple_transactions, current_date=current_date)
+        rfm_segmentation = RFMSegmentation(df=df_multiple_transactions, current_date="2025-03-17")
         result_df = rfm_segmentation.df
 
-        assert result_df.loc[1, "rfm_segment"] == 0
+        # Metrics aggregate across the customer's five transactions: frequency counts unique
+        # transactions, monetary sums spend, and recency is measured from the most recent
+        # transaction (2025-03-10). A lone customer falls in the bottom bin for every metric.
+        expected_df = pd.DataFrame(
+            {
+                cols.customer_id: [1],
+                "frequency": [5],
+                "monetary": [1070.0],
+                "recency_days": [7],
+                "r_score": [0],
+                "f_score": [0],
+                "m_score": [0],
+                "rfm_segment": [0],
+                "fm_segment": [0],
+            },
+        ).set_index(cols.customer_id)
 
-    def test_lazy_execution_with_ibis_table(self, base_df):
-        """Test lazy execution of Ibis table on accessing .df."""
-        ibis_table = ibis.memtable(base_df)
-        rfm = RFMSegmentation(df=ibis_table, current_date="2025-03-17")
-        result_df = rfm.df
-        assert isinstance(result_df, pd.DataFrame)
-        assert not result_df.empty
+        pd.testing.assert_frame_equal(result_df, expected_df, check_like=True, check_dtype=False)
+
+    def test_ibis_table_input_matches_dataframe_input(self, base_df):
+        """Ibis-table input produces the same segmentation as the equivalent DataFrame input."""
+        current_date = "2025-03-17"
+        dataframe_result = RFMSegmentation(df=base_df, current_date=current_date).df
+        ibis_result = RFMSegmentation(df=ibis.memtable(base_df), current_date=current_date).df
+
+        pd.testing.assert_frame_equal(ibis_result.sort_index(), dataframe_result.sort_index())
 
     def test_df_property_caching(self, base_df):
         """Test that df property caches result and doesn't recompute."""
@@ -163,9 +185,6 @@ class TestRFMSegmentation:
         rfm_segmentation = RFMSegmentation(df=base_df, current_date=current_date)
 
         first_df = rfm_segmentation.df
-        assert first_df is not None
-        assert not first_df.empty
-
         second_df = rfm_segmentation.df
         assert first_df is second_df
 
@@ -212,34 +231,26 @@ class TestRFMSegmentation:
         with pytest.raises(expected_error, match=error_message):
             RFMSegmentation(base_df, current_date=invalid_date)
 
-    def test_custom_bins_with_integers(self, larger_df):
-        """Test custom number of bins works correctly."""
-        current_date = "2025-03-17"
+    @pytest.mark.parametrize(
+        ("r_segments", "f_segments", "m_segments"),
+        [
+            (5, 3, 4),
+            ([0.2, 0.4, 0.6, 0.8], [0.33, 0.66], [0.25, 0.5, 0.75]),
+        ],
+    )
+    def test_custom_segment_counts(self, larger_df, r_segments, f_segments, m_segments):
+        """Integer bin counts and equivalent cut points both produce the expected score range.
+
+        Five recency bins, three frequency bins, and four monetary bins yield top scores of
+        4, 2, and 3 respectively, with every metric starting at 0.
+        """
         max_r, max_f, max_m = 4, 2, 3
         rfm_segmentation = RFMSegmentation(
             df=larger_df,
-            current_date=current_date,
-            r_segments=5,
-            f_segments=3,
-            m_segments=4,
-        )
-        result_df = rfm_segmentation.df
-
-        assert result_df["r_score"].max() == max_r
-        assert result_df["f_score"].max() == max_f
-        assert result_df["m_score"].max() == max_m
-        assert all(result_df[col].min() == 0 for col in ["r_score", "f_score", "m_score"])
-
-    def test_custom_cut_points(self, larger_df):
-        """Test custom cut points work correctly."""
-        current_date = "2025-03-17"
-        max_r, max_f, max_m = 4, 2, 3
-        rfm_segmentation = RFMSegmentation(
-            df=larger_df,
-            current_date=current_date,
-            r_segments=[0.2, 0.4, 0.6, 0.8],
-            f_segments=[0.33, 0.66],
-            m_segments=[0.25, 0.5, 0.75],
+            current_date="2025-03-17",
+            r_segments=r_segments,
+            f_segments=f_segments,
+            m_segments=m_segments,
         )
         result_df = rfm_segmentation.df
 
@@ -280,30 +291,63 @@ class TestRFMSegmentation:
         # r_score is non-increasing as recency grows (more recent => better).
         assert result_df["r_score"].is_monotonic_decreasing
 
-    def test_custom_cut_points_frequency_monetary_direction(self, multi_transaction_df):
-        """Higher frequency and monetary values must earn higher scores under custom cut points.
+    def test_custom_cut_points_segment_composition(self):
+        """Cut-points scoring composes rfm_segment and fm_segment correctly across all metrics.
 
-        Companion to the recency-direction regression test: the cut-points branch is shared
-        across all three metrics, so frequency and monetary direction are pinned here to guard
-        against future ordering regressions in that branch.
+        Uses customers whose recency, frequency, and monetary rankings differ so that the
+        composed segments (r*100 + f*10 + m and f*10 + m) distinguish each coefficient. This
+        also pins score direction for all three metrics: higher frequency/monetary and lower
+        recency earn the higher score.
         """
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [1, 1, 2, 2, 2, 2, 3, 4, 4, 4],
+                cols.transaction_id: list(range(101, 111)),
+                cols.unit_spend: [50.0, 50.0, 100.0, 100.0, 100.0, 100.0, 200.0, 100.0, 100.0, 100.0],
+                cols.transaction_date: [
+                    "2025-03-07",
+                    "2025-03-07",
+                    "2025-02-25",
+                    "2025-02-25",
+                    "2025-02-25",
+                    "2025-02-25",
+                    "2025-02-15",
+                    "2025-02-05",
+                    "2025-02-05",
+                    "2025-02-05",
+                ],
+            },
+        )
+
         rfm_segmentation = RFMSegmentation(
-            df=multi_transaction_df,
+            df=df,
             current_date="2025-03-17",
-            f_segments=[0.5, 0.8],
-            m_segments=[0.5, 0.8],
+            r_segments=[0.5],
+            f_segments=[0.5],
+            m_segments=[0.5],
         )
         result_df = rfm_segmentation.df
 
-        by_frequency = result_df.sort_values("frequency")
-        assert by_frequency["f_score"].iloc[0] == 0
-        assert by_frequency["f_score"].iloc[-1] == by_frequency["f_score"].max()
-        assert by_frequency["f_score"].is_monotonic_increasing
+        expected_df = pd.DataFrame(
+            {
+                cols.customer_id: [1, 2, 3, 4],
+                "frequency": [2, 4, 1, 3],
+                "monetary": [100.0, 400.0, 200.0, 300.0],
+                "recency_days": [10, 20, 30, 40],
+                "r_score": [1, 1, 0, 0],
+                "f_score": [0, 1, 0, 1],
+                "m_score": [0, 1, 0, 1],
+                "rfm_segment": [100, 111, 0, 11],
+                "fm_segment": [0, 11, 0, 11],
+            },
+        ).set_index(cols.customer_id)
 
-        by_monetary = result_df.sort_values("monetary")
-        assert by_monetary["m_score"].iloc[0] == 0
-        assert by_monetary["m_score"].iloc[-1] == by_monetary["m_score"].max()
-        assert by_monetary["m_score"].is_monotonic_increasing
+        pd.testing.assert_frame_equal(
+            result_df.sort_index(),
+            expected_df.sort_index(),
+            check_like=True,
+            check_dtype=False,
+        )
 
     def test_single_bin_segments(self, larger_df):
         """Test using single bins for all segments."""
@@ -381,6 +425,7 @@ class TestRFMSegmentation:
         ("filter_config", "expected_count", "expected_condition"),
         [
             ({"min_frequency": MIN_FREQ}, EXPECTED_COUNT_ONE, lambda df: df["frequency"].min() >= MIN_FREQ),
+            ({"max_frequency": MAX_FREQ}, EXPECTED_COUNT_ONE, lambda df: df["frequency"].max() <= MAX_FREQ),
             (
                 {"min_frequency": MIN_FREQ, "max_frequency": MAX_FREQ},
                 EXPECTED_COUNT_TWO,
@@ -432,6 +477,14 @@ class TestRFMSegmentation:
         """Test validation for frequency filter relationships."""
         with pytest.raises(ValueError, match="min_frequency must be less than or equal to max_frequency"):
             RFMSegmentation(base_df, min_frequency=10, max_frequency=5)
+
+    def test_filter_excluding_all_customers_yields_empty_result(self, base_df):
+        """A monetary filter above every customer's spend produces an empty segmentation."""
+        # base_df spend tops out at 300.0, so a 10000.0 floor excludes all five customers.
+        rfm_segmentation = RFMSegmentation(df=base_df, current_date="2025-03-17", min_monetary=10000.0)
+        result_df = rfm_segmentation.df
+
+        assert len(result_df) == 0
 
     def test_filters_applied_before_segmentation(self):
         """Test that filters are applied before calculating segment boundaries.
