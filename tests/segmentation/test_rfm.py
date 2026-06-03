@@ -517,14 +517,21 @@ class TestRFMSegmentation:
             )
 
     def test_with_custom_column_names(self, base_df):
-        """Test RFMSegmentation with custom column names."""
+        """Custom column-name options drive the computation, yielding the default-name result.
+
+        Renaming every input column and pointing the options at the new names must produce the
+        same scores and segments as the default-named data (only the index name changes),
+        proving the option values are used throughout the pipeline rather than just echoed.
+        """
+        current_date = "2025-03-17"
+        default_result = RFMSegmentation(df=base_df, current_date=current_date).df
+
         rename_mapping = {
             "customer_id": "custom_cust_id",
             "transaction_id": "custom_txn_id",
             "unit_spend": "custom_spend_amount",
             "transaction_date": "custom_txn_date",
         }
-
         custom_df = base_df.rename(columns=rename_mapping)
 
         with option_context(
@@ -537,7 +544,7 @@ class TestRFMSegmentation:
             "column.transaction_date",
             "custom_txn_date",
         ):
-            rfm_segmentation = RFMSegmentation(df=custom_df)
-            result_df = rfm_segmentation.df
-            assert isinstance(result_df, pd.DataFrame), "Should execute successfully with custom column names"
-            assert result_df.index.name == "custom_cust_id", "Should use custom customer_id column name as index"
+            custom_result = RFMSegmentation(df=custom_df, current_date=current_date).df
+
+        assert custom_result.index.name == "custom_cust_id"
+        pd.testing.assert_frame_equal(custom_result.rename_axis(default_result.index.name), default_result)
