@@ -220,7 +220,7 @@ class TestRFMSegmentation:
         ],
     )
     def test_custom_segment_counts(self, larger_df, r_segments, f_segments, m_segments):
-        """Integer bin counts and equivalent cut points both produce the expected score range."""
+        """Integer bin counts and cut-point lists both produce the expected min/max score range."""
         max_r, max_f, max_m = 4, 2, 3
         rfm_segmentation = RFMSegmentation(
             df=larger_df,
