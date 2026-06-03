@@ -282,7 +282,7 @@ class RFMSegmentation:
         if isinstance(segments, int):
             return ibis.ntile(segments).over(window)
 
-        percentile = table[column].percent_rank().over(window)
+        percentile = ibis.percent_rank().over(window)
 
         sorted_segments = sorted(segments)
         case_expr = ibis.literal(0).cast("int32")

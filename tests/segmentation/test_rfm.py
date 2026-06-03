@@ -248,6 +248,63 @@ class TestRFMSegmentation:
         assert result_df["m_score"].max() == max_m
         assert all(result_df[col].min() == 0 for col in ["r_score", "f_score", "m_score"])
 
+    def test_custom_cut_points_recency_direction(self):
+        """Most recent customers must receive the highest r_score under custom cut points.
+
+        Regression test: the cut-points branch previously ranked recency by its natural
+        ascending order, ignoring the descending window ordering. This inverted r_score so
+        the most recent customers received the lowest score instead of the highest, breaking
+        the package's "higher score is better" contract and disagreeing with the integer-bin
+        path.
+        """
+        current_date = "2025-03-17"
+        recency_days = [3, 9, 15, 21, 40, 60, 90, 150, 250, 350]
+        transaction_dates = [
+            (pd.Timestamp(current_date) - pd.Timedelta(days=days)).strftime("%Y-%m-%d") for days in recency_days
+        ]
+        df = pd.DataFrame(
+            {
+                cols.customer_id: list(range(1, 11)),
+                cols.transaction_id: list(range(101, 111)),
+                cols.unit_spend: [100.0] * 10,
+                cols.transaction_date: transaction_dates,
+            },
+        )
+
+        rfm_segmentation = RFMSegmentation(df=df, current_date=current_date, r_segments=[0.5, 0.8])
+        result_df = rfm_segmentation.df.sort_values("recency_days")
+
+        # Most recent customer earns the top score; least recent earns the bottom score.
+        assert result_df["r_score"].iloc[0] == result_df["r_score"].max()
+        assert result_df["r_score"].iloc[-1] == 0
+        # r_score is non-increasing as recency grows (more recent => better).
+        assert result_df["r_score"].is_monotonic_decreasing
+
+    def test_custom_cut_points_frequency_monetary_direction(self, multi_transaction_df):
+        """Higher frequency and monetary values must earn higher scores under custom cut points.
+
+        Companion to the recency-direction regression test: the cut-points branch is shared
+        across all three metrics, so frequency and monetary direction are pinned here to guard
+        against future ordering regressions in that branch.
+        """
+        rfm_segmentation = RFMSegmentation(
+            df=multi_transaction_df,
+            current_date="2025-03-17",
+            f_segments=[0.5, 0.8],
+            m_segments=[0.5, 0.8],
+        )
+        result_df = rfm_segmentation.df
+
+        by_frequency = result_df.sort_values("frequency")
+        assert by_frequency["f_score"].iloc[0] == 0
+        assert by_frequency["f_score"].iloc[-1] == by_frequency["f_score"].max()
+        assert by_frequency["f_score"].is_monotonic_increasing
+
+        by_monetary = result_df.sort_values("monetary")
+        assert by_monetary["m_score"].iloc[0] == 0
+        assert by_monetary["m_score"].iloc[-1] == by_monetary["m_score"].max()
+        assert by_monetary["m_score"].is_monotonic_increasing
+
     def test_single_bin_segments(self, larger_df):
         """Test using single bins for all segments."""
         current_date = "2025-03-17"
