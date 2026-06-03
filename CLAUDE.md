@@ -123,10 +123,7 @@ fails at runtime, and only "green" when it passes at runtime.
 - Always put imports at the top of the module (never import inside test methods)
 - Where possible prefer pandas `assert_frame_equal` to asserting individual values of the dataframe
     - This may require creating an expected dataframe to compare against
-    - Do not reach for `check_dtype=False` to silence a mismatch — it is lazy and hides real dtype
-      regressions. Match the expected dtype instead (e.g. cast a single column with
-      `.astype(result[col].dtype)`), and treat a genuine cross-branch dtype divergence as a bug to fix
-      in the source, not the test.
+    - Avoid `check_dtype=False`; match the expected dtype instead (it lazily hides real dtype regressions)
 - Use `pytest.mark.parametrize` when testing multiple input variations of the same behavior
 - Test files should follow pattern: `test_*.py` with test functions `test_*`
 - Test names must accurately describe what is being tested
