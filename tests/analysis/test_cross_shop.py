@@ -99,7 +99,7 @@ def test_calc_cross_shop_three_groups(sample_data):
         },
     ).set_index(cols.customer_id)
 
-    pd.testing.assert_frame_equal(cross_shop_df, ret_df, check_dtype=False)
+    pd.testing.assert_frame_equal(cross_shop_df, ret_df)
 
 
 def test_calc_cross_shop_three_groups_customer_id_nunique(sample_data):

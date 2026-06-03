@@ -51,7 +51,7 @@ class TestNLRSegmentation:
             },
         ).set_index(cols.customer_id)
 
-        assert_frame_equal(result, expected, check_dtype=False)
+        assert_frame_equal(result, expected)
 
     def test_segment_names_are_exhaustive(self, transaction_df):
         """Test that every customer receives a known segment — no NULLs or unknown values."""
@@ -252,7 +252,7 @@ class TestNLRSegmentation:
             },
         ).set_index(cols.customer_id)
 
-        assert_frame_equal(result, expected, check_dtype=False)
+        assert_frame_equal(result, expected)
 
     def test_input_dataframe_not_mutated(self, transaction_df):
         """Test that the original DataFrame is not modified."""
@@ -383,7 +383,7 @@ class TestNLRSegmentationGroupCol:
             },
         ).set_index([cols.customer_id, cols.store_id])
 
-        assert_frame_equal(result, expected, check_dtype=False)
+        assert_frame_equal(result, expected)
 
     def test_raises_on_missing_group_column(self):
         """Test that ValueError is raised when group_col column is missing from the DataFrame."""
