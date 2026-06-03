@@ -88,11 +88,7 @@ class TestRFMSegmentation:
 
     @pytest.mark.parametrize("current_date", ["2025-03-17", datetime.date(2025, 3, 17)])
     def test_correct_rfm_segmentation(self, base_df, expected_df, current_date):
-        """Test that RFM segmentation calculates scores and segments for string and date inputs.
-
-        Parameterizing current_date covers both the string ("YYYY-MM-DD") and datetime.date
-        input paths, which must produce identical results for the same calendar date.
-        """
+        """Test that string and datetime.date current_date inputs yield identical scores and segments."""
         rfm_segmentation = RFMSegmentation(df=base_df, current_date=current_date)
         result_df = rfm_segmentation.df
         expected_df["recency_days"] = [16, 30, 46, 7, 25]
@@ -137,9 +133,8 @@ class TestRFMSegmentation:
         rfm_segmentation = RFMSegmentation(df=df_multiple_transactions, current_date="2025-03-17")
         result_df = rfm_segmentation.df
 
-        # Metrics aggregate across the customer's five transactions: frequency counts unique
-        # transactions, monetary sums spend, and recency is measured from the most recent
-        # transaction (2025-03-10). A lone customer falls in the bottom bin for every metric.
+        # Expected: frequency 5 (unique transactions), monetary the total spend, recency from the
+        # latest transaction (2025-03-10); a lone customer lands in the bottom bin for all three.
         expected_df = pd.DataFrame(
             {
                 cols.customer_id: [1],
@@ -225,11 +220,7 @@ class TestRFMSegmentation:
         ],
     )
     def test_custom_segment_counts(self, larger_df, r_segments, f_segments, m_segments):
-        """Integer bin counts and equivalent cut points both produce the expected score range.
-
-        Five recency bins, three frequency bins, and four monetary bins yield top scores of
-        4, 2, and 3 respectively, with every metric starting at 0.
-        """
+        """Integer bin counts and equivalent cut points both produce the expected score range."""
         max_r, max_f, max_m = 4, 2, 3
         rfm_segmentation = RFMSegmentation(
             df=larger_df,
@@ -248,12 +239,9 @@ class TestRFMSegmentation:
     def test_custom_cut_points_segment_composition(self):
         """Cut-points scoring composes rfm_segment and fm_segment correctly across all metrics.
 
-        Uses customers whose recency, frequency, and monetary rankings differ so that the
-        composed segments (r*100 + f*10 + m and f*10 + m) distinguish each coefficient. This
-        also pins score direction for all three metrics: higher frequency/monetary and lower
-        recency earn the higher score. It is the regression guard for the cut-points branch
-        previously ranking recency by ascending order and inverting r_score (most recent
-        customers wrongly received the lowest score).
+        Customers' R/F/M rankings differ so the composed segments distinguish each coefficient.
+        Regression guard for the cut-points branch that previously inverted r_score by ranking
+        recency ascending.
         """
         df = pd.DataFrame(
             {
@@ -520,12 +508,7 @@ class TestRFMSegmentation:
             )
 
     def test_with_custom_column_names(self, base_df):
-        """Custom column-name options drive the computation, yielding the default-name result.
-
-        Renaming every input column and pointing the options at the new names must produce the
-        same scores and segments as the default-named data (only the index name changes),
-        proving the option values are used throughout the pipeline rather than just echoed.
-        """
+        """Custom column-name options produce the same scores and segments as the default names (index aside)."""
         current_date = "2025-03-17"
         default_result = RFMSegmentation(df=base_df, current_date=current_date).df
 

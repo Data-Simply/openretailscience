@@ -285,8 +285,7 @@ class RFMSegmentation:
         percentile = ibis.percent_rank().over(window)
 
         sorted_segments = sorted(segments)
-        # Match the int64 scores produced by the ntile branch so _compute_score returns a
-        # consistent dtype regardless of whether segments is an int or a list of cut points.
+        # Cast to int64 to match the ntile branch so _compute_score returns a consistent dtype.
         case_expr = ibis.literal(0).cast("int64")
 
         for i, cutpoint in enumerate(sorted_segments):
