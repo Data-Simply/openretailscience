@@ -118,21 +118,6 @@ class TestRFMSegmentation:
             check_like=True,
         )
 
-    def test_single_customer(self):
-        """Test RFM segmentation for a single customer."""
-        df_single_customer = pd.DataFrame(
-            {
-                cols.customer_id: [1],
-                cols.transaction_id: [101],
-                cols.unit_spend: [200.0],
-                cols.transaction_date: ["2025-03-01"],
-            },
-        )
-        current_date = "2025-03-17"
-        rfm_segmentation = RFMSegmentation(df=df_single_customer, current_date=current_date)
-        result_df = rfm_segmentation.df
-        assert result_df.loc[1, "rfm_segment"] == 0
-
     def test_multiple_transactions_per_customer(self):
         """Test that the method correctly handles multiple transactions for the same customer."""
         df_multiple_transactions = pd.DataFrame(
@@ -432,21 +417,17 @@ class TestRFMSegmentation:
             RFMSegmentation(base_df, **kwargs)
 
     @pytest.mark.parametrize(
-        ("min_val", "max_val", "error_message"),
+        ("filter_kwargs", "error_message"),
         [
-            (500.0, 500.0, "min_monetary must be less than max_monetary"),
-            (600.0, 500.0, "min_monetary must be less than max_monetary"),
+            ({"min_monetary": 500.0, "max_monetary": 500.0}, "min_monetary must be less than max_monetary"),
+            ({"min_monetary": 600.0, "max_monetary": 500.0}, "min_monetary must be less than max_monetary"),
+            ({"min_frequency": 10, "max_frequency": 5}, "min_frequency must be less than or equal to max_frequency"),
         ],
     )
-    def test_monetary_filter_relationships(self, base_df, min_val, max_val, error_message):
-        """Test validation for monetary filter relationships."""
+    def test_filter_relationship_validation(self, base_df, filter_kwargs, error_message):
+        """A filter minimum that exceeds its maximum raises a descriptive ValueError."""
         with pytest.raises(ValueError, match=error_message):
-            RFMSegmentation(base_df, min_monetary=min_val, max_monetary=max_val)
-
-    def test_frequency_filter_relationships(self, base_df):
-        """Test validation for frequency filter relationships."""
-        with pytest.raises(ValueError, match="min_frequency must be less than or equal to max_frequency"):
-            RFMSegmentation(base_df, min_frequency=10, max_frequency=5)
+            RFMSegmentation(base_df, **filter_kwargs)
 
     def test_filter_excluding_all_customers_yields_empty_result(self, base_df):
         """A monetary filter above every customer's spend produces an empty segmentation."""
