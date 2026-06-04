@@ -1046,7 +1046,7 @@ class SegTransactionStats:
         ]
 
         # Add any extra aggregation columns to the column order
-        if hasattr(self, "extra_aggs") and self.extra_aggs:
+        if self.extra_aggs:
             if include_unknown:
                 # Add identified, unknown, and total variants for each extra agg
                 suffix_unknown = get_option("column.suffix.unknown_customer")
