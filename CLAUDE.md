@@ -27,6 +27,9 @@ second use case demands it is cheap; removing an abstraction once code depends o
 ## Build & Test Commands
 
 - Install dependencies: `uv sync`
+- Install pre-commit hooks: `uv run pre-commit install` — **run this before your first commit.** The hooks
+  (ruff, conventional-commit, pytest, etc.) gate every commit and mirror CI; setting them up first catches
+  failures locally instead of in the pipeline.
 - Run all tests: `uv run pytest`
 - Run specific test: `uv run pytest tests/test_file.py::test_function_name`
 - Run tests with pattern: `uv run pytest -k "pattern"`
