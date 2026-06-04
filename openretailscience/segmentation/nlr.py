@@ -49,6 +49,7 @@ rather than spend.
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING
 
 import ibis
@@ -144,8 +145,6 @@ class NLRSegmentation:
             ValueError: If required columns are missing from the DataFrame, or if agg_func is not
                 a supported aggregation function.
         """
-        self._df: pd.DataFrame | None = None
-
         cols = ColumnHelper()
         value_col = cols.unit_spend if value_col is None else value_col
 
@@ -208,13 +207,11 @@ class NLRSegmentation:
             p2_col,
         )
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Returns the DataFrame with segment names, indexed by customer_id (and group_col if specified)."""
-        if self._df is None:
-            cols = ColumnHelper()
-            index_cols = [cols.customer_id]
-            if self._group_col is not None:
-                index_cols.extend(self._group_col)
-            self._df = self.table.execute().set_index(index_cols)
-        return self._df
+        cols = ColumnHelper()
+        index_cols = [cols.customer_id]
+        if self._group_col is not None:
+            index_cols.extend(self._group_col)
+        return self.table.execute().set_index(index_cols)

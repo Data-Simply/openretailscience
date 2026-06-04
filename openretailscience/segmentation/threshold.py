@@ -43,6 +43,7 @@ and doesn't scale across large datasets.
 - Efficient execution using Ibis for large datasets
 """
 
+import functools
 from typing import Literal
 
 import ibis
@@ -88,7 +89,6 @@ class ThresholdSegmentation:
             ValueError: If the dataframe is missing the columns option column.customer_id or `value_col`, or these
                 columns contain null values.
         """
-        self._df: pd.DataFrame | None = None
         self._group_col: list[str] | None = None
         if len(thresholds) != len(set(thresholds)):
             raise ValueError("The thresholds must be unique")
@@ -146,13 +146,11 @@ class ThresholdSegmentation:
 
         self.table = df
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Returns the dataframe with the segment names."""
-        if self._df is None:
-            cols = ColumnHelper()
-            index_cols = [cols.customer_id]
-            if self._group_col is not None:
-                index_cols.extend(self._group_col)
-            self._df = self.table.execute().set_index(index_cols)
-        return self._df
+        cols = ColumnHelper()
+        index_cols = [cols.customer_id]
+        if self._group_col is not None:
+            index_cols.extend(self._group_col)
+        return self.table.execute().set_index(index_cols)

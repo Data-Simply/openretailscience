@@ -6,6 +6,7 @@ Every store counts equally regardless of its sales volume.
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING
 
 import ibis
@@ -57,7 +58,6 @@ class PctOfStores:
         within_group: bool = False,
     ) -> None:
         """Initializes the % of Stores calculation."""
-        self._df: pd.DataFrame | None = None
         self.table: ibis.Table
 
         df = ensure_ibis_table(df)
@@ -107,13 +107,11 @@ class PctOfStores:
             **{pct_stores_col: ratio_metric(_[agg_stores_col], denominator)},
         ).select(final_cols)
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Returns the materialized pandas DataFrame of % of Stores results.
 
         Returns:
             pd.DataFrame: DataFrame with % of stores values. Cached after first access.
         """
-        if self._df is None:
-            self._df = self.table.execute()
-        return self._df
+        return self.table.execute()

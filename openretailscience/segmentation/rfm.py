@@ -24,6 +24,7 @@ to enhance customer insights and business decision-making.
 """
 
 import datetime
+import functools
 
 import ibis
 import pandas as pd
@@ -89,7 +90,6 @@ class RFMSegmentation:
                        or invalid filter parameters.
             TypeError: If the input data is not a pandas DataFrame or an Ibis Table.
         """
-        self._df: pd.DataFrame | None = None
         cols = ColumnHelper()
         required_cols = [
             cols.customer_id,
@@ -297,9 +297,7 @@ class RFMSegmentation:
 
         return case_expr
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Returns the dataframe with the segment names."""
-        if self._df is None:
-            self._df = self.table.execute().set_index(get_option("column.customer_id"))
-        return self._df
+        return self.table.execute().set_index(get_option("column.customer_id"))
