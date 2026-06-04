@@ -72,6 +72,6 @@ class Acv:
         """Returns the materialized pandas DataFrame of ACV results.
 
         Returns:
-            pd.DataFrame: DataFrame with ACV values. Cached after first access.
+            pd.DataFrame: DataFrame with ACV values.
         """
         return self.table.execute()

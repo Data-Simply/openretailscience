@@ -112,6 +112,6 @@ class PctOfStores:
         """Returns the materialized pandas DataFrame of % of Stores results.
 
         Returns:
-            pd.DataFrame: DataFrame with % of stores values. Cached after first access.
+            pd.DataFrame: DataFrame with % of stores values.
         """
         return self.table.execute()
