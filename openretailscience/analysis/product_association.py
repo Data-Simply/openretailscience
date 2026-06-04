@@ -106,6 +106,8 @@ Retailers should consider multiple metrics together:
 - Account for external factors (promotions, events) affecting associations
 """
 
+import functools
+
 import ibis
 import pandas as pd
 from ibis import _
@@ -192,7 +194,6 @@ class ProductAssociation:
             ValueError: If the minimum occurrences or cooccurrences are less than 1.
             ValueError: If the input DataFrame does not contain the required columns or if they have null values.
         """
-        self._df: pd.DataFrame | None = None
         group_col = group_col or get_option("column.customer_id")
         required_cols = [group_col, value_col]
         ensure_data_has_columns(df, required_cols)
@@ -407,9 +408,7 @@ class ProductAssociation:
             ]
         ]
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Returns the executed DataFrame."""
-        if self._df is None:
-            self._df = self.table.execute().reset_index(drop=True)
-        return self._df
+        return self.table.execute().reset_index(drop=True)

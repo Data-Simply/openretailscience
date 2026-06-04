@@ -61,6 +61,8 @@ Key Features:
 - Utilizes Ibis for efficient query execution on large retail datasets
 """
 
+import functools
+
 import ibis
 import ibis.expr.types as ir
 import pandas as pd
@@ -180,7 +182,6 @@ class CompositeRank:
             >>> # Electronics products ranked against other electronics
             >>> # Apparel products ranked against other apparel
         """
-        self._df: pd.DataFrame | None = None
         df = ensure_ibis_table(df)
 
         if group_col is not None:
@@ -294,7 +295,7 @@ class CompositeRank:
         }
         return df.mutate(composite_rank=agg_expr[agg_func])
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Returns ranked data ready for business decision-making.
 
@@ -304,6 +305,4 @@ class CompositeRank:
                 - Individual rank columns (e.g., sales_rank, margin_rank)
                 - composite_rank: Final combined ranking for decisions
         """
-        if self._df is None:
-            self._df = self.table.execute()
-        return self._df
+        return self.table.execute()

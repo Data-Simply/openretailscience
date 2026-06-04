@@ -45,6 +45,7 @@ transaction frequency, average basket size, and custom business metrics for any
 segment combination.
 """
 
+import functools
 import warnings
 from itertools import chain, combinations
 from typing import Any, Literal
@@ -300,7 +301,6 @@ class SegTransactionStats:
             ...     calc_rollup=False,
             ... )
         """
-        self._df: pd.DataFrame | None = None
         data = ensure_ibis_table(data, "data")
 
         cols = ColumnHelper()
@@ -1029,35 +1029,33 @@ class SegTransactionStats:
 
         return final_metrics
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Returns the dataframe with the transaction statistics by segment."""
-        if self._df is None:
-            cols = ColumnHelper()
-            include_quantity = cols.agg.unit_qty in self.table.columns
-            include_customer = cols.agg.customer_id in self.table.columns
-            include_unknown = self.unknown_customer_value is not None
-            col_order = [
-                *self.segment_col,
-                *SegTransactionStats._get_col_order(
-                    include_quantity=include_quantity,
-                    include_customer=include_customer,
-                    include_unknown=include_unknown,
-                ),
-            ]
+        cols = ColumnHelper()
+        include_quantity = cols.agg.unit_qty in self.table.columns
+        include_customer = cols.agg.customer_id in self.table.columns
+        include_unknown = self.unknown_customer_value is not None
+        col_order = [
+            *self.segment_col,
+            *SegTransactionStats._get_col_order(
+                include_quantity=include_quantity,
+                include_customer=include_customer,
+                include_unknown=include_unknown,
+            ),
+        ]
 
-            # Add any extra aggregation columns to the column order
-            if hasattr(self, "extra_aggs") and self.extra_aggs:
-                if include_unknown:
-                    # Add identified, unknown, and total variants for each extra agg
-                    suffix_unknown = get_option("column.suffix.unknown_customer")
-                    suffix_total = get_option("column.suffix.total")
-                    for agg_name in self.extra_aggs:
-                        col_order.append(agg_name)
-                        col_order.append(f"{agg_name}_{suffix_unknown}")
-                        col_order.append(f"{agg_name}_{suffix_total}")
-                else:
-                    col_order.extend(self.extra_aggs.keys())
+        # Add any extra aggregation columns to the column order
+        if hasattr(self, "extra_aggs") and self.extra_aggs:
+            if include_unknown:
+                # Add identified, unknown, and total variants for each extra agg
+                suffix_unknown = get_option("column.suffix.unknown_customer")
+                suffix_total = get_option("column.suffix.total")
+                for agg_name in self.extra_aggs:
+                    col_order.append(agg_name)
+                    col_order.append(f"{agg_name}_{suffix_unknown}")
+                    col_order.append(f"{agg_name}_{suffix_total}")
+            else:
+                col_order.extend(self.extra_aggs.keys())
 
-            self._df = self.table.execute()[col_order]
-        return self._df
+        return self.table.execute()[col_order]

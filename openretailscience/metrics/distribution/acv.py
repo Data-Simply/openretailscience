@@ -6,6 +6,7 @@ expressed in millions ($MM).
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING
 
 import ibis
@@ -46,7 +47,6 @@ class Acv:
         acv_scale_factor: float = 1_000_000,
     ) -> None:
         """Initializes the ACV calculation."""
-        self._df: pd.DataFrame | None = None
         self.table: ibis.Table
 
         df = ensure_ibis_table(df)
@@ -67,13 +67,11 @@ class Acv:
 
         self.table = df.aggregate(acv=_[unit_spend_col].sum() / acv_scale_factor)
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Returns the materialized pandas DataFrame of ACV results.
 
         Returns:
             pd.DataFrame: DataFrame with ACV values. Cached after first access.
         """
-        if self._df is None:
-            self._df = self.table.execute()
-        return self._df
+        return self.table.execute()
