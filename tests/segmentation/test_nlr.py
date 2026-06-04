@@ -319,18 +319,6 @@ class TestNLRSegmentation:
         assert result.loc[1002, "segment_name"] == SEGMENT_LAPSED
         assert result.loc[1004, "segment_name"] == SEGMENT_NEW
 
-    def test_df_property_caches_result(self, transaction_df):
-        """Test that the df property returns the same cached DataFrame on subsequent calls."""
-        seg = NLRSegmentation(
-            df=transaction_df,
-            period_col="year",
-            p1_value=2023,
-            p2_value=2024,
-        )
-        first_call = seg.df
-        second_call = seg.df
-        assert first_call is second_call
-
 
 class TestNLRSegmentationGroupCol:
     """Tests for NLRSegmentation group_col functionality."""

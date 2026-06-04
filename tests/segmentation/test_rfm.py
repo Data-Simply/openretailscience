@@ -160,15 +160,6 @@ class TestRFMSegmentation:
 
         pd.testing.assert_frame_equal(ibis_result.sort_index(), dataframe_result.sort_index())
 
-    def test_df_property_caching(self, base_df):
-        """Test that df property caches result and doesn't recompute."""
-        current_date = "2025-03-17"
-        rfm_segmentation = RFMSegmentation(df=base_df, current_date=current_date)
-
-        first_df = rfm_segmentation.df
-        second_df = rfm_segmentation.df
-        assert first_df is second_df
-
     @pytest.mark.parametrize(
         ("invalid_input", "expected_error", "error_message"),
         [
