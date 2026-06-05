@@ -6,7 +6,6 @@ social:
 ---
 
 !!! warning "Experimental"
-
     Metrics are experimental. Their APIs and import paths (under `openretailscience.experimental`) may change
     without notice.
 
