@@ -1,11 +1,11 @@
-"""Tests for openretailscience.metrics.base."""
+"""Tests for openretailscience.experimental.metrics.base."""
 
 import ibis
 import numpy as np
 import pandas as pd
 import pytest
 
-from openretailscience.metrics.base import PERCENTAGE_SCALE, ratio_metric
+from openretailscience.experimental.metrics.base import PERCENTAGE_SCALE, ratio_metric
 
 
 class TestRatioMetric:

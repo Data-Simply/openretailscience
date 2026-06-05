@@ -5,6 +5,11 @@ social:
     title: OpenRetailScience | Retail Metrics
 ---
 
+!!! warning "Experimental"
+
+    Metrics are experimental. Their APIs and import paths (under `openretailscience.experimental`) may change
+    without notice.
+
 ## Distribution Metrics
 
 ### ACV (All Commodity Volume)
@@ -22,7 +27,7 @@ Example:
 
 ```python
 import pandas as pd
-from openretailscience.metrics.distribution.acv import Acv
+from openretailscience.experimental.metrics.distribution.acv import Acv
 
 df = pd.DataFrame({
     "store_id": [101, 101, 102, 102, 103],
@@ -50,7 +55,7 @@ Example:
 
 ```python
 import pandas as pd
-from openretailscience.metrics.distribution.pct_of_stores import PctOfStores
+from openretailscience.experimental.metrics.distribution.pct_of_stores import PctOfStores
 
 df = pd.DataFrame({
     "store_id": [10, 20, 20, 30, 40],
