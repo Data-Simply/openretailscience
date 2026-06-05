@@ -11,8 +11,8 @@ nav:
       - Plot Styling Guide: getting_started/styling_guide.ipynb
   - Analysis Modules:
       - analysis_modules.md
-  - Metrics:
-      - metrics.md
+  - Experimental:
+      - Metrics: experimental/metrics.md
   - Plot Gallery:
       - Overview: gallery/index.md
       - Area Plot: gallery/plots/area.ipynb
@@ -74,8 +74,9 @@ nav:
           - Styles:
               - Graph Utils: api/plots/styles/graph_utils.md
               - Styling Helpers: api/plots/styles/styling_helpers.md
-      - Metrics:
-          - Distribution: api/metrics/distribution.md
+      - Experimental:
+          - Metrics:
+              - Distribution: api/experimental/metrics/distribution.md
       - Utils:
           - Date Utils: api/utils/date.md
           - Filter & Label Utils: api/utils/filter_and_label.md

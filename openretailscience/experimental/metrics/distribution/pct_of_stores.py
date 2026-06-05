@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     import pandas as pd
 
 from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
-from openretailscience.metrics.base import ratio_metric
+from openretailscience.experimental.metrics.base import ratio_metric
 from openretailscience.options import ColumnHelper, get_option
 
 _TEMP_TOTAL_STORES = "__prs_temp_total_stores__"
