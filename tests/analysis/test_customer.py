@@ -153,7 +153,7 @@ class TestPurchasesPerCustomer:
     def test_find_purchase_percentile_invalid_comparison_raises(self, transactions_df):
         """Unknown comparison strings are rejected with a clear error."""
         ppc = PurchasesPerCustomer(transactions_df)
-        with pytest.raises(ValueError, match="Comparison must be one of"):
+        with pytest.raises(ValueError, match="comparison must be one of"):
             ppc.find_purchase_percentile(1, "foo")
 
     def test_missing_required_columns_raises(self):

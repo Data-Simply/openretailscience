@@ -47,7 +47,7 @@ from typing import TYPE_CHECKING
 
 import ibis
 
-from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
+from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table, ensure_value_choice
 from openretailscience.options import ColumnHelper
 
 if TYPE_CHECKING:
@@ -145,11 +145,7 @@ class PurchasesPerCustomer:
         Raises:
             ValueError: If ``comparison`` is not a recognized operator name.
         """
-        if comparison not in _COMPARISONS:
-            msg = f"Comparison must be one of {', '.join(repr(k) for k in _COMPARISONS)}"
-            raise ValueError(msg)
-
-        op = _COMPARISONS[comparison]
+        op = _COMPARISONS[ensure_value_choice(comparison, _COMPARISONS, "comparison")]
         agg = self.table.aggregate(
             matched=op(self.table.purchase_count, number_of_purchases).cast("int").sum(),
             total=self.table.count(),
