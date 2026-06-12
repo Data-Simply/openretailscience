@@ -37,17 +37,18 @@ jobs:
         if: github.event_name == 'pull_request'
         # Workaround for codecov/codecov-action#1876: the uploader intermittently
         # fails to fetch its own verification key, producing "Can't check signature:
-        # No public key" and failing the job under fail_ci_if_error. Pre-seeding the
-        # key into the runner keyrings lets the wrapper's signature check succeed even
-        # when its own fetch flakes. Best-effort: it never fails the build, so when the
-        # import cannot run the behaviour is unchanged from relying on the wrapper alone.
+        # No public key" and failing the job under fail_ci_if_error. Pre-seed Codecov's
+        # public key (codecovsecops, fingerprint 2703 4E7F DB85 0E0B BC2C 62FF 806B B28A
+        # ED77 9869) so the wrapper's check succeeds even when its own fetch flakes. The
+        # observed wrapper verifies against the default keyring (`gpg --verify`), so that
+        # import is the one that fixes this failure; trustedkeys.gpg is also seeded for
+        # the documented gpgv path. Best-effort: never fails the build, so behaviour is
+        # unchanged when the import itself cannot run.
         run: |
           set +e
-          for account in codecovsecurity codecovsecops; do
-            curl -fsSL "https://keybase.io/${account}/pgp_keys.asc" -o codecov.asc || continue
-            gpg --batch --import codecov.asc
-            gpg --batch --no-default-keyring --keyring trustedkeys.gpg --import codecov.asc
-          done
+          curl -fsSL https://keybase.io/codecovsecops/pgp_keys.asc -o codecov.asc
+          gpg --batch --import codecov.asc
+          gpg --batch --no-default-keyring --keyring trustedkeys.gpg --import codecov.asc
           rm -f codecov.asc
           exit 0
       - name: Upload coverage to Codecov
