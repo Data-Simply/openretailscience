@@ -33,10 +33,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          # Caching is disabled here because this job deploys a preview site, and a
-          # restorable cache shared with PR runs is a cache-poisoning vector for the
-          # published artifact. The workflow runs only on docs changes, so the lost
-          # cache costs little.
+          # Disabled: a shared cache feeding the preview deploy is a poisoning vector.
           enable-cache: "false"
 
       - name: Install Dependencies
