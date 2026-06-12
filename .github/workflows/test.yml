@@ -33,6 +33,23 @@ jobs:
         run: uv sync --locked
       - name: Run Pre-commit
         run: uv run pre-commit run --all-files
+      - name: Pre-import Codecov uploader signing key
+        if: github.event_name == 'pull_request'
+        # Workaround for codecov/codecov-action#1876: the uploader intermittently
+        # fails to fetch its own verification key, producing "Can't check signature:
+        # No public key" and failing the job under fail_ci_if_error. Pre-seeding the
+        # key into the runner keyrings lets the wrapper's signature check succeed even
+        # when its own fetch flakes. Best-effort: it never fails the build, so when the
+        # import cannot run the behaviour is unchanged from relying on the wrapper alone.
+        run: |
+          set +e
+          for account in codecovsecurity codecovsecops; do
+            curl -fsSL "https://keybase.io/${account}/pgp_keys.asc" -o codecov.asc || continue
+            gpg --batch --import codecov.asc
+            gpg --batch --no-default-keyring --keyring trustedkeys.gpg --import codecov.asc
+          done
+          rm -f codecov.asc
+          exit 0
       - name: Upload coverage to Codecov
         if: github.event_name == 'pull_request'
         uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
