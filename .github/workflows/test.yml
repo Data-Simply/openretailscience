@@ -42,13 +42,20 @@ jobs:
         # ED77 9869) so the wrapper's check succeeds even when its own fetch flakes. The
         # observed wrapper verifies against the default keyring (`gpg --verify`), so that
         # import is the one that fixes this failure; trustedkeys.gpg is also seeded for
-        # the documented gpgv path. Best-effort: never fails the build, so behaviour is
-        # unchanged when the import itself cannot run.
+        # the documented gpgv path. The fetched key's fingerprint is checked against the
+        # expected value BEFORE import, so a DNS hijack or tampered keybase response is
+        # never installed into a trusted keyring. Best-effort: never fails the build, so a
+        # fetch outage or fingerprint mismatch just falls back to the uploader's own check.
         run: |
           set +e
+          expected="27034E7FDB850E0BBC2C62FF806BB28AED779869"
           curl -fsSL https://keybase.io/codecovsecops/pgp_keys.asc -o codecov.asc
-          gpg --batch --import codecov.asc
-          gpg --batch --no-default-keyring --keyring trustedkeys.gpg --import codecov.asc
+          if gpg --show-keys --with-colons codecov.asc 2>/dev/null | grep -q ":${expected}:"; then
+            gpg --batch --import codecov.asc
+            gpg --batch --no-default-keyring --keyring trustedkeys.gpg --import codecov.asc
+          else
+            echo "WARNING: Codecov signing key not verified (fetch failed or fingerprint mismatch) – skipping pre-import"
+          fi
           rm -f codecov.asc
           exit 0
       - name: Upload coverage to Codecov
