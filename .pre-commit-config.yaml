@@ -1,35 +1,33 @@
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.2.0
+    rev: v4.4.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
         args: []
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.11.0"
+    rev: "v0.15.17"
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
         exclude: '\.svg$'
-      - id: fix-encoding-pragma
-        args: [--remove]
       - id: check-yaml
       - id: debug-statements
         language_version: python3
   - repo: https://github.com/kynan/nbstripout
-    rev: 0.5.0
+    rev: 0.9.1
     hooks:
       - id: nbstripout
         files: \.(ipynb)$
-        args: [--keep-output, --strip-empty-cells]
-  - repo: https://github.com/nikaro/taplo-pre-commit
-    rev: 0.1.1
+        args: [--keep-output, --drop-empty-cells]
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
     hooks:
       - id: taplo-format
         name: Format TOML files
@@ -40,7 +38,7 @@ repos:
         args: ["--config", "taplo.toml"]
         exclude: ^tests/toml_files/corrupt.toml$
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.38.0
+    rev: v0.48.0
     hooks:
       - id: markdownlint
         args: ["--config", ".markdownlint.json"]

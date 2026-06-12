@@ -41,7 +41,8 @@ second use case demands it is cheap; removing an abstraction once code depends o
 - When running a specific test, use `pytest -k "test_name"` if you don't already know the full node path
   (class name, parameterization, etc.). Don't guess full paths.
 
-**Note**: Always use `uv run` to execute Python commands to ensure the correct virtual environment and dependencies are used.
+**Note**: Always use `uv run` to execute Python commands to ensure the correct virtual environment and
+dependencies are used.
 
 ## Code Style Guidelines
 
