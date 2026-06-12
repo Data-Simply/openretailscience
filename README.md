@@ -8,7 +8,8 @@
 </div>
 
 <div align="center">
-  Open source retail analytics that runs in your database, handles billions of rows, and gives you back control of your KPIs.
+  Open source retail analytics that runs in your database, handles billions of rows, and gives you back
+  control of your KPIs.
 </div>
 
 ## Installation
