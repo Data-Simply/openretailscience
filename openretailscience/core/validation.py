@@ -151,3 +151,70 @@ def ensure_value_choice(
 
     msg = f"{param_name} must be one of {choices_list}. Got '{value}'."
     raise ValueError(msg)
+
+
+def ensure_unit_interval(value: float, param_name: str) -> None:
+    """Validate that a numeric parameter lies in the closed unit interval [0, 1].
+
+    Args:
+        value (float): The value supplied by the caller (e.g. a percentile).
+        param_name (str): The parameter name to surface in error messages.
+
+    Raises:
+        TypeError: If ``value`` is not an int or float.
+        ValueError: If ``value`` is outside the inclusive range [0, 1].
+    """
+    if not isinstance(value, int | float):
+        msg = f"{param_name} must be a number between 0 and 1. Got {type(value).__name__}."
+        raise TypeError(msg)
+    if not 0.0 <= value <= 1.0:
+        msg = f"{param_name} must be between 0 and 1 (inclusive). Got {value}."
+        raise ValueError(msg)
+
+
+def ensure_positive(value: float, param_name: str) -> None:
+    """Validate that a numeric parameter is strictly greater than zero.
+
+    Args:
+        value (float): The value supplied by the caller (e.g. a churn period in days).
+        param_name (str): The parameter name to surface in error messages.
+
+    Raises:
+        TypeError: If ``value`` is not an int or float.
+        ValueError: If ``value`` is not strictly positive.
+    """
+    if not isinstance(value, int | float):
+        msg = f"{param_name} must be a number. Got {type(value).__name__}."
+        raise TypeError(msg)
+    if value <= 0:
+        msg = f"{param_name} must be positive. Got {value}."
+        raise ValueError(msg)
+
+
+def ensure_tznaive_datetime(df: ibis.Table, column: str) -> None:
+    """Validate that a column is a timezone-naive date or datetime type.
+
+    Day-level operations (truncation, lag/lead over ordered days) require a temporal
+    column. Timezone-aware timestamps are rejected because the backend normalizes them
+    to UTC, which silently shifts day boundaries for non-UTC data.
+
+    Args:
+        df (ibis.Table): The table whose column is being validated.
+        column (str): The name of the column that must be a tz-naive temporal type.
+
+    Raises:
+        TypeError: If ``column`` is not a date or datetime type.
+        ValueError: If ``column`` is a timezone-aware timestamp.
+    """
+    col_type = df[column].type()
+    if not col_type.is_temporal():
+        msg = f"Column '{column}' must be a date or datetime type. Got {col_type}."
+        raise TypeError(msg)
+    if col_type.is_timestamp() and col_type.timezone is not None:
+        msg = (
+            f"Column '{column}' is timezone-aware ({col_type.timezone}). The backend normalizes "
+            f"timezone-aware timestamps to UTC, which can shift day boundaries. Convert to a "
+            f"timezone-naive wall-clock time first, e.g. "
+            f"df['{column}'] = df['{column}'].dt.tz_localize(None)."
+        )
+        raise ValueError(msg)
