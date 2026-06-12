@@ -42,12 +42,20 @@ the plotting helpers in `openretailscience.plots`.
 from __future__ import annotations
 
 import datetime
+import functools
 import operator
 from typing import TYPE_CHECKING
 
 import ibis
 
-from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table, ensure_value_choice
+from openretailscience.core.validation import (
+    ensure_data_has_columns,
+    ensure_ibis_table,
+    ensure_positive,
+    ensure_tznaive_datetime,
+    ensure_unit_interval,
+    ensure_value_choice,
+)
 from openretailscience.options import ColumnHelper
 
 if TYPE_CHECKING:
@@ -61,6 +69,10 @@ _COMPARISONS = {
     "greater_than": operator.gt,
     "greater_than_equal_to": operator.ge,
 }
+
+# Name of the per-transaction-number index column produced by TransactionChurn. Defined once
+# so the aggregation that creates it and the materialized view that indexes on it cannot drift.
+_TRANSACTION_NUMBER_COL = "transaction_number"
 
 
 def _distinct_customer_days(df: ibis.Table) -> ibis.Table:
@@ -106,14 +118,11 @@ class PurchasesPerCustomer:
         self.table = df.group_by(cols.customer_id).aggregate(
             purchase_count=df[cols.transaction_id].nunique(),
         )
-        self._df: pd.DataFrame | None = None
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Materialized purchase counts indexed by customer_id."""
-        if self._df is None:
-            self._df = self.table.execute().set_index(self._customer_id_col).sort_index()
-        return self._df
+        return self.table.execute().set_index(self._customer_id_col).sort_index()
 
     def purchases_percentile(self, percentile: float = 0.5) -> float:
         """Return the purchase count at the given percentile across customers.
@@ -123,8 +132,13 @@ class PurchasesPerCustomer:
 
         Returns:
             float: The purchase count at that percentile, using linear interpolation.
+
+        Raises:
+            TypeError: If ``percentile`` is not a number.
+            ValueError: If ``percentile`` is outside [0, 1].
         """
-        return float(self.table.purchase_count.quantile(percentile).execute())
+        ensure_unit_interval(percentile, "percentile")
+        return float(self.df["purchase_count"].quantile(percentile))
 
     def find_purchase_percentile(
         self,
@@ -138,22 +152,20 @@ class PurchasesPerCustomer:
             comparison (str): One of ``less_than``, ``less_than_equal_to``,
                 ``equal_to``, ``not_equal_to``, ``greater_than``,
                 ``greater_than_equal_to``. Defaults to ``less_than_equal_to``.
+                Matching is case-insensitive.
 
         Returns:
-            float: Fraction of customers satisfying the comparison.
+            float: Fraction of customers satisfying the comparison, or NaN if there
+                are no customers.
 
         Raises:
+            TypeError: If ``comparison`` is not a string.
             ValueError: If ``comparison`` is not a recognized operator name.
         """
         op = _COMPARISONS[ensure_value_choice(comparison, _COMPARISONS, "comparison")]
-        agg = self.table.aggregate(
-            matched=op(self.table.purchase_count, number_of_purchases).cast("int").sum(),
-            total=self.table.count(),
-        ).execute()
-        total = int(agg["total"].iloc[0])
-        if total == 0:
-            return float("nan")
-        return float(agg["matched"].iloc[0]) / total
+        counts = self.df["purchase_count"]
+        # mean of the boolean mask is the matching share; on an empty frame it is NaN.
+        return float(op(counts, number_of_purchases).mean())
 
 
 class DaysBetweenPurchases:
@@ -176,22 +188,21 @@ class DaysBetweenPurchases:
                 ``customer_id`` and ``transaction_date`` columns.
 
         Raises:
-            ValueError: If the required columns are missing.
-            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table.
+            ValueError: If the required columns are missing, or transaction_date is timezone-aware.
+            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table, or transaction_date
+                is not a date/datetime type.
         """
         cols = ColumnHelper()
         df = ensure_ibis_table(df)
         ensure_data_has_columns(df, [cols.customer_id, cols.transaction_date])
+        ensure_tznaive_datetime(df, cols.transaction_date)
         self._customer_id_col = cols.customer_id
         self.table = self._calculate(df)
-        self._df: pd.DataFrame | None = None
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Materialized per-customer mean gaps indexed by customer_id."""
-        if self._df is None:
-            self._df = self.table.execute().set_index(self._customer_id_col).sort_index()
-        return self._df
+        return self.table.execute().set_index(self._customer_id_col).sort_index()
 
     @staticmethod
     def _calculate(df: ibis.Table) -> ibis.Table:
@@ -221,8 +232,13 @@ class DaysBetweenPurchases:
 
         Returns:
             float: The average gap at that percentile, using linear interpolation.
+
+        Raises:
+            TypeError: If ``percentile`` is not a number.
+            ValueError: If ``percentile`` is outside [0, 1].
         """
-        return float(self.table.avg_days_between_purchases.quantile(percentile).execute())
+        ensure_unit_interval(percentile, "percentile")
+        return float(self.df["avg_days_between_purchases"].quantile(percentile))
 
 
 class TransactionChurn:
@@ -248,29 +264,38 @@ class TransactionChurn:
             df (pd.DataFrame | ibis.Table): Transaction data containing the
                 ``customer_id`` and ``transaction_date`` columns.
             churn_period (int): Number of days of inactivity after which a
-                customer is considered churned.
+                customer is considered churned. Must be positive.
 
         Raises:
-            ValueError: If the required columns are missing.
-            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table.
+            ValueError: If the required columns are missing, transaction_date is
+                timezone-aware, or ``churn_period`` is not positive.
+            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table, or
+                transaction_date is not a date/datetime type.
         """
         cols = ColumnHelper()
         df = ensure_ibis_table(df)
         ensure_data_has_columns(df, [cols.customer_id, cols.transaction_date])
+        ensure_tznaive_datetime(df, cols.transaction_date)
+        ensure_positive(churn_period, "churn_period")
 
-        self.n_unique_customers = int(df[cols.customer_id].nunique().execute())
-        self.table = self._calculate(df, churn_period)
-        self._df: pd.DataFrame | None = None
+        # One round-trip for both scalars the build needs: the distinct customer count
+        # and the latest purchase day (which anchors the churn boundary). max(truncate(x))
+        # equals truncate(max(x)) since truncation is monotonic.
+        stats = df.aggregate(
+            n_unique_customers=df[cols.customer_id].nunique(),
+            max_day=df[cols.transaction_date].truncate("D").max(),
+        ).execute()
+        self.n_unique_customers = int(stats["n_unique_customers"].iloc[0])
+        churn_boundary = stats["max_day"].iloc[0] - datetime.timedelta(days=churn_period)
+        self.table = self._calculate(df, churn_boundary)
 
-    @property
+    @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Materialized churn table indexed by transaction_number."""
-        if self._df is None:
-            self._df = self.table.execute().set_index("transaction_number").sort_index()
-        return self._df
+        return self.table.execute().set_index(_TRANSACTION_NUMBER_COL).sort_index()
 
     @staticmethod
-    def _calculate(df: ibis.Table, churn_period: int) -> ibis.Table:
+    def _calculate(df: ibis.Table, churn_boundary: pd.Timestamp) -> ibis.Table:
         cols = ColumnHelper()
         per_customer_day = _distinct_customer_days(df)
         cust_window = ibis.window(
@@ -278,23 +303,17 @@ class TransactionChurn:
             order_by=per_customer_day.transaction_day,
         )
 
-        # Materialize the scalar max once. On non-DuckDB backends, using a deferred
-        # reduction in a downstream `<` comparison can plan as a correlated subquery
-        # evaluated per row; passing a literal avoids that.
-        max_day = per_customer_day.transaction_day.max().execute()
-        churn_boundary = max_day - datetime.timedelta(days=churn_period)
-
         # `is_last_transaction` must be computed BEFORE filtering to the churn window:
         # the lead must look at the customer's full history. Filtering first would
         # mark a customer's last in-window transaction as "last" even when they have
         # later transactions outside the window — the opposite of the intended flag.
         annotated = per_customer_day.mutate(
-            transaction_number=ibis.row_number().over(cust_window) + 1,
             is_last_transaction=per_customer_day.transaction_day.lead(1).over(cust_window).isnull(),  # noqa: PD003 (ibis API, not pandas)
+            **{_TRANSACTION_NUMBER_COL: ibis.row_number().over(cust_window) + 1},
         )
 
         in_window = annotated.filter(annotated.transaction_day < churn_boundary)
-        grouped = in_window.group_by(in_window.transaction_number).aggregate(
+        grouped = in_window.group_by(_TRANSACTION_NUMBER_COL).aggregate(
             retained=(~in_window.is_last_transaction).cast("int").sum(),
             churned=in_window.is_last_transaction.cast("int").sum(),
         )

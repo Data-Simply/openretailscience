@@ -122,18 +122,23 @@ display(cs.cross_shop_table_df)
 Here is an excerpt from the customer retention analysis example [notebook](https://openretailscience.datasimply.co/examples/retention/)
 
 ```python
-ax = dbp.plot(
+from openretailscience.plots import histogram
+from openretailscience.plots.styles.graph_utils import set_axis_percent
+
+ax = histogram.plot(
+    df=dbp.df["avg_days_between_purchases"],
     figsize=(10, 5),
     bins=20,
     cumulative=True,
-    draw_percentile_line=True,
-    percentile_line=0.8,
+    density=True,
     source_text="Source: Transactions in 2023",
     title="When Do Customers Make Their Next Purchase?",
 )
+set_axis_percent(ax.yaxis, decimals=0, xmax=1.0)
 
 # Let's dress up the chart a bit of text and get rid of the legend
 churn_period = dbp.purchases_percentile(0.8)
+ax.axvline(x=churn_period, color="black", linestyle="--", lw=2)
 ax.annotate(
     f"80% of customers made\nanother purchase within\n{round(churn_period)} days",
     xy=(churn_period, 0.81),

@@ -1,5 +1,6 @@
 """Tests for openretailscience.analysis.customer."""
 
+import functools
 import math
 
 import ibis
@@ -13,6 +14,12 @@ from openretailscience.analysis.customer import (
     TransactionChurn,
 )
 from openretailscience.options import option_context
+
+# Constructor makers normalized to a single ``make(df)`` signature so behaviors shared
+# across the three classes can be parametrized. TransactionChurn needs a churn_period.
+MAKE_PURCHASES = PurchasesPerCustomer
+MAKE_DAYS = DaysBetweenPurchases
+MAKE_CHURN = functools.partial(TransactionChurn, churn_period=30)
 
 # Expected derived values for the `transactions_df` fixture below. Per-customer purchase
 # counts are [1, 2, 3, 4] and per-customer mean inter-purchase gaps are [14.0, 30.0, 31.0].
@@ -100,23 +107,140 @@ def expected_churn_table() -> pd.DataFrame:
     )
 
 
+class TestSharedConstructorContract:
+    """Behaviors structurally identical across the three classes, parametrized over them.
+
+    Each ``make`` is a callable normalizing the constructor to a single ``make(df)``
+    signature (TransactionChurn binds churn_period via functools.partial).
+    """
+
+    @pytest.mark.parametrize(
+        ("make", "expected_columns"),
+        [
+            (MAKE_PURCHASES, {"customer_id", "purchase_count"}),
+            (MAKE_DAYS, {"customer_id", "avg_days_between_purchases"}),
+            (MAKE_CHURN, {"transaction_number", "retained", "churned", "churned_pct"}),
+        ],
+        ids=["purchases", "days_between", "churn"],
+    )
+    def test_table_is_ibis_table(self, transactions_df, make, expected_columns):
+        """The .table attribute is an ibis Table with the expected schema."""
+        obj = make(transactions_df)
+        assert isinstance(obj.table, ibis.Table)
+        assert set(obj.table.columns) == expected_columns
+
+    @pytest.mark.parametrize(
+        ("make", "expected_fixture"),
+        [
+            (MAKE_PURCHASES, "expected_purchase_counts"),
+            (MAKE_DAYS, "expected_days_between_purchases"),
+            (MAKE_CHURN, "expected_churn_table"),
+        ],
+        ids=["purchases", "days_between", "churn"],
+    )
+    def test_accepts_ibis_table_input(self, request, transactions_df, make, expected_fixture):
+        """An ibis Table passed in directly produces identical results to a DataFrame."""
+        obj = make(ibis.memtable(transactions_df))
+        expected = request.getfixturevalue(expected_fixture)
+        assert_frame_equal(obj.df, expected, check_dtype=False)
+
+    @pytest.mark.parametrize(
+        ("make", "missing_col"),
+        [
+            (MAKE_PURCHASES, "transaction_id"),
+            (MAKE_DAYS, "transaction_date"),
+            (MAKE_CHURN, "transaction_date"),
+        ],
+        ids=["purchases", "days_between", "churn"],
+    )
+    def test_missing_required_columns_raises(self, make, missing_col):
+        """Dropping a required column raises with the missing column listed."""
+        df = pd.DataFrame({"customer_id": [1], "unit_spend": [1.0]})
+        with pytest.raises(ValueError, match=missing_col):
+            make(df)
+
+    @pytest.mark.parametrize(
+        "make", [MAKE_PURCHASES, MAKE_DAYS, MAKE_CHURN], ids=["purchases", "days_between", "churn"]
+    )
+    def test_rejects_non_table_input(self, make):
+        """Inputs other than DataFrame / Ibis Table raise TypeError."""
+        with pytest.raises(TypeError, match="pandas DataFrame or an Ibis Table"):
+            make([1, 2, 3])
+
+    @pytest.mark.parametrize(
+        ("make", "rename_map", "options", "expected_fixture", "axis_name"),
+        [
+            (
+                MAKE_PURCHASES,
+                {"transaction_id": "txn_id", "customer_id": "cust_id"},
+                ("column.customer_id", "cust_id", "column.transaction_id", "txn_id"),
+                "expected_purchase_counts",
+                "cust_id",
+            ),
+            (
+                MAKE_DAYS,
+                {"customer_id": "cust_id", "transaction_date": "txn_date"},
+                ("column.customer_id", "cust_id", "column.transaction_date", "txn_date"),
+                "expected_days_between_purchases",
+                "cust_id",
+            ),
+            (
+                MAKE_CHURN,
+                {"customer_id": "cust_id", "transaction_date": "txn_date"},
+                ("column.customer_id", "cust_id", "column.transaction_date", "txn_date"),
+                "expected_churn_table",
+                None,
+            ),
+        ],
+        ids=["purchases", "days_between", "churn"],
+    )
+    def test_with_custom_column_names(
+        self,
+        request,
+        transactions_df,
+        make,
+        rename_map,
+        options,
+        expected_fixture,
+        axis_name,
+    ):
+        """Custom ColumnHelper names are honoured and produce identical results."""
+        renamed = transactions_df.rename(columns=rename_map)
+        with option_context(*options):
+            actual = make(renamed).df
+        expected = request.getfixturevalue(expected_fixture)
+        # PurchasesPerCustomer / DaysBetweenPurchases index on the renamed customer_id;
+        # TransactionChurn indexes on the derived transaction_number, which is unaffected.
+        if axis_name is not None:
+            expected = expected.rename_axis(axis_name)
+        assert_frame_equal(actual, expected, check_dtype=False)
+
+    @pytest.mark.parametrize("make", [MAKE_PURCHASES, MAKE_DAYS], ids=["purchases", "days_between"])
+    def test_df_access_under_option_context_uses_init_time_column(self, transactions_df, make):
+        """.df accessed inside a different option_context still resolves the init-time customer_id column."""
+        obj = make(transactions_df)  # built under default "customer_id"
+        with option_context("column.customer_id", "cust_id"):
+            # Must not raise — the column was resolved at __init__ and baked into the cached frame.
+            result = obj.df
+        assert result.index.name == "customer_id"
+
+    @pytest.mark.parametrize("make", [MAKE_PURCHASES, MAKE_DAYS], ids=["purchases", "days_between"])
+    def test_purchases_percentile_reuses_materialized_df(self, transactions_df, make):
+        """purchases_percentile computes from the cached .df, so repeated calls don't re-query the backend."""
+        obj = make(transactions_df)
+        assert "df" not in obj.__dict__  # nothing materialized yet
+        obj.purchases_percentile(0.5)
+        # cached_property stores the materialized frame under "df"; its presence proves the
+        # percentile was read from the shared materialization rather than a fresh execute().
+        assert "df" in obj.__dict__
+
+
 class TestPurchasesPerCustomer:
     """Behavioral tests for PurchasesPerCustomer."""
 
     def test_df_holds_unique_transactions_per_customer(self, transactions_df, expected_purchase_counts):
         """The materialized df holds the unique transaction count per customer."""
         ppc = PurchasesPerCustomer(transactions_df)
-        assert_frame_equal(ppc.df, expected_purchase_counts, check_dtype=False)
-
-    def test_table_is_ibis_table(self, transactions_df):
-        """The .table attribute is an ibis Table with the expected schema."""
-        ppc = PurchasesPerCustomer(transactions_df)
-        assert isinstance(ppc.table, ibis.Table)
-        assert set(ppc.table.columns) == {"customer_id", "purchase_count"}
-
-    def test_accepts_ibis_table_input(self, transactions_df, expected_purchase_counts):
-        """An ibis Table passed in directly produces identical results."""
-        ppc = PurchasesPerCustomer(ibis.memtable(transactions_df))
         assert_frame_equal(ppc.df, expected_purchase_counts, check_dtype=False)
 
     @pytest.mark.parametrize(
@@ -155,27 +279,6 @@ class TestPurchasesPerCustomer:
         ppc = PurchasesPerCustomer(transactions_df)
         with pytest.raises(ValueError, match="comparison must be one of"):
             ppc.find_purchase_percentile(1, "foo")
-
-    def test_missing_required_columns_raises(self):
-        """Dropping a required column raises with the missing column listed."""
-        df = pd.DataFrame({"customer_id": [1], "unit_spend": [1.0]})
-        with pytest.raises(ValueError, match="transaction_id"):
-            PurchasesPerCustomer(df)
-
-    def test_rejects_non_table_input(self):
-        """Inputs other than DataFrame / Ibis Table raise TypeError."""
-        with pytest.raises(TypeError, match="pandas DataFrame or an Ibis Table"):
-            PurchasesPerCustomer([1, 2, 3])
-
-    def test_with_custom_column_names(self, transactions_df, expected_purchase_counts):
-        """Custom ColumnHelper names are honoured and produce identical counts."""
-        renamed = transactions_df.rename(columns={"transaction_id": "txn_id", "customer_id": "cust_id"})
-        with option_context("column.customer_id", "cust_id", "column.transaction_id", "txn_id"):
-            ppc = PurchasesPerCustomer(df=renamed)
-            actual = ppc.df
-
-        expected = expected_purchase_counts.rename_axis("cust_id")
-        assert_frame_equal(actual, expected, check_dtype=False)
 
     def test_find_purchase_percentile_returns_nan_on_empty_input(self):
         """An empty input yields NaN rather than ZeroDivisionError (matches purchases_percentile)."""
@@ -216,17 +319,6 @@ class TestDaysBetweenPurchases:
         dbp = DaysBetweenPurchases(transactions_df)
         assert_frame_equal(dbp.df, expected_days_between_purchases, check_dtype=False)
 
-    def test_table_is_ibis_table(self, transactions_df):
-        """The .table attribute is an ibis Table with the expected schema."""
-        dbp = DaysBetweenPurchases(transactions_df)
-        assert isinstance(dbp.table, ibis.Table)
-        assert set(dbp.table.columns) == {"customer_id", "avg_days_between_purchases"}
-
-    def test_accepts_ibis_table_input(self, transactions_df, expected_days_between_purchases):
-        """An ibis Table passed in directly produces identical results."""
-        dbp = DaysBetweenPurchases(ibis.memtable(transactions_df))
-        assert_frame_equal(dbp.df, expected_days_between_purchases, check_dtype=False)
-
     def test_same_day_transactions_collapse_to_one_purchase_day(self):
         """Multiple transactions on the same day count as a single purchase day."""
         df = pd.DataFrame(
@@ -258,29 +350,6 @@ class TestDaysBetweenPurchases:
         dbp = DaysBetweenPurchases(transactions_df)
         assert dbp.purchases_percentile(percentile) == pytest.approx(expected)
 
-    def test_missing_required_columns_raises(self):
-        """Dropping a required column raises with the missing column listed."""
-        df = pd.DataFrame({"customer_id": [1], "unit_spend": [1.0]})
-        with pytest.raises(ValueError, match="transaction_date"):
-            DaysBetweenPurchases(df)
-
-    def test_with_custom_column_names(self, transactions_df, expected_days_between_purchases):
-        """Custom ColumnHelper names are honoured and produce identical gaps."""
-        renamed = transactions_df.rename(columns={"customer_id": "cust_id", "transaction_date": "txn_date"})
-        with option_context("column.customer_id", "cust_id", "column.transaction_date", "txn_date"):
-            dbp = DaysBetweenPurchases(df=renamed)
-            actual = dbp.df
-
-        expected = expected_days_between_purchases.rename_axis("cust_id")
-        assert_frame_equal(actual, expected, check_dtype=False)
-
-    def test_df_access_under_option_context_uses_init_time_column(self, transactions_df):
-        """.df accessed inside a different option_context still resolves the init-time customer_id column."""
-        dbp = DaysBetweenPurchases(transactions_df)
-        with option_context("column.customer_id", "cust_id"):
-            result = dbp.df
-        assert result.index.name == "customer_id"
-
 
 class TestTransactionChurn:
     """Behavioral tests for TransactionChurn."""
@@ -292,17 +361,6 @@ class TestTransactionChurn:
     ):
         """The materialized df reports retained, churned counts and the churned percentage."""
         tc = TransactionChurn(transactions_df, churn_period=30)
-        assert_frame_equal(tc.df, expected_churn_table, check_dtype=False)
-
-    def test_table_is_ibis_table(self, transactions_df):
-        """The .table attribute is an ibis Table with the expected schema."""
-        tc = TransactionChurn(transactions_df, churn_period=30)
-        assert isinstance(tc.table, ibis.Table)
-        assert set(tc.table.columns) == {"transaction_number", "retained", "churned", "churned_pct"}
-
-    def test_accepts_ibis_table_input(self, transactions_df, expected_churn_table):
-        """An ibis Table passed in directly produces identical results."""
-        tc = TransactionChurn(ibis.memtable(transactions_df), churn_period=30)
         assert_frame_equal(tc.df, expected_churn_table, check_dtype=False)
 
     def test_counts_unique_customers_in_source(self, transactions_df):
@@ -352,16 +410,41 @@ class TestTransactionChurn:
         assert tc.df.loc[1, "retained"] == 1
         assert tc.df.loc[1, "churned"] == 0
 
-    def test_missing_required_columns_raises(self):
-        """Dropping a required column raises with the missing column listed."""
-        df = pd.DataFrame({"customer_id": [1], "unit_spend": [1.0]})
-        with pytest.raises(ValueError, match="transaction_date"):
-            TransactionChurn(df, churn_period=30)
+    @pytest.mark.parametrize("churn_period", [0, -5])
+    def test_churn_period_must_be_positive(self, transactions_df, churn_period):
+        """A non-positive churn_period is rejected at construction rather than producing nonsense."""
+        with pytest.raises(ValueError, match="churn_period must be positive"):
+            TransactionChurn(transactions_df, churn_period=churn_period)
 
-    def test_with_custom_column_names(self, transactions_df, expected_churn_table):
-        """Custom ColumnHelper names are honoured and produce identical churn rates."""
-        renamed = transactions_df.rename(columns={"customer_id": "cust_id", "transaction_date": "txn_date"})
-        with option_context("column.customer_id", "cust_id", "column.transaction_date", "txn_date"):
-            tc = TransactionChurn(df=renamed, churn_period=30)
-            actual = tc.df
-        assert_frame_equal(actual, expected_churn_table, check_dtype=False)
+
+class TestInputValidation:
+    """Validation behaviours shared across the three classes."""
+
+    @pytest.mark.parametrize("make", [MAKE_PURCHASES, MAKE_DAYS], ids=["purchases", "days_between"])
+    @pytest.mark.parametrize("bad_percentile", [-0.1, 1.5])
+    def test_percentile_out_of_range_raises(self, transactions_df, make, bad_percentile):
+        """purchases_percentile rejects values outside [0, 1] with a clear ValueError."""
+        obj = make(transactions_df)
+        with pytest.raises(ValueError, match="between 0 and 1"):
+            obj.purchases_percentile(bad_percentile)
+
+    @pytest.mark.parametrize("make", [MAKE_DAYS, MAKE_CHURN], ids=["days_between", "churn"])
+    def test_rejects_tz_aware_transaction_date(self, make):
+        """Timezone-aware transaction_date is rejected because the backend re-buckets it to UTC days."""
+        df = pd.DataFrame(
+            {
+                "customer_id": [1, 1],
+                "transaction_date": pd.to_datetime(["2024-01-01 23:00", "2024-01-02 02:00"]).tz_localize(
+                    "US/Eastern",
+                ),
+            },
+        )
+        with pytest.raises(ValueError, match="timezone-aware"):
+            make(df)
+
+    @pytest.mark.parametrize("make", [MAKE_DAYS, MAKE_CHURN], ids=["days_between", "churn"])
+    def test_rejects_non_datetime_transaction_date(self, make):
+        """A string transaction_date raises a clear TypeError instead of a cryptic ibis error."""
+        df = pd.DataFrame({"customer_id": [1, 1], "transaction_date": ["2024-01-01", "2024-01-05"]})
+        with pytest.raises(TypeError, match="date or datetime"):
+            make(df)
