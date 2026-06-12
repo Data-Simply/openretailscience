@@ -51,14 +51,12 @@ jobs:
 
       - name: Publish to Cloudflare Pages
         id: cloudflare-deploy
-        uses: cloudflare/pages-action@f0a1cd58cd66095dee69bfa18fa5efd1dde93bca # v1.5.0
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: openretailscience-docs
-          directory: site
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.head_ref || github.ref_name }}
+          command: pages deploy site --project-name=openretailscience-docs --branch=${{ github.head_ref || github.ref_name }}
 
       - name: Find existing comment
         if: github.event_name == 'pull_request'
@@ -81,8 +79,7 @@ jobs:
 
             ✅ Preview deployed successfully!
 
-            **Preview URL:** ${{ steps.cloudflare-deploy.outputs.url }}
-            **Deployment ID:** ${{ steps.cloudflare-deploy.outputs.id }}
+            **Preview URL:** ${{ steps.cloudflare-deploy.outputs.deployment-url }}
 
             ---
             *This preview will be updated automatically when you push new changes to this PR.*
