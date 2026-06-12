@@ -52,13 +52,11 @@ jobs:
       - name: Publish to Cloudflare Pages
         id: cloudflare-deploy
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
-        env:
-          PR_BRANCH: ${{ github.head_ref || github.ref_name }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          command: pages deploy site --project-name=openretailscience-docs --branch="$PR_BRANCH"
+          command: pages deploy site --project-name=openretailscience-docs --branch=${{ github.head_ref || github.ref_name }}
 
       - name: Find existing comment
         if: github.event_name == 'pull_request'
