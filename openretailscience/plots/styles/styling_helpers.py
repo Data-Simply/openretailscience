@@ -95,20 +95,20 @@ def _resolve_end_of_line_legend_args(
     return False, None, False
 
 
-def _freeze_text_wrap(text: Text, fig: Figure) -> None:
+def _freeze_text_wrap(text: Text) -> None:
     """Bake matplotlib's soft wrap into ``text`` and stop it re-wrapping on later draws.
 
     ``wrap=True`` recomputes line breaks every draw from the figure width, so a later resize (or
     the extra draw ``bbox_inches='tight'`` triggers) can change the line count and invalidate the
     layout positioned against the measured height. Baking the wrapped lines as explicit newlines
-    and turning wrap off freezes the count. Requires a prior draw so the wrap is computed; no-op
-    when wrapping is already off.
+    and turning wrap off freezes the count. Requires a prior draw so the wrap is already computed;
+    the caller measures the baked text afterwards via ``get_window_extent``, which re-lays it out
+    without another draw. No-op when wrapping is already off.
     """
     if not text.get_wrap():
         return
     text.set_text(text._get_wrapped_text())
     text.set_wrap(False)
-    fig.canvas.draw()
 
 
 def _place_header_text(
@@ -141,7 +141,7 @@ def _place_header_text(
     )
     t.set_gid(gid)
     fig.canvas.draw()
-    _freeze_text_wrap(t, fig)
+    _freeze_text_wrap(t)
     renderer = fig.canvas.get_renderer()
     return t.get_window_extent(renderer=renderer).y0 / fig.bbox.height
 
@@ -504,7 +504,7 @@ def apply_chart_chrome(
         fig.canvas.draw()
         # Freeze the wrap like the header: an unfrozen source re-wraps to a different line count
         # on a width resize, invalidating the axes_bottom reserved here and crowding the axes.
-        _freeze_text_wrap(source_t, fig)
+        _freeze_text_wrap(source_t)
         source_top_px = source_t.get_window_extent(renderer=fig.canvas.get_renderer()).y1
         axes_bottom = source_top_px / fig.bbox.height + _CHROME_GAP_SOURCE_TO_AXES_IN / fig_h
 
