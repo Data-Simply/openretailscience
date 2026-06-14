@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from matplotlib.axes import Axes
+from matplotlib.collections import PathCollection
 
 from openretailscience.plots import scatter
 
@@ -83,11 +84,11 @@ def test_plot_single_column(sample_sales_dataframe):
     assert isinstance(result_ax, Axes)
 
     # Verify scatter plot collections were created
-    collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+    collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
     assert len(collections) == 1
 
     # Verify correct number of data points
-    offsets = collections[0].get_offsets()
+    offsets = np.asarray(collections[0].get_offsets())
     assert len(offsets) == len(sample_sales_dataframe), (
         f"Expected {len(sample_sales_dataframe)} points, got {len(offsets)}"
     )
@@ -107,14 +108,14 @@ def test_plot_with_group_col(sample_sales_dataframe):
     assert isinstance(result_ax, Axes)
 
     # Verify scatter plot collections were created for groups
-    collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+    collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
     unique_categories = sample_sales_dataframe["category"].nunique()
     assert len(collections) == unique_categories, (
         f"Expected {unique_categories} collections for groups, got {len(collections)}"
     )
 
     # Verify total data points match original dataframe
-    total_points = sum(len(collection.get_offsets()) for collection in collections)
+    total_points = sum(len(np.asarray(collection.get_offsets())) for collection in collections)
     assert total_points == len(sample_sales_dataframe), (
         f"Total points should match dataframe length, got {total_points}"
     )
@@ -134,14 +135,14 @@ def test_plot_multiple_columns(sample_sales_dataframe):
     assert isinstance(result_ax, Axes)
 
     # Verify scatter plot collections were created for each column
-    collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+    collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
     assert len(collections) == len(value_cols), (
         f"Expected {len(value_cols)} collections for multiple columns, got {len(collections)}"
     )
 
     # Verify each collection has correct number of points
     for collection in collections:
-        offsets = collection.get_offsets()
+        offsets = np.asarray(collection.get_offsets())
         assert len(offsets) == len(sample_sales_dataframe), (
             f"Each collection should have {len(sample_sales_dataframe)} points, got {len(offsets)}"
         )
@@ -174,11 +175,11 @@ def test_plot_single_column_series(sample_sales_dataframe):
     assert isinstance(result_ax, Axes)
 
     # Verify scatter plot was created from series
-    collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+    collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
     assert len(collections) == 1
 
     # Verify correct number of data points from series
-    offsets = collections[0].get_offsets()
+    offsets = np.asarray(collections[0].get_offsets())
     assert len(offsets) == len(sales_series), f"Expected {len(sales_series)} points from series, got {len(offsets)}"
 
 
@@ -223,7 +224,7 @@ def test_plot_with_labels_grouped_series(sample_store_dataframe):
     assert result_ax.get_ylabel() == "Revenue"
 
     # One scatter collection per region (separate styling per group).
-    collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+    collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
     assert len(collections) == sample_store_dataframe["region"].nunique()
 
     rendered_labels = [t.get_text() for t in result_ax.texts]
@@ -348,7 +349,7 @@ class TestBubbleChartFeature:
 
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
-        collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+        collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
         assert len(collections) == 1
 
         sizes = collections[0].get_sizes()
@@ -374,18 +375,18 @@ class TestBubbleChartFeature:
 
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
-        collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+        collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
         unique_regions = bubble_chart_dataframe["region"].nunique()
         assert len(collections) == unique_regions, f"Expected {unique_regions} collections for groups"
 
-        total_points = sum(len(collection.get_offsets()) for collection in collections)
+        total_points = sum(len(np.asarray(collection.get_offsets())) for collection in collections)
         assert total_points == len(bubble_chart_dataframe), (
             f"Total points should match dataframe length, got {total_points}"
         )
 
         for collection in collections:
             sizes = collection.get_sizes()
-            offsets = collection.get_offsets()
+            offsets = np.asarray(collection.get_offsets())
             assert len(sizes) == len(offsets), "Each point should have a corresponding size"
 
         all_sizes = sorted(np.concatenate([c.get_sizes() for c in collections]))
@@ -406,7 +407,7 @@ class TestBubbleChartFeature:
 
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
-        collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+        collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
         assert len(collections) == 1
 
         # When size_col is None, all points should have uniform default size
@@ -463,7 +464,7 @@ class TestBubbleChartFeature:
 
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
-        collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+        collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
         assert len(collections) == 1
 
         # Verify sizes come from size_col, not the 's' parameter
@@ -484,7 +485,7 @@ class TestBubbleChartFeature:
 
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
-        collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+        collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
         assert len(collections) == 1
 
         # Verify all points use the user-provided 's' value
@@ -505,7 +506,7 @@ class TestBubbleChartFeature:
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
         # Verify collections for each value column
-        collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+        collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
         assert len(collections) == len(value_cols), (
             f"Expected {len(value_cols)} collections for multiple value columns, got {len(collections)}"
         )
@@ -513,7 +514,7 @@ class TestBubbleChartFeature:
         # Verify each collection has sizes and correct number of points
         for i, collection in enumerate(collections):
             sizes = collection.get_sizes()
-            offsets = collection.get_offsets()
+            offsets = np.asarray(collection.get_offsets())
 
             assert len(sizes) == len(bubble_chart_dataframe), (
                 f"Collection {i} should have {len(bubble_chart_dataframe)} sizes, got {len(sizes)}"
@@ -557,10 +558,10 @@ class TestBubbleChartFeature:
 
         assert isinstance(result_ax, Axes), "Result should be an Axes object"
 
-        collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+        collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
         assert len(collections) == 1
 
-        offsets = collections[0].get_offsets()
+        offsets = np.asarray(collections[0].get_offsets())
         assert len(offsets) == len(df), "All data points should be plotted"
 
         sizes = collections[0].get_sizes()
@@ -578,7 +579,7 @@ class TestBubbleChartFeature:
             title="Labeled Bubble Chart",
         )
 
-        collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+        collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
         assert len(collections) == 1
         assert np.array_equal(collections[0].get_sizes(), bubble_chart_dataframe["store_sqft"].to_numpy())
 
@@ -598,7 +599,7 @@ class TestBubbleChartFeature:
 
         assert isinstance(result_ax, Axes)
 
-        collections = [child for child in result_ax.get_children() if hasattr(child, "get_offsets")]
+        collections = [child for child in result_ax.get_children() if isinstance(child, PathCollection)]
         assert len(collections) == 1
 
         sizes = collections[0].get_sizes()

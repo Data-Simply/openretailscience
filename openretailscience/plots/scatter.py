@@ -26,7 +26,7 @@ for bubble chart functionality.
 """
 
 import warnings
-from typing import Any
+from typing import Any, cast
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -333,6 +333,9 @@ def plot(  # noqa: PLR0913
             else df.pivot(index=x_col, columns=group_col, values=value_col)
         )
 
+    # Selecting a list of columns / pivoting always yields a DataFrame here; pandas-stubs widens it.
+    pivot_df = cast("pd.DataFrame", pivot_df)
+
     is_multi_scatter = (group_col is not None) or (isinstance(value_col, list) and len(value_col) > 1)
 
     num_colors = len(pivot_df.columns) if is_multi_scatter else 1
@@ -352,10 +355,11 @@ def plot(  # noqa: PLR0913
 
     # Add labels if requested
     if label_col is not None:
+        # label_col is only accepted with a single (non-list) value_col; validated above.
         _add_point_labels(
             ax=ax,
             df=df,
-            value_col=value_col,
+            value_col=cast("str", value_col),
             label_col=label_col,
             x_col=x_col,
             label_kwargs=label_kwargs,

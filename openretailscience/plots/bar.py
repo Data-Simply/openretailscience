@@ -35,7 +35,7 @@ Series.
 
 import warnings
 from collections.abc import Iterable
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import pandas as pd
 from matplotlib.axes import Axes
@@ -60,20 +60,39 @@ def _validate_bar_inputs(
     orientation: str,
     sort_order: str | None,
     data_label_format: str | None,
-) -> tuple[str, str | None, str | None]:
+) -> tuple[
+    Literal["horizontal", "h", "vertical", "v"],
+    Literal["asc", "ascending", "desc", "descending"] | None,
+    Literal["absolute", "percentage_by_bar_group", "percentage_by_series"] | None,
+]:
     """Validate ``plot`` arguments up-front and return the case-normalized enum values."""
     if df.empty:
         raise ValueError("Cannot plot with empty DataFrame")
     if isinstance(df, pd.Series) and x_col is not None:
         raise ValueError("x_col cannot be provided when df is a pd.Series; the Series index is used as the x-axis.")
-    if x_col is not None:
+    if x_col is not None and isinstance(df, pd.DataFrame):
         ensure_columns(df, x_col, "x_col")
-    orientation = ensure_value_choice(orientation, VALID_ORIENTATIONS, "orientation")
-    if sort_order is not None:
-        sort_order = ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
-    if data_label_format is not None:
-        data_label_format = ensure_value_choice(data_label_format, VALID_DATA_LABEL_FORMATS, "data_label_format")
-    return orientation, sort_order, data_label_format
+    orientation_out = cast(
+        "Literal['horizontal', 'h', 'vertical', 'v']",
+        ensure_value_choice(orientation, VALID_ORIENTATIONS, "orientation"),
+    )
+    sort_order_out = (
+        cast(
+            "Literal['asc', 'ascending', 'desc', 'descending']",
+            ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order"),
+        )
+        if sort_order is not None
+        else None
+    )
+    data_label_format_out = (
+        cast(
+            "Literal['absolute', 'percentage_by_bar_group', 'percentage_by_series']",
+            ensure_value_choice(data_label_format, VALID_DATA_LABEL_FORMATS, "data_label_format"),
+        )
+        if data_label_format is not None
+        else None
+    )
+    return orientation_out, sort_order_out, data_label_format_out
 
 
 def plot(  # noqa: PLR0913
@@ -168,15 +187,19 @@ def plot(  # noqa: PLR0913
     color = kwargs.pop("color", default_colors)
     legend = kwargs.pop("legend", (len(value_col) > 1))
 
-    ax = df.plot(
-        kind=plot_kind,
-        y=value_col,
-        x=x_col,
-        ax=ax,
-        width=width,
-        color=color,
-        legend=legend,
-        **kwargs,
+    # pandas-stubs types DataFrame.plot() as a wide union; it returns a single Axes here.
+    ax = cast(
+        "Axes",
+        df.plot(
+            kind=plot_kind,
+            y=value_col,
+            x=x_col,
+            ax=ax,
+            width=width,
+            color=color,
+            legend=legend,
+            **kwargs,
+        ),
     )
 
     if use_hatch:

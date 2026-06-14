@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 from matplotlib.axes import Axes
+from matplotlib.patches import Rectangle
 
 from openretailscience.plots import histogram
 
@@ -77,7 +78,7 @@ def test_clip_range_piles_outliers_into_boundary_bins():
         bins=6,
     )
 
-    heights = [p.get_height() for p in result_ax.patches]
+    heights = [p.get_height() for p in result_ax.patches if isinstance(p, Rectangle)]
     # Bin edges [0, 10, 20, 30, 40, 50, 60]; last bin is right-closed.
     # All below-lower outliers clamp to 0 → first bin.
     # All above-upper outliers + the in-range 50 land in the last bin (60 is closed).
@@ -107,11 +108,12 @@ def test_clip_range_bin_edges_respect_bounds(data, clip_range, expected_leftmost
         bins=6,
     )
 
+    bars = [p for p in result_ax.patches if isinstance(p, Rectangle)]
     if expected_leftmost is not None:
-        leftmost = min(p.get_x() for p in result_ax.patches)
+        leftmost = min(p.get_x() for p in bars)
         assert leftmost == pytest.approx(expected_leftmost)
     if expected_rightmost is not None:
-        rightmost = max(p.get_x() + p.get_width() for p in result_ax.patches)
+        rightmost = max(p.get_x() + p.get_width() for p in bars)
         assert rightmost == pytest.approx(expected_rightmost)
 
 

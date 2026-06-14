@@ -46,7 +46,7 @@ legend outside the plot for clarity.
 
 """
 
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from matplotlib.axes import Axes
@@ -175,7 +175,9 @@ def _prepare_value_col(df: pd.DataFrame | pd.Series, value_col: str | list[str] 
         list[str]: The processed value_col as a list of strings.
     """
     if isinstance(df, pd.Series):
-        return ["value"] if value_col is None else [value_col]
+        if value_col is None:
+            return ["value"]
+        return [value_col] if isinstance(value_col, str) else value_col
 
     if value_col is None:
         raise ValueError("Please provide a value column to plot")
@@ -200,7 +202,8 @@ def _get_num_histograms(df: pd.DataFrame, value_col: list[str], group_col: str |
     num_histograms = len(value_col)
 
     if group_col is not None:
-        num_histograms = max(num_histograms, df[group_col].nunique())
+        # Indexing a DataFrame with a single column label yields a Series, whose nunique() returns int.
+        num_histograms = max(num_histograms, cast("pd.Series", df[group_col]).nunique())
 
     return num_histograms
 

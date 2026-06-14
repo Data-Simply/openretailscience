@@ -25,12 +25,17 @@ should already be structured correctly.
 """
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib_set_diagrams import EulerDiagram, VennDiagram
+
+if TYPE_CHECKING:
+    from matplotlib.artist import Artist
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.text import Text
 
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_plot_colors
@@ -54,11 +59,13 @@ def _tighten_to_artists(ax: Axes, padding: float = 0.02) -> None:
     """
     fig = ax.figure
     fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
+    # get_renderer() lives on the concrete Agg canvas, not the base FigureCanvasBase the stubs expose.
+    renderer = cast("FigureCanvasAgg", fig.canvas).get_renderer()
     xs: list[float] = []
     ys: list[float] = []
-    for artist in (*ax.patches, *ax.texts):
-        if artist in ax.texts and not artist.get_text():
+    artists: list[Artist] = [*ax.patches, *ax.texts]
+    for artist in artists:
+        if artist in ax.texts and not cast("Text", artist).get_text():
             continue
         bb_disp = artist.get_window_extent(renderer=renderer)
         bb_data = bb_disp.transformed(ax.transData.inverted())

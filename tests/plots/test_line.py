@@ -1,6 +1,7 @@
 """Tests for the plots.line module."""
 
 from itertools import pairwise
+from typing import TYPE_CHECKING, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,6 +12,9 @@ from matplotlib.axes import Axes
 from openretailscience.options import get_option
 from openretailscience.plots import line
 from openretailscience.plots.styles.graph_utils import _LABEL_GAP_FACTOR, _POINTS_PER_INCH
+
+if TYPE_CHECKING:
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 # Sub-pixel slack for matplotlib bbox rounding when comparing rendered gaps to a computed pixel threshold.
 _BBOX_PIXEL_ROUNDING_TOLERANCE_PX = 0.5
@@ -132,7 +136,8 @@ def test_end_of_line_labels_respect_min_gap_after_chrome():
         ax=ax,
     )
     fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
+    # get_renderer() lives on the concrete Agg canvas, not the base FigureCanvasBase the stubs expose.
+    renderer = cast("FigureCanvasAgg", fig.canvas).get_renderer()
 
     series_labels = set(categories)
     annotations = [t for t in ax.texts if t.get_text() in series_labels]
@@ -339,7 +344,7 @@ def test_plot_series_with_styling_options(sample_series, x_label, y_label):
 
     # Verify the x-axis data uses the Series index
     lines = result_ax.get_lines()
-    plotted_x_data = lines[0].get_xdata()
+    plotted_x_data = np.asarray(lines[0].get_xdata())
     # For string indices, matplotlib converts them to numeric positions
     if sample_series.index.dtype == "object":
         assert len(plotted_x_data) == len(sample_series.index), "X-axis should have same length as Series index"
@@ -385,8 +390,9 @@ def test_series_with_various_configurations(data, index, name):
     lines = result_ax.get_lines()
     assert len(lines) == 1, "Should have exactly one line for Series"
 
-    # For edge cases, handle different validation approaches
-    plotted_data = lines[0].get_ydata()
+    # For edge cases, handle different validation approaches. matplotlib returns a (possibly masked)
+    # ndarray; type as MaskedArray so the mask/len/iteration accesses below type-check.
+    plotted_data = cast("np.ma.MaskedArray", lines[0].get_ydata())
 
     if name == "all_nan":
         # All NaN Series - matplotlib handles NaN values with masked arrays
@@ -565,7 +571,15 @@ class TestHighlightFeature:
                 "revenue": [100, 200, 110, 210, 120, 220],
             },
         )
-        ax = line.plot(df=df, x_col="month", value_col="revenue", group_col="store_id", highlight=[10])
+        # Pivoting on an int group_col yields int column labels; highlight accepts them at runtime
+        # even though the public type is list[str]. This test exercises exactly that path.
+        ax = line.plot(
+            df=df,
+            x_col="month",
+            value_col="revenue",
+            group_col="store_id",
+            highlight=cast("list[str]", [10]),
+        )
         # Sanity: plot rendered without raising.
         assert ax is not None
 
@@ -635,6 +649,7 @@ class TestHighlightFeature:
                 context_lines.append(plot_line)
 
         # Check styling properties
+        assert highlighted_line is not None, "Highlighted 'Electronics' line should be present"
         assert highlighted_line.get_linewidth() == highlighted_linewidth, (
             "Highlighted line should have default highlighted linewidth"
         )
@@ -662,6 +677,7 @@ class TestHighlightFeature:
         )
 
         legend = result_ax.get_legend()
+        assert legend is not None, "Legend should be present when move_legend_outside is set"
         legend_labels = [t.get_text() for t in legend.get_texts()]
         assert legend_labels == ["Electronics"], (
             f"Legend should contain only the highlighted series, got: {legend_labels}"

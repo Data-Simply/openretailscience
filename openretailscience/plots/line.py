@@ -45,7 +45,7 @@ for use with actual datetime values**.
 
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import pandas as pd
 from matplotlib.axes import Axes
@@ -75,8 +75,9 @@ def _validate_and_prepare_input(
             raise ValueError(
                 "When df is a pd.Series, group_col must be None. Cannot group a single series.",
             )
-        # Convert Series to DataFrame for uniform processing
-        series_name = df.name if df.name is not None else "value"
+        # Convert Series to DataFrame for uniform processing. df.name is Hashable; coerce to str
+        # so the column label is a plain string for downstream pivoting and labelling.
+        series_name = str(df.name) if df.name is not None else "value"
         df = df.to_frame(name=series_name)
         value_col = series_name
 
@@ -145,7 +146,8 @@ def _create_pivot_dataframe(
         if fill_na_value is not None:
             pivot_df = pivot_df.fillna(fill_na_value)
 
-    return pivot_df
+    # Selecting a list of columns / pivoting always yields a DataFrame here; pandas-stubs widens it.
+    return cast("pd.DataFrame", pivot_df)
 
 
 def _categorize_columns(
@@ -182,25 +184,34 @@ def _render_plot(
     # Context lines first (lower z-order). Underscore-prefix the column names so matplotlib
     # auto-excludes them from any legend rendered later
     if len(context_cols) > 0:
-        context_df = pivot_df[context_cols].rename(columns={c: f"_{c}" for c in context_cols})
+        # Indexing with a list of columns yields a DataFrame; pandas-stubs widens it to DataFrame | Series.
+        context_df = cast("pd.DataFrame", pivot_df[context_cols]).rename(columns={c: f"_{c}" for c in context_cols})
         context_kwargs = {k: v for k, v in kwargs.items() if k not in ["color", "alpha", "zorder", "linewidth"]}
-        ax = context_df.plot(
-            ax=ax,
-            linewidth=1.0,
-            color=get_named_color("context"),
-            legend=False,
-            zorder=1,
-            **context_kwargs,
+        # pandas-stubs types DataFrame.plot() as a wide union; it returns a single Axes here.
+        ax = cast(
+            "Axes",
+            context_df.plot(
+                ax=ax,
+                linewidth=1.0,
+                color=get_named_color("context"),
+                legend=False,
+                zorder=1,
+                **context_kwargs,
+            ),
         )
 
-    highlighted_df = pivot_df[highlighted_cols]
-    return highlighted_df.plot(
-        ax=ax,
-        linewidth=kwargs.pop("linewidth", 3),
-        color=kwargs.pop("color", highlighted_colors),
-        legend=is_multi_line,
-        zorder=2,
-        **kwargs,
+    highlighted_df = cast("pd.DataFrame", pivot_df[highlighted_cols])
+    # pandas-stubs types DataFrame.plot() as a wide union; it returns a single Axes here.
+    return cast(
+        "Axes",
+        highlighted_df.plot(
+            ax=ax,
+            linewidth=kwargs.pop("linewidth", 3),
+            color=kwargs.pop("color", highlighted_colors),
+            legend=is_multi_line,
+            zorder=2,
+            **kwargs,
+        ),
     )
 
 

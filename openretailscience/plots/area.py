@@ -28,7 +28,7 @@ explicitly time-based visualizations, offering features like resampling and time
   before being passed to the function.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import pandas as pd
 from matplotlib.axes import Axes
@@ -105,13 +105,17 @@ def plot(
     default_colors = get_plot_colors(num_colors)
     alpha = kwargs.pop("alpha", 0.7)
     color = kwargs.pop("color", default_colors)
-    ax = pivot_df.plot(
-        ax=ax,
-        kind="area",
-        alpha=alpha,
-        color=color,
-        legend=is_multi_area,
-        **kwargs,
+    # pandas-stubs types DataFrame.plot(kind="area") as a wide union; it returns a single Axes here.
+    ax = cast(
+        "Axes",
+        pivot_df.plot(
+            ax=ax,
+            kind="area",
+            alpha=alpha,
+            color=color,
+            legend=is_multi_area,
+            **kwargs,
+        ),
     )
 
     # Drop the stroke so the swatch reads as a single translucent block matching the fill.

@@ -35,7 +35,7 @@ def sample_series():
 
 def test_plot_with_empty_dataframe():
     """Test bar plot with an empty DataFrame."""
-    empty_df = pd.DataFrame(columns=["sales_q1", "sales_q2"])
+    empty_df = pd.DataFrame({"sales_q1": [], "sales_q2": []})
 
     with pytest.raises(ValueError, match="Cannot plot with empty DataFrame"):
         bar.plot(
@@ -88,7 +88,7 @@ def test_plot_with_none_value_col(sample_dataframe):
     )
 
     expected_heights = sample_dataframe["sales_q1"].tolist()
-    actual_heights = [p.get_height() for p in result_ax.patches]
+    actual_heights = [p.get_height() for p in result_ax.patches if isinstance(p, Rectangle)]
 
     expected_num_patches = 4
 
@@ -116,7 +116,7 @@ def test_plot_with_nan_values():
     )
 
     expected_heights = [1000.0, 1500.0, 0.0, 2500.0, 1100.0, 1600.0, 2100.0, 0.0]
-    actual_heights = [p.get_height() for p in result_ax.patches]
+    actual_heights = [p.get_height() for p in result_ax.patches if isinstance(p, Rectangle)]
 
     expected_num_patches = 8
 
@@ -139,8 +139,9 @@ def test_plot_horizontal_orientation(sample_dataframe):
 
     assert isinstance(result_ax, Axes)
     # Check that the bars are oriented horizontally by checking their width, not height
-    assert all(p.get_width() > 0 for p in result_ax.patches)
-    assert all(p.get_height() == expected_height for p in result_ax.patches)  # Default bar height in horizontal bars
+    bars = [p for p in result_ax.patches if isinstance(p, Rectangle)]
+    assert all(p.get_width() > 0 for p in bars)
+    assert all(p.get_height() == expected_height for p in bars)  # Default bar height in horizontal bars
 
 
 def test_plot_vertical_orientation(sample_dataframe):
@@ -157,8 +158,9 @@ def test_plot_vertical_orientation(sample_dataframe):
 
     assert isinstance(result_ax, Axes)
     # Check that the bars are oriented vertically by checking their height, not width
-    assert all(p.get_height() > 0 for p in result_ax.patches)
-    assert all(p.get_width() == expected_width for p in result_ax.patches)  # Default bar width in vertical bars
+    bars = [p for p in result_ax.patches if isinstance(p, Rectangle)]
+    assert all(p.get_height() > 0 for p in bars)
+    assert all(p.get_width() == expected_width for p in bars)  # Default bar width in vertical bars
 
 
 def test_plot_with_custom_bar_width(sample_dataframe):
@@ -202,7 +204,7 @@ def test_plot_multiple_bars(sample_dataframe):
     )
 
     expected_heights = sample_dataframe["sales_q1"].tolist() + sample_dataframe["sales_q2"].tolist()
-    actual_heights = [p.get_height() for p in result_ax.patches]
+    actual_heights = [p.get_height() for p in result_ax.patches if isinstance(p, Rectangle)]
 
     expected_num_patches = 8
 
@@ -224,7 +226,7 @@ def test_plot_with_ascending_sorting(sample_dataframe, sort_order):
 
     expected_order = ["Apples", "Bananas", "Cereal", "Donuts"]
     actual_order = [label.get_text() for label in result_ax.get_xticklabels()]
-    bar_heights = [patch.get_height() for patch in result_ax.patches]
+    bar_heights = [patch.get_height() for patch in result_ax.patches if isinstance(patch, Rectangle)]
     expected_num_patches = 4
 
     assert isinstance(result_ax, Axes)
@@ -247,7 +249,7 @@ def test_plot_with_descending_sorting(sample_dataframe, sort_order):
 
     expected_order = ["Donuts", "Cereal", "Bananas", "Apples"]
     actual_order = [label.get_text() for label in result_ax.get_xticklabels()]
-    bar_heights = [patch.get_height() for patch in result_ax.patches]
+    bar_heights = [patch.get_height() for patch in result_ax.patches if isinstance(patch, Rectangle)]
 
     assert isinstance(result_ax, Axes)
     assert actual_order == expected_order
