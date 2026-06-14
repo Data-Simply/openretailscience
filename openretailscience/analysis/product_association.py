@@ -170,7 +170,7 @@ class ProductAssociation:
         """Initialize the ProductAssociation object.
 
         Args:
-            df (pd.DataFrame | ibis.Table) : The input DataFrame or ibis Table containing transaction data.
+            df (pd.DataFrame | ibis.Table): The input DataFrame or ibis Table containing transaction data.
             value_col (str): The name of the column in the input DataFrame that contains the product identifiers.
             group_col (str, optional): The name of the column that identifies unique transactions or customers. Defaults
                 to option column.unit_spend.
@@ -259,7 +259,7 @@ class ProductAssociation:
         helping to identify patterns in customer purchasing behavior.
 
         Args:
-            df (pd.DataFrame | ibis.Table) : The input DataFrame or ibis Table containing transaction data.
+            df (pd.DataFrame | ibis.Table): The input DataFrame or ibis Table containing transaction data.
             value_col (str): The name of the column in the input DataFrame that contains the product identifiers.
             group_col (str, optional): The name of the column that identifies unique transactions or customers. Defaults
                 to option column.unit_spend.
