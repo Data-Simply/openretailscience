@@ -249,20 +249,26 @@ def _install_chrome_layout_engine(fig: Figure) -> None:
         fig.set_layout_engine(_ChromeLayoutEngine())
 
 
-def _capture_chrome_layout(fig: Figure, ax: Axes, chrome_gid: str) -> _ChromeLayout:
-    """Snapshot the placed chrome artists and axes box as resize-invariant inch offsets."""
+def _capture_chrome_layout(fig: Figure, ax: Axes, chrome_gid: str, source_text: Text | None) -> _ChromeLayout:
+    """Snapshot the placed chrome artists and axes box as resize-invariant inch offsets.
+
+    ``source_text`` is passed by reference rather than recovered from the figure, so the source
+    (the one bottom-anchored element) is identified explicitly; every other chrome text is a
+    top-anchored header element.
+    """
     renderer = fig.canvas.get_renderer()
     fig_h = fig.get_figheight()
     fig_w = fig.get_figwidth()
     bbox_h = fig.bbox.height
     top_texts: list[tuple[Text, float]] = []
-    source: tuple[Text, float] | None = None
-    for text in [t for t in fig.texts if t.get_gid() == chrome_gid]:
+    for text in fig.texts:
+        if text.get_gid() != chrome_gid or text is source_text:
+            continue
         extent = text.get_window_extent(renderer=renderer)
-        if text.get_verticalalignment() == "bottom":
-            source = (text, extent.y0 / bbox_h * fig_h)
-        else:
-            top_texts.append((text, (1.0 - extent.y1 / bbox_h) * fig_h))
+        top_texts.append((text, (1.0 - extent.y1 / bbox_h) * fig_h))
+    source: tuple[Text, float] | None = None
+    if source_text is not None:
+        source = (source_text, source_text.get_window_extent(renderer=renderer).y0 / bbox_h * fig_h)
     tab: tuple[Rectangle, float, float, float] | None = None
     for patch in [p for p in fig.patches if p.get_gid() == chrome_gid]:
         top_frac = patch.get_y() + patch.get_height()
@@ -488,6 +494,7 @@ def apply_chart_chrome(
 
     bottom_margin_fig = _CHROME_BOTTOM_MARGIN_IN / fig_h
     axes_bottom = bottom_margin_fig
+    source_t = None
     if source_text is not None:
         source_t = fig.text(
             chrome_x,
@@ -525,7 +532,7 @@ def apply_chart_chrome(
     if layouts is None:
         layouts = {}
         fig._ors_chrome_layouts = layouts
-    layouts[id(ax)] = _capture_chrome_layout(fig, ax, chrome_gid)
+    layouts[id(ax)] = _capture_chrome_layout(fig, ax, chrome_gid, source_t)
     _install_chrome_layout_engine(fig)
 
 
