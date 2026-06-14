@@ -34,7 +34,7 @@ By leveraging cohort analysis, businesses can make data-driven decisions to enha
 marketing strategies, and drive long-term growth.
 """
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar, Literal, cast
 
 import ibis
 import numpy as np
@@ -42,6 +42,9 @@ import pandas as pd
 
 from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table, ensure_value_choice
 from openretailscience.options import ColumnHelper
+
+if TYPE_CHECKING:
+    from ibis.expr.types import TimestampColumn
 
 
 class CohortAnalysis:
@@ -113,7 +116,8 @@ class CohortAnalysis:
         full_range = pd.date_range(start=min_period, end=max_period, freq=period_lookup[period])
         cohort_analysis_table = cohort_analysis_table.reindex(full_range, fill_value=0)
         if cohort_analysis_table.shape[1] > 0:
-            max_period_since = cohort_analysis_table.columns.max()
+            # period_since columns are integers; Index.max() widens to a union in the stubs.
+            max_period_since = int(cast("int", cohort_analysis_table.columns.max()))
             all_periods = range(max_period_since + 1)
             cohort_analysis_table = cohort_analysis_table.reindex(columns=all_periods, fill_value=0)
         return cohort_analysis_table
@@ -142,8 +146,11 @@ class CohortAnalysis:
 
         ibis_table = ensure_ibis_table(df)
 
+        # .truncate lives on TimestampColumn, but Table.__getitem__ returns a generic Column in the stubs.
+        # ibis accepts long-form unit names ("month", ...) at runtime, but the stub's unit Literal omits them.
+        truncate_unit = cast("Literal['Y', 'Q', 'M', 'W', 'D']", period)
         filtered_table = ibis_table.mutate(
-            period_shopped=ibis_table[cols.transaction_date].truncate(period),
+            period_shopped=cast("TimestampColumn", ibis_table[cols.transaction_date]).truncate(truncate_unit),
             period_value=ibis_table[aggregation_column],
         )
 
@@ -157,11 +164,18 @@ class CohortAnalysis:
             .aggregate(period_value=getattr(filtered_table.period_value, agg_func)())
         )
 
+        # .delta lives on TimestampColumn, but column attribute access returns a generic Column in the stubs.
         cohort_table = cohort_table.mutate(
-            period_since=cohort_table.period_shopped.delta(cohort_table.min_period_shopped, unit=period),
+            period_since=cast("TimestampColumn", cohort_table.period_shopped).delta(
+                cohort_table.min_period_shopped,
+                unit=cast("Literal['year', 'quarter', 'month', 'week', 'day']", period),
+            ),
         )
 
-        cohort_df = cohort_table.execute().drop_duplicates(subset=["min_period_shopped", "period_since"])
+        # Table.execute() materializes to a DataFrame; ibis stubs widen the return type.
+        cohort_df = cast("pd.DataFrame", cohort_table.execute()).drop_duplicates(
+            subset=["min_period_shopped", "period_since"],
+        )
 
         cohort_analysis_table = cohort_df.pivot(
             index="min_period_shopped",

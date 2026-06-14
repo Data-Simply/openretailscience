@@ -107,6 +107,7 @@ Retailers should consider multiple metrics together:
 """
 
 import functools
+from typing import TYPE_CHECKING, cast
 
 import ibis
 import pandas as pd
@@ -114,6 +115,11 @@ from ibis import _
 
 from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import get_option
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    import ibis.expr.types as ir
 
 
 class ProductAssociation:
@@ -160,7 +166,7 @@ class ProductAssociation:
         df: pd.DataFrame | ibis.Table,
         value_col: str,
         group_col: str | None = None,
-        target_item: str | None = None,
+        target_item: str | float | list[str | float] | None = None,
         min_occurrences: int = 1,
         min_cooccurrences: int = 1,
         min_support: float = 0.0,
@@ -252,7 +258,7 @@ class ProductAssociation:
         min_support: float = 0.0,
         min_confidence: float = 0.0,
         min_uplift: float = 0.0,
-    ) -> pd.DataFrame:
+    ) -> ibis.Table:
         """Calculate product association rules based on transaction data.
 
         This method calculates association rules between products based on transaction data,
@@ -278,7 +284,7 @@ class ProductAssociation:
                 Must be greater or equal to 0.
 
         Returns:
-            pandas.DataFrame: A DataFrame containing the calculated association rules and their metrics.
+            ibis.Table: A table expression containing the calculated association rules and their metrics.
 
         Raises:
             ValueError: If the number of combinations is not 2 or 3, or if any of the minimum values are invalid.
@@ -286,7 +292,7 @@ class ProductAssociation:
             ValueError: If the minimum occurrences or cooccurrences are less than 1.
 
         Note:
-            The resulting DataFrame contains the following columns:
+            The resulting table contains the following columns:
             - product_1, product_2: The pair of products for which the association is calculated.
             - occurrences_1, occurrences_2: The number of transactions containing each product.
             - cooccurrences: The number of transactions containing both products.
@@ -339,7 +345,9 @@ class ProductAssociation:
             join_logic.extend(
                 [
                     left_table.item_1 != right_table.item_2,
-                    left_table.item_1.isin(target_item),
+                    # ibis Column.isin accepts a sequence of Python scalars at runtime; the stub types
+                    # the values parameter as Iterable[Value].
+                    left_table.item_1.isin(cast("Iterable[ir.Value]", target_item)),
                 ],
             )
         merged_df = left_table.join(right_table, predicates=join_logic)
@@ -386,12 +394,16 @@ class ProductAssociation:
                 occurrences_2=result.occurrences_1,
                 prob_1=result.prob_2,
                 prob_2=result.prob_1,
-                confidence=result.cooccurrences / result.occurrences_2,
+                # Column attribute access returns a generic Column; both operands are NumericColumns.
+                confidence=cast("ir.NumericColumn", result.cooccurrences)
+                / cast("ir.NumericColumn", result.occurrences_2),
             )
             result = result[col_order].union(inverse_pairs[col_order])
 
         result = (
-            result.filter(result.confidence >= min_confidence)
+            # Column attribute access returns a generic Column; confidence is a NumericColumn.
+            # ibis coerces the Python scalar at runtime, but the comparison stub expects a Value.
+            result.filter(cast("ir.NumericColumn", result.confidence) >= ibis.literal(min_confidence))
             .order_by(["item_1", "item_2"])
             .rename({f"{value_col}_1": "item_1", f"{value_col}_2": "item_2"})
         )
@@ -411,4 +423,5 @@ class ProductAssociation:
     @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Returns the executed DataFrame."""
-        return self.table.execute().reset_index(drop=True)
+        # Table.execute() materializes to a DataFrame; ibis stubs widen the return type.
+        return cast("pd.DataFrame", self.table.execute()).reset_index(drop=True)

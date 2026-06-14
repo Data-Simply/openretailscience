@@ -18,7 +18,7 @@ This analysis helps marketers:
 - Understand competitive dynamics in the market
 """
 
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from matplotlib.axes import Axes
@@ -84,12 +84,13 @@ class GainLoss:
         self.group_col = group_col
         self.value_col = value_col
 
+        # Convert list masks to Series so boolean indexing and elementwise &/| operate correctly.
         self.gain_loss_df = self._calc_gain_loss(
             df=df,
-            p1_index=p1_index,
-            p2_index=p2_index,
-            focus_group_index=focus_group_index,
-            comparison_group_index=comparison_group_index,
+            p1_index=pd.Series(p1_index),
+            p2_index=pd.Series(p2_index),
+            focus_group_index=pd.Series(focus_group_index),
+            comparison_group_index=pd.Series(comparison_group_index),
             group_col=group_col,
             value_col=value_col,
             agg_func=agg_func,
@@ -145,10 +146,10 @@ class GainLoss:
     @staticmethod
     def _calc_gain_loss(
         df: pd.DataFrame,
-        p1_index: list[bool],
-        p2_index: list[bool],
-        focus_group_index: list[bool],
-        comparison_group_index: list,
+        p1_index: pd.Series,
+        p2_index: pd.Series,
+        focus_group_index: pd.Series,
+        comparison_group_index: pd.Series,
         group_col: str | None = None,
         value_col: str = get_option("column.unit_spend"),
         agg_func: str = "sum",
@@ -169,12 +170,15 @@ class GainLoss:
             pd.DataFrame: The gain loss table.
         """
         cols = ColumnHelper()
-        df = df[p1_index | p2_index].copy()
+        # Boolean Series indexing returns a DataFrame; pandas-stubs widens to DataFrame | Series.
+        df = cast("pd.DataFrame", df[p1_index | p2_index]).copy()
         df[cols.customer_id] = df[cols.customer_id].astype("category")
 
         grp_cols = [cols.customer_id] if group_col is None else [group_col, cols.customer_id]
 
-        p1_df = pd.concat(
+        # groupby[col].agg(str) returns a Series, but pandas-stubs widens to Series | DataFrame.
+        p1_objs = cast(
+            "list[pd.Series]",
             [
                 df[focus_group_index & p1_index].groupby(grp_cols, observed=False)[value_col].agg(agg_func),
                 df[comparison_group_index & p1_index].groupby(grp_cols, observed=False)[value_col].agg(agg_func),
@@ -182,11 +186,12 @@ class GainLoss:
                 .groupby(grp_cols, observed=False)[value_col]
                 .agg(agg_func),
             ],
-            axis=1,
         )
+        p1_df = pd.concat(p1_objs, axis=1)
         p1_df.columns = ["focus", "comparison", "total"]
 
-        p2_df = pd.concat(
+        p2_objs = cast(
+            "list[pd.Series]",
             [
                 df[focus_group_index & p2_index].groupby(grp_cols, observed=False)[value_col].agg(agg_func),
                 df[comparison_group_index & p2_index].groupby(grp_cols, observed=False)[value_col].agg(agg_func),
@@ -194,14 +199,15 @@ class GainLoss:
                 .groupby(grp_cols, observed=False)[value_col]
                 .agg(agg_func),
             ],
-            axis=1,
         )
+        p2_df = pd.concat(p2_objs, axis=1)
         p2_df.columns = ["focus", "comparison", "total"]
 
         gl_df = p1_df.merge(p2_df, on=grp_cols, how="outer", suffixes=("_p1", "_p2")).fillna(0)
 
-        # Remove rows that are all 0 due to grouping by customer_id as a categorical with observed=False
-        gl_df = gl_df[~(gl_df == 0).all(axis=1)]
+        # Remove rows that are all 0 due to grouping by customer_id as a categorical with observed=False.
+        # Boolean Series indexing returns a DataFrame; pandas-stubs widens it to DataFrame | Series.
+        gl_df = cast("pd.DataFrame", gl_df[~(gl_df == 0).all(axis=1)])
 
         gl_df["focus_diff"] = gl_df["focus_p2"] - gl_df["focus_p1"]
         gl_df["comparison_diff"] = gl_df["comparison_p2"] - gl_df["comparison_p1"]
@@ -246,9 +252,11 @@ class GainLoss:
             pd.DataFrame: The aggregated gain loss table
         """
         if group_col is None:
-            return gain_loss_df.sum().to_frame("").T
+            # .to_frame(...).T yields a DataFrame; pandas-stubs widens transpose to Series | DataFrame.
+            return cast("pd.DataFrame", gain_loss_df.sum().to_frame("").T)
 
-        return gain_loss_df.groupby(level=0).sum()
+        # groupby(...).sum() returns a DataFrame here; pandas-stubs widens the result type.
+        return cast("pd.DataFrame", gain_loss_df.groupby(level=0).sum())
 
     def plot(
         self,

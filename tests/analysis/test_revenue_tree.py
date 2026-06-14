@@ -98,7 +98,7 @@ class TestRevenueTree:
                 cols.agg.transaction_id: [3, 3],
                 cols.agg.unit_spend: [900.0, 1200.0],
             },
-            index=["p1", "p2"],
+            index=pd.Index(["p1", "p2"]),
         )
 
         if include_quantity:
@@ -392,7 +392,7 @@ class TestRevenueTree:
                 cols.agg.transaction_id: [3, 3],
                 cols.agg.unit_spend: [900.0, 1100.0],
             },
-            index=["p1", "p2"],
+            index=pd.Index(["p1", "p2"]),
         )
 
         if include_quantity:
@@ -665,7 +665,7 @@ class TestRevenueTree:
                 cols.agg.transaction_id: [0, 5],
                 cols.agg.unit_spend: [0.0, 500.0],
             },
-            index=["p1", "p2"],
+            index=pd.Index(["p1", "p2"]),
         )
 
         if include_quantity:
@@ -723,7 +723,7 @@ class TestRevenueTree:
                 cols.agg.unit_spend: unit_spend,
                 cols.agg.unit_qty: unit_qty,
             },
-            index=["p1", "p2"],
+            index=pd.Index(["p1", "p2"]),
         )
 
         result = calc_tree_kpis(df, [True, False], [False, True])

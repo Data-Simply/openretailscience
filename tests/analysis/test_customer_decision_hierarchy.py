@@ -1,5 +1,7 @@
 """Tests for the customer_decision_hierarchy module."""
 
+from typing import TYPE_CHECKING, cast
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -9,6 +11,9 @@ from scipy.spatial.distance import squareform
 
 import openretailscience.analysis.customer_decision_hierarchy as rp
 from openretailscience.options import ColumnHelper, option_context
+
+if TYPE_CHECKING:
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 cols = ColumnHelper()
 
@@ -217,7 +222,7 @@ class TestPlot:
         ]
         df = pd.DataFrame(
             purchase_pattern,
-            columns=[cols.customer_id, cols.transaction_id, "product_name"],
+            columns=pd.Index([cols.customer_id, cols.transaction_id, "product_name"]),
         )
         return rp.CustomerDecisionHierarchy(df=df, product_col="product_name")
 
@@ -242,7 +247,8 @@ class TestPlot:
         fig, ax = plt.subplots(figsize=(10, 5))
         long_label_cdh.plot(title="Substitutability", ax=ax, orientation="top")
         fig.canvas.draw()
-        renderer = fig.canvas.get_renderer()
+        # get_renderer() lives on the concrete Agg canvas, not the base FigureCanvasBase the stubs expose.
+        renderer = cast("FigureCanvasAgg", fig.canvas).get_renderer()
         label_y0_fig = [
             t.get_window_extent(renderer=renderer).y0 / fig.bbox.height for t in ax.get_xticklabels() if t.get_text()
         ]

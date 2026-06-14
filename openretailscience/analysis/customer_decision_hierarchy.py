@@ -62,10 +62,11 @@ The analysis examines customer purchase patterns to identify substitutability:
 - **Strategic Clarity**: Data-driven approach to range decisions
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from matplotlib.axes import Axes
 from scipy.cluster.hierarchy import dendrogram, linkage
@@ -170,11 +171,11 @@ class CustomerDecisionHierarchy:
         cols = ColumnHelper()
         if exclude_same_transaction_products:
             pairs_df = df[[cols.customer_id, cols.transaction_id, product_col]].drop_duplicates()
-            pairs_to_exclude_df = (
-                pairs_df.groupby(cols.transaction_id)
-                .filter(lambda x: len(x) > 1)[[cols.customer_id, product_col]]
-                .drop_duplicates()
-            )
+            # Multi-column selection returns a DataFrame; pandas-stubs widens it to DataFrame | Series.
+            pairs_to_exclude_df = cast(
+                "pd.DataFrame",
+                pairs_df.groupby(cols.transaction_id).filter(lambda x: len(x) > 1)[[cols.customer_id, product_col]],
+            ).drop_duplicates()
             # Drop all rows from pairs_df where customer_id and product_name are in pairs_to_exclude_df
             pairs_df = pairs_df.merge(
                 pairs_to_exclude_df,
@@ -182,21 +183,28 @@ class CustomerDecisionHierarchy:
                 how="left",
                 indicator=True,
             )
-            pairs_df = pairs_df[pairs_df["_merge"] == "left_only"][[cols.customer_id, product_col]].drop_duplicates()
+            pairs_df = cast(
+                "pd.DataFrame",
+                pairs_df[pairs_df["_merge"] == "left_only"][[cols.customer_id, product_col]],
+            ).drop_duplicates()
         else:
             pairs_df = df[[cols.customer_id, product_col]].drop_duplicates()
 
-        return pairs_df.reset_index(drop=True).astype("category")
+        # .astype on the reset DataFrame returns a DataFrame; pandas-stubs widens it to DataFrame | Series.
+        return cast("pd.DataFrame", pairs_df.reset_index(drop=True).astype("category"))
 
     @staticmethod
-    def _calculate_yules_q(bought_product_1: np.array, bought_product_2: np.array) -> float:
+    def _calculate_yules_q(
+        bought_product_1: npt.NDArray[np.bool_],
+        bought_product_2: npt.NDArray[np.bool_],
+    ) -> float:
         """Calculates the Yule's Q coefficient between two binary arrays.
 
         Args:
-            bought_product_1 (np.array): Binary array representing the first bought product. Each element is 1 if the
-                customer bought the product and 0 if they didn't.
-            bought_product_2 (np.array): Binary array representing the second bought product. Each element is 1 if the
-                customer bought the product and 0 if they didn't.
+            bought_product_1 (npt.NDArray[np.bool_]): Binary array representing the first bought product. Each element
+                is 1 if the customer bought the product and 0 if they didn't.
+            bought_product_2 (npt.NDArray[np.bool_]): Binary array representing the second bought product. Each element
+                is 1 if the customer bought the product and 0 if they didn't.
 
         Returns:
             float: The Yule's Q coefficient.
@@ -246,8 +254,9 @@ class CustomerDecisionHierarchy:
             dtype=bool,
         )
 
-        # Calculate the number of customers and products
-        n_products = product_matrix.shape[0]
+        # Calculate the number of customers and products.
+        # csr_matrix.shape is always a 2-tuple, but scipy stubs type it as Optional.
+        n_products = cast("tuple[int, int]", product_matrix.shape)[0]
 
         # Create an empty matrix to store the yules q values
         yules_q_matrix = np.zeros((n_products, n_products), dtype=float)

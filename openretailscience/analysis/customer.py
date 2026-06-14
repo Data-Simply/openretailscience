@@ -40,6 +40,7 @@ the plotting helpers in `openretailscience.plots`.
 """
 
 import operator
+from typing import cast
 
 import pandas as pd
 
@@ -81,7 +82,8 @@ class PurchasesPerCustomer:
         Returns:
             float: The number of purchases at the given percentile.
         """
-        return self.cust_purchases_s.quantile(percentile)
+        # A scalar percentile yields a scalar quantile; pandas-stubs widens it to Series | float.
+        return float(cast("float", self.cust_purchases_s.quantile(percentile)))
 
     def find_purchase_percentile(self, number_of_purchases: int, comparison: str = "less_than_equal_to") -> float:
         """Find the percentile of the number of purchases.
@@ -149,14 +151,16 @@ class DaysBetweenPurchases:
             pd.Series: The average number of days between purchases per customer.
         """
         cols = ColumnHelper()
-        purchase_dist_df = df[[cols.customer_id, cols.transaction_date]].copy()
+        # Multi-column selection returns a DataFrame; pandas-stubs widens it to DataFrame | Series.
+        purchase_dist_df = cast("pd.DataFrame", df[[cols.customer_id, cols.transaction_date]]).copy()
         purchase_dist_df[cols.transaction_date] = df[cols.transaction_date].dt.floor("D")
-        purchase_dist_df = purchase_dist_df.drop_duplicates().sort_values([cols.customer_id, cols.transaction_date])
+        purchase_dist_df = purchase_dist_df.drop_duplicates().sort_values(by=[cols.customer_id, cols.transaction_date])
         purchase_dist_df["diff"] = purchase_dist_df[cols.transaction_date].diff()
         new_cust_mask = purchase_dist_df[cols.customer_id] != purchase_dist_df[cols.customer_id].shift(1)
         purchase_dist_df = purchase_dist_df[~new_cust_mask]
-        purchase_dist_df["diff"] = purchase_dist_df["diff"].dt.days
-        return purchase_dist_df.groupby(cols.customer_id)["diff"].mean()
+        # .diff() on a datetime column yields a timedelta Series exposing .dt; pandas-stubs widens it to ndarray.
+        purchase_dist_df["diff"] = cast("pd.Series", purchase_dist_df["diff"]).dt.days
+        return cast("pd.Series", purchase_dist_df.groupby(cols.customer_id)["diff"].mean())
 
     def purchases_percentile(self, percentile: float = 0.5) -> float:
         """Get the average number of days between purchases at a given percentile.
@@ -193,11 +197,12 @@ class TransactionChurn:
         required_cols = [cols.customer_id, cols.transaction_date]
         ensure_data_has_columns(df, required_cols)
 
-        purchase_dist_df = df[[cols.customer_id, cols.transaction_date]].copy()
+        # Multi-column selection returns a DataFrame; pandas-stubs widens it to DataFrame | Series.
+        purchase_dist_df = cast("pd.DataFrame", df[[cols.customer_id, cols.transaction_date]]).copy()
         # Truncate the transaction_date to the day
         purchase_dist_df[cols.transaction_date] = df[cols.transaction_date].dt.floor("D")
         purchase_dist_df = purchase_dist_df.drop_duplicates()
-        purchase_dist_df = purchase_dist_df.sort_values([cols.customer_id, cols.transaction_date])
+        purchase_dist_df = purchase_dist_df.sort_values(by=[cols.customer_id, cols.transaction_date])
         purchase_dist_df["transaction_number"] = purchase_dist_df.groupby(cols.customer_id).cumcount() + 1
 
         purchase_dist_df["last_transaction"] = (
@@ -210,11 +215,15 @@ class TransactionChurn:
             purchase_dist_df["last_transaction"] & purchase_dist_df["transaction_before_churn_window"]
         )
 
-        purchase_dist_df = (
-            purchase_dist_df[purchase_dist_df["transaction_before_churn_window"]]
-            .groupby(["transaction_number"])["churned"]
-            .value_counts()
-            .unstack()
+        # .unstack() returns a DataFrame here; pandas-stubs widens it to Series | DataFrame.
+        purchase_dist_df = cast(
+            "pd.DataFrame",
+            (
+                purchase_dist_df[purchase_dist_df["transaction_before_churn_window"]]
+                .groupby(["transaction_number"])["churned"]
+                .value_counts()
+                .unstack()
+            ),
         )
         purchase_dist_df.columns = ["retained", "churned"]
         purchase_dist_df["churned_pct"] = purchase_dist_df["churned"].div(purchase_dist_df.sum(axis=1))

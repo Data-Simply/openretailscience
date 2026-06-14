@@ -34,7 +34,7 @@ class TestCompositeRank:
         )
 
         # Test with ascending and descending columns
-        rank_cols = [
+        rank_cols: list[tuple[str, str] | str] = [
             ("spend", "desc"),  # Higher spend is better
             ("customers", "desc"),  # Higher customer count is better
             ("spend_per_customer", "desc"),  # Higher spend per customer is better
@@ -142,7 +142,7 @@ class TestCompositeRank:
                 "profit": [50, 30, 70, 10, 60],  # Ranks descending: 3, 4, 1, 5, 2
             },
         )
-        rank_cols = [("spend", "desc"), ("customers", "desc"), ("profit", "desc")]
+        rank_cols: list[tuple[str, str] | str] = [("spend", "desc"), ("customers", "desc"), ("profit", "desc")]
 
         # Create instance with specified aggregation function
         cr = CompositeRank(df=df, rank_cols=rank_cols, agg_func=agg_func, ignore_ties=False)
@@ -214,7 +214,7 @@ class TestCompositeRank:
     @pytest.mark.parametrize("agg_func", ["MEAN", "Mean", "SUM", "Min", "MAX"])
     def test_agg_func_case_insensitive(self, simple_df, agg_func):
         """Mixed-case agg_func produces identical output to the lowercase form (regression for #429 bug)."""
-        rank_cols = [("spend", "desc"), ("customers", "desc")]
+        rank_cols: list[tuple[str, str] | str] = [("spend", "desc"), ("customers", "desc")]
         upper = CompositeRank(df=simple_df, rank_cols=rank_cols, agg_func=agg_func).df
         lower = CompositeRank(df=simple_df, rank_cols=rank_cols, agg_func=agg_func.lower()).df
         pd.testing.assert_frame_equal(upper, lower)

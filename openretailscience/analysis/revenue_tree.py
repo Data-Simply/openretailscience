@@ -25,6 +25,8 @@ for retail businesses, helping to identify key drivers of revenue changes and
 inform strategic decision-making.
 """
 
+from typing import TYPE_CHECKING, cast
+
 import ibis
 import numpy as np
 import pandas as pd
@@ -34,6 +36,9 @@ from openretailscience.core.validation import ensure_columns, ensure_data_has_co
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles import graph_utils as gu
 from openretailscience.plots.tree_diagram import DetailedTreeNode, TreeGrid
+
+if TYPE_CHECKING:
+    from ibis.expr.types import NumericColumn
 
 
 def calc_tree_kpis(
@@ -58,7 +63,8 @@ def calc_tree_kpis(
     if cols.agg.unit_qty in df.columns:
         required_cols.append(cols.agg.unit_qty)
 
-    df = df[required_cols].copy()
+    # Multi-column selection returns a DataFrame; pandas-stubs widens it to DataFrame | Series.
+    df = cast("pd.DataFrame", df[required_cols]).copy()
     df_cols = df.columns
 
     if cols.agg.unit_qty in df_cols:
@@ -197,9 +203,10 @@ def calc_tree_kpis(
             - ((df[cols.calc.trans_per_cust_diff] * df[cols.calc.spend_per_trans_diff]) / 4)
         ) * df[cols.agg.customer_id_p2] - ((df[cols.agg.customer_id_diff] * df[cols.calc.spend_per_cust_diff]) / 8)
 
-    cols = RevenueTree._get_final_col_order(include_quantity=cols.agg.unit_qty in df_cols)
+    final_cols = RevenueTree._get_final_col_order(include_quantity=cols.agg.unit_qty in df_cols)
 
-    return df[cols]
+    # Reordering by a column list returns a DataFrame; pandas-stubs widens it to DataFrame | Series.
+    return cast("pd.DataFrame", df[final_cols])
 
 
 class RevenueTree:
@@ -277,18 +284,20 @@ class RevenueTree:
 
         df = ensure_ibis_table(df)
 
+        # .sum() lives on NumericColumn, but Table.__getitem__ is typed as returning a generic Column.
         aggs = {
             cols.agg.customer_id: df[cols.customer_id].nunique(),
             cols.agg.transaction_id: df[cols.transaction_id].nunique(),
-            cols.agg.unit_spend: df[cols.unit_spend].sum(),
+            cols.agg.unit_spend: cast("NumericColumn", df[cols.unit_spend]).sum(),
         }
         if cols.unit_qty in df.columns:
-            aggs[cols.agg.unit_qty] = df[cols.unit_qty].sum()
+            aggs[cols.agg.unit_qty] = cast("NumericColumn", df[cols.unit_qty]).sum()
 
         group_by_cols = [*group_col, period_col] if group_col else [period_col]
         df = pd.DataFrame(df.group_by(group_by_cols).aggregate(**aggs).execute())
-        p1_df = df[df[period_col] == p1_value].drop(columns=[period_col])
-        p2_df = df[df[period_col] == p2_value].drop(columns=[period_col])
+        # Boolean Series indexing returns a DataFrame; pandas-stubs widens it to DataFrame | Series.
+        p1_df = cast("pd.DataFrame", df[df[period_col] == p1_value]).drop(columns=[period_col])
+        p2_df = cast("pd.DataFrame", df[df[period_col] == p2_value]).drop(columns=[period_col])
 
         if group_col is not None:
             p1_df = p1_df.sort_values(by=group_col)

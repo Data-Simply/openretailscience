@@ -1,5 +1,7 @@
 """Tests for the ProductAssociation module."""
 
+from typing import cast
+
 import pandas as pd
 import pytest
 
@@ -294,7 +296,7 @@ class TestProductAssociations:
 
     def test_calc_association_target_item_list(self, transactions_df):
         """Test calculating association rules with a list of target items."""
-        target_items = ["milk", "bread"]
+        target_items: list[str | float] = ["milk", "bread"]
 
         calc_df = ProductAssociation(
             df=transactions_df,
@@ -311,7 +313,7 @@ class TestProductAssociations:
     def test_calc_association_target_item_single_vs_list(self, transactions_df):
         """Test that single target item and list with single item produce same results."""
         single_target = "milk"
-        list_target = ["milk"]
+        list_target: list[str | float] = ["milk"]
 
         calc_single = ProductAssociation(
             df=transactions_df,
@@ -342,12 +344,14 @@ class TestProductAssociations:
 
     def test_calc_association_target_item_invalid_type(self, transactions_df):
         """Test that invalid types in target item list raise TypeError."""
+        # Intentionally pass an unsupported element type to exercise the runtime type guard.
+        invalid_target = cast("list[str | float]", ["milk", {"invalid": "dict"}])
         with pytest.raises(TypeError, match="target_item must contain only str or float values"):
             ProductAssociation(
                 df=transactions_df,
                 value_col="product",
                 group_col=cols.transaction_id,
-                target_item=["milk", {"invalid": "dict"}],
+                target_item=invalid_target,
             )
 
     def test_with_custom_column_names(self, transactions_df):

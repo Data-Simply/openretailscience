@@ -17,27 +17,27 @@ strategic decision-making.
 - **Requires Trigonometric Functions**: Backend must support mathematical functions
 """
 
-import ibis
+from ibis.expr.types import NumericValue
 
 
 def haversine_distance(
-    lat_col: ibis.Column,
-    lon_col: ibis.Column,
-    target_lat_col: ibis.Column,
-    target_lon_col: ibis.Column,
+    lat_col: NumericValue,
+    lon_col: NumericValue,
+    target_lat_col: NumericValue,
+    target_lon_col: NumericValue,
     radius: float = 6371.0,
-) -> ibis.Column:
+) -> NumericValue:
     """Computes the Haversine distance between two sets of latitude and longitude columns.
 
     Parameters:
-        lat_col (ibis.Column): Column containing source latitudes.
-        lon_col (ibis.Column): Column containing source longitudes.
-        target_lat_col (ibis.Column): Column containing target latitudes.
-        target_lon_col (ibis.Column): Column containing target longitudes.
+        lat_col (ibis.expr.types.NumericValue): Column or scalar containing source latitudes.
+        lon_col (ibis.expr.types.NumericValue): Column or scalar containing source longitudes.
+        target_lat_col (ibis.expr.types.NumericValue): Column or scalar containing target latitudes.
+        target_lon_col (ibis.expr.types.NumericValue): Column or scalar containing target longitudes.
         radius (float, optional): Earth's radius in kilometers (default: 6371 km).
 
     Returns:
-        ibis.Column: An Ibis expression representing the computed distances.
+        ibis.expr.types.NumericValue: An Ibis expression representing the computed distances.
     """
     lat1_rad = lat_col.radians()
     lat2_rad = target_lat_col.radians()

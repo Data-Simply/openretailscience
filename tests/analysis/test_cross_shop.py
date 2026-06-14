@@ -135,7 +135,7 @@ def test_calc_cross_shop_three_groups_customer_id_nunique(sample_data):
             "group_labels": ["A", "B", "C", "No Groups", "A, B", "A", "B", "A, C", "B", "A"],
             cols.customer_id: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         },
-        index=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        index=pd.Index([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
     )
     ret_df.index.name = cols.customer_id
     ret_df = ret_df.astype({"group_1": "int32", "group_2": "int32", "group_3": "int32"})
@@ -466,7 +466,8 @@ def test_with_custom_column_names(sample_data):
         cross_shop_df = cross_shop.cross_shop_df
         assert isinstance(cross_shop_df, pd.DataFrame)
         assert not cross_shop_df.empty
-        assert "my_customer_identifier" in cross_shop_df.index.name or cross_shop_df.index.name is None, (
+        index_name = cross_shop_df.index.name
+        assert index_name is None or index_name == "my_customer_identifier", (
             "Should handle custom customer_id column name"
         )
         assert "total_amount_spent" in cross_shop_df.columns, "Should handle custom unit_spend column name"

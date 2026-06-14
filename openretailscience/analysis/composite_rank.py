@@ -62,6 +62,8 @@ Key Features:
 """
 
 import functools
+import operator
+from typing import cast
 
 import ibis
 import ibis.expr.types as ir
@@ -286,10 +288,12 @@ class CompositeRank:
         Returns:
             ibis.Table: The input table with an additional composite_rank column.
         """
-        column_refs = [df[col] for col in rank_mutates]
+        # Table.__getitem__ returns a generic Column; the rank columns are known to be NumericColumns.
+        column_refs = [cast("ir.NumericColumn", df[col]) for col in rank_mutates]
+        rank_sum = functools.reduce(operator.add, column_refs)
         agg_expr = {
-            "mean": sum(column_refs) / len(column_refs),
-            "sum": sum(column_refs),
+            "mean": rank_sum / len(column_refs),
+            "sum": rank_sum,
             "min": ibis.least(*column_refs),
             "max": ibis.greatest(*column_refs),
         }
@@ -305,4 +309,5 @@ class CompositeRank:
                 - Individual rank columns (e.g., sales_rank, margin_rank)
                 - composite_rank: Final combined ranking for decisions
         """
-        return self.table.execute()
+        # Table.execute() materializes to a DataFrame; ibis stubs widen the return type.
+        return cast("pd.DataFrame", self.table.execute())

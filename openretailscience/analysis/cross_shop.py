@@ -59,7 +59,7 @@ The module generates Venn diagrams showing:
 """
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import ibis
 import pandas as pd
@@ -68,6 +68,9 @@ from matplotlib.axes import Axes
 from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import get_option
 from openretailscience.plots import venn
+
+if TYPE_CHECKING:
+    from ibis.expr.types import BooleanColumn
 
 
 class CrossShop:
@@ -258,9 +261,12 @@ class CrossShop:
         temp_value_col = "temp_value_col"
         df = df.mutate(**{temp_value_col: df[value_col]})
 
-        group_1 = (df[group_1_col] == group_1_val).cast("int32").name("group_1")
-        group_2 = (df[group_2_col] == group_2_val).cast("int32").name("group_2")
-        group_3 = (df[group_3_col] == group_3_val).cast("int32").name("group_3") if group_3_col else None
+        # ibis Column.__eq__ returns a BooleanColumn at runtime, but the stub widens it to bool.
+        group_1 = cast("BooleanColumn", df[group_1_col] == group_1_val).cast("int32").name("group_1")
+        group_2 = cast("BooleanColumn", df[group_2_col] == group_2_val).cast("int32").name("group_2")
+        group_3 = (
+            cast("BooleanColumn", df[group_3_col] == group_3_val).cast("int32").name("group_3") if group_3_col else None
+        )
 
         group_cols = ["group_1", "group_2"]
         select_cols = [df[group_col], group_1, group_2]
@@ -268,15 +274,19 @@ class CrossShop:
             group_cols.append("group_3")
             select_cols.append(group_3)
 
-        cs_df = df.select([*select_cols, df[temp_value_col]]).order_by(group_col)
-        cs_df = (
-            cs_df.group_by(group_col)
-            .aggregate(
-                **{col: cs_df[col].max().name(col) for col in group_cols},
-                **{temp_value_col: getattr(cs_df[temp_value_col], agg_func)().name(temp_value_col)},
-            )
-            .order_by(group_col)
-        ).execute()
+        cs_table = df.select([*select_cols, df[temp_value_col]]).order_by(group_col)
+        # Table.execute() materializes to a DataFrame; ibis stubs widen the return type.
+        cs_df = cast(
+            "pd.DataFrame",
+            (
+                cs_table.group_by(group_col)
+                .aggregate(
+                    **{col: cs_table[col].max().name(col) for col in group_cols},
+                    **{temp_value_col: getattr(cs_table[temp_value_col], agg_func)().name(temp_value_col)},
+                )
+                .order_by(group_col)
+            ).execute(),
+        )
 
         cs_df["groups"] = cs_df[group_cols].apply(tuple, axis=1)
 
