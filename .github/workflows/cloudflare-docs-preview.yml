@@ -40,7 +40,7 @@ jobs:
         run: uv sync --locked
 
       - name: Build docs
-        run: uv run mkdocs build
+        run: uv run mkdocs build --strict
 
       - name: Verify build output
         run: |
