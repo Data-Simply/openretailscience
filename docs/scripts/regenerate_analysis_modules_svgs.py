@@ -20,11 +20,15 @@ This script is intentionally not referenced from the public docs.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
 
 mpl.use("Agg")
 
@@ -44,7 +48,7 @@ from openretailscience.segmentation.threshold import ThresholdSegmentation
 OUT_DIR = Path(__file__).resolve().parent.parent / "assets" / "images" / "analysis_modules"
 
 
-def _save(fig: plt.Figure, name: str) -> None:
+def _save(fig: Figure, name: str) -> None:
     path = OUT_DIR / f"{name}.svg"
     fig.savefig(path, format="svg", bbox_inches="tight")
     plt.close(fig)
@@ -67,19 +71,24 @@ def build_transaction_panel() -> pd.DataFrame:
         visit_offsets = np.sort(rng.integers(0, 365, size=visits))
         visit_dates = pd.Timestamp("2024-01-01") + pd.to_timedelta(visit_offsets, unit="D")
         for spend, dt in zip(spends, visit_dates, strict=True):
-            rows.append((cid, tid, dt, float(spend), int(rng.integers(1, 5))))
+            rows.append((int(cid), tid, dt, float(spend), int(rng.integers(1, 5))))
             tid += 1
 
+    # pandas-stubs rejects list[str] for the columns parameter (its SequenceNotStr protocol
+    # does not accept list); pd.Index is an accepted member of the columns type union.
     return pd.DataFrame(
         rows,
-        columns=["customer_id", "transaction_id", "transaction_date", "unit_spend", "unit_quantity"],
+        columns=pd.Index(["customer_id", "transaction_id", "transaction_date", "unit_spend", "unit_quantity"]),
     )
 
 
 def regenerate_hml_segmentation(transactions: pd.DataFrame) -> None:
     hml = HMLSegmentation(transactions, zero_value_customers="include_with_light")
-    segment_spend = (
-        hml.df.groupby("segment_name", observed=True)["unit_spend"].sum().reindex(["Heavy", "Medium", "Light"])
+    # groupby(...).sum().reindex(...) on a single column returns a Series, but pandas-stubs
+    # widens it to DataFrame | NDFrame | Series. Narrow back to Series for the plot call.
+    segment_spend = cast(
+        "pd.Series",
+        hml.df.groupby("segment_name", observed=True)["unit_spend"].sum().reindex(["Heavy", "Medium", "Light"]),
     )
     ratio = segment_spend["Heavy"] / segment_spend["Light"]
     fig, ax = plt.subplots(figsize=(6.4, 4.8))
@@ -107,10 +116,13 @@ def regenerate_threshold_segmentation(transactions: pd.DataFrame) -> None:
         segments=["Bronze", "Silver", "Gold", "Platinum"],
         zero_value_customers="separate_segment",
     )
-    quartile_spend = (
+    # groupby(...).sum().reindex(...) on a single column returns a Series, but pandas-stubs
+    # widens it to DataFrame | NDFrame | Series. Narrow back to Series for the plot call.
+    quartile_spend = cast(
+        "pd.Series",
         thresh.df.groupby("segment_name", observed=True)["unit_spend"]
         .sum()
-        .reindex(["Platinum", "Gold", "Silver", "Bronze"])
+        .reindex(["Platinum", "Gold", "Silver", "Bronze"]),
     )
     platinum_share = quartile_spend["Platinum"] / quartile_spend.sum()
     fig, ax = plt.subplots(figsize=(6.4, 4.8))
@@ -155,8 +167,9 @@ def regenerate_days_between_purchases(transactions: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(6.4, 4.8))
     # Trim the long right tail (a handful of customers with averages >200 days) so the
     # body of the distribution and the median line are easier to read.
-    series = dbp.purchase_dist_s
-    series = series[series <= 200]
+    # Boolean-mask indexing on a Series returns a Series, but pandas-stubs widens the result
+    # type; narrow it back for the plot call.
+    series = cast("pd.Series", dbp.purchase_dist_s[dbp.purchase_dist_s <= 200])
     histogram.plot(
         df=series,
         ax=ax,
@@ -223,8 +236,8 @@ def regenerate_cross_shop() -> None:
     rows: list[tuple[int, str, float]] = []
     for cid, mode in zip(cust_ids, modes, strict=True):
         for cat in mode_to_cats[mode]:
-            rows.append((cid, cat, float(rng.integers(20, 300))))
-    cs_df = pd.DataFrame(rows, columns=["customer_id", "category_name", "unit_spend"])
+            rows.append((int(cid), cat, float(rng.integers(20, 300))))
+    cs_df = pd.DataFrame(rows, columns=pd.Index(["customer_id", "category_name", "unit_spend"]))
 
     cs = CrossShop(
         cs_df,
@@ -275,7 +288,7 @@ def regenerate_gain_loss() -> None:
         elif pat == "switch_BtoA":
             rows.append((cid, float(rng.integers(60, 160)), "Brand B", "p1"))
             rows.append((cid, float(rng.integers(70, 180)), "Brand A", "p2"))
-    gl_df = pd.DataFrame(rows, columns=["customer_id", "unit_spend", "brand", "period"])
+    gl_df = pd.DataFrame(rows, columns=pd.Index(["customer_id", "unit_spend", "brand", "period"]))
 
     gain_loss = GainLoss(
         df=gl_df,
@@ -344,7 +357,7 @@ def regenerate_customer_decision_hierarchy() -> None:
                 next_transaction_id += 1
             next_customer_id += 1
 
-    snack_transactions = pd.DataFrame(rows, columns=["customer_id", "transaction_id", "product_name"])
+    snack_transactions = pd.DataFrame(rows, columns=pd.Index(["customer_id", "transaction_id", "product_name"]))
     cdh = CustomerDecisionHierarchy(snack_transactions, product_col="product_name")
     fig, ax = plt.subplots(figsize=(6.4, 4.8))
     cdh.plot(

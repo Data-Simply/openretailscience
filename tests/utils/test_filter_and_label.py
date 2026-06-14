@@ -1,5 +1,7 @@
 """Tests for the filter_and_label module."""
 
+from typing import cast
+
 import ibis
 import pandas as pd
 
@@ -33,7 +35,7 @@ def test_filter_and_label_by_condition():
     )
 
     pd.testing.assert_frame_equal(
-        result.execute().sort_values("product_id").reset_index(drop=True),
+        cast("pd.DataFrame", result.execute()).sort_values(by="product_id").reset_index(drop=True),
         expected_df.sort_values("product_id").reset_index(drop=True),
     )
 
@@ -66,6 +68,6 @@ def test_filter_and_label_by_condition_custom_column():
     )
 
     pd.testing.assert_frame_equal(
-        result.execute().sort_values("product_id").reset_index(drop=True),
+        cast("pd.DataFrame", result.execute()).sort_values(by="product_id").reset_index(drop=True),
         expected_df.sort_values("product_id").reset_index(drop=True),
     )

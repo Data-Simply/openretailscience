@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
+
+import ibis
 
 if TYPE_CHECKING:
     import ibis.expr.types as ir
@@ -26,4 +28,7 @@ def ratio_metric(
         ir.FloatingValue: The scaled ratio expression. Evaluates to NULL
             when the denominator is zero (materializes as NaN in pandas).
     """
-    return (numerator / denominator.nullif(0)) * scale
+    # Division/multiplication on ibis NumericValue is statically typed as NumericValue,
+    # but the runtime result of a float ratio is always a FloatingValue. Cast to the
+    # documented narrower return type.
+    return cast("ir.FloatingValue", (numerator / denominator.nullif(ibis.literal(0))) * scale)

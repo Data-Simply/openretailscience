@@ -2,6 +2,7 @@
 
 # flake8: noqa: DTZ001
 import datetime
+from typing import cast
 
 import ibis
 import pandas as pd
@@ -9,6 +10,10 @@ import pytest
 
 from openretailscience.options import option_context
 from openretailscience.utils.date import filter_and_label_by_periods, find_overlapping_periods
+
+# Mirrors the period_ranges parameter type of filter_and_label_by_periods. Used to annotate
+# test dicts so they match the invariant dict value type expected by the function.
+PeriodRanges = dict[str, "tuple[datetime.datetime, datetime.datetime] | tuple[str, str]"]
 
 
 class TestFilterAndLabelByPeriods:
@@ -41,7 +46,7 @@ class TestFilterAndLabelByPeriods:
         q2_count = 2
         total_count = q1_count + q2_count
 
-        period_ranges = {
+        period_ranges: PeriodRanges = {
             "Q1": (
                 datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
                 datetime.datetime(2023, 3, 31, tzinfo=datetime.timezone.utc),
@@ -76,7 +81,7 @@ class TestFilterAndLabelByPeriods:
         q3_count = 2
         total_count = q1_count + q2_count + q3_count
 
-        period_ranges = {
+        period_ranges: PeriodRanges = {
             "Q1": ("2023-01-01", "2023-03-31"),
             "Q2": ("2023-04-01", "2023-06-30"),
             "Q3": ("2023-07-01", "2023-09-30"),
@@ -104,21 +109,21 @@ class TestFilterAndLabelByPeriods:
 
     def test_filter_and_label_by_periods_invalid_period_format(self, sample_transactions_table):
         """Test that invalid period formats raise ValueError."""
-        # Single date instead of tuple
-        period_ranges = {"Invalid": "2023-01-01"}
+        # Single date instead of tuple. Intentionally malformed to exercise validation.
+        period_ranges = cast("PeriodRanges", {"Invalid": "2023-01-01"})
 
         with pytest.raises(ValueError, match="Period 'Invalid' must have a \\(start_date, end_date\\) tuple"):
             filter_and_label_by_periods(sample_transactions_table, period_ranges)
 
-        # Tuple with wrong length
-        period_ranges = {"Invalid": ("2023-01-01", "2023-03-31", "extra-value")}
+        # Tuple with wrong length. Intentionally malformed to exercise validation.
+        period_ranges = cast("PeriodRanges", {"Invalid": ("2023-01-01", "2023-03-31", "extra-value")})
 
         with pytest.raises(ValueError, match="Period 'Invalid' must have a \\(start_date, end_date\\) tuple"):
             filter_and_label_by_periods(sample_transactions_table, period_ranges)
 
     def test_filter_and_label_by_periods_no_matches(self, sample_transactions_table):
         """Test behavior when no transactions match the given periods."""
-        period_ranges = {
+        period_ranges: PeriodRanges = {
             "Future": ("2024-01-01", "2024-12-31"),
         }
 
@@ -153,7 +158,7 @@ class TestFilterAndLabelByPeriods:
 
     def test_equal_start_end_dates_valid(self, sample_transactions_table):
         """Test that start date == end date is valid (single day period)."""
-        period_ranges = {
+        period_ranges: PeriodRanges = {
             "Single_Day": ("2023-01-15", "2023-01-15"),
         }
 
@@ -206,7 +211,7 @@ class TestFilterAndLabelByPeriods:
         custom_table = sample_transactions_table.mutate(my_date_col=sample_transactions_table.transaction_date).drop(
             "transaction_date",
         )
-        period_ranges = {"Test_Period": ("2023-01-01", "2023-12-31")}
+        period_ranges: PeriodRanges = {"Test_Period": ("2023-01-01", "2023-12-31")}
 
         with option_context("column.transaction_date", "my_date_col"):
             result = filter_and_label_by_periods(custom_table, period_ranges)
@@ -221,7 +226,7 @@ class TestFilterAndLabelByPeriods:
         q1_count = 2
         q2_count = 2
 
-        period_ranges = {
+        period_ranges: PeriodRanges = {
             "Q1": ("2023-01-01", "2023-03-31"),
             "Q2": ("2023-04-01", "2023-06-30"),
         }
@@ -331,6 +336,9 @@ class TestFindOverlappingPeriods:
         """Test that naive datetime and string inputs produce naive datetime outputs."""
         result = find_overlapping_periods(start_date, end_date, return_str=False)
         for start, end in result:
+            # return_str=False yields datetime objects; narrow from the str | datetime union.
+            assert isinstance(start, datetime.datetime)
+            assert isinstance(end, datetime.datetime)
             assert start.tzinfo is None
             assert end.tzinfo is None
 
@@ -346,6 +354,9 @@ class TestFindOverlappingPeriods:
         result = find_overlapping_periods(start_date, end_date, return_str=False)
         assert result == expected
         for start, end in result:
+            # return_str=False yields datetime objects; narrow from the str | datetime union.
+            assert isinstance(start, datetime.datetime)
+            assert isinstance(end, datetime.datetime)
             assert start.tzinfo is not None
             assert end.tzinfo is not None
 

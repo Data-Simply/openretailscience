@@ -4,6 +4,10 @@ from datetime import datetime, timezone
 
 from openretailscience.utils.date import filter_and_label_by_periods
 
+# Mirrors the period_ranges parameter type of filter_and_label_by_periods, matching the
+# invariant dict value type the function expects.
+PeriodRanges = dict[str, "tuple[datetime, datetime] | tuple[str, str]"]
+
 
 def test_filter_and_label_by_periods_integration(transactions_table):
     """Integration test for filter_and_label_by_periods using parameterized database backends.
@@ -17,7 +21,7 @@ def test_filter_and_label_by_periods_integration(transactions_table):
                           or PySpark transactions table
     """
     limited_table = transactions_table.limit(1000)
-    period_ranges = {
+    period_ranges: PeriodRanges = {
         "Q1": (datetime(2023, 1, 1, tzinfo=timezone.utc), datetime(2023, 3, 31, tzinfo=timezone.utc)),
         "Q2": (datetime(2023, 4, 1, tzinfo=timezone.utc), datetime(2023, 6, 30, tzinfo=timezone.utc)),
     }

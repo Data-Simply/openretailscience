@@ -1,11 +1,16 @@
 """Tests for openretailscience.experimental.metrics.base."""
 
+from typing import TYPE_CHECKING, cast
+
 import ibis
 import numpy as np
 import pandas as pd
 import pytest
 
 from openretailscience.experimental.metrics.base import PERCENTAGE_SCALE, ratio_metric
+
+if TYPE_CHECKING:
+    import ibis.expr.types as ir
 
 
 class TestRatioMetric:
@@ -21,13 +26,19 @@ class TestRatioMetric:
     )
     def test_ratio_calculation(self, num, denom, scale, expected):
         """Test ratio_metric computes (numerator / denominator) * scale correctly."""
-        result = ratio_metric(ibis.literal(num), ibis.literal(denom), scale=scale).execute()
+        # ibis.literal is statically typed as Scalar; numeric literals are NumericValue at runtime.
+        result = ratio_metric(
+            cast("ir.NumericValue", ibis.literal(num)),
+            cast("ir.NumericValue", ibis.literal(denom)),
+            scale=scale,
+        ).execute()
         assert result == expected
 
     def test_zero_denominator_returns_nan(self):
         """Test that zero denominator returns NaN (NULL in ibis)."""
-        numerator = ibis.literal(10)
-        denominator = ibis.literal(0)
+        # ibis.literal is statically typed as Scalar; numeric literals are NumericValue at runtime.
+        numerator = cast("ir.NumericValue", ibis.literal(10))
+        denominator = cast("ir.NumericValue", ibis.literal(0))
         result = ratio_metric(numerator, denominator).execute()
         assert np.isnan(result)
 
@@ -40,7 +51,13 @@ class TestRatioMetric:
             }
         )
         table = ibis.memtable(df)
-        result_table = table.mutate(pct=ratio_metric(table.stores_selling, table.total_stores))
+        # Table columns are statically typed as Column; numeric columns are NumericValue at runtime.
+        result_table = table.mutate(
+            pct=ratio_metric(
+                cast("ir.NumericValue", table.stores_selling),
+                cast("ir.NumericValue", table.total_stores),
+            )
+        )
         result = result_table.execute()
         expected_pct = [50.0, 25.0, 100.0]
         pd.testing.assert_series_equal(
@@ -57,7 +74,14 @@ class TestRatioMetric:
             }
         )
         table = ibis.memtable(df)
-        result_table = table.mutate(ratio=ratio_metric(table.numerator, table.denominator, scale=1))
+        # Table columns are statically typed as Column; numeric columns are NumericValue at runtime.
+        result_table = table.mutate(
+            ratio=ratio_metric(
+                cast("ir.NumericValue", table.numerator),
+                cast("ir.NumericValue", table.denominator),
+                scale=1,
+            )
+        )
         result = result_table.execute()
         expected = pd.Series([5.0, float("nan"), 6.0], name="ratio")
         pd.testing.assert_series_equal(result["ratio"], expected)

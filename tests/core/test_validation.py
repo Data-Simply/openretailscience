@@ -1,5 +1,7 @@
 """Tests for openretailscience.core.validation."""
 
+from typing import cast
+
 import ibis
 import pandas as pd
 import pytest
@@ -120,7 +122,8 @@ class TestEnsureValueChoice:
     def test_raises_type_error_for_non_string_value(self):
         """Test that TypeError is raised when value is not a string."""
         with pytest.raises(TypeError, match="must be a string"):
-            ensure_value_choice(42, ["asc", "desc"], "sort_order")
+            # Intentionally passing a non-string to exercise the type validation branch.
+            ensure_value_choice(cast("str", 42), ["asc", "desc"], "sort_order")
 
     @pytest.mark.parametrize(
         "choices_factory",
@@ -176,4 +179,5 @@ class TestEnsureIbisTable:
     def test_error_surfaces_caller_param_name(self):
         """Test that a caller-supplied param_name appears in the TypeError message."""
         with pytest.raises(TypeError, match="data must be either a pandas DataFrame or an Ibis Table"):
-            ensure_ibis_table("not a dataframe", param_name="data")
+            # Intentionally passing a non-DataFrame to exercise the type validation branch.
+            ensure_ibis_table(cast("pd.DataFrame", "not a dataframe"), param_name="data")

@@ -1,5 +1,7 @@
 """Tests for openretailscience.experimental.metrics.distribution.pct_of_stores."""
 
+from typing import cast
+
 import ibis
 import pandas as pd
 import pytest
@@ -94,7 +96,8 @@ class TestPctOfStores:
     def test_invalid_type_raises(self):
         """Test that passing a non-DataFrame/Table raises TypeError."""
         with pytest.raises(TypeError, match="pandas DataFrame or an Ibis Table"):
-            PctOfStores({cols.store_id: [10], cols.product_id: [501]})
+            # Intentionally passing a dict to exercise the type validation branch.
+            PctOfStores(cast("pd.DataFrame", {cols.store_id: [10], cols.product_id: [501]}))
 
     @pytest.mark.parametrize(
         "kwargs",

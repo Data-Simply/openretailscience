@@ -59,21 +59,17 @@ def label_by_condition(
     if label_col is None:
         label_col = get_option("column.customer_id")
 
-    table = table.mutate(label_condition=condition.ifelse(1, 0)).group_by(label_col)
+    grouped = table.mutate(label_condition=condition.ifelse(1, 0)).group_by(label_col)
 
     if labeling_strategy == "binary":
-        return table.aggregate(
-            {
-                return_col: (_.label_condition.max() == 1).ifelse(contains_label, not_contains_label),
-            },
+        return grouped.aggregate(
+            (_.label_condition.max() == 1).ifelse(contains_label, not_contains_label).name(return_col),
         )
 
-    return table.aggregate(
-        {
-            return_col: ibis.cases(
-                ((_.label_condition.max() == 1) & (_.label_condition.min() == 1), contains_label),
-                ((_.label_condition.max() == 1) & (_.label_condition.min() == 0), mixed_label),
-                else_=not_contains_label,
-            ),
-        },
+    return grouped.aggregate(
+        ibis.cases(
+            ((_.label_condition.max() == 1) & (_.label_condition.min() == 1), contains_label),
+            ((_.label_condition.max() == 1) & (_.label_condition.min() == 0), mixed_label),
+            else_=not_contains_label,
+        ).name(return_col),
     )

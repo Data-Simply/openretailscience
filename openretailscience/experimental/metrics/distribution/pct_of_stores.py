@@ -7,12 +7,13 @@ Every store counts equally regardless of its sales volume.
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import ibis
 from ibis import _
 
 if TYPE_CHECKING:
+    import ibis.expr.types as ir
     import pandas as pd
 
 from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
@@ -91,20 +92,21 @@ class PctOfStores:
             **{agg_stores_col: _[store_id_col].count()},
         )
 
-        use_within_group = within_group and group_col is not None
-        if use_within_group:
+        # In a mutate/aggregate context the deferred ``_`` column references resolve to
+        # NumericValue expressions; pyright sees the broader Deferred/IntegerScalar type.
+        if within_group and group_col is not None:
             total_stores = store_product.group_by(group_col).aggregate(
                 **{_TEMP_TOTAL_STORES: _[store_id_col].nunique()},
             )
             per_group = per_group.inner_join(total_stores, group_col)
-            denominator = _[_TEMP_TOTAL_STORES]
+            denominator = cast("ir.NumericValue", _[_TEMP_TOTAL_STORES])
         else:
             denominator = store_product[store_id_col].nunique()
 
         pct_stores_col = ColumnHelper.join_options("column.agg.store_id", "column.suffix.percent")
         final_cols = [*group_cols, agg_stores_col, pct_stores_col]
         self.table = per_group.mutate(
-            **{pct_stores_col: ratio_metric(_[agg_stores_col], denominator)},
+            **{pct_stores_col: ratio_metric(cast("ir.NumericValue", _[agg_stores_col]), denominator)},
         ).select(final_cols)
 
     @functools.cached_property
@@ -114,4 +116,6 @@ class PctOfStores:
         Returns:
             pd.DataFrame: DataFrame with % of stores values.
         """
-        return self.table.execute()
+        # Table.execute() is typed as DataFrame | Series | Any by pandas-stubs widening;
+        # an aggregate/select query always materializes a DataFrame.
+        return cast("pd.DataFrame", self.table.execute())

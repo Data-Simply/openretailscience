@@ -1,5 +1,7 @@
 """Tests for openretailscience.experimental.metrics.distribution.acv."""
 
+from typing import cast
+
 import ibis
 import numpy as np
 import pandas as pd
@@ -118,4 +120,5 @@ class TestAcv:
     def test_acv_invalid_type_raises(self):
         """Test that passing a non-DataFrame/Table raises TypeError."""
         with pytest.raises(TypeError, match="pandas DataFrame or an Ibis Table"):
-            Acv({cols.unit_spend: [100.0]})
+            # Intentionally passing a dict to exercise the type validation branch.
+            Acv(cast("pd.DataFrame", {cols.unit_spend: [100.0]}))

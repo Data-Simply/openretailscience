@@ -7,7 +7,7 @@ expressed in millions ($MM).
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import ibis
 from ibis import _
@@ -62,10 +62,13 @@ class Acv:
         # group_col is already validated above; only the function's hard-coded requirement remains.
         ensure_data_has_columns(df, [unit_spend_col])
 
+        # _[unit_spend_col] resolves to a NumericValue within aggregate; pyright types it
+        # as the broader Deferred. Name the expression so aggregate accepts it.
+        acv_expr = (_[unit_spend_col].sum() / acv_scale_factor).name("acv")
         if group_col is not None:
-            df = df.group_by(group_col)
-
-        self.table = df.aggregate(acv=_[unit_spend_col].sum() / acv_scale_factor)
+            self.table = df.group_by(group_col).aggregate(acv_expr)
+        else:
+            self.table = df.aggregate(acv_expr)
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
@@ -74,4 +77,6 @@ class Acv:
         Returns:
             pd.DataFrame: DataFrame with ACV values.
         """
-        return self.table.execute()
+        # Table.execute() is typed as DataFrame | Series | Any by pandas-stubs widening;
+        # an aggregate query always materializes a DataFrame.
+        return cast("pd.DataFrame", self.table.execute())

@@ -1,5 +1,7 @@
 """Tests for the label module."""
 
+from typing import cast
+
 import ibis
 import pandas as pd
 import pytest
@@ -33,7 +35,7 @@ class TestLabelByCondition:
             },
         )
 
-        result_df = result.execute().sort_values("customer_id").reset_index(drop=True)
+        result_df = cast("pd.DataFrame", result.execute()).sort_values(by="customer_id").reset_index(drop=True)
         expected_df = expected_df.sort_values("customer_id")
 
         assert result_df.equals(expected_df)
@@ -62,7 +64,7 @@ class TestLabelByCondition:
             },
         )
 
-        result_df = result.execute().sort_values("transaction_id").reset_index(drop=True)
+        result_df = cast("pd.DataFrame", result.execute()).sort_values(by="transaction_id").reset_index(drop=True)
         expected_df = expected_df.sort_values("transaction_id").reset_index(drop=True)
 
         assert result_df.equals(expected_df)
@@ -98,7 +100,7 @@ class TestLabelByCondition:
             },
         )
 
-        result_df = result.execute().sort_values("group_id").reset_index(drop=True)
+        result_df = cast("pd.DataFrame", result.execute()).sort_values(by="group_id").reset_index(drop=True)
         expected_df = expected_df.sort_values("group_id").reset_index(drop=True)
 
         assert result_df.equals(expected_df)
@@ -131,7 +133,7 @@ class TestLabelByCondition:
             },
         )
 
-        result_df = result.execute().sort_values("store_id").reset_index(drop=True)
+        result_df = cast("pd.DataFrame", result.execute()).sort_values(by="store_id").reset_index(drop=True)
         expected_df = expected_df.sort_values("store_id").reset_index(drop=True)
 
         assert result_df.equals(expected_df)
@@ -167,7 +169,7 @@ class TestLabelByCondition:
             },
         )
 
-        result_df = result.execute().sort_values("customer_id").reset_index(drop=True)
+        result_df = cast("pd.DataFrame", result.execute()).sort_values(by="customer_id").reset_index(drop=True)
         expected_df = expected_df.sort_values("customer_id").reset_index(drop=True)
 
         assert result_df.equals(expected_df)
