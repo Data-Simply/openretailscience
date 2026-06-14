@@ -1,17 +1,24 @@
 """Module-level helpers that apply styling using the options system."""
 
-import warnings
-from itertools import pairwise
-from typing import Literal
+from __future__ import annotations
 
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
+import warnings
+from dataclasses import dataclass
+from itertools import pairwise
+from typing import TYPE_CHECKING, Literal
+
+from matplotlib.layout_engine import LayoutEngine
 from matplotlib.patches import Rectangle
 from matplotlib.ticker import AutoLocator, FixedFormatter, FixedLocator, MaxNLocator
 
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.font_utils import get_font_properties
 from openretailscience.plots.styles.graph_utils import draw_end_of_line_labels
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+    from matplotlib.text import Text
 
 GridAxis = Literal["both", "x", "y", "none"]
 
@@ -88,6 +95,22 @@ def _resolve_end_of_line_legend_args(
     return False, None, False
 
 
+def _freeze_text_wrap(text: Text, fig: Figure) -> None:
+    """Bake matplotlib's soft wrap into ``text`` and stop it re-wrapping on later draws.
+
+    ``wrap=True`` recomputes line breaks every draw from the figure width, so a later resize (or
+    the extra draw ``bbox_inches='tight'`` triggers) can change the line count and invalidate the
+    layout positioned against the measured height. Baking the wrapped lines as explicit newlines
+    and turning wrap off freezes the count. Requires a prior draw so the wrap is computed; no-op
+    when wrapping is already off.
+    """
+    if not text.get_wrap():
+        return
+    text.set_text(text._get_wrapped_text())
+    text.set_wrap(False)
+    fig.canvas.draw()
+
+
 def _place_header_text(
     ax: Axes,
     x_fig: float,
@@ -118,19 +141,138 @@ def _place_header_text(
     )
     t.set_gid(gid)
     fig.canvas.draw()
-    # Freeze matplotlib's wrap: bake the wrapped lines into the text content and
-    # turn off `wrap` so the wrap isn't recomputed on subsequent draws. Jupyter
-    # saves notebook outputs with bbox_inches='tight', which triggers an extra
-    # draw cycle with a slightly different effective figure bbox; left dynamic,
-    # the wrap can pick a different line count than the chrome layout planned
-    # for, opening an unintended gap between title and subtitle.
-    if wrap:
-        wrapped = t._get_wrapped_text()
-        t.set_text(wrapped)
-        t.set_wrap(False)
-        fig.canvas.draw()
+    _freeze_text_wrap(t, fig)
     renderer = fig.canvas.get_renderer()
     return t.get_window_extent(renderer=renderer).y0 / fig.bbox.height
+
+
+@dataclass
+class _ChromeLayout:
+    """One axes' chrome placement, stored as absolute inch offsets so it survives a resize.
+
+    Text is sized in points (absolute), so its gaps must be absolute too. Fractions captured at
+    layout time go stale when the figure is later resized; inch offsets re-derived at draw time
+    do not. Vertical offsets only — horizontal placement stays in fractions, which already track
+    width and keep the chrome aligned to the axes spine.
+
+    Attributes:
+        ax: The axes whose box is reflowed beneath the header.
+        top_texts: ``(text, top_offset_in)`` per top-anchored header element; offset measured
+            from the figure top to the text's top.
+        source: ``(text, bottom_offset_in)`` for the bottom-anchored source line, or None.
+        tab: ``(rectangle, top_offset_in, height_in)`` for the tab mark, or None.
+        axes_top_offset_in: Inches from the figure top to the axes top edge.
+        axes_bottom_offset_in: Inches from the figure bottom to the axes bottom edge.
+    """
+
+    ax: Axes
+    top_texts: list[tuple[Text, float]]
+    source: tuple[Text, float] | None
+    tab: tuple[Rectangle, float, float] | None
+    axes_top_offset_in: float
+    axes_bottom_offset_in: float
+
+
+def _apply_chrome_layout(layout: _ChromeLayout, fig_h: float) -> None:
+    """Re-derive figure fractions from ``layout``'s inch offsets for a figure of height ``fig_h``."""
+    for text, top_offset_in in layout.top_texts:
+        text.set_y(1.0 - top_offset_in / fig_h)
+    if layout.source is not None:
+        source_text, bottom_offset_in = layout.source
+        source_text.set_y(bottom_offset_in / fig_h)
+    if layout.tab is not None:
+        tab, tab_top_offset_in, tab_height_in = layout.tab
+        tab_height_fig = tab_height_in / fig_h
+        tab.set_y(1.0 - tab_top_offset_in / fig_h - tab_height_fig)
+        tab.set_height(tab_height_fig)
+    pos = layout.ax.get_position()
+    axes_top = 1.0 - layout.axes_top_offset_in / fig_h
+    axes_bottom = layout.axes_bottom_offset_in / fig_h
+    layout.ax.set_position((pos.x0, axes_bottom, pos.width, axes_top - axes_bottom))
+
+
+def _apply_chrome_layouts(fig: Figure) -> None:
+    """Re-apply every stored chrome layout on ``fig`` at its current height."""
+    layouts = getattr(fig, "_ors_chrome_layouts", None)
+    if layouts is None:
+        return
+    fig_h = fig.get_figheight()
+    for layout in layouts.values():
+        _apply_chrome_layout(layout, fig_h)
+
+
+def _axes_offsets_in(ax: Axes, fig_h: float) -> tuple[float, float]:
+    """Return the axes box's ``(top_offset_in, bottom_offset_in)`` — inches from the figure top/bottom."""
+    pos = ax.get_position()
+    return (1.0 - pos.y1) * fig_h, pos.y0 * fig_h
+
+
+def _refresh_chrome_axes_offsets(fig: Figure) -> None:
+    """Re-snapshot each layout's axes box after a post-install reflow moved it.
+
+    ``_auto_rotate_categorical_x_ticks`` reflows the axes to reserve room for rotated labels;
+    without this the engine would re-apply the pre-rotation box and push the labels off-figure.
+    """
+    layouts = getattr(fig, "_ors_chrome_layouts", None)
+    if layouts is None:
+        return
+    fig_h = fig.get_figheight()
+    for layout in layouts.values():
+        layout.axes_top_offset_in, layout.axes_bottom_offset_in = _axes_offsets_in(layout.ax, fig_h)
+
+
+class _ChromeLayoutEngine(LayoutEngine):
+    """Re-applies chrome geometry before each draw so it tracks the figure's current height.
+
+    Matplotlib runs ``execute`` at the start of every draw (including ``savefig``), before
+    artists render, so repositioning lands in the same render even for a single headless save.
+    ``execute`` is pure arithmetic on the stored inch offsets — it never draws or measures — so
+    it cannot recurse.
+    """
+
+    # Match tight_layout's flags: the chrome reflow runs through fig.tight_layout (gridspec
+    # based), so matplotlib's engine-compatibility check rejects a mismatching engine once a
+    # colorbar (e.g. heatmap) has been created.
+    _adjust_compatible = True
+    _colorbar_gridspec = True
+
+    def execute(self, fig: Figure) -> None:
+        """Apply the stored chrome layouts to ``fig`` at its current size."""
+        _apply_chrome_layouts(fig)
+
+
+def _install_chrome_layout_engine(fig: Figure) -> None:
+    """Register the chrome layout engine on ``fig`` unless it is already active."""
+    if not isinstance(fig.get_layout_engine(), _ChromeLayoutEngine):
+        fig.set_layout_engine(_ChromeLayoutEngine())
+
+
+def _capture_chrome_layout(fig: Figure, ax: Axes, chrome_gid: str) -> _ChromeLayout:
+    """Snapshot the placed chrome artists and axes box as resize-invariant inch offsets."""
+    renderer = fig.canvas.get_renderer()
+    fig_h = fig.get_figheight()
+    bbox_h = fig.bbox.height
+    top_texts: list[tuple[Text, float]] = []
+    source: tuple[Text, float] | None = None
+    for text in [t for t in fig.texts if t.get_gid() == chrome_gid]:
+        extent = text.get_window_extent(renderer=renderer)
+        if text.get_verticalalignment() == "bottom":
+            source = (text, extent.y0 / bbox_h * fig_h)
+        else:
+            top_texts.append((text, (1.0 - extent.y1 / bbox_h) * fig_h))
+    tab: tuple[Rectangle, float, float] | None = None
+    for patch in [p for p in fig.patches if p.get_gid() == chrome_gid]:
+        top_frac = patch.get_y() + patch.get_height()
+        tab = (patch, (1.0 - top_frac) * fig_h, patch.get_height() * fig_h)
+    axes_top_offset_in, axes_bottom_offset_in = _axes_offsets_in(ax, fig_h)
+    return _ChromeLayout(
+        ax=ax,
+        top_texts=top_texts,
+        source=source,
+        tab=tab,
+        axes_top_offset_in=axes_top_offset_in,
+        axes_bottom_offset_in=axes_bottom_offset_in,
+    )
 
 
 def _resolve_chrome_left(fig: Figure, ax: Axes) -> float:
@@ -160,6 +302,11 @@ def _reflow_axes(fig: Figure, top: float, bottom: float) -> bool:
     ``constrained_layout`` is active or the rect is degenerate — callers
     decide whether to fall back to ``subplots_adjust``.
     """
+    # fig.tight_layout warns and replaces a non-tight engine, so detach ours first (e.g. on
+    # _auto_rotate's post-install reflow) and restore it in the finally.
+    has_chrome_engine = isinstance(fig.get_layout_engine(), _ChromeLayoutEngine)
+    if has_chrome_engine:
+        fig.set_layout_engine("none")
     try:
         fig.tight_layout(
             pad=0,
@@ -167,6 +314,12 @@ def _reflow_axes(fig: Figure, top: float, bottom: float) -> bool:
         )
     except (ValueError, RuntimeError):
         return False
+    finally:
+        if has_chrome_engine:
+            _install_chrome_layout_engine(fig)
+            # tight_layout may have moved the axes (e.g. to reserve room for rotated tick
+            # labels); resnapshot so the engine preserves the new box instead of reverting it.
+            _refresh_chrome_axes_offsets(fig)
     return True
 
 
@@ -346,6 +499,9 @@ def apply_chart_chrome(
         )
         source_t.set_gid(chrome_gid)
         fig.canvas.draw()
+        # Freeze the wrap like the header: an unfrozen source re-wraps to a different line count
+        # on a width resize, invalidating the axes_bottom reserved here and crowding the axes.
+        _freeze_text_wrap(source_t, fig)
         source_top_px = source_t.get_window_extent(renderer=fig.canvas.get_renderer()).y1
         axes_bottom = source_top_px / fig.bbox.height + _CHROME_GAP_SOURCE_TO_AXES_IN / fig_h
 
@@ -357,6 +513,17 @@ def apply_chart_chrome(
 
     if not _reflow_axes(fig, top=header_bottom, bottom=axes_bottom):
         fig.subplots_adjust(top=header_bottom, bottom=axes_bottom)
+
+    # Snapshot the placement as inch offsets and install the engine so the chrome tracks the
+    # figure's current height on later draws; otherwise the fraction-based gaps balloon (or
+    # overlap, when shrunk) on resize. Header/source placement and the reflow above already
+    # drew, so artist extents are current for the snapshot.
+    layouts = getattr(fig, "_ors_chrome_layouts", None)
+    if layouts is None:
+        layouts = {}
+        fig._ors_chrome_layouts = layouts
+    layouts[id(ax)] = _capture_chrome_layout(fig, ax, chrome_gid)
+    _install_chrome_layout_engine(fig)
 
 
 def apply_base_styling(ax: Axes, grid_axis: GridAxis = "both", hide_spines: bool = False) -> None:
