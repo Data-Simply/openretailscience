@@ -48,7 +48,7 @@ docs = [
     "mkdocs-jupyter>=0.24.6,<0.25",
     "mkdocs-material>=9.5.4,<10",
     "mkdocs>=1.5.3,<2",
-    "mkdocstrings[python]>=0.26,<0.30",
+    "mkdocstrings>=0.26,<0.30",
     "mkdocstrings-python>=1.11,<2",
 ]
 examples = [ "jupyterlab>=4.2.5,<5", "tqdm>=4.66.1,<5" ]
