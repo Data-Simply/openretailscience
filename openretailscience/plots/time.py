@@ -48,7 +48,7 @@ retail analysis, sales tracking, and customer behavior insights.
   styling, formatting, and other plot adjustments.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import pandas as pd
 from matplotlib.axes import Axes
@@ -125,32 +125,38 @@ def plot(
         period,
     )
 
+    plot_data: pd.DataFrame | pd.Series
     if group_col is None:
         default_colors = get_named_color("primary")
-        df = df.groupby("transaction_period")[value_col].agg(agg_func)
+        # SeriesGroupBy.agg with a single string aggregation returns a Series; pandas-stubs widen this.
+        plot_data = cast("pd.Series", df.groupby("transaction_period")[value_col].agg(agg_func))
         show_legend = False
     else:
-        df = (
+        plot_data = (
             df.groupby([group_col, "transaction_period"])[value_col]
             .agg(agg_func)
             .reset_index()
             .pivot(index="transaction_period", columns=group_col, values=value_col)
         )
-        default_colors = get_plot_colors(df.shape[1])
+        default_colors = get_plot_colors(plot_data.shape[1])
         show_legend = True
 
     linewidth = kwargs.pop("linewidth", 3)
     color = kwargs.pop("color", default_colors)
-    ax = df.plot(
-        linewidth=linewidth,
-        color=color,
-        legend=show_legend,
-        ax=ax,
-        **kwargs,
+    # pandas .plot() is typed as returning Axes for line plots, but the stub widens to Axes | ndarray | None.
+    plotted_ax = cast(
+        "Axes",
+        plot_data.plot(
+            linewidth=linewidth,
+            color=color,
+            legend=show_legend,
+            ax=ax,
+            **kwargs,
+        ),
     )
 
     return standard_graph_styles(
-        ax,
+        plotted_ax,
         title=title,
         eyebrow=eyebrow,
         subtitle=subtitle,

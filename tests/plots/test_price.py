@@ -1,10 +1,13 @@
 """Tests for the price architecture bubble plot module."""
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
 import pytest
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.collections import PathCollection
 
 from openretailscience.plots import price
 
@@ -50,7 +53,8 @@ def simple_price_dataframe():
 
 def test_plot_with_empty_dataframe():
     """Test price architecture plot with an empty DataFrame."""
-    empty_df = pd.DataFrame(columns=["unit_price", "retailer"])
+    # pandas-stubs lacks an overload for a bare list of column names; wrap in pd.Index to disambiguate.
+    empty_df = pd.DataFrame(columns=pd.Index(["unit_price", "retailer"]))
 
     with pytest.raises(ValueError, match="Cannot plot with empty DataFrame"):
         price.plot(
@@ -140,12 +144,14 @@ def test_plot_with_unsorted_bins_list(simple_price_dataframe):
 
 def test_plot_invalid_bins_type(simple_price_dataframe):
     """Test price architecture plot with invalid bins type."""
+    # Deliberately pass a wrong-typed bins value to exercise the runtime TypeError guard.
+    invalid_bins = cast("int", "invalid")
     with pytest.raises(TypeError, match="bins must be either an integer or a list of numeric values"):
         price.plot(
             df=simple_price_dataframe,
             value_col="unit_price",
             group_col="retailer",
-            bins="invalid",
+            bins=invalid_bins,
         )
 
 
@@ -419,12 +425,16 @@ def test_percentages_sum_to_100_for_each_group():
     # All bubbles share a single PathCollection; offsets give x (retailer index) and
     # y (bin index), and sizes are proportions scaled by `scale_factor`.
     collection = result_ax.collections[0]
-    offsets = collection.get_offsets()
+    assert isinstance(collection, PathCollection)
+    # get_offsets() returns a wide ArrayLike union in matplotlib stubs; np.asarray pins it to an ndarray.
+    offsets = np.asarray(collection.get_offsets())
     sizes = collection.get_sizes()
     x_positions = offsets[:, 0]
 
     rendered = pd.DataFrame({"x": x_positions, "size": sizes})
-    per_group_totals = rendered.groupby("x")["size"].sum() / scale_factor
+    # pandas-stubs widens the grouped sum to DataFrame | Series; selecting one column yields a Series.
+    group_sums = cast("pd.Series", rendered.groupby("x")["size"].sum())
+    per_group_totals = group_sums / scale_factor
 
     assert all(abs(total - 1.0) < floating_point_tolerance for total in per_group_totals)
     assert (sizes > 0).all()
@@ -469,7 +479,9 @@ def test_individual_percentage_calculations_are_correct():
     )
 
     collection = result_ax.collections[0]
-    offsets = collection.get_offsets()
+    assert isinstance(collection, PathCollection)
+    # get_offsets() returns a wide ArrayLike union in matplotlib stubs; np.asarray pins it to an ndarray.
+    offsets = np.asarray(collection.get_offsets())
     actual = (
         pd.DataFrame({"x": offsets[:, 0], "y": offsets[:, 1], "size": collection.get_sizes()})
         .sort_values(["x", "y"])

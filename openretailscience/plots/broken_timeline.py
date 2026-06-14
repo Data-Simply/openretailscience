@@ -17,7 +17,7 @@ data is available as horizontal bars, with gaps indicating missing data periods.
 - **Seasonality Analysis**: Assess to look for period of low sales that may indicate seasonality or other trends
 """
 
-from typing import Any
+from typing import Any, cast
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -109,7 +109,8 @@ def plot(
     if threshold_value is not None:
         df_copy = df_copy[df_copy[value_col] >= threshold_value]
 
-    df_copy["period"] = df_copy[date_col].dt.to_period(period)
+    # pandas-stubs types df[str] as a broad union; the date column is a Series.
+    df_copy["period"] = cast("pd.Series", df_copy[date_col]).dt.to_period(period)
     df_copy = df_copy.groupby([category_col, "period"]).agg({value_col: agg_func}).reset_index()
     df_copy[date_col] = df_copy["period"].dt.start_time
 
@@ -128,7 +129,9 @@ def plot(
     bar_offset = bar_height / 2
 
     for category in categories:
-        dates = df_copy[df_copy[category_col] == category][date_col].to_numpy()
+        # pandas-stubs types df[str] as a broad union; the date column is a Series.
+        date_values = cast("pd.Series", df_copy[df_copy[category_col] == category][date_col])
+        dates = date_values.to_numpy()
         dates_num = mdates.date2num(dates)
         gaps = np.diff(dates_num) > period_days
         date_segments = np.split(dates_num, np.where(gaps)[0] + 1)

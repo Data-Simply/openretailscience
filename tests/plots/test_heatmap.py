@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 from matplotlib.axes import Axes
 from matplotlib.collections import QuadMesh
+from matplotlib.figure import Figure
 from matplotlib.patches import FancyBboxPatch
 
 from openretailscience.options import option_context
@@ -29,8 +30,8 @@ def sample_heatmap_dataframe():
     data = np.round(rng.uniform(0, 1, size=(4, 4)), 2)
     return pd.DataFrame(
         data,
-        columns=["Store_North", "Store_South", "Store_East", "Store_West"],
-        index=["Mon", "Tue", "Wed", "Thu"],
+        columns=pd.Index(["Store_North", "Store_South", "Store_East", "Store_West"]),
+        index=pd.Index(["Mon", "Tue", "Wed", "Thu"]),
     )
 
 
@@ -72,8 +73,10 @@ def test_plot_with_figsize(sample_heatmap_dataframe):
         figsize=(width, height),
     )
 
-    assert result_ax.figure.get_size_inches()[0] == width
-    assert result_ax.figure.get_size_inches()[1] == height
+    figure = result_ax.figure
+    assert isinstance(figure, Figure)
+    assert figure.get_size_inches()[0] == width
+    assert figure.get_size_inches()[1] == height
 
 
 @pytest.mark.parametrize("shape", [(1, 5), (5, 1), (1, 1)])
@@ -84,8 +87,8 @@ def test_plot_edge_case_dimensions(shape):
     data = np.round(rng.uniform(0, 1, size=shape), 2)
     df = pd.DataFrame(
         data,
-        columns=[f"Store_{i}" for i in range(cols)],
-        index=[f"Week_{i}" for i in range(rows)],
+        columns=pd.Index([f"Store_{i}" for i in range(cols)]),
+        index=pd.Index([f"Week_{i}" for i in range(rows)]),
     )
 
     result_ax = heatmap.plot(df=df, cbar_label="Value")
@@ -117,8 +120,8 @@ def test_plot_different_value_ranges(data_range):
     data = np.round(rng.uniform(min_val, max_val, size=(3, 3)), 2)
     df = pd.DataFrame(
         data,
-        columns=[f"Store_{i}" for i in range(3)],
-        index=[f"Week_{i}" for i in range(3)],
+        columns=pd.Index([f"Store_{i}" for i in range(3)]),
+        index=pd.Index([f"Week_{i}" for i in range(3)]),
     )
 
     result_ax = heatmap.plot(df=df, cbar_label="Value")
@@ -133,8 +136,8 @@ def test_plot_skips_nan_cells():
     """NaN cells render as empty (no patch, no text)."""
     df = pd.DataFrame(
         [[1.0, 2.0], [np.nan, 4.0]],
-        columns=["Morning", "Afternoon"],
-        index=["Mon", "Tue"],
+        columns=pd.Index(["Morning", "Afternoon"]),
+        index=pd.Index(["Mon", "Tue"]),
     )
 
     result_ax = heatmap.plot(df=df, cbar_label="Foot traffic")
@@ -150,7 +153,7 @@ def test_plot_label_rotation(label_length):
     """Test automatic label rotation based on label length."""
     cols = [label_length] * 3
     data = np.ones((2, 3))
-    df = pd.DataFrame(data, columns=cols, index=["Mon", "Tue"])
+    df = pd.DataFrame(data, columns=pd.Index(cols), index=pd.Index(["Mon", "Tue"]))
 
     result_ax = heatmap.plot(df=df, cbar_label="Value")
 
@@ -169,7 +172,7 @@ def test_plot_label_alignment():
     """Test horizontal alignment of x-axis labels based on rotation."""
     short_cols = ["Mon", "Tue", "Wed"]
     data = np.ones((2, 3))
-    df_short = pd.DataFrame(data, columns=short_cols, index=["Week_1", "Week_2"])
+    df_short = pd.DataFrame(data, columns=pd.Index(short_cols), index=pd.Index(["Week_1", "Week_2"]))
 
     result_ax = heatmap.plot(df=df_short, cbar_label="Value")
     x_tick_labels = result_ax.get_xticklabels()
@@ -180,7 +183,7 @@ def test_plot_label_alignment():
 
     # Test with long labels (rotated)
     long_cols = ["very_long_column_name_1", "very_long_column_name_2", "very_long_column_name_3"]
-    df_long = pd.DataFrame(data, columns=long_cols, index=["Week_1", "Week_2"])
+    df_long = pd.DataFrame(data, columns=pd.Index(long_cols), index=pd.Index(["Week_1", "Week_2"]))
 
     result_ax = heatmap.plot(df=df_long, cbar_label="Value")
     x_tick_labels = result_ax.get_xticklabels()
@@ -209,7 +212,7 @@ def test_colorbar_label_uses_label_font_family(sample_heatmap_dataframe):
 
         cbar_ax = result_ax.figure.axes[-1]
         font_file = cbar_ax.yaxis.label.get_fontproperties().get_file()
-        assert font_file is not None
+        assert isinstance(font_file, str)
         assert "Poppins-Bold.ttf" in font_file
 
 
@@ -292,7 +295,7 @@ def test_text_color_contrast():
     """Verify text color switches based on cell background intensity."""
     # Create data with known light and dark cells
     data = np.array([[0.0, 1.0]])  # Dark cell, light cell
-    df = pd.DataFrame(data, columns=["Morning", "Afternoon"], index=["Mon"])
+    df = pd.DataFrame(data, columns=pd.Index(["Morning", "Afternoon"]), index=pd.Index(["Mon"]))
 
     result_ax = heatmap.plot(df=df, cbar_label="Value")
 
@@ -321,8 +324,8 @@ def test_plot_raises_on_all_nan_data():
     """An all-NaN frame has no finite vmin/vmax to normalise against; raise rather than leak NaN."""
     df = pd.DataFrame(
         np.full((3, 3), np.nan),
-        columns=["Store_North", "Store_South", "Store_East"],
-        index=["Mon", "Tue", "Wed"],
+        columns=pd.Index(["Store_North", "Store_South", "Store_East"]),
+        index=pd.Index(["Mon", "Tue", "Wed"]),
     )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -342,8 +345,8 @@ def test_plot_handles_constant_value_dataframe():
     """
     df = pd.DataFrame(
         [[100.0, 100.0], [100.0, 100.0]],
-        columns=["Store_North", "Store_South"],
-        index=["Mon", "Tue"],
+        columns=pd.Index(["Store_North", "Store_South"]),
+        index=pd.Index(["Mon", "Tue"]),
     )
 
     with warnings.catch_warnings():
@@ -361,7 +364,9 @@ def test_plot_handles_constant_value_dataframe():
     assert len(quad_meshes) == 1
     # QuadMesh swatches are coloured via cmap(norm(array)), not get_facecolor() — the latter
     # returns the QuadMesh's unset background, not the rendered bin colours.
-    cbar_swatches = quad_meshes[0].to_rgba(quad_meshes[0].get_array()).reshape(-1, 4)
+    cbar_array = quad_meshes[0].get_array()
+    assert cbar_array is not None
+    cbar_swatches = quad_meshes[0].to_rgba(cbar_array).reshape(-1, 4)
     cbar_facecolors = {tuple(rgba) for rgba in cbar_swatches}
     assert len(cbar_facecolors) == 1, f"Expected uniform cbar swatch colour, got {cbar_facecolors}"
     assert cbar_facecolors == {cell_facecolors[0]}, "Cbar swatch colour must match cell colour (cmap midpoint)"

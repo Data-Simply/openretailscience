@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
+from matplotlib.axes import Axes
 
 from openretailscience.plots.time import plot
 
@@ -37,7 +38,7 @@ class TestTimePlot:
         """Test that the function generates a time plot with default parameters."""
         df = test_data
         result_ax = plot(df, value_col="sales")
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         assert len(result_ax.lines) == 1  # Single time series line
 
     def test_generates_time_plot_with_group_col(self, test_data):
@@ -45,7 +46,7 @@ class TestTimePlot:
         df = test_data
         result_ax = plot(df, value_col="sales", group_col="category")
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         expected_lines_count = 2
         assert len(result_ax.lines) == expected_lines_count
 
@@ -55,7 +56,7 @@ class TestTimePlot:
         custom_title = "Sales Over Time"
         result_ax = plot(df, value_col="sales", title=custom_title)
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         title_texts = [t for t in result_ax.figure.texts if t.get_text() == custom_title]
         assert len(title_texts) == 1
 
@@ -72,7 +73,7 @@ class TestTimePlot:
         source_text = "Data source: Company XYZ"
         result_ax = plot(df, value_col="sales", source_text=source_text)
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         assert len(result_ax.lines) == 1  # Still just one line for the data
         source_texts = [text for text in result_ax.figure.texts if text.get_text() == source_text]
         assert len(source_texts) == 1
@@ -82,7 +83,7 @@ class TestTimePlot:
         df = test_data
         result_ax = plot(df, value_col="sales", x_label="Date", y_label="Sales Amount")
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         assert result_ax.get_xlabel() == "Date"
         assert result_ax.get_ylabel() == "Sales Amount"
 

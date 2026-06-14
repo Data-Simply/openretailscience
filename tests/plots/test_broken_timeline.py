@@ -1,9 +1,11 @@
 """Tests for the broken timeline plot module."""
 
+import numpy as np
 import pandas as pd
 import pytest
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.text import Text
 
 from openretailscience.options import get_option
 from openretailscience.plots import broken_timeline
@@ -75,7 +77,7 @@ def sample_dataframe_single_category():
 def empty_dataframe():
     """An empty dataframe for testing."""
     date_col = get_option("column.transaction_date")
-    return pd.DataFrame(columns=[date_col, "category", "value"])
+    return pd.DataFrame(columns=pd.Index([date_col, "category", "value"]))
 
 
 class TestBrokenTimelinePlot:
@@ -213,7 +215,7 @@ class TestBrokenTimelinePlot:
         )
 
         # Check that source text appears in the plot's text elements
-        text_elements = [text.get_text() for text in ax.figure.findobj(plt.Text)]
+        text_elements = [text.get_text() for text in ax.figure.findobj(Text)]
         assert source_text in text_elements
 
     def test_custom_axes(self, sample_dataframe):
@@ -355,7 +357,7 @@ class TestBrokenTimelinePlot:
 
         ax = broken_timeline.plot(df, "category", "value", period=period)
         paths = ax.collections[0].get_paths()
-        first_path_vertices = paths[0].vertices
+        first_path_vertices = np.asarray(paths[0].vertices)
         actual_width = first_path_vertices[2][0] - first_path_vertices[0][0]
         assert actual_width == expected_width
 

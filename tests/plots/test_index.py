@@ -1,11 +1,15 @@
 """Tests for the index plot module."""
 
+from typing import Any, cast
+
 import ibis
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
+from matplotlib.axes import Axes
 from matplotlib.colors import to_hex
+from matplotlib.patches import Rectangle
 
 from openretailscience.plots.index import (
     BASELINE_INDEX,
@@ -251,7 +255,8 @@ class TestGetIndexesZeroDivision:
             value_col="sales",
             group_col="region",
         )
-        assert result["index"].isna().all(), "Expected all NaN index values when totals are zero"
+        index_values = cast("pd.Series", result["index"])
+        assert index_values.isna().all(), "Expected all NaN index values when totals are zero"
 
     def test_zero_overall_total_with_subgroup_returns_nan(self):
         """Test that get_indexes produces NaN index when a subgroup's overall total is zero."""
@@ -281,11 +286,12 @@ class TestGetIndexesZeroDivision:
             group_col="region",
             index_subgroup_col="store",
         )
-        mall_rows = result[result["store"] == "Mall"]
-        assert not mall_rows["index"].isna().any(), "Expected valid index for subgroup with non-zero overall total"
+        store = cast("pd.Series", result["store"])
+        mall_index = cast("pd.Series", result[store == "Mall"]["index"])
+        assert not mall_index.isna().any(), "Expected valid index for subgroup with non-zero overall total"
 
-        outlet_rows = result[result["store"] == "Outlet"]
-        assert outlet_rows["index"].isna().all(), "Expected NaN index for subgroup with zero overall total"
+        outlet_index = cast("pd.Series", result[store == "Outlet"]["index"])
+        assert outlet_index.isna().all(), "Expected NaN index for subgroup with zero overall total"
 
     def test_zero_group_proportion_returns_nan(self):
         """Test that get_indexes produces NaN for a group with zero overall proportion."""
@@ -304,11 +310,12 @@ class TestGetIndexesZeroDivision:
             value_col="sales",
             group_col="region",
         )
-        east_row = result[result["region"] == "East"]
-        assert east_row["index"].isna().all(), "Expected NaN index for group with zero proportion_overall"
+        region = cast("pd.Series", result["region"])
+        east_index = cast("pd.Series", result[region == "East"]["index"])
+        assert east_index.isna().all(), "Expected NaN index for group with zero proportion_overall"
 
-        non_zero_rows = result[result["region"] != "East"]
-        assert not non_zero_rows["index"].isna().any(), "Expected valid index for groups with non-zero proportions"
+        non_zero_index = cast("pd.Series", result[region != "East"]["index"])
+        assert not non_zero_index.isna().any(), "Expected valid index for groups with non-zero proportions"
 
 
 class TestIndexPlot:
@@ -343,7 +350,7 @@ class TestIndexPlot:
             value_to_index="Bakery",
         )
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         # barh adds a single BarContainer holding one Rectangle per y-axis row.
         assert len(result_ax.containers) == 1
         assert len(result_ax.containers[0]) == len(result_ax.get_yticklabels())
@@ -363,7 +370,7 @@ class TestIndexPlot:
             title=custom_title,
         )
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         # Title is rendered as figure-level text by the chrome layout, not via ax.set_title.
         title_texts = [t for t in result_ax.figure.texts if t.get_text() == custom_title]
         assert len(title_texts) == 1
@@ -380,7 +387,7 @@ class TestIndexPlot:
             highlight_range=(80, 120),
         )
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         assert result_ax.get_xlim()[0] < BASELINE_INDEX < result_ax.get_xlim()[1]
 
     def test_generates_index_plot_with_group_filter(self, test_data):
@@ -395,7 +402,7 @@ class TestIndexPlot:
             include_only_groups=["Bakery", "Dairy"],
         )
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
 
         # Verify that only the filtered groups appear in the plot
         y_labels = [label.get_text() for label in result_ax.get_yticklabels()]
@@ -412,6 +419,7 @@ class TestIndexPlot:
         """Test that the function raises a ValueError for an invalid sort_by or sort_order parameter."""
         df = test_data
 
+        invalid_kwargs: dict[str, Any] = {kwarg: "invalid"}
         with pytest.raises(ValueError):
             plot(
                 df,
@@ -419,7 +427,7 @@ class TestIndexPlot:
                 group_col="category",
                 index_col="category",
                 value_to_index="Bakery",
-                **{kwarg: "invalid"},
+                **invalid_kwargs,
             )
 
     def test_generates_index_plot_with_source_text(self, test_data):
@@ -435,7 +443,7 @@ class TestIndexPlot:
             source_text=source_text,
         )
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         source_texts = [text for text in result_ax.figure.texts if text.get_text() == source_text]
         assert len(source_texts) == 1
 
@@ -452,7 +460,7 @@ class TestIndexPlot:
             y_label="Category Group",
         )
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         assert result_ax.get_xlabel() == "Sales Value"
         assert result_ax.get_ylabel() == "Category Group"
 
@@ -471,7 +479,7 @@ class TestIndexPlot:
             value_to_index="Bakery",
             drop_na=True,
         )
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         ytick_labels = [label.get_text() for label in result_ax.get_yticklabels()]
         xtick_labels = [label.get_text() for label in result_ax.get_xticklabels()]
         assert not any(
@@ -482,7 +490,7 @@ class TestIndexPlot:
             label == "" or label is None or str(label).lower() == "nan" or str(label).lower() == "na"
             for label in xtick_labels
         )
-        bar_values = [patch.get_width() for patch in result_ax.patches]
+        bar_values = [patch.get_width() for patch in result_ax.patches if isinstance(patch, Rectangle)]
         assert not any(pd.isna(val) for val in bar_values)
 
     def test_nan_index_values_present_in_data(self, test_data):
@@ -497,7 +505,8 @@ class TestIndexPlot:
             value_col="sales",
             group_col="category",
         )
-        assert index_df["index"].isna().any(), "Expected at least one NaN value in the 'index' column"
+        index_values = cast("pd.Series", index_df["index"])
+        assert index_values.isna().any(), "Expected at least one NaN value in the 'index' column"
 
     def test_filter_by_index_values(self):
         """Test that filter_above drops groups whose raw index does not exceed the threshold."""
@@ -771,7 +780,7 @@ class TestIndexPlot:
             sort_order=sort_order,
         )
 
-        assert isinstance(ax, plt.Axes)
+        assert isinstance(ax, Axes)
 
         # Verify y-axis labels reflect sorted categories
         y_labels = [t.get_text() for t in ax.get_yticklabels()]

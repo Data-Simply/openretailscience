@@ -50,7 +50,7 @@ retail operations.
 
 """
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import ibis
 import matplotlib.pyplot as plt
@@ -61,6 +61,9 @@ from matplotlib.axes import Axes
 from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_ibis_table, ensure_value_choice
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
+
+if TYPE_CHECKING:
+    import ibis.expr.types as ir
 
 BASELINE_INDEX = 100
 DEFAULT_HIGHLIGHT_RANGE = (80, 120)
@@ -88,10 +91,12 @@ def filter_by_groups(
     """
     result_df = df.copy()
     if exclude_groups is not None:
-        result_df = result_df[~result_df[group_col].isin(exclude_groups)]
+        group_values = cast("pd.Series", result_df[group_col])
+        result_df = result_df[~group_values.isin(exclude_groups)]
     if include_only_groups is not None:
-        result_df = result_df[result_df[group_col].isin(include_only_groups)]
-    return result_df
+        group_values = cast("pd.Series", result_df[group_col])
+        result_df = result_df[group_values.isin(include_only_groups)]
+    return cast("pd.DataFrame", result_df)
 
 
 def filter_by_value_thresholds(
@@ -141,7 +146,7 @@ def filter_by_value_thresholds(
             "Filtering resulted in an empty dataset. Consider adjusting filter parameters.",
         )
 
-    return result_df
+    return cast("pd.DataFrame", result_df)
 
 
 def filter_top_bottom_n(df: pd.DataFrame, top_n: int | None = None, bottom_n: int | None = None) -> pd.DataFrame:
@@ -310,10 +315,13 @@ def plot(  # noqa: C901, PLR0913
         ValueError: If filtering results in an empty dataset.
     """
     if sort_by is not None:
-        sort_by = ensure_value_choice(sort_by, VALID_SORT_BY, "sort_by")
+        sort_by = cast("Literal['group', 'value']", ensure_value_choice(sort_by, VALID_SORT_BY, "sort_by"))
     if series_col is not None and sort_by == "value":
         raise ValueError("sort_by cannot be 'value' when series_col is provided")
-    sort_order = ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
+    sort_order = cast(
+        "Literal['asc', 'ascending', 'desc', 'descending']",
+        ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order"),
+    )
     if exclude_groups is not None and include_only_groups is not None:
         raise ValueError("exclude_groups and include_only_groups cannot be used together")
     if series_col is not None and (
@@ -391,7 +399,7 @@ def plot(  # noqa: C901, PLR0913
     width = kwargs.pop("width", 0.8)
     color = kwargs.pop("color", default_colors)
 
-    if color_by_threshold:
+    if color_by_threshold and highlight_range is not None:
         positive_color = get_named_color("positive")
         negative_color = get_named_color("negative")
         neutral_color = get_named_color("neutral")
@@ -417,14 +425,18 @@ def plot(  # noqa: C901, PLR0913
             **mpl_kwargs,
         )
     else:
-        ax = index_df.plot.barh(
-            left=BASELINE_INDEX,
-            legend=show_legend,
-            ax=ax,
-            color=color,
-            width=width,
-            zorder=2,
-            **kwargs,
+        # pandas-stubs types DataFrame.plot.barh() as a wide union; it returns a single Axes here.
+        ax = cast(
+            "Axes",
+            index_df.plot.barh(
+                left=BASELINE_INDEX,
+                legend=show_legend,
+                ax=ax,
+                color=color,
+                width=width,
+                zorder=2,
+                **kwargs,
+            ),
         )
 
     ax.axvline(BASELINE_INDEX, color="black", linewidth=1, alpha=0.5)
@@ -487,38 +499,48 @@ def get_indexes(
 
     overall_agg = table.group_by(group_cols).aggregate(value=agg_fn(table[value_col]))
 
+    # Table.__getitem__ and aggregate() expose generic ir.Column in ibis stubs; these are aggregated numeric
+    # columns, so narrow to ir.NumericColumn to enable arithmetic and reductions.
     if index_subgroup_col is None:
-        overall_total = overall_agg.value.sum()
-        overall_props = overall_agg.mutate(proportion_overall=overall_agg.value / overall_total.nullif(0))
+        overall_value = cast("ir.NumericColumn", overall_agg.value)
+        overall_total = overall_value.sum()
+        overall_props = overall_agg.mutate(proportion_overall=overall_value / overall_total.nullif(ibis.literal(0)))
     else:
-        overall_total = overall_agg.group_by(index_subgroup_col).aggregate(total=lambda t: t.value.sum())
-        overall_props = (
-            overall_agg.join(overall_total, index_subgroup_col)
-            .mutate(proportion_overall=lambda t: t.value / t.total.nullif(0))
-            .drop("total")
+        overall_total = overall_agg.group_by(index_subgroup_col).aggregate(
+            total=cast("ir.NumericColumn", overall_agg.value).sum(),
         )
+        overall_joined = overall_agg.join(overall_total, index_subgroup_col)
+        overall_value = cast("ir.NumericColumn", overall_joined.value)
+        overall_total_col = cast("ir.NumericColumn", overall_joined.total)
+        overall_props = overall_joined.mutate(
+            proportion_overall=overall_value / overall_total_col.nullif(ibis.literal(0)),
+        ).drop("total")
 
     table = table.filter(table[index_col] == value_to_index)
     subset_agg = table.group_by(group_cols).aggregate(value=agg_fn(table[value_col]))
 
     if index_subgroup_col is None:
-        subset_total = subset_agg.value.sum().name("total")
-        subset_props = subset_agg.mutate(proportion=subset_agg.value / subset_total.nullif(0))
+        subset_value = cast("ir.NumericColumn", subset_agg.value)
+        subset_total = subset_value.sum().name("total")
+        subset_props = subset_agg.mutate(proportion=subset_value / subset_total.nullif(ibis.literal(0)))
     else:
-        subset_total = subset_agg.group_by(index_subgroup_col).aggregate(total=lambda t: t.value.sum())
+        subset_total = subset_agg.group_by(index_subgroup_col).aggregate(
+            total=cast("ir.NumericColumn", subset_agg.value).sum(),
+        )
+        subset_joined = subset_agg.join(subset_total, index_subgroup_col)
+        subset_value = cast("ir.NumericColumn", subset_joined.value)
+        subset_total_col = cast("ir.NumericColumn", subset_joined.total)
         subset_props = (
-            subset_agg.join(subset_total, index_subgroup_col)
-            .filter(lambda t: t.total != 0)
-            .mutate(proportion=lambda t: t.value / t.total)
+            subset_joined.filter(subset_total_col != 0)
+            .mutate(proportion=subset_value / subset_total_col)
             .drop("total")
         )
 
-    result = (
-        subset_props.join(overall_props, group_cols)
-        .mutate(
-            index=lambda t: (t.proportion / t.proportion_overall.nullif(0) * 100) - offset,
-        )
-        .order_by(group_cols)
-    )
+    result_joined = subset_props.join(overall_props, group_cols)
+    proportion = cast("ir.NumericColumn", result_joined.proportion)
+    proportion_overall = cast("ir.NumericColumn", result_joined.proportion_overall)
+    result = result_joined.mutate(
+        index=(proportion / proportion_overall.nullif(ibis.literal(0)) * 100) - offset,
+    ).order_by(group_cols)
 
-    return result[[*group_cols, "index"]].execute()
+    return cast("pd.DataFrame", result[[*group_cols, "index"]].execute())

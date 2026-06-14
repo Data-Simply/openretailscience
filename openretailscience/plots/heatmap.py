@@ -27,7 +27,7 @@ visualizations. It provides a clean, reusable interface without domain-specific 
 - Match visual style of existing plots while remaining generic
 """
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,6 +36,10 @@ from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.patches import FancyBboxPatch
+
+if TYPE_CHECKING:
+    from matplotlib.collections import QuadMesh
+    from matplotlib.spines import Spine
 
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_sequential_cmap
@@ -184,7 +188,8 @@ def plot(
         )
     else:
         cbar = ax.figure.colorbar(mappable, ax=ax, format=cbar_format, fraction=0.03, pad=0.02, shrink=0.85)
-    cbar.outline.set_visible(False)
+    # matplotlib stubs type Colorbar.outline as a Spines collection, but at runtime it is a single Spine.
+    cast("Spine", cbar.outline).set_visible(False)
     cbar.ax.set_ylabel(
         cbar_label,
         rotation=-90,
@@ -198,8 +203,10 @@ def plot(
         cbar.set_ticklabels(["Low", "High"])
         cbar.ax.tick_params(length=0)
         cbar.ax.set_box_aspect(_DISCRETE_BIN_COUNT)
-        cbar.solids.set_edgecolor(background)
-        cbar.solids.set_linewidth(3)
+        # A discrete colorbar always renders a QuadMesh of solids; the stub types it as optional.
+        solids = cast("QuadMesh", cbar.solids)
+        solids.set_edgecolor(background)
+        solids.set_linewidth(3)
         for spine in cbar.ax.spines.values():
             spine.set_visible(False)
 

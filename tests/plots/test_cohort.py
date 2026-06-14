@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 from openretailscience.plots import cohort
 
@@ -21,7 +22,11 @@ def sample_cohort_dataframe():
     """Generates a sample cohort DataFrame."""
     rng = np.random.default_rng(42)
     data = np.round(rng.uniform(0, 1, size=(6, 6)), 2)
-    return pd.DataFrame(data, columns=[f"Month {i + 1}" for i in range(6)], index=[f"Cohort {i + 1}" for i in range(6)])
+    return pd.DataFrame(
+        data,
+        columns=pd.Index([f"Month {i + 1}" for i in range(6)]),
+        index=pd.Index([f"Cohort {i + 1}" for i in range(6)]),
+    )
 
 
 def test_plot_cohort(sample_cohort_dataframe):
@@ -71,15 +76,17 @@ def test_plot_cohort_with_figsize(sample_cohort_dataframe):
     )
 
     assert isinstance(result_ax, Axes)
-    assert result_ax.figure.get_size_inches()[0] == width
-    assert result_ax.figure.get_size_inches()[1] == height
+    figure = result_ax.figure
+    assert isinstance(figure, Figure)
+    assert figure.get_size_inches()[0] == width
+    assert figure.get_size_inches()[1] == height
 
 
 @pytest.mark.parametrize("percentage", [True, False])
 def test_plot_cohort_percentage_formatting(percentage):
     """Test cohort plot percentage formatting comprehensively."""
     data = np.array([[0.5, 0.3], [0.8, 0.6]])
-    df = pd.DataFrame(data, columns=["Month 1", "Month 2"], index=["Cohort A", "Cohort B"])
+    df = pd.DataFrame(data, columns=pd.Index(["Month 1", "Month 2"]), index=pd.Index(["Cohort A", "Cohort B"]))
 
     result_ax = cohort.plot(df=df, cbar_label="Retention Rate", percentage=percentage)
 

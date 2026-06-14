@@ -1,5 +1,7 @@
 """Tests for the period_on_period overlapping_periods function."""
 
+from datetime import datetime
+
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,9 +12,13 @@ from matplotlib.axes import Axes
 from openretailscience.options import ColumnHelper
 from openretailscience.plots.period_on_period import plot
 
+# plot()'s periods parameter is invariant list[tuple[str | datetime, str | datetime]]; annotate the
+# string-only literals used in these tests so they match without widening at every call site.
+Periods = list[tuple[str | datetime, str | datetime]]
 
-def _period_label(period: tuple[str, str]) -> str:
-    """Render a (start, end) string tuple as the legend label period_on_period uses."""
+
+def _period_label(period: tuple[str | datetime, str | datetime]) -> str:
+    """Render a (start, end) period tuple as the legend label period_on_period uses."""
     return f"{pd.to_datetime(period[0]).date()} to {pd.to_datetime(period[1]).date()}"
 
 
@@ -42,7 +48,7 @@ def sample_dataframe():
 
 def test_overlapping_periods_basic(sample_dataframe):
     """Test basic overlapping periods plot."""
-    periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
+    periods: Periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
     ax = plot(
         df=sample_dataframe,
         x_col=cols.transaction_date,
@@ -57,7 +63,7 @@ def test_overlapping_periods_basic(sample_dataframe):
 
 def test_overlapping_periods_with_labels_and_title(sample_dataframe):
     """The plot renders the supplied title and axis labels on the axes."""
-    periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
+    periods: Periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
     title = "Overlapping Periods Test"
     ax = plot(
         df=sample_dataframe,
@@ -77,7 +83,7 @@ def test_overlapping_periods_with_labels_and_title(sample_dataframe):
 
 def test_overlapping_periods_with_source_text(sample_dataframe):
     """The plot renders source_text as a figure-level text element."""
-    periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
+    periods: Periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
     source_text = "Source: Sales Data"
 
     ax = plot(
@@ -94,7 +100,7 @@ def test_overlapping_periods_with_source_text(sample_dataframe):
 
 def test_default_renders_legend_with_one_entry_per_period(sample_dataframe):
     """Default plot must label every period so readers can identify each line."""
-    periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
+    periods: Periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
 
     ax = plot(
         df=sample_dataframe,
@@ -110,7 +116,7 @@ def test_default_renders_legend_with_one_entry_per_period(sample_dataframe):
 
 def test_overlapping_periods_with_legend_title_and_outside(sample_dataframe):
     """legend_title is rendered as the legend's title when move_legend_outside=True."""
-    periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
+    periods: Periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
     legend_title = "Periods"
 
     ax = plot(
@@ -133,7 +139,7 @@ def test_periods_sampled_from_sequential_cmap_newest_darkest(sample_dataframe):
     Caller passes periods in reverse-chronological order to confirm the function sorts internally
     rather than relying on input order.
     """
-    periods = [
+    periods: Periods = [
         ("2023-01-15", "2023-01-19"),  # newest
         ("2023-01-08", "2023-01-12"),
         ("2023-01-01", "2023-01-05"),  # oldest
@@ -179,7 +185,7 @@ def test_newer_periods_drawn_above_older_periods(sample_dataframe):
 
 def test_newest_period_drawn_thicker_than_oldest(sample_dataframe):
     """Linewidth ramp reinforces the color/linestyle ordering: newest thickest, oldest thinnest."""
-    periods = [
+    periods: Periods = [
         ("2023-01-15", "2023-01-19"),  # newest
         ("2023-01-08", "2023-01-12"),
         ("2023-01-01", "2023-01-05"),  # oldest
@@ -202,7 +208,7 @@ def test_newest_period_drawn_thicker_than_oldest(sample_dataframe):
 
 def test_user_supplied_linewidth_overrides_gradient(sample_dataframe):
     """A caller-supplied linewidth applies uniformly to every period instead of the gradient."""
-    periods = [
+    periods: Periods = [
         ("2023-01-15", "2023-01-19"),
         ("2023-01-01", "2023-01-05"),
     ]
@@ -236,7 +242,7 @@ def test_plot_does_not_mutate_caller_dataframe_when_x_col_is_string():
         },
     )
     df_before = df.copy(deep=True)
-    periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
+    periods: Periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
 
     plot(
         df=df,
@@ -265,7 +271,7 @@ def test_overlapping_periods_raises_on_empty_periods(sample_dataframe):
 @pytest.mark.parametrize("invalid_value", ["endofline", "box ", "", "BOX"])
 def test_plot_rejects_invalid_legend_style(sample_dataframe, invalid_value):
     """period_on_period.plot raises ValueError for legend_style values outside the documented set."""
-    periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
+    periods: Periods = [("2023-01-01", "2023-01-05"), ("2023-01-06", "2023-01-10")]
     with pytest.raises(ValueError, match="legend_style"):
         plot(
             df=sample_dataframe,

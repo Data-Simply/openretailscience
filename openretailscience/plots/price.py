@@ -26,7 +26,7 @@ retailers, countries, etc.
 - **Numeric Price Column**: Requires numeric price/value column for binning
 """
 
-from typing import Any
+from typing import Any, cast
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -80,8 +80,9 @@ def _validate_inputs(
     # Validate bins parameter
     validated_bins = _validate_bins_parameter(bins)
 
-    # Remove rows with missing values in key columns
-    df_clean = df[[value_col, group_col]].dropna()
+    # Remove rows with missing values in key columns. pandas-stubs widens DataFrame.dropna() to
+    # DataFrame | Series; selecting a column list always yields a DataFrame here.
+    df_clean = cast("pd.DataFrame", df[[value_col, group_col]].dropna())
 
     if df_clean.empty:
         msg = f"No valid data after removing missing values from {value_col} and {group_col}"
@@ -230,7 +231,8 @@ def plot(
         )
 
     ax.set_xticks(range(len(groups)))
-    ax.set_xticklabels(groups)
+    # Index.tolist() is typed list[Any]; group labels render via their string form on the axis.
+    ax.set_xticklabels([str(group) for group in groups])
     ax.set_yticks(range(len(price_bins)))
 
     # Reserve half a unit on each side to give bubbles breathing room even at high s_scale.
