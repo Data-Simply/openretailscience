@@ -10,6 +10,7 @@ from matplotlib.colors import to_hex
 from openretailscience.options import PlotStyleHelper, get_option, option_context
 from openretailscience.plots import heatmap, line
 from openretailscience.plots.styles.styling_helpers import (
+    _CHROME_TAB_WIDTH_IN,
     _CHROME_TOP_LABEL_HEADROOM_FACTOR,
     apply_chart_chrome,
     apply_legend,
@@ -235,14 +236,10 @@ class TestApplyChartChrome:
             )
 
     def test_chrome_spacing_survives_figure_resize(self):
-        """Resizing the figure after chrome is applied must not change the inter-element gaps.
+        """Resizing the figure after layout must not change the inter-element gaps.
 
-        Chrome positions are derived from the figure height at layout time. A common export
-        flow builds the chart on a default-sized figure and then calls ``set_size_inches`` for
-        the final render. Because the eyebrow/title/subtitle are sized in points (absolute) but
-        the gaps were historically stored as a fraction of the layout-time height, enlarging the
-        figure ballooned the gaps (and shrinking it overlapped them). The layout must instead
-        track the figure's current height so the gaps stay put at any rendered size.
+        The text is sized in points but the gaps were once stored as a fraction of the
+        layout-time height, so a later resize ballooned (or, when shrunk, overlapped) them.
         """
         reference = _measure_chrome_spacing(figheight=8)
         resized_up = _measure_chrome_spacing(figheight=8, build_height=4)
@@ -263,12 +260,10 @@ class TestApplyChartChrome:
             )
 
     def test_source_text_does_not_rewrap_into_axes_on_width_resize(self):
-        """Narrowing the figure after layout must not let the source line creep into the axes.
+        """Narrowing the figure after layout must not re-wrap the source line into the axes.
 
-        The source is placed with matplotlib wrapping. Left dynamic, it re-wraps to more lines
-        when the figure narrows, growing upward into the reserved source-to-axes gap (and
-        eventually overlapping the data area), because the axes bottom was reserved for the
-        layout-time line count. Freezing the wrap (as the header does) keeps the gap stable.
+        The source wrap is frozen like the header; otherwise a width change re-wraps it to more
+        lines, growing it up into the reserved source-to-axes gap.
         """
         long_source = (
             "Source: 2024 loyalty-program transactions across all banners, excluding staff "
@@ -294,12 +289,10 @@ class TestApplyChartChrome:
         )
 
     def test_chrome_survives_resize_on_figure_with_colorbar(self):
-        """Chrome spacing holds after resizing a heatmap, and its colorbar axes is preserved.
+        """Resizing a heatmap holds the chrome spacing and keeps its colorbar axes.
 
-        The layout engine declares colorbar-gridspec compatibility so matplotlib accepts it on a
-        figure that already owns a colorbar; a mismatching engine raises at install time. This
-        guards both that install (the heatmap renders at all) and that the colorbar axes survives
-        the resize while the eyebrow-to-title gap stays fixed.
+        Also guards the engine's colorbar-gridspec compatibility: a mismatching engine would
+        raise when installed on a figure that already owns a colorbar.
         """
         traffic = pd.DataFrame(
             [[120, 480, 300], [140, 520, 280], [160, 540, 260]],
@@ -333,6 +326,29 @@ class TestApplyChartChrome:
         assert abs(gap_after - gap_before) <= 1.0, (
             f"eyebrow-to-title gap changed from {gap_before:.1f}px to {gap_after:.1f}px after "
             "resizing a heatmap figure with a colorbar"
+        )
+
+    def test_tab_width_stays_fixed_across_width_resize(self):
+        """The tab mark keeps its absolute design width when the figure is resized horizontally.
+
+        The tab is a fixed-size element; storing only a width fraction lets it scale with the
+        figure width on resize.
+        """
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.barh(["Whole Milk", "Free-Range Eggs"], [120, 88])
+        apply_chart_chrome(ax, eyebrow="Category index", title="Premium brands over-index")
+        tab = next(p for p in fig.patches if (p.get_gid() or "").startswith("_ors_chrome"))
+
+        fig.canvas.draw()
+        width_wide_in = tab.get_width() * fig.get_figwidth()
+        fig.set_size_inches(5, 5)
+        fig.canvas.draw()
+        width_narrow_in = tab.get_width() * fig.get_figwidth()
+
+        assert width_wide_in == pytest.approx(_CHROME_TAB_WIDTH_IN, abs=0.02)
+        assert width_narrow_in == pytest.approx(_CHROME_TAB_WIDTH_IN, abs=0.02), (
+            f"tab width became {width_narrow_in:.3f}in after narrowing the figure; it must stay "
+            f"the fixed {_CHROME_TAB_WIDTH_IN}in design width"
         )
 
     def test_chrome_uses_configured_colors(self, fig_ax):

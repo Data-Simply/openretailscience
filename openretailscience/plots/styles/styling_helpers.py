@@ -160,7 +160,7 @@ class _ChromeLayout:
         top_texts: ``(text, top_offset_in)`` per top-anchored header element; offset measured
             from the figure top to the text's top.
         source: ``(text, bottom_offset_in)`` for the bottom-anchored source line, or None.
-        tab: ``(rectangle, top_offset_in, height_in)`` for the tab mark, or None.
+        tab: ``(rectangle, top_offset_in, height_in, width_in)`` for the tab mark, or None.
         axes_top_offset_in: Inches from the figure top to the axes top edge.
         axes_bottom_offset_in: Inches from the figure bottom to the axes bottom edge.
     """
@@ -168,23 +168,24 @@ class _ChromeLayout:
     ax: Axes
     top_texts: list[tuple[Text, float]]
     source: tuple[Text, float] | None
-    tab: tuple[Rectangle, float, float] | None
+    tab: tuple[Rectangle, float, float, float] | None
     axes_top_offset_in: float
     axes_bottom_offset_in: float
 
 
-def _apply_chrome_layout(layout: _ChromeLayout, fig_h: float) -> None:
-    """Re-derive figure fractions from ``layout``'s inch offsets for a figure of height ``fig_h``."""
+def _apply_chrome_layout(layout: _ChromeLayout, fig_h: float, fig_w: float) -> None:
+    """Re-derive figure fractions from ``layout``'s inch offsets for the current figure size."""
     for text, top_offset_in in layout.top_texts:
         text.set_y(1.0 - top_offset_in / fig_h)
     if layout.source is not None:
         source_text, bottom_offset_in = layout.source
         source_text.set_y(bottom_offset_in / fig_h)
     if layout.tab is not None:
-        tab, tab_top_offset_in, tab_height_in = layout.tab
+        tab, tab_top_offset_in, tab_height_in, tab_width_in = layout.tab
         tab_height_fig = tab_height_in / fig_h
         tab.set_y(1.0 - tab_top_offset_in / fig_h - tab_height_fig)
         tab.set_height(tab_height_fig)
+        tab.set_width(tab_width_in / fig_w)
     pos = layout.ax.get_position()
     axes_top = 1.0 - layout.axes_top_offset_in / fig_h
     axes_bottom = layout.axes_bottom_offset_in / fig_h
@@ -197,8 +198,9 @@ def _apply_chrome_layouts(fig: Figure) -> None:
     if layouts is None:
         return
     fig_h = fig.get_figheight()
+    fig_w = fig.get_figwidth()
     for layout in layouts.values():
-        _apply_chrome_layout(layout, fig_h)
+        _apply_chrome_layout(layout, fig_h, fig_w)
 
 
 def _axes_offsets_in(ax: Axes, fig_h: float) -> tuple[float, float]:
@@ -251,6 +253,7 @@ def _capture_chrome_layout(fig: Figure, ax: Axes, chrome_gid: str) -> _ChromeLay
     """Snapshot the placed chrome artists and axes box as resize-invariant inch offsets."""
     renderer = fig.canvas.get_renderer()
     fig_h = fig.get_figheight()
+    fig_w = fig.get_figwidth()
     bbox_h = fig.bbox.height
     top_texts: list[tuple[Text, float]] = []
     source: tuple[Text, float] | None = None
@@ -260,10 +263,10 @@ def _capture_chrome_layout(fig: Figure, ax: Axes, chrome_gid: str) -> _ChromeLay
             source = (text, extent.y0 / bbox_h * fig_h)
         else:
             top_texts.append((text, (1.0 - extent.y1 / bbox_h) * fig_h))
-    tab: tuple[Rectangle, float, float] | None = None
+    tab: tuple[Rectangle, float, float, float] | None = None
     for patch in [p for p in fig.patches if p.get_gid() == chrome_gid]:
         top_frac = patch.get_y() + patch.get_height()
-        tab = (patch, (1.0 - top_frac) * fig_h, patch.get_height() * fig_h)
+        tab = (patch, (1.0 - top_frac) * fig_h, patch.get_height() * fig_h, patch.get_width() * fig_w)
     axes_top_offset_in, axes_bottom_offset_in = _axes_offsets_in(ax, fig_h)
     return _ChromeLayout(
         ax=ax,
