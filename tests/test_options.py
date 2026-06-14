@@ -1,6 +1,7 @@
 """Tests for the Options module."""
 
 from pathlib import Path
+from typing import get_args
 
 import pytest
 import toml
@@ -123,6 +124,36 @@ class TestOptions:
         defaults = opt.Options()
         expected = {name: defaults.get_option(name) for name in defaults.list_options()}
         assert flat_template == expected
+
+    def test_typed_option_name_groups_match_defaults(self):
+        """The typed get_option overloads must cover every default option with the right type.
+
+        Why: ``get_option`` returns precise types (str, float, bool, ...) via overloads keyed on
+        Literal groups of option names. If a new option is added to the defaults but not to the
+        matching group, callers silently fall back to the wide ``OptionTypes`` union; if a group
+        lists a stale name, the overload lies about a key that no longer exists. This pins both
+        groups and defaults together so either kind of drift fails loudly.
+        """
+        group_to_type: dict[tuple[str, ...], type | tuple[type, ...]] = {
+            get_args(opt._StrOptionName): str,
+            get_args(opt._FloatOptionName): float,
+            get_args(opt._IntOptionName): int,
+            get_args(opt._BoolOptionName): bool,
+            get_args(opt._StrListOptionName): list,
+            get_args(opt._FloatListOptionName): list,
+        }
+        name_to_expected_type = {name: expected for names, expected in group_to_type.items() for name in names}
+
+        defaults = opt.Options()
+        default_values = {name: defaults.get_option(name) for name in defaults.list_options()}
+
+        assert set(name_to_expected_type) == set(default_values)
+        # bool is a subclass of int, so check bool before int to avoid misclassification.
+        for name, expected_type in name_to_expected_type.items():
+            value = default_values[name]
+            assert isinstance(value, expected_type), f"{name}={value!r} is not {expected_type}"
+            if expected_type is int:
+                assert not isinstance(value, bool), f"{name} is grouped as int but is a bool"
 
     def test_flatten_options(self):
         """Test flattening the options dictionary."""

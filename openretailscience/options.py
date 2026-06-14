@@ -19,12 +19,114 @@ Example:
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Literal, overload
 
 import toml
 
 from openretailscience.constants import COLORS
 
 OptionTypes = str | int | float | bool | list | dict | None
+
+# Option names grouped by the concrete type their value resolves to. These drive the typed
+# ``get_option`` overloads below so callers receive ``str`` for a column name, ``float`` for a
+# font size, and so on, instead of the wide ``OptionTypes`` union. The groups must stay in sync
+# with the defaults defined in ``Options.__init__``; ``tests/test_options.py`` enforces that.
+_StrOptionName = Literal[
+    "column.customer_id",
+    "column.transaction_id",
+    "column.transaction_date",
+    "column.transaction_time",
+    "column.product_id",
+    "column.unit_quantity",
+    "column.unit_price",
+    "column.unit_spend",
+    "column.unit_cost",
+    "column.promo_unit_spend",
+    "column.promo_unit_quantity",
+    "column.store_id",
+    "column.agg.customer_id",
+    "column.agg.transaction_id",
+    "column.agg.product_id",
+    "column.agg.unit_quantity",
+    "column.agg.unit_price",
+    "column.agg.unit_spend",
+    "column.agg.unit_cost",
+    "column.agg.promo_unit_spend",
+    "column.agg.promo_unit_quantity",
+    "column.agg.store_id",
+    "column.calc.price_per_unit",
+    "column.calc.units_per_transaction",
+    "column.calc.spend_per_customer",
+    "column.calc.spend_per_transaction",
+    "column.calc.transactions_per_customer",
+    "column.calc.price_elasticity",
+    "column.calc.frequency_elasticity",
+    "column.suffix.count",
+    "column.suffix.percent",
+    "column.suffix.difference",
+    "column.suffix.percent_difference",
+    "column.suffix.contribution",
+    "column.suffix.period_1",
+    "column.suffix.period_2",
+    "column.suffix.unknown_customer",
+    "column.suffix.total",
+    "plot.color.positive",
+    "plot.color.negative",
+    "plot.color.neutral",
+    "plot.color.difference",
+    "plot.color.context",
+    "plot.color.primary",
+    "plot.color.sequential",
+    "plot.color.eyebrow",
+    "plot.color.subtitle",
+    "plot.color.title",
+    "plot.color.tab",
+    "plot.color.source",
+    "plot.font.title_font",
+    "plot.font.eyebrow_font",
+    "plot.font.subtitle_font",
+    "plot.font.label_font",
+    "plot.font.tick_font",
+    "plot.font.source_font",
+    "plot.font.data_label_font",
+    "plot.font.legend_font",
+    "plot.style.background_color",
+    "plot.style.grid_color",
+    "plot.style.legend_loc",
+]
+
+_FloatOptionName = Literal[
+    "plot.font.title_size",
+    "plot.font.eyebrow_size",
+    "plot.font.subtitle_size",
+    "plot.font.label_size",
+    "plot.font.tick_size",
+    "plot.font.source_size",
+    "plot.font.data_label_size",
+    "plot.font.legend_size",
+    "plot.style.grid_alpha",
+    "plot.style.cell_corner_radius",
+    "plot.style.cell_gap",
+]
+
+_IntOptionName = Literal[
+    "plot.spacing.x_label_pad",
+    "plot.spacing.y_label_pad",
+]
+
+_BoolOptionName = Literal[
+    "plot.style.show_top_spine",
+    "plot.style.show_right_spine",
+    "plot.style.show_bottom_spine",
+    "plot.style.show_left_spine",
+    "plot.style.auto_rotate_x_ticks",
+    "plot.style.auto_wrap_x_ticks",
+    "plot.style.show_tab",
+]
+
+_StrListOptionName = Literal["plot.color.multi_color_palette"]
+
+_FloatListOptionName = Literal["plot.style.legend_bbox_to_anchor"]
 
 
 class Options:
@@ -384,14 +486,14 @@ class Options:
         if project_root is None:
             return options_instance
 
-        toml_file = Path(project_root) / "openretailscience.toml"
+        toml_file = project_root / "openretailscience.toml"
         if toml_file.is_file():
             return Options.load_from_toml(toml_file)
 
         return options_instance
 
     @classmethod
-    def load_from_toml(cls, file_path: str) -> "Options":
+    def load_from_toml(cls, file_path: str | Path) -> "Options":
         """Load options from a TOML file.
 
         Args:
@@ -416,15 +518,15 @@ class Options:
         return options_instance
 
 
-def find_project_root() -> str | None:
+def find_project_root() -> Path | None:
     """Returns the directory containing .git, .hg, or pyproject.toml, starting from the current working directory."""
     current_dir = Path.cwd()
 
     while True:
-        if (Path(current_dir / ".git")).is_dir() or (Path(current_dir / "openretailscience.toml")).is_file():
+        if (current_dir / ".git").is_dir() or (current_dir / "openretailscience.toml").is_file():
             return current_dir
 
-        parent_dir = Path(current_dir).parent
+        parent_dir = current_dir.parent
         reached_root = parent_dir == current_dir
         if reached_root:
             return None
@@ -451,6 +553,20 @@ def set_option(pat: str, val: OptionTypes) -> None:
     _global_options.set_option(pat, val)
 
 
+@overload
+def get_option(pat: _StrOptionName) -> str: ...
+@overload
+def get_option(pat: _FloatOptionName) -> float: ...
+@overload
+def get_option(pat: _IntOptionName) -> int: ...
+@overload
+def get_option(pat: _BoolOptionName) -> bool: ...
+@overload
+def get_option(pat: _StrListOptionName) -> list[str]: ...
+@overload
+def get_option(pat: _FloatListOptionName) -> list[float]: ...
+@overload
+def get_option(pat: str) -> OptionTypes: ...
 def get_option(pat: str) -> OptionTypes:
     """Get the value of the specified option.
 
@@ -540,6 +656,9 @@ def option_context(*args: OptionTypes) -> Generator[None, None, None]:
     old_options: dict[str, OptionTypes] = {}
     try:
         for pat, val in zip(args[::2], args[1::2], strict=True):
+            if not isinstance(pat, str):
+                msg = f"Option name must be a string, got {type(pat).__name__}"
+                raise TypeError(msg)
             old_options[pat] = get_option(pat)
             set_option(pat, val)
         yield
@@ -834,14 +953,15 @@ class ColumnHelper:
         self.calc = CalcColumns()
 
     @staticmethod
-    def join_options(*args: str, sep: str = "_") -> str:
+    def join_options(*args: _StrOptionName, sep: str = "_") -> str:
         """Join multiple option values together with a separator.
 
         This method resolves option keys to their configured values and joins them.
         Commonly used to create column names with suffixes like period indicators.
 
         Args:
-            *args: Option keys to resolve and join (e.g., "column.agg.unit_spend", "column.suffix.period_1")
+            *args: String-valued option keys to resolve and join (e.g., "column.agg.unit_spend",
+                "column.suffix.period_1")
             sep: Separator to use when joining values (default: "_")
 
         Returns:
@@ -851,7 +971,7 @@ class ColumnHelper:
             >>> join_options("column.agg.unit_spend", "column.suffix.period_1")
             "spend_p1"  # Assuming default options
         """
-        return sep.join(map(get_option, args))
+        return sep.join(get_option(arg) for arg in args)
 
 
 class PlotStyleHelper:
