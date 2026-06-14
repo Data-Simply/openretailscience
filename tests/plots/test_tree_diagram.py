@@ -1,10 +1,17 @@
 """Tests for the plots.tree_diagram module."""
 
+from typing import TYPE_CHECKING, cast
+
 import matplotlib.pyplot as plt
+import numpy as np
 import pytest
+from matplotlib.colors import to_rgba
 
 from openretailscience.options import get_option
 from openretailscience.plots.tree_diagram import BaseRoundedBox, DetailedTreeNode, SimpleTreeNode, TreeGrid, TreeNode
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @pytest.fixture(autouse=True)
@@ -73,7 +80,7 @@ class TestBaseRoundedBox:
 
         # Top rounded (2 corners), bottom square (2 corners): 2 * 10 arc points + 2 straight points + 1 close
         expected_vertices = 2 * self.ARC_POINTS_PER_CORNER + 2 + 1
-        assert len(box.get_path().vertices) == expected_vertices
+        assert len(np.asarray(box.get_path().vertices)) == expected_vertices
 
     def test_border_radius_bottom(self, ax):
         """Test that bottom_radius creates correct number of vertices for rounded bottom corners."""
@@ -82,7 +89,7 @@ class TestBaseRoundedBox:
 
         # Bottom rounded (2 corners), top square (2 corners): 2 * 10 arc points + 2 straight points + 1 close
         expected_vertices = 2 * self.ARC_POINTS_PER_CORNER + 2 + 1
-        assert len(box.get_path().vertices) == expected_vertices
+        assert len(np.asarray(box.get_path().vertices)) == expected_vertices
 
     def test_zero_radius_creates_square_corners(self, ax):
         """Test that zero radius creates a box with square corners."""
@@ -91,7 +98,7 @@ class TestBaseRoundedBox:
 
         # With zero radius, we should have fewer vertices (just the corners, not arc points)
         path = box.get_path()
-        assert len(path.vertices) == self.SQUARE_CORNER_VERTICES
+        assert len(np.asarray(path.vertices)) == self.SQUARE_CORNER_VERTICES
 
     def test_nonzero_radius_creates_rounded_corners(self, ax):
         """Test that nonzero radius creates more vertices for rounded corners."""
@@ -100,7 +107,7 @@ class TestBaseRoundedBox:
 
         # With rounded corners, we should have many more vertices (10 per corner arc)
         path = box.get_path()
-        assert len(path.vertices) == self.ROUNDED_CORNER_VERTICES
+        assert len(np.asarray(path.vertices)) == self.ROUNDED_CORNER_VERTICES
 
     def test_different_top_bottom_radius(self, ax):
         """Test that different top and bottom radii produce different shapes."""
@@ -108,7 +115,9 @@ class TestBaseRoundedBox:
         box_bottom_only = BaseRoundedBox(xy=(0, 0), width=2.0, height=1.0, top_radius=0.0, bottom_radius=0.5)
 
         # Different radius configurations should produce different paths
-        assert not (box_top_only.get_path().vertices == box_bottom_only.get_path().vertices).all()
+        top_verts = np.asarray(box_top_only.get_path().vertices)
+        bottom_verts = np.asarray(box_bottom_only.get_path().vertices)
+        assert not (top_verts == bottom_verts).all()
 
     def test_multiple_boxes_on_same_axes(self, ax):
         """Test creating multiple boxes on the same axes."""
@@ -156,8 +165,11 @@ class TestTreeNode:
 
     def test_cannot_instantiate_abstract_class(self):
         """Test that TreeNode abstract class cannot be instantiated."""
+        # Cast past pyright's abstract-class guard: this test deliberately attempts
+        # the instantiation that should fail at runtime with TypeError.
+        abstract_cls = cast("Callable[..., TreeNode]", TreeNode)
         with pytest.raises(TypeError):
-            TreeNode(data={}, x=0, y=0)
+            abstract_cls(data={}, x=0, y=0)
 
 
 class TestSimpleTreeNode:
@@ -540,7 +552,8 @@ class TestTreeGrid:
                 tree_structure=tree_structure,
                 num_rows=1,
                 num_cols=1,
-                node_class=str,  # Not a TreeNode subclass
+                # Intentionally wrong type to exercise the runtime subclass check.
+                node_class=cast("type[TreeNode]", str),
             )
 
     def test_empty_tree_structure(self):
@@ -822,6 +835,6 @@ class TestDetailedTreeNodeIntegration:
         title_boxes = [ax.patches[0], ax.patches[2], ax.patches[4]]  # Every other patch is a title box
 
         for i, title_box in enumerate(title_boxes):
-            facecolor = title_box.get_facecolor()
-            hex_color = f"#{int(facecolor[0] * 255):02x}{int(facecolor[1] * 255):02x}{int(facecolor[2] * 255):02x}"
+            r, g, b, _ = to_rgba(title_box.get_facecolor())
+            hex_color = f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
             assert hex_color == expected_colors[i]

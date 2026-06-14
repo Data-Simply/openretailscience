@@ -67,7 +67,9 @@ class TestStylingOptionsIntegration:
             title_texts = [t for t in ax.figure.texts if t.get_text() == "Custom Font Test"]
             assert len(title_texts) == 1
             assert title_texts[0].get_fontsize() == TEST_TITLE_SIZE
-            assert "Poppins-Bold.ttf" in title_texts[0].get_fontproperties().get_file()
+            title_font_file = title_texts[0].get_fontproperties().get_file()
+            assert isinstance(title_font_file, str)
+            assert "Poppins-Bold.ttf" in title_font_file
 
             # Verify label properties
             assert ax.get_xlabel() == "X Axis"
@@ -157,13 +159,17 @@ class TestStylingOptionsIntegration:
             legend = ax.get_legend()
             assert legend is not None, "Expected a legend on grouped scatter plot"
 
-            assert "Poppins-Bold.ttf" in legend.get_title().get_fontproperties().get_file()
+            legend_title_font_file = legend.get_title().get_fontproperties().get_file()
+            assert isinstance(legend_title_font_file, str)
+            assert "Poppins-Bold.ttf" in legend_title_font_file
 
             legend_texts = legend.get_texts()
             expected_categories = sample_dataframe["category"].nunique()
             assert len(legend_texts) == expected_categories
             for text in legend_texts:
-                assert "Poppins-Bold.ttf" in text.get_fontproperties().get_file()
+                text_font_file = text.get_fontproperties().get_file()
+                assert isinstance(text_font_file, str)
+                assert "Poppins-Bold.ttf" in text_font_file
 
     def test_label_font_customization(self, sample_dataframe):
         """Test that data label fonts can be customized."""

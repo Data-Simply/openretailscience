@@ -1,15 +1,26 @@
 """Tests for the chart chrome layout engine."""
 
 import warnings
+from typing import TYPE_CHECKING, cast
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
+from matplotlib.backend_bases import RendererBase
 from matplotlib.colors import to_hex
+from matplotlib.figure import Figure
 
 from openretailscience.options import PlotStyleHelper, get_option, option_context
 from openretailscience.plots import heatmap, line
 from openretailscience.plots.styles.styling_helpers import apply_chart_chrome, apply_legend, standard_graph_styles
+
+if TYPE_CHECKING:
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+
+def _renderer(fig: Figure) -> RendererBase:
+    """Return the figure's Agg renderer (cast past the FigureCanvasBase stub gap)."""
+    return cast("FigureCanvasAgg", fig.canvas).get_renderer()
 
 
 @pytest.fixture(autouse=True)
@@ -44,7 +55,7 @@ def _measure_chrome_spacing(figheight: float) -> dict[str, float]:
         source_text=source,
     )
     fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
+    renderer = _renderer(fig)
     eye = _texts_with(fig, eyebrow.upper())[0].get_window_extent(renderer=renderer)
     ttl = _texts_with(fig, title)[0].get_window_extent(renderer=renderer)
     sub = _texts_with(fig, subtitle)[0].get_window_extent(renderer=renderer)
@@ -77,7 +88,7 @@ def _topmost_axes_content_fig_y(*, labeltop: bool) -> float:
     ax.tick_params(top=labeltop, bottom=not labeltop, labeltop=labeltop, labelbottom=not labeltop)
     apply_chart_chrome(ax, title="Title", subtitle="Subtitle")
     fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
+    renderer = _renderer(fig)
     spine_top_fig = ax.get_position().y1
     top_label_tops_fig = [
         t.label2.get_window_extent(renderer=renderer).y1 / fig.bbox.height
@@ -174,7 +185,7 @@ class TestApplyChartChrome:
         title_text = fig.texts[0]
         subtitle_text = fig.texts[1]
         fig.canvas.draw()
-        renderer = fig.canvas.get_renderer()
+        renderer = _renderer(fig)
         title_bottom = title_text.get_window_extent(renderer=renderer).y0
         subtitle_top = subtitle_text.get_window_extent(renderer=renderer).y1
         # Subtitle's top must sit below the title's bottom (no overlap).
@@ -376,7 +387,9 @@ class TestLegendStyleEndOfLine:
                 title="t",
                 move_legend_outside=True,
             )
-        legend_labels = [t.get_text() for t in ax.get_legend().get_texts()]
+        legend = ax.get_legend()
+        assert legend is not None
+        legend_labels = [t.get_text() for t in legend.get_texts()]
         assert legend_labels == ["Whole Bean Coffee", "Loose Leaf Tea"]
 
     def test_end_of_line_renders_no_boxed_legend(self, line_data):
@@ -440,9 +453,9 @@ class TestHeatmapColormapStyle:
     def heat_df(self):
         """Small day-by-time heatmap dataframe used by the colormap_style tests."""
         return pd.DataFrame(
-            [[10, 50, 100], [20, 60, 110], [30, 70, 120]],
-            index=["Mon", "Tue", "Wed"],
-            columns=["Morning", "Noon", "Evening"],
+            data=[[10, 50, 100], [20, 60, 110], [30, 70, 120]],
+            index=pd.Index(["Mon", "Tue", "Wed"]),
+            columns=pd.Index(["Morning", "Noon", "Evening"]),
         )
 
     def test_discrete_default_uses_low_high_labels(self, heat_df):

@@ -2,9 +2,10 @@
 
 import warnings
 from itertools import pairwise
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, Protocol, cast
 
 from matplotlib.axes import Axes
+from matplotlib.backend_bases import RendererBase
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 from matplotlib.ticker import AutoLocator, FixedFormatter, FixedLocator, MaxNLocator
@@ -13,7 +14,38 @@ from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.font_utils import get_font_properties
 from openretailscience.plots.styles.graph_utils import draw_end_of_line_labels
 
+if TYPE_CHECKING:
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
 GridAxis = Literal["both", "x", "y", "none"]
+
+
+class _WrappableText(Protocol):
+    """The matplotlib-private ``Text._get_wrapped_text`` API, absent from the Text stub."""
+
+    def _get_wrapped_text(self) -> str: ...
+
+
+def _root_figure(ax: Axes) -> Figure:
+    """Return the root ``Figure`` that ``ax`` belongs to.
+
+    ``ax.figure`` is typed ``Figure | SubFigure``; chrome layout uses figure-level
+    geometry (``get_figheight``/``transFigure``) only available on the root ``Figure``.
+    """
+    fig = ax.get_figure(root=True)
+    if fig is None:
+        raise ValueError("Axes is not attached to a figure.")
+    return fig
+
+
+def _get_renderer(fig: Figure) -> RendererBase:
+    """Return the figure's Agg renderer.
+
+    ``get_renderer`` lives on the concrete ``FigureCanvasAgg`` (the non-interactive
+    backend these plots render with) but not on the ``FigureCanvasBase`` type stub,
+    so ``fig.canvas`` is cast to the Agg canvas before the access.
+    """
+    return cast("FigureCanvasAgg", fig.canvas).get_renderer()
 
 
 def _hide_zero_value_ticks(ax: Axes) -> None:
@@ -104,7 +136,7 @@ def _place_header_text(
     Each element is placed and drawn in turn so that wrapped lines from
     the previous element are reflected in the y position of the next.
     """
-    fig = ax.figure
+    fig = _root_figure(ax)
     t = fig.text(
         x_fig,
         prev_bottom_fig_y,
@@ -125,11 +157,13 @@ def _place_header_text(
     # the wrap can pick a different line count than the chrome layout planned
     # for, opening an unintended gap between title and subtitle.
     if wrap:
-        wrapped = t._get_wrapped_text()
+        # _get_wrapped_text is matplotlib-private and absent from the Text stub; it
+        # returns the text with matplotlib's computed line breaks baked in.
+        wrapped = cast("_WrappableText", t)._get_wrapped_text()
         t.set_text(wrapped)
         t.set_wrap(False)
         fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
+    renderer = _get_renderer(fig)
     return t.get_window_extent(renderer=renderer).y0 / fig.bbox.height
 
 
@@ -195,7 +229,9 @@ def _track_chrome_axes(fig: Figure, ax: Axes, *, warn_stacklevel: int) -> None:
     """
     prior = getattr(fig, "_ors_chrome_axes", None)
     if prior is None:
-        fig._ors_chrome_axes = [ax]
+        # _ors_chrome_axes is a dynamic attribute we stash on the figure; setattr
+        # avoids a stub error since Figure doesn't declare it.
+        setattr(fig, "_ors_chrome_axes", [ax])  # noqa: B010
         return
     if ax in prior:
         return
@@ -249,7 +285,7 @@ def apply_chart_chrome(
     suppress it project-wide; use ``option_context`` to scope the change.
     """
     style = PlotStyleHelper()
-    fig = ax.figure
+    fig = _root_figure(ax)
     show_tab = style.show_tab
     has_header = eyebrow is not None or title is not None or subtitle is not None
     any_chrome = has_header or source_text is not None
@@ -346,14 +382,16 @@ def apply_chart_chrome(
         )
         source_t.set_gid(chrome_gid)
         fig.canvas.draw()
-        source_top_px = source_t.get_window_extent(renderer=fig.canvas.get_renderer()).y1
+        source_top_px = source_t.get_window_extent(renderer=_get_renderer(fig)).y1
         axes_bottom = source_top_px / fig.bbox.height + _CHROME_GAP_SOURCE_TO_AXES_IN / fig_h
 
     # Cache the chrome rect so callers (e.g. _auto_rotate_categorical_x_ticks)
     # can re-reflow after they change tick label heights. Without this, a
     # post-chrome rotation/wrap leaves the axes box sized for the original
     # pandas-90° labels and you get a tall empty gap below the data area.
-    fig._ors_chrome_rect = (header_bottom, axes_bottom)
+    # _ors_chrome_rect is a dynamic attribute we stash on the figure; setattr
+    # avoids a stub error since Figure doesn't declare it.
+    setattr(fig, "_ors_chrome_rect", (header_bottom, axes_bottom))  # noqa: B010
 
     if not _reflow_axes(fig, top=header_bottom, bottom=axes_bottom):
         fig.subplots_adjust(top=header_bottom, bottom=axes_bottom)
@@ -437,17 +475,17 @@ def _set_xtick_rotation(ax: Axes, angle: float) -> None:
     for label in ax.get_xticklabels():
         label.set_rotation(angle)
         if angle == 0:
-            label.set_ha("center")
+            label.set_horizontalalignment("center")
             label.set_rotation_mode("default")
         else:
-            label.set_ha("right")
+            label.set_horizontalalignment("right")
             label.set_rotation_mode("anchor")
 
 
 def _xtick_labels_overlap(ax: Axes, fig: Figure) -> bool:
     """Return True when adjacent x-tick label bboxes encroach on the configured gap."""
     fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
+    renderer = _get_renderer(fig)
     bboxes = sorted(
         (label.get_window_extent(renderer=renderer) for label in ax.get_xticklabels()),
         key=lambda b: b.x0,
@@ -496,7 +534,7 @@ def _auto_rotate_categorical_x_ticks(ax: Axes) -> None:
     if current_rotation not in (0, 90):
         return
 
-    fig = ax.figure
+    fig = _root_figure(ax)
     original_formatter = ax.xaxis.get_major_formatter()
     originals = [label.get_text() for label in labels]
 
@@ -714,8 +752,8 @@ def standard_graph_styles(  # noqa: PLR0913
             reverse=legend_reverse,
             custom_labels=legend_labels,
         )
-    elif not legend_show and ax.get_legend() is not None:
-        ax.get_legend().remove()
+    elif not legend_show and (existing_legend := ax.get_legend()) is not None:
+        existing_legend.remove()
 
     apply_chart_chrome(
         ax,

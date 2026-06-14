@@ -40,6 +40,7 @@ from typing import Any, Literal
 
 import pandas as pd
 from matplotlib.axes import Axes
+from matplotlib.container import BarContainer
 
 import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.core.validation import ensure_value_choice
@@ -102,20 +103,21 @@ def plot(
         raise ValueError("The lengths of amounts and labels must be the same")
 
     if data_label_format is not None:
-        data_label_format = ensure_value_choice(data_label_format, VALID_DATA_LABEL_FORMATS, "data_label_format")
+        ensure_value_choice(data_label_format, VALID_DATA_LABEL_FORMATS, "data_label_format")
 
     df = pd.DataFrame({"labels": labels, "amounts": amounts})
 
     if remove_zero_amounts:
-        df = df[df["amounts"] != 0]
+        df = df.loc[df["amounts"] != 0]
 
-    amount_total = df["amounts"].sum()
+    amounts_series: pd.Series = df.loc[:, "amounts"]
+    amount_total = amounts_series.sum()
 
     positive_color = get_named_color("positive")
     negative_color = get_named_color("negative")
 
-    default_colors = (df["amounts"] > 0).map({True: positive_color, False: negative_color}).to_list()
-    bottom = df["amounts"].cumsum().shift(1).fillna(0).to_list()
+    default_colors = (amounts_series > 0).map({True: positive_color, False: negative_color}).to_list()
+    bottom = amounts_series.cumsum().shift(1).fillna(0).to_list()
 
     if display_net_bar:
         # Append a row for the net amount
@@ -126,7 +128,7 @@ def plot(
     # Create the plot
     width = kwargs.pop("width", 0.8)
     color = kwargs.pop("color", default_colors)
-    ax = df.plot.bar(
+    plot_result = df.plot.bar(
         x="labels",
         y="amounts",
         legend=None,
@@ -136,21 +138,27 @@ def plot(
         ax=ax,
         **kwargs,
     )
+    if not isinstance(plot_result, Axes):
+        raise TypeError("Expected df.plot.bar to return a single Axes.")
+    ax = plot_result
 
     # Add a black line at the y=0 position
     ax.axhline(y=0, color="black", linewidth=1, zorder=-1)
     if data_label_format is not None:
-        decimals = gu.get_decimals(ax.get_ylim(), ax.get_yticks())
+        decimals = gu.get_decimals(ax.get_ylim(), ax.get_yticks().tolist())
         labels = format_data_labels(
-            df["amounts"],
+            amounts_series,
             amount_total,
             data_label_format,
             decimals,
         )
 
+        bar_container = ax.containers[0]
+        if not isinstance(bar_container, BarContainer):
+            raise TypeError("Expected the first container to be a BarContainer.")
         style = PlotStyleHelper()
         ax.bar_label(
-            ax.containers[0],
+            bar_container,
             label_type="edge",
             labels=labels,
             padding=5,

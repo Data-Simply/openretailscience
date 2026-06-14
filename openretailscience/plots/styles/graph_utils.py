@@ -2,9 +2,9 @@
 
 import importlib.resources as pkg_resources
 import warnings
-from collections.abc import Generator
+from collections.abc import Iterator
 from itertools import cycle
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import matplotlib.ticker as mtick
 import numpy as np
@@ -43,8 +43,8 @@ class _EndOfLineCandidate(TypedDict):
     zorder: float
 
 
-def _hatches_gen() -> Generator[str, None, None]:
-    """Returns a generator that cycles through predefined hatch patterns.
+def _hatches_gen() -> Iterator[str]:
+    """Returns an iterator that cycles through predefined hatch patterns.
 
     Yields:
         str: The next hatch pattern in the sequence.
@@ -178,7 +178,7 @@ def draw_end_of_line_labels(ax: Axes) -> None:
 
     candidates: list[_EndOfLineCandidate] = []
     for line in ax.get_lines():
-        label = line.get_label()
+        label = str(line.get_label())
         if not label or label.startswith("_"):
             continue
         xdata = np.asarray(line.get_xdata())
@@ -193,14 +193,16 @@ def draw_end_of_line_labels(ax: Axes) -> None:
             continue
         idx = np.where(finite_mask)[0][-1]
         candidates.append(
-            {
-                "label": label,
-                "x_end": xdata[idx],
-                "y_end": ydata[idx],
-                "color": line.get_color(),
-                "marker_size": max(line.get_linewidth() * 2.0, 6.0),
-                "zorder": line.get_zorder(),
-            },
+            _EndOfLineCandidate(
+                label=label,
+                x_end=xdata[idx],
+                y_end=float(ydata[idx]),
+                # ``get_color`` is typed as ``ColorType`` (which includes RGBA tuples), but matplotlib
+                # lines drawn by these plots carry hex/name string colors; coerce to the str field.
+                color=cast("str", line.get_color()),
+                marker_size=max(line.get_linewidth() * 2.0, 6.0),
+                zorder=line.get_zorder(),
+            ),
         )
 
     if len(candidates) == 0:
@@ -209,7 +211,10 @@ def draw_end_of_line_labels(ax: Axes) -> None:
     label_ys = _resolve_end_of_line_label_ys(ax, candidates, style.legend_size)
 
     for cand, y_lbl in zip(candidates, label_ys, strict=True):
-        x_end = cand["x_end"]
+        # ``x_end`` is stored as object because matplotlib lines may carry pandas Period/Timestamp
+        # or category x-values; ax.plot / ax.annotate accept these at runtime, so cast to float for
+        # the numeric-coordinate signatures those calls expose.
+        x_end = cast("float", cand["x_end"])
         y_end = cand["y_end"]
         color = cand["color"]
         marker_size = cand["marker_size"]
@@ -339,11 +344,17 @@ def apply_hatches(ax: Axes, num_segments: int) -> Axes:
         Axes: The modified Axes object with hatches applied to the patches.
     """
     available_hatches = _hatches_gen()
-    patch_groups = np.array_split(ax.patches, num_segments)
-    for patch_group in patch_groups:
+    patches = list(ax.patches)
+    # Split the patches into roughly equal contiguous groups (one hatch per group),
+    # mirroring numpy.array_split's distribution of any remainder to the leading groups.
+    base, remainder = divmod(len(patches), num_segments)
+    start = 0
+    for segment in range(num_segments):
+        size = base + (1 if segment < remainder else 0)
         hatch = next(available_hatches)
-        for patch in patch_group:
+        for patch in patches[start : start + size]:
             patch.set_hatch(hatch)
+        start += size
 
     legend = ax.get_legend()
     if legend:
@@ -398,7 +409,7 @@ def set_axis_shorthand(
         is_xaxis = fmt_axis is parent_ax.xaxis
         limits = parent_ax.get_xlim() if is_xaxis else parent_ax.get_ylim()
         ticks = parent_ax.get_xticks() if is_xaxis else parent_ax.get_yticks()
-        decimals = get_decimals(limits, ticks)
+        decimals = get_decimals(limits, ticks.tolist())
     fmt_axis.set_major_formatter(
         lambda value, _pos=None: format_shorthand(value, decimals=decimals, prefix=prefix),
     )

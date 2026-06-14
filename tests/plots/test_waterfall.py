@@ -1,14 +1,18 @@
 """Tests for the waterfall plot module."""
 
 import warnings
+from typing import Literal, cast
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
+from matplotlib.axes import Axes
 from matplotlib.colors import to_hex
 
 from openretailscience.options import option_context
 from openretailscience.plots.waterfall import format_data_labels, plot
+
+DataLabelFormat = Literal["absolute", "percentage", "both"]
 
 
 class TestWaterfallPlot:
@@ -28,7 +32,7 @@ class TestWaterfallPlot:
         amounts, labels = test_data
         result_ax = plot(amounts, labels)
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         assert len(result_ax.patches) == len(labels)
 
     def test_raises_value_error_for_mismatched_lengths(self, test_data):
@@ -50,7 +54,7 @@ class TestWaterfallPlot:
 
         result_ax = plot(amounts, labels, source_text=source_text)
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         assert len(result_ax.patches) == len(labels)
 
         # Check if the source text is added correctly
@@ -99,7 +103,7 @@ class TestWaterfallPlot:
 
         non_zero_amounts = len([amount for amount in amounts if amount != 0])
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         assert len(result_ax.patches) == non_zero_amounts
 
     # Raises a ValueError for an invalid data label format
@@ -107,8 +111,10 @@ class TestWaterfallPlot:
         """Test that the function raises a ValueError for an invalid data label format."""
         amounts, labels = test_data
 
+        # Intentionally pass an out-of-domain value to exercise runtime validation;
+        # cast past the Literal annotation that would otherwise reject it statically.
         with pytest.raises(ValueError):
-            plot(amounts, labels, data_label_format="invalid_format")
+            plot(amounts, labels, data_label_format=cast("DataLabelFormat", "invalid_format"))
 
     def test_bar_labels_use_data_label_size(self, test_data):
         """Bar-end data labels should track plot.font.data_label_size, not label_size."""
@@ -133,7 +139,7 @@ class TestWaterfallPlot:
             warnings.simplefilter("always")
             result_ax = plot(amounts, labels, data_label_format=label_format)
 
-        assert isinstance(result_ax, plt.Axes)
+        assert isinstance(result_ax, Axes)
         assert any("Total change is zero" in str(w.message) for w in caught)
 
 

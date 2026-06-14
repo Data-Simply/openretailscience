@@ -187,9 +187,9 @@ def test_set_axis_shorthand_auto_decimals(axis_name):
     fmt_axis = getattr(ax, axis_name)
 
     if axis_name == "xaxis":
-        expected_decimals = gu.get_decimals(ax.get_xlim(), ax.get_xticks())
+        expected_decimals = gu.get_decimals(ax.get_xlim(), ax.get_xticks().tolist())
     else:
-        expected_decimals = gu.get_decimals(ax.get_ylim(), ax.get_yticks())
+        expected_decimals = gu.get_decimals(ax.get_ylim(), ax.get_yticks().tolist())
 
     gu.set_axis_shorthand(fmt_axis)
 

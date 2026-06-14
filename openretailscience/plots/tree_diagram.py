@@ -96,7 +96,7 @@ class BaseRoundedBox(mpatches.PathPatch):
         end_angle: float,
         fallback_point: tuple[float, float],
         is_first: bool,
-    ) -> tuple[list[tuple[float, float]], list[int]]:
+    ) -> tuple[list[tuple[float, float]], list[np.uint8]]:
         """Generate vertices and codes for a single corner.
 
         Args:
@@ -483,7 +483,7 @@ class TreeGrid:
     @staticmethod
     def _add_curve(
         verts: list[tuple[float, float]],
-        codes: list[int],
+        codes: list[np.uint8],
         x: float,
         y: float,
         x_offset: float,
