@@ -49,7 +49,7 @@ legend outside the plot for clarity.
 from typing import Any
 
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.plots.styles.colors import get_plot_colors
@@ -74,7 +74,7 @@ def plot(
     clip_range: tuple[float | None, float | None] | None = None,
     use_hatch: bool = False,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Plots a histogram of `value_col`, optionally split by `group_col`.
 
     Args:
@@ -99,7 +99,7 @@ def plot(
         **kwargs: Additional keyword arguments for Pandas' `plot` function.
 
     Returns:
-        SubplotBase: The matplotlib axes object.
+        Axes: The matplotlib axes object.
 
     Raises:
         ValueError: If both `clip_range` and matplotlib's `range` kwarg are specified; if `clip_range` is not a

@@ -30,7 +30,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 from openretailscience.plots.styles.colors import get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
@@ -145,7 +145,7 @@ def plot(
     source_text: str | None = None,
     move_legend_outside: bool = False,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Creates a bubble chart visualization showing price distribution analysis across categories.
 
     The chart displays price bands as vertical layers with bubble sizes representing the percentage
@@ -168,7 +168,7 @@ def plot(
         **kwargs (Any): Additional keyword arguments for the scatter plot function.
 
     Returns:
-        SubplotBase: The Matplotlib Axes object with the generated bubble chart.
+        Axes: The Matplotlib Axes object with the generated bubble chart.
 
     Raises:
         ValueError: If DataFrame is empty, columns don't exist, or bins parameter is invalid.

@@ -21,7 +21,7 @@ This analysis helps marketers:
 from typing import Any
 
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
 from openretailscience.options import ColumnHelper, get_option
@@ -261,7 +261,7 @@ class GainLoss:
         source_text: str | None = None,
         move_legend_outside: bool = False,
         **kwargs: Any,  # noqa: ANN401
-    ) -> SubplotBase:
+    ) -> Axes:
         """Plot the gain loss table using the bar.plot wrapper.
 
         Args:
@@ -276,7 +276,7 @@ class GainLoss:
             kwargs (Any): Additional keyword arguments to pass to the plot.
 
         Returns:
-            SubplotBase: The plot
+            Axes: The plot
         """
         increase_cols = ["new", "increased_focus", "switch_from_comparison"]
         decrease_cols = ["lost", "decreased_focus", "switch_to_comparison"]

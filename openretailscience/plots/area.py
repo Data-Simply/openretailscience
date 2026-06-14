@@ -31,7 +31,7 @@ explicitly time-based visualizations, offering features like resampling and time
 from typing import Any, Literal
 
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 from openretailscience.plots.styles.colors import get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
@@ -53,7 +53,7 @@ def plot(
     move_legend_outside: bool = False,
     legend_style: Literal["box", "end_of_line"] | None = None,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Plots an area chart for the given `value_col` over `x_col` or index, with optional grouping by `group_col`.
 
     Args:
@@ -76,7 +76,7 @@ def plot(
         **kwargs: Additional keyword arguments for Pandas' `plot` function.
 
     Returns:
-        SubplotBase: The matplotlib axes object.
+        Axes: The matplotlib axes object.
 
     Raises:
         ValueError: If `value_col` is a list and `group_col` is provided (which causes ambiguity in plotting).

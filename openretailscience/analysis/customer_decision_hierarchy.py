@@ -67,7 +67,7 @@ from typing import Any, Literal
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.sparse import csr_matrix
 from scipy.spatial.distance import squareform
@@ -312,7 +312,7 @@ class CustomerDecisionHierarchy:
         subtitle: str | None = None,
         source_text: str | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> SubplotBase:
+    ) -> Axes:
         """Plots the customer decision hierarchy dendrogram.
 
         Args:
@@ -327,7 +327,7 @@ class CustomerDecisionHierarchy:
             **kwargs (Any): Additional keyword arguments to pass to the dendrogram function.
 
         Returns:
-            SubplotBase: The matplotlib SubplotBase object.
+            Axes: The matplotlib Axes object.
         """
         linkage_matrix = self._compute_linkage_matrix()
         labels = self.pairs_df[self.product_col].cat.categories

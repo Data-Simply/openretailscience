@@ -31,7 +31,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import pandas as pd
 import textalloc as ta
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_plot_colors
@@ -261,7 +261,7 @@ def plot(  # noqa: PLR0913
     label_col: str | None = None,
     label_kwargs: dict[str, Any] | None = None,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Plots a scatter chart for the given `value_col` over `x_col` or index, with optional grouping by `group_col`.
 
     Args:
@@ -292,7 +292,7 @@ def plot(  # noqa: PLR0913
         **kwargs: Additional keyword arguments for matplotlib scatter function.
 
     Returns:
-        SubplotBase: The matplotlib axes object.
+        Axes: The matplotlib axes object.
 
     Raises:
         ValueError: If `value_col` is a list and `group_col` is provided (which causes ambiguity in plotting).

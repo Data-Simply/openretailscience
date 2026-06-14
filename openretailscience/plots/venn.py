@@ -29,7 +29,7 @@ from typing import Any
 
 import pandas as pd
 from matplotlib import pyplot as plt
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 from matplotlib_set_diagrams import EulerDiagram, VennDiagram
 
 from openretailscience.options import PlotStyleHelper
@@ -91,7 +91,7 @@ def plot(
     ax: Axes | None = None,
     subset_label_formatter: Callable | None = None,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Plots a Venn or Euler diagram using subset sizes extracted from a DataFrame.
 
     Args:
@@ -108,7 +108,7 @@ def plot(
         **kwargs: Additional keyword arguments.
 
     Returns:
-        SubplotBase: The matplotlib axes object with the plotted diagram.
+        Axes: The matplotlib axes object with the plotted diagram.
 
     Raises:
         ValueError: If the number of sets is not 2 or 3.

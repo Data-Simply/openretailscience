@@ -32,7 +32,7 @@ from typing import Literal
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.patches import FancyBboxPatch
@@ -83,7 +83,7 @@ def plot(
     cbar_format: str = "{x:g}",
     colormap_style: Literal["discrete", "continuous"] = "discrete",
     x_labels_position: Literal["top", "bottom"] = "bottom",
-) -> SubplotBase:
+) -> Axes:
     """Creates a generic heatmap visualization from a pandas DataFrame.
 
     This function creates a color-coded heatmap with cell values displayed as text. It is suitable
@@ -115,7 +115,7 @@ def plot(
             top-to-bottom alongside the row labels. Defaults to ``"bottom"``.
 
     Returns:
-        SubplotBase: The matplotlib axes object.
+        Axes: The matplotlib axes object.
     """
     data, vmin, vmax, is_uniform = _resolve_data_range(df)
 

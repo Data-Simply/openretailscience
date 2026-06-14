@@ -38,7 +38,7 @@ from collections.abc import Iterable
 from typing import Any, Literal
 
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 from matplotlib.container import BarContainer
 from matplotlib.patches import Rectangle
 
@@ -96,7 +96,7 @@ def plot(  # noqa: PLR0913
     use_hatch: bool = False,
     num_digits: int = 3,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Creates a customizable bar plot from a DataFrame or Series.
 
     Supports optional sorting, orientation, and data labels. Grouped bars can be created with a grouping column.
@@ -133,7 +133,7 @@ def plot(  # noqa: PLR0913
         **kwargs (Any): Additional keyword arguments for the Pandas `plot` function.
 
     Returns:
-        SubplotBase: The Matplotlib Axes object with the generated plot.
+        Axes: The Matplotlib Axes object with the generated plot.
     """
     orientation, sort_order, data_label_format = _validate_bar_inputs(
         df,

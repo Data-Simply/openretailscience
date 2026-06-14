@@ -51,7 +51,7 @@ retail analysis, sales tracking, and customer behavior insights.
 from typing import Any, Literal
 
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 from pandas.tseries.offsets import BaseOffset
 
 from openretailscience.options import get_option
@@ -76,7 +76,7 @@ def plot(
     move_legend_outside: bool = False,
     legend_style: Literal["box", "end_of_line"] | None = None,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Plots the value_col over time.
 
     Timeline plots are a fundamental tool for interpreting transactional data within a temporal context. By presenting
@@ -112,7 +112,7 @@ def plot(
         **kwargs: Additional keyword arguments to pass to the Pandas plot function.
 
     Returns:
-        SubplotBase: The matplotlib axes object.
+        Axes: The matplotlib axes object.
 
     Raises:
         ValueError: If `legend_style` is not one of ``None``, ``"box"``, or ``"end_of_line"``.

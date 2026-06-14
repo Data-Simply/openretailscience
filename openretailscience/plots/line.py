@@ -48,7 +48,7 @@ for use with actual datetime values**.
 from typing import Any, Literal
 
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
@@ -222,7 +222,7 @@ def plot(  # noqa: PLR0913
     fill_na_value: float | None = None,
     highlight: str | list[str] | None = None,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Plots `value_col` over `x_col` or index, with a separate line per unique `group_col` value.
 
     This function supports both pandas DataFrames and Series as input. When a Series is provided,
@@ -259,7 +259,7 @@ def plot(  # noqa: PLR0913
         **kwargs: Additional keyword arguments for Pandas' `plot` function.
 
     Returns:
-        SubplotBase: The matplotlib axes object.
+        Axes: The matplotlib axes object.
 
     Raises:
         ValueError: If `value_col` is a list and `group_col` is provided (which causes ambiguity in plotting).

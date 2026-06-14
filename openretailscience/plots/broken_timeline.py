@@ -23,7 +23,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 from openretailscience.core.validation import ensure_data_has_columns, ensure_value_choice
 from openretailscience.options import get_option
@@ -62,7 +62,7 @@ def plot(
     bar_height: float = 0.8,
     figsize: tuple[int, int] | None = None,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Creates a broken timeline plot showing data availability across categories over time.
 
     Shows periods where data is available as horizontal bars, with gaps indicating missing data periods.
@@ -89,7 +89,7 @@ def plot(
         **kwargs (Any): Additional keyword arguments for matplotlib broken_barh function.
 
     Returns:
-        SubplotBase: The Matplotlib Axes object with the generated plot.
+        Axes: The Matplotlib Axes object with the generated plot.
 
     Raises:
         ValueError: If DataFrame is empty, required columns are missing, or invalid period specified.

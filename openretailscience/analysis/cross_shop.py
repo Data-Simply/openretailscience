@@ -63,7 +63,7 @@ from typing import Any
 
 import ibis
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import get_option
@@ -324,7 +324,7 @@ class CrossShop:
         ax: Axes | None = None,
         subset_label_formatter: Callable | None = None,
         **kwargs: Any,  # noqa: ANN401
-    ) -> SubplotBase:
+    ) -> Axes:
         """Generate Venn diagram showing customer segment overlaps.
 
         Args:
@@ -341,7 +341,7 @@ class CrossShop:
             **kwargs (Any): Additional diagram customization options.
 
         Returns:
-            SubplotBase: Matplotlib axes containing the cross-shop visualization.
+            Axes: Matplotlib axes containing the cross-shop visualization.
         """
         return venn.plot(
             df=self.cross_shop_table_df,

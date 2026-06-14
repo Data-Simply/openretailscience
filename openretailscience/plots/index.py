@@ -56,7 +56,7 @@ import ibis
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_ibis_table, ensure_value_choice
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
@@ -224,7 +224,7 @@ def plot(  # noqa: C901, PLR0913
     filter_below: float | None = None,
     color_by_threshold: bool = False,
     **kwargs: Any,  # noqa: ANN401
-) -> SubplotBase:
+) -> Axes:
     """Creates an index plot.
 
     Index plots are visual tools used in retail analytics to compare different categories or segments against a
@@ -295,7 +295,7 @@ def plot(  # noqa: C901, PLR0913
             and pandas-specific kwargs (figsize, stacked, legend, subplots, layout) are filtered out.
 
     Returns:
-        SubplotBase: The matplotlib axes object.
+        Axes: The matplotlib axes object.
 
     Raises:
         ValueError: If sort_by is not either "group" or "value" or None.

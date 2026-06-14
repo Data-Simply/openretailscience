@@ -30,7 +30,7 @@ pre-aggregated before being passed to the function.
 from typing import Literal
 
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+from matplotlib.axes import Axes
 
 from openretailscience.plots import heatmap
 
@@ -48,7 +48,7 @@ def plot(
     percentage: bool = True,
     figsize: tuple[int, int] | None = None,
     colormap_style: Literal["discrete", "continuous"] = "discrete",
-) -> SubplotBase:
+) -> Axes:
     """Plots a cohort plot for the given DataFrame.
 
     Args:
@@ -69,7 +69,7 @@ def plot(
             discrete bins lump them together.
 
     Returns:
-        SubplotBase: The matplotlib axes object.
+        Axes: The matplotlib axes object.
     """
     return heatmap.plot(
         df=df,
