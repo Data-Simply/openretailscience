@@ -531,9 +531,7 @@ def get_indexes(
         subset_value = cast("ir.NumericColumn", subset_joined.value)
         subset_total_col = cast("ir.NumericColumn", subset_joined.total)
         subset_props = (
-            subset_joined.filter(subset_total_col != 0)
-            .mutate(proportion=subset_value / subset_total_col)
-            .drop("total")
+            subset_joined.filter(subset_total_col != 0).mutate(proportion=subset_value / subset_total_col).drop("total")
         )
 
     result_joined = subset_props.join(overall_props, group_cols)
