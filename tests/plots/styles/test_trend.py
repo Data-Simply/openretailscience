@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from matplotlib.axes import Axes
+from matplotlib.patches import Circle
 from scipy import stats
 
 from openretailscience.options import get_option
@@ -160,6 +161,15 @@ class TestTrendLine:
 
         # Check for appropriate error message
         assert "trend" in str(excinfo.value).lower()
+
+    def test_non_rectangle_patches_raise_value_error(self):
+        """Patches present but none are bar Rectangles -> clear ValueError, not an opaque unpack error."""
+        _, ax = plt.subplots()
+        # A non-Rectangle patch reaches the bar branch but yields no bar geometry.
+        ax.add_patch(Circle((0.5, 0.5), 0.1))
+
+        with pytest.raises(ValueError, match="No bar"):
+            trend.add_trend_line(ax)
 
     def test_bar_plot_negative_values(self):
         """Trend on vertical bars matches OLS on bar centers, including negative heights."""

@@ -295,6 +295,8 @@ def _extract_plot_data(ax: Axes) -> tuple[np.ndarray, np.ndarray]:
 
         # Bars are Rectangle patches; filter to them for the geometry accessors below.
         bars = [patch for patch in ax.patches if isinstance(patch, Rectangle)]
+        if len(bars) == 0:
+            raise ValueError("No bar (Rectangle) patches found in the plot")
         if is_vertical:
             # Vertical bars: x is center position, y is height
             bar_data = [(bar.get_x() + bar.get_width() / 2, bar.get_height()) for bar in bars]
