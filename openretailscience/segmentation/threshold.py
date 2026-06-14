@@ -44,13 +44,16 @@ and doesn't scale across large datasets.
 """
 
 import functools
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import ibis
 import pandas as pd
 
 from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import ColumnHelper
+
+if TYPE_CHECKING:
+    import ibis.expr.types as ir
 
 
 class ThresholdSegmentation:
@@ -137,11 +140,16 @@ class ThresholdSegmentation:
         )
         df = df.mutate(ptile=ibis.percent_rank().over(window))
 
-        case_args = [(df["ptile"] <= quantile, segment) for quantile, segment in zip(thresholds, segments, strict=True)]
+        # Table.__getitem__ is typed as the generic ir.Column; "ptile" holds percent_rank values, so
+        # narrow to ir.NumericColumn to enable the <= comparison.
+        ptile = cast("ir.NumericColumn", df["ptile"])
+        case_args = [
+            (ptile <= ibis.literal(quantile), segment) for quantile, segment in zip(thresholds, segments, strict=True)
+        ]
 
-        df = df.mutate(segment_name=ibis.cases(*case_args)).drop(["ptile"])
+        df = df.mutate(segment_name=ibis.cases(*case_args)).drop("ptile")
 
-        if zero_value_customers == "separate_segment":
+        if zero_value_customers == "separate_segment" and zero_df is not None:
             df = ibis.union(df, zero_df)
 
         self.table = df

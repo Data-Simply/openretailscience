@@ -50,7 +50,7 @@ rather than spend.
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import ibis
 
@@ -63,6 +63,7 @@ from openretailscience.core.validation import (
 from openretailscience.options import ColumnHelper
 
 if TYPE_CHECKING:
+    import ibis.expr.types as ir
     import pandas as pd
 
 SEGMENT_NEW = "New"
@@ -186,14 +187,21 @@ class NLRSegmentation:
             },
         )
 
+        # Table.__getitem__ is typed as the generic ir.Column in ibis stubs; these are aggregated numeric
+        # columns, so narrow to ir.NumericColumn to enable comparison operators.
+        p1_numeric = cast("ir.NumericColumn", customer[p1_col])
+        p2_numeric = cast("ir.NumericColumn", customer[p2_col])
+
         # Exclude customers with no positive value in either period
-        customer = customer.filter((customer[p1_col] > 0) | (customer[p2_col] > 0))
+        zero = ibis.literal(0)
+        customer = customer.filter((p1_numeric > zero) | (p2_numeric > zero))
 
         # Classify: both periods -> Repeating, P1 only -> Lapsed, P2 only -> New
         # Use of ifelse ensures compatibility with some ibis backends that do not support boolean expressions in cases
         # statements
-        in_p1 = (customer[p1_col] > 0).ifelse(1, 0)
-        in_p2 = (customer[p2_col] > 0).ifelse(1, 0)
+        one = ibis.literal(1)
+        in_p1 = (cast("ir.NumericColumn", customer[p1_col]) > zero).ifelse(one, zero)
+        in_p2 = (cast("ir.NumericColumn", customer[p2_col]) > zero).ifelse(one, zero)
         segment_expr = ibis.cases(
             ((in_p1 == 1) & (in_p2 == 1), SEGMENT_REPEATING),
             (in_p1 == 1, SEGMENT_LAPSED),

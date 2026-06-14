@@ -47,14 +47,18 @@ segment combination.
 
 import functools
 import warnings
+from collections.abc import Sequence
 from itertools import chain, combinations
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import ibis
 import pandas as pd
 
 from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import ColumnHelper, get_option
+
+if TYPE_CHECKING:
+    import ibis.expr.types as ir
 
 __all__ = ["SegTransactionStats", "cube", "rollup"]
 
@@ -210,7 +214,9 @@ class SegTransactionStats:
         calc_rollup: bool | None = None,
         rollup_value: Any | list[Any] = "Total",  # noqa: ANN401 - Any is required for ibis.literal typing
         unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None = None,
-        grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None = None,
+        grouping_sets: (
+            Literal["rollup", "cube", "total"] | list[tuple[str, ...] | tuple[list | str, ...]] | None
+        ) = None,
         sort_by: bool = False,
     ) -> None:
         """Calculates transaction statistics by segment.
@@ -445,7 +451,7 @@ class SegTransactionStats:
 
     @staticmethod
     def _validate_grouping_sets_params(
-        grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None,
+        grouping_sets: (Literal["rollup", "cube", "total"] | list[tuple[str, ...] | tuple[list | str, ...]] | None),
         calc_total: bool | None,
         calc_rollup: bool | None,
     ) -> None:
@@ -569,8 +575,9 @@ class SegTransactionStats:
                 msg = f"Invalid type in specification tuple: {type(element).__name__}"
                 raise TypeError(msg)
 
-        # Validate cube()/rollup() result is not empty
-        if len(grouping_sets_list) == 0:
+        # Validate cube()/rollup() result is not empty. has_list guarantees the loop assigned
+        # grouping_sets_list, but the None guard makes that explicit for the type checker.
+        if grouping_sets_list is None or len(grouping_sets_list) == 0:
             raise ValueError("Specification tuple must contain non-empty cube() or rollup() result")
 
         # Flatten: append fixed columns to each set
@@ -583,7 +590,7 @@ class SegTransactionStats:
         calc_total: bool | None = None,
         calc_rollup: bool | None = None,
         grouping_sets: (
-            Literal["rollup", "cube", "total"] | list[tuple[str, ...] | tuple[list | str, ...]] | None
+            Literal["rollup", "cube", "total"] | Sequence[tuple[str, ...] | tuple[list | str, ...]] | None
         ) = None,
     ) -> list[tuple[str, ...]]:
         """Generate grouping sets based on grouping_sets parameter or calc_total/calc_rollup settings.
@@ -844,26 +851,33 @@ class SegTransactionStats:
         cols = ColumnHelper()
         aggs = {}
 
+        # Table.__getitem__ is typed as the generic ir.Column in ibis stubs; spend/qty are numeric, so
+        # narrow to ir.NumericColumn to enable .sum(). coalesce(*args: Value) also requires ibis literals.
+        spend = cast("ir.NumericColumn", data[cols.unit_spend])
+        qty = cast("ir.NumericColumn", data[cols.unit_qty]) if cols.unit_qty in data.columns else None
+        zero_int = ibis.literal(0)
+        zero_float = ibis.literal(0.0)
+
         # Identified customers only (where NOT unknown)
         # Use coalesce to ensure proper types: int for counts, float for sums
-        aggs[cols.agg.unit_spend] = data[cols.unit_spend].sum(where=~unknown_flag).coalesce(0.0)
-        aggs[cols.agg.transaction_id] = data[cols.transaction_id].nunique(where=~unknown_flag).coalesce(0)
-        aggs[cols.agg.customer_id] = data[cols.customer_id].nunique(where=~unknown_flag).coalesce(0)
-        if cols.unit_qty in data.columns:
-            aggs[cols.agg.unit_qty] = data[cols.unit_qty].sum(where=~unknown_flag).coalesce(0)
+        aggs[cols.agg.unit_spend] = spend.sum(where=~unknown_flag).coalesce(zero_float)
+        aggs[cols.agg.transaction_id] = data[cols.transaction_id].nunique(where=~unknown_flag).coalesce(zero_int)
+        aggs[cols.agg.customer_id] = data[cols.customer_id].nunique(where=~unknown_flag).coalesce(zero_int)
+        if qty is not None:
+            aggs[cols.agg.unit_qty] = qty.sum(where=~unknown_flag).coalesce(zero_int)
 
         # Unknown customers (where unknown)
         # Use coalesce to ensure proper types: int for counts, float for sums
-        aggs[cols.agg.unit_spend_unknown] = data[cols.unit_spend].sum(where=unknown_flag).coalesce(0.0)
-        aggs[cols.agg.transaction_id_unknown] = data[cols.transaction_id].nunique(where=unknown_flag).coalesce(0)
-        if cols.unit_qty in data.columns:
-            aggs[cols.agg.unit_qty_unknown] = data[cols.unit_qty].sum(where=unknown_flag).coalesce(0)
+        aggs[cols.agg.unit_spend_unknown] = spend.sum(where=unknown_flag).coalesce(zero_float)
+        aggs[cols.agg.transaction_id_unknown] = data[cols.transaction_id].nunique(where=unknown_flag).coalesce(zero_int)
+        if qty is not None:
+            aggs[cols.agg.unit_qty_unknown] = qty.sum(where=unknown_flag).coalesce(zero_int)
 
         # Total (all customers)
-        aggs[cols.agg.unit_spend_total] = data[cols.unit_spend].sum()
+        aggs[cols.agg.unit_spend_total] = spend.sum()
         aggs[cols.agg.transaction_id_total] = data[cols.transaction_id].nunique()
-        if cols.unit_qty in data.columns:
-            aggs[cols.agg.unit_qty_total] = data[cols.unit_qty].sum()
+        if qty is not None:
+            aggs[cols.agg.unit_qty_total] = qty.sum()
 
         # Add extra aggregations with three variants
         if extra_aggs:
@@ -889,7 +903,9 @@ class SegTransactionStats:
         calc_rollup: bool | None = None,
         rollup_value: Any | list[Any] = "Total",  # noqa: ANN401 - Any is required for ibis.literal typing
         unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None = None,
-        grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None = None,
+        grouping_sets: (
+            Literal["rollup", "cube", "total"] | list[tuple[str, ...] | tuple[list | str, ...]] | None
+        ) = None,
     ) -> ibis.Table:
         """Calculates the transaction statistics by segment.
 
@@ -1058,4 +1074,6 @@ class SegTransactionStats:
             else:
                 col_order.extend(self.extra_aggs.keys())
 
-        return self.table.execute()[col_order]
+        # DataFrame.__getitem__ with a list of column labels returns a DataFrame, but pandas-stubs widens
+        # the result; narrow it back here.
+        return cast("pd.DataFrame", self.table.execute()[col_order])

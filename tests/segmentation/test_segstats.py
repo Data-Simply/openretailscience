@@ -1,6 +1,7 @@
 """Tests for the SegTransactionStats class."""
 
 import warnings
+from typing import TYPE_CHECKING, Literal, cast
 
 import ibis
 import numpy as np
@@ -9,6 +10,9 @@ import pytest
 
 from openretailscience.options import ColumnHelper, get_option, option_context
 from openretailscience.segmentation.segstats import SegTransactionStats, cube, rollup
+
+if TYPE_CHECKING:
+    import ibis.expr.types as ir
 
 cols = ColumnHelper()
 
@@ -198,7 +202,7 @@ class TestSegTransactionStats:
     def test_handles_empty_dataframe_with_errors(self):
         """Test that the method raises an error when the DataFrame is missing a required column."""
         df = pd.DataFrame(
-            columns=[cols.unit_spend, cols.transaction_id, cols.unit_qty],
+            columns=pd.Index([cols.unit_spend, cols.transaction_id, cols.unit_qty]),
         )
 
         with pytest.raises(ValueError):
@@ -567,8 +571,10 @@ class TestSegTransactionStats:
         # Dynamically compute expected sums
         expected = {}
 
-        # Detail rows
-        for (cat0, cat1), group in df_sample.groupby(segment_cols):
+        # Detail rows. groupby on multiple columns yields tuple keys at runtime; pandas-stubs types the
+        # key as a single Hashable, so index the key rather than destructuring it.
+        for key, group in df_sample.groupby(segment_cols):
+            cat0, cat1 = cast("tuple[str, str]", key)
             expected[(cat0, cat1)] = group[measure_col].sum()
 
         # Prefix rollups (category subtotal)
@@ -635,7 +641,7 @@ class TestSegTransactionStats:
             & (result_df["subcategory"] == "Total")
         ]
         assert len(north_clothing_total) == 1
-        assert north_clothing_total[cols.agg.unit_spend].to_numpy()[0] == 10.0 + 20.0
+        assert cast("pd.Series", north_clothing_total[cols.agg.unit_spend]).to_numpy()[0] == 10.0 + 20.0
 
         # Spot check: one suffix rollup (Total, Total, Jeans)
         total_total_jeans = result_df[
@@ -644,7 +650,7 @@ class TestSegTransactionStats:
             & (result_df["subcategory"] == "Jeans")
         ]
         assert len(total_total_jeans) == 1
-        assert total_total_jeans[cols.agg.unit_spend].to_numpy()[0] == 10.0 + 30.0 + 50.0 + 70.0
+        assert cast("pd.Series", total_total_jeans[cols.agg.unit_spend]).to_numpy()[0] == 10.0 + 30.0 + 50.0 + 70.0
 
         # Grand total
         grand_total = result_df[
@@ -653,7 +659,8 @@ class TestSegTransactionStats:
             & (result_df["subcategory"] == "Total")
         ]
         assert len(grand_total) == 1
-        assert grand_total[cols.agg.unit_spend].to_numpy()[0] == sum([10, 20, 30, 40, 50, 60, 70, 80])
+        grand_total_spend = cast("pd.Series", grand_total[cols.agg.unit_spend])
+        assert grand_total_spend.to_numpy()[0] == sum([10, 20, 30, 40, 50, 60, 70, 80])
 
     def test_rollup_enabled_total_disabled(self):
         """Test that rollup rows are included but grand total is excluded when calc_rollup=True, calc_total=False."""
@@ -831,9 +838,9 @@ class TestUnknownCustomerTracking:
         seg_stats = SegTransactionStats(
             data_table,
             "segment_name",
-            unknown_customer_value=data_table[cols.customer_id] < 0,
+            unknown_customer_value=cast("ir.NumericColumn", data_table[cols.customer_id]) < ibis.literal(0),
         )
-        result_df = seg_stats.df.sort_values("segment_name").reset_index(drop=True)
+        result_df = seg_stats.df.sort_values(by="segment_name").reset_index(drop=True)
 
         expected_output = pd.DataFrame(
             {
@@ -941,8 +948,8 @@ class TestUnknownCustomerTracking:
         assert cols.agg.unit_spend_total in total_row.columns
         expected_unknown_spend = 400.0
         expected_total_spend = 700.0
-        assert total_row[cols.agg.unit_spend_unknown].iloc[0] == expected_unknown_spend
-        assert total_row[cols.agg.unit_spend_total].iloc[0] == expected_total_spend
+        assert cast("pd.Series", total_row[cols.agg.unit_spend_unknown]).iloc[0] == expected_unknown_spend
+        assert cast("pd.Series", total_row[cols.agg.unit_spend_total]).iloc[0] == expected_total_spend
 
     def test_unknown_customer_with_extra_aggs(self):
         """Test unknown customer tracking with extra aggregations."""
@@ -1156,7 +1163,9 @@ class TestGenerateGroupingSets:
 
         # Sort and compare
         result_subset = (
-            result[["region", "store", cols.agg.unit_spend]].sort_values(["region", "store"]).reset_index(drop=True)
+            cast("pd.DataFrame", result[["region", "store", cols.agg.unit_spend]])
+            .sort_values(by=["region", "store"])
+            .reset_index(drop=True)
         )
         expected_sorted = expected.sort_values(["region", "store"]).reset_index(drop=True)
 
@@ -1229,7 +1238,7 @@ class TestGroupingSetsRollupMode:
         """Test that invalid string value raises error."""
         with pytest.raises(ValueError, match="grouping_sets must be 'rollup', 'cube'"):
             SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets="invalid",
+                grouping_sets=cast("Literal['rollup', 'cube', 'total']", "invalid"),  # invalid value tested at runtime
                 calc_total=None,
                 calc_rollup=None,
             )
@@ -1334,7 +1343,9 @@ class TestGroupingSetsRollupMode:
 
         # Sort both dataframes for consistent comparison
         result_subset = (
-            result[["region", "store", cols.agg.unit_spend]].sort_values(["region", "store"]).reset_index(drop=True)
+            cast("pd.DataFrame", result[["region", "store", cols.agg.unit_spend]])
+            .sort_values(by=["region", "store"])
+            .reset_index(drop=True)
         )
         expected_sorted = expected.sort_values(["region", "store"]).reset_index(drop=True)
 
@@ -1460,7 +1471,9 @@ class TestGroupingSetsRollupMode:
 
         # Sort both dataframes for consistent comparison
         result_subset = (
-            result[["region", "store", cols.agg.unit_spend]].sort_values(["region", "store"]).reset_index(drop=True)
+            cast("pd.DataFrame", result[["region", "store", cols.agg.unit_spend]])
+            .sort_values(by=["region", "store"])
+            .reset_index(drop=True)
         )
         expected_sorted = expected.sort_values(["region", "store"]).reset_index(drop=True)
 
@@ -1561,7 +1574,9 @@ class TestGroupingSetsCustomMode:
             match="Each element must be a tuple",
         ):
             SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=["region"],  # Wrong: string instead of tuple
+                grouping_sets=cast(
+                    "list[tuple[str, ...] | tuple[list | str, ...]]", ["region"]
+                ),  # Wrong: string instead of tuple
                 calc_total=None,
                 calc_rollup=None,
             )
@@ -1574,7 +1589,9 @@ class TestGroupingSetsCustomMode:
             match="Each element must be a tuple",
         ):
             SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=[("region",), 123],  # Wrong: integer instead of tuple
+                grouping_sets=cast(
+                    "list[tuple[str, ...] | tuple[list | str, ...]]", [("region",), 123]
+                ),  # Wrong: integer instead of tuple
                 calc_total=None,
                 calc_rollup=None,
             )
@@ -1585,7 +1602,9 @@ class TestGroupingSetsCustomMode:
             match="Each element must be a tuple",
         ):
             SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=[("region",), None],  # Wrong: None instead of tuple
+                grouping_sets=cast(
+                    "list[tuple[str, ...] | tuple[list | str, ...]]", [("region",), None]
+                ),  # Wrong: None instead of tuple
                 calc_total=None,
                 calc_rollup=None,
             )
@@ -1640,7 +1659,9 @@ class TestGroupingSetsCustomMode:
 
         # Sort both dataframes for consistent comparison
         result_subset = (
-            result[["region", "store", cols.agg.unit_spend]].sort_values(["region", "store"]).reset_index(drop=True)
+            cast("pd.DataFrame", result[["region", "store", cols.agg.unit_spend]])
+            .sort_values(by=["region", "store"])
+            .reset_index(drop=True)
         )
         expected_sorted = expected.sort_values(["region", "store"]).reset_index(drop=True)
 
@@ -1796,12 +1817,12 @@ class TestComposableGroupingSets:
     def test_cube_non_string_column_error(self):
         """Test cube() raises TypeError when passed non-string columns."""
         with pytest.raises(TypeError, match="All column names must be strings"):
-            cube("region", 123, "store")
+            cube("region", cast("str", 123), "store")  # non-string column tested at runtime
 
     def test_rollup_non_string_column_error(self):
         """Test rollup() raises TypeError when passed non-string columns."""
         with pytest.raises(TypeError, match="All column names must be strings"):
-            rollup("year", "quarter", 456)
+            rollup("year", "quarter", cast("str", 456))  # non-string column tested at runtime
 
     def test_flatten_item_invalid_type_error(self):
         """Test _flatten_item() raises TypeError for invalid types in specification tuple."""
@@ -1943,8 +1964,8 @@ class TestComposableGroupingSets:
 
         # Sort both dataframes for consistent comparison
         result_subset = (
-            result[["store", "region", "date", cols.agg.unit_spend]]
-            .sort_values(["store", "region", "date"])
+            cast("pd.DataFrame", result[["store", "region", "date", cols.agg.unit_spend]])
+            .sort_values(by=["store", "region", "date"])
             .reset_index(drop=True)
         )
         expected_sorted = expected.sort_values(["store", "region", "date"]).reset_index(drop=True)
@@ -2000,8 +2021,8 @@ class TestDivisionByZeroHandling:
 
         # Verify that spend_per_cust is NaN when customer_id count is 0
         # (all customers are unknown, so identified customer count is 0)
-        assert result[cols.calc.spend_per_cust].isna().all()
-        assert result[cols.calc.trans_per_cust].isna().all()
+        assert cast("pd.Series", result[cols.calc.spend_per_cust]).isna().all()
+        assert cast("pd.Series", result[cols.calc.trans_per_cust]).isna().all()
 
     def test_zero_unknown_transactions_returns_nan(self):
         """Test that zero unknown transactions produce NaN for unknown-specific metrics."""
@@ -2033,7 +2054,7 @@ class TestDivisionByZeroHandling:
         assert (result[cols.agg.transaction_id_unknown] == 0).all()
 
         # spend_per_trans_unknown should be NaN (not an error) when transaction_id_unknown is 0
-        assert result[cols.calc.spend_per_trans_unknown].isna().all()
+        assert cast("pd.Series", result[cols.calc.spend_per_trans_unknown]).isna().all()
 
     def test_rollup_with_all_unknown_customers_no_division_error(self):
         """Test rollup with all unknown customers doesn't cause division by zero errors.
@@ -2073,11 +2094,11 @@ class TestDivisionByZeroHandling:
 
         # Verify derived metrics that divide by transaction/customer counts are NaN
         # when those counts are zero (which they are for identified customers)
-        assert result[cols.calc.spend_per_cust].isna().all()
-        assert result[cols.calc.trans_per_cust].isna().all()
+        assert cast("pd.Series", result[cols.calc.spend_per_cust]).isna().all()
+        assert cast("pd.Series", result[cols.calc.trans_per_cust]).isna().all()
 
         # But unknown customer metrics should have valid values
-        assert result[cols.calc.spend_per_trans_unknown].notna().all()
+        assert cast("pd.Series", result[cols.calc.spend_per_trans_unknown]).notna().all()
 
     def test_mixed_zero_and_nonzero_segments(self):
         """Test that segments with zero values return NaN while others compute correctly."""
@@ -2105,19 +2126,21 @@ class TestDivisionByZeroHandling:
 
         # Loyalty segment (known customers) should have valid spend_per_cust
         loyalty_segment = result[result["customer_type"] == "Loyalty"]
-        assert loyalty_segment[cols.calc.spend_per_cust].notna().all()
+        loyalty_spend_per_cust = cast("pd.Series", loyalty_segment[cols.calc.spend_per_cust])
+        assert loyalty_spend_per_cust.notna().all()
         # Verify the actual computed value: (100 + 200) / 2 customers = 150
         expected_loyalty_spend_per_cust = 150.0
-        assert loyalty_segment[cols.calc.spend_per_cust].iloc[0] == pytest.approx(expected_loyalty_spend_per_cust)
+        assert loyalty_spend_per_cust.iloc[0] == pytest.approx(expected_loyalty_spend_per_cust)
 
         # Walk-In segment (only unknown customers) should have NaN for spend_per_cust
         walkin_segment = result[result["customer_type"] == "Walk-In"]
-        assert walkin_segment[cols.calc.spend_per_cust].isna().all()
+        assert cast("pd.Series", walkin_segment[cols.calc.spend_per_cust]).isna().all()
 
         # But Walk-In segment should have valid spend_per_trans_unknown
-        assert walkin_segment[cols.calc.spend_per_trans_unknown].notna().all()
+        walkin_spend_per_trans_unknown = cast("pd.Series", walkin_segment[cols.calc.spend_per_trans_unknown])
+        assert walkin_spend_per_trans_unknown.notna().all()
         # Verify the actual computed value: (150 + 250) / 2 unknown transactions = 200
         expected_walkin_spend_per_trans_unknown = 200.0
-        assert walkin_segment[cols.calc.spend_per_trans_unknown].iloc[0] == pytest.approx(
+        assert walkin_spend_per_trans_unknown.iloc[0] == pytest.approx(
             expected_walkin_spend_per_trans_unknown,
         )

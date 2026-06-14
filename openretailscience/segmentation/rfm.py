@@ -25,12 +25,16 @@ to enhance customer insights and business decision-making.
 
 import datetime
 import functools
+from typing import TYPE_CHECKING, cast
 
 import ibis
 import pandas as pd
 
 from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import ColumnHelper, get_option
+
+if TYPE_CHECKING:
+    import ibis.expr.types as ir
 
 
 class RFMSegmentation:
@@ -208,14 +212,16 @@ class RFMSegmentation:
             ibis.Table: A table with RFM scores and segment values.
         """
         cols = ColumnHelper()
-        current_date_expr = ibis.literal(current_date)
+        # ibis.literal types as the generic ir.Scalar in stubs; a datetime.date literal is a DateValue at
+        # runtime, so narrow to enable .delta. Likewise unit_spend is a numeric column, narrow for .sum().
+        current_date_expr = cast("ir.DateValue", ibis.literal(current_date))
 
         customer_metrics = df.group_by(cols.customer_id).aggregate(
             recency_days=current_date_expr.delta(df[cols.transaction_date].max().cast("date"), unit="day").cast(
                 "int32",
             ),
             frequency=df[cols.transaction_id].nunique(),
-            monetary=df[cols.unit_spend].sum(),
+            monetary=cast("ir.NumericColumn", df[cols.unit_spend]).sum(),
         )
 
         filtered_metrics = self._apply_filters(customer_metrics)
@@ -226,9 +232,13 @@ class RFMSegmentation:
             m_score=self._compute_score(filtered_metrics, "monetary", self.m_segments, ascending=True),
         )
 
+        # Score columns are integer-valued; narrow to ir.NumericColumn to enable arithmetic operators.
+        r_score = cast("ir.NumericColumn", rfm_scores.r_score)
+        f_score = cast("ir.NumericColumn", rfm_scores.f_score)
+        m_score = cast("ir.NumericColumn", rfm_scores.m_score)
         return rfm_scores.mutate(
-            rfm_segment=(rfm_scores.r_score * 100 + rfm_scores.f_score * 10 + rfm_scores.m_score),
-            fm_segment=(rfm_scores.f_score * 10 + rfm_scores.m_score),
+            rfm_segment=(r_score * 100 + f_score * 10 + m_score),
+            fm_segment=(f_score * 10 + m_score),
         )
 
     def _apply_filters(self, customer_metrics: ibis.Table) -> ibis.Table:

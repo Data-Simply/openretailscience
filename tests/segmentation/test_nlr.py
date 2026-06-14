@@ -1,5 +1,7 @@
 """Tests for the NLRSegmentation class."""
 
+from typing import cast
+
 import ibis
 import pandas as pd
 import pytest
@@ -64,8 +66,9 @@ class TestNLRSegmentation:
         result = seg.df
         valid_segments = {SEGMENT_NEW, SEGMENT_REPEATING, SEGMENT_LAPSED}
 
-        assert result["segment_name"].notna().all()
-        assert set(result["segment_name"].unique()) == valid_segments
+        segment_name = cast("pd.Series", result["segment_name"])
+        assert segment_name.notna().all()
+        assert set(segment_name.unique()) == valid_segments
 
     def test_zero_spend_not_counted_as_bought(self):
         """Test that a customer with zero aggregated spend in a period is not considered to have bought."""
