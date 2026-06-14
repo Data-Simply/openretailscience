@@ -9,7 +9,12 @@ from matplotlib.colors import to_hex
 
 from openretailscience.options import PlotStyleHelper, get_option, option_context
 from openretailscience.plots import heatmap, line
-from openretailscience.plots.styles.styling_helpers import apply_chart_chrome, apply_legend, standard_graph_styles
+from openretailscience.plots.styles.styling_helpers import (
+    _CHROME_TOP_LABEL_HEADROOM_FACTOR,
+    apply_chart_chrome,
+    apply_legend,
+    standard_graph_styles,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -29,9 +34,17 @@ def _texts_with(fig, text: str) -> list:
     return [t for t in fig.texts if t.get_text() == text]
 
 
-def _measure_chrome_spacing(figheight: float) -> dict[str, float]:
-    """Render eyebrow/title/subtitle/source on a figure of the given height and return inter-element pixel gaps."""
-    fig, ax = plt.subplots(figsize=(10, figheight))
+def _measure_chrome_spacing(figheight: float, build_height: float | None = None) -> dict[str, float]:
+    """Render eyebrow/title/subtitle/source and return inter-element pixel gaps at ``figheight``.
+
+    When ``build_height`` is given and differs from ``figheight``, chrome is applied at
+    ``build_height`` and the figure is then resized to ``figheight`` before measuring. This
+    reproduces the common export flow (build on a default-sized figure, resize for the final
+    render) and proves the layout tracks the figure's *current* size rather than the size it
+    was first laid out at.
+    """
+    build_height = figheight if build_height is None else build_height
+    fig, ax = plt.subplots(figsize=(10, build_height))
     eyebrow = "Category index"
     title = "Premium categories over-index"
     subtitle = "Vs. mainstream during Q4"
@@ -43,6 +56,8 @@ def _measure_chrome_spacing(figheight: float) -> dict[str, float]:
         subtitle=subtitle,
         source_text=source,
     )
+    if build_height != figheight:
+        fig.set_size_inches(10, figheight)
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
     eye = _texts_with(fig, eyebrow.upper())[0].get_window_extent(renderer=renderer)
@@ -219,6 +234,107 @@ class TestApplyChartChrome:
                 f"(short={short[key]:.2f}, tall={tall[key]:.2f}); spacing is figure-relative, not absolute"
             )
 
+    def test_chrome_spacing_survives_figure_resize(self):
+        """Resizing the figure after chrome is applied must not change the inter-element gaps.
+
+        Chrome positions are derived from the figure height at layout time. A common export
+        flow builds the chart on a default-sized figure and then calls ``set_size_inches`` for
+        the final render. Because the eyebrow/title/subtitle are sized in points (absolute) but
+        the gaps were historically stored as a fraction of the layout-time height, enlarging the
+        figure ballooned the gaps (and shrinking it overlapped them). The layout must instead
+        track the figure's current height so the gaps stay put at any rendered size.
+        """
+        reference = _measure_chrome_spacing(figheight=8)
+        resized_up = _measure_chrome_spacing(figheight=8, build_height=4)
+        resized_down = _measure_chrome_spacing(figheight=4, build_height=8)
+        reference_down = _measure_chrome_spacing(figheight=4)
+
+        tolerance_px = 1.0
+        for key in reference:
+            assert abs(resized_up[key] - reference[key]) <= tolerance_px, (
+                f"{key}: building at 4in then resizing to 8in gives {resized_up[key]:.2f}px, "
+                f"but building directly at 8in gives {reference[key]:.2f}px; layout did not "
+                f"track the resized figure height"
+            )
+            assert abs(resized_down[key] - reference_down[key]) <= tolerance_px, (
+                f"{key}: building at 8in then resizing to 4in gives {resized_down[key]:.2f}px, "
+                f"but building directly at 4in gives {reference_down[key]:.2f}px; layout did not "
+                f"track the resized figure height"
+            )
+
+    def test_source_text_does_not_rewrap_into_axes_on_width_resize(self):
+        """Narrowing the figure after layout must not let the source line creep into the axes.
+
+        The source is placed with matplotlib wrapping. Left dynamic, it re-wraps to more lines
+        when the figure narrows, growing upward into the reserved source-to-axes gap (and
+        eventually overlapping the data area), because the axes bottom was reserved for the
+        layout-time line count. Freezing the wrap (as the header does) keeps the gap stable.
+        """
+        long_source = (
+            "Source: 2024 loyalty-program transactions across all banners, excluding staff "
+            "purchases and returns; index baseline is the chain average of 100."
+        )
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.barh(["Whole Milk", "Free-Range Eggs", "Sourdough"], [120, 88, 145])
+        apply_chart_chrome(ax, title="Premium categories over-index", source_text=long_source)
+        source_artist = next(t for t in fig.texts if t.get_text().startswith("Source:"))
+
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        gap_wide = ax.get_position().y0 * fig.bbox.height - source_artist.get_window_extent(renderer=renderer).y1
+
+        fig.set_size_inches(4, 5)
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        gap_narrow = ax.get_position().y0 * fig.bbox.height - source_artist.get_window_extent(renderer=renderer).y1
+
+        assert abs(gap_narrow - gap_wide) <= 1.0, (
+            f"source-to-axes gap changed from {gap_wide:.1f}px to {gap_narrow:.1f}px when the "
+            "figure narrowed; the source re-wrapped because its wrap was not frozen"
+        )
+
+    def test_chrome_survives_resize_on_figure_with_colorbar(self):
+        """Chrome spacing holds after resizing a heatmap, and its colorbar axes is preserved.
+
+        The layout engine declares colorbar-gridspec compatibility so matplotlib accepts it on a
+        figure that already owns a colorbar; a mismatching engine raises at install time. This
+        guards both that install (the heatmap renders at all) and that the colorbar axes survives
+        the resize while the eyebrow-to-title gap stays fixed.
+        """
+        traffic = pd.DataFrame(
+            [[120, 480, 300], [140, 520, 280], [160, 540, 260]],
+            index=["Mon", "Tue", "Wed"],
+            columns=["Morning", "Midday", "Evening"],
+        )
+        ax = heatmap.plot(
+            traffic,
+            cbar_label="Visits",
+            eyebrow="Footfall",
+            title="Midday peaks across the week",
+            subtitle="Store 101",
+        )
+        fig = ax.figure
+        axes_count = len(fig.axes)  # main heatmap axes + colorbar axes
+
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        eye = _texts_with(fig, "FOOTFALL")[0].get_window_extent(renderer=renderer)
+        ttl = _texts_with(fig, "Midday peaks across the week")[0].get_window_extent(renderer=renderer)
+        gap_before = eye.y0 - ttl.y1
+
+        fig.set_size_inches(12, 9)
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        eye = _texts_with(fig, "FOOTFALL")[0].get_window_extent(renderer=renderer)
+        ttl = _texts_with(fig, "Midday peaks across the week")[0].get_window_extent(renderer=renderer)
+        gap_after = eye.y0 - ttl.y1
+
+        assert len(fig.axes) == axes_count, "colorbar axes was dropped after resize"
+        assert abs(gap_after - gap_before) <= 1.0, (
+            f"eyebrow-to-title gap changed from {gap_before:.1f}px to {gap_after:.1f}px after "
+            "resizing a heatmap figure with a colorbar"
+        )
+
     def test_chrome_uses_configured_colors(self, fig_ax):
         """Each chrome element pulls its color from its corresponding plot.color.* option."""
         fig, ax = fig_ax
@@ -318,7 +434,7 @@ class TestApplyChartChrome:
         without_top = _topmost_axes_content_fig_y(labeltop=False)
 
         tick_size = get_option("plot.font.tick_size")
-        expected_drop_fig = tick_size * 1.2 / 72.0 / _CHROME_TEST_FIGHEIGHT_IN
+        expected_drop_fig = tick_size * _CHROME_TOP_LABEL_HEADROOM_FACTOR / 72.0 / _CHROME_TEST_FIGHEIGHT_IN
         actual_drop_fig = without_top - with_top
 
         # Tolerance absorbs tight_layout's asymmetric internal padding: the top-labels
