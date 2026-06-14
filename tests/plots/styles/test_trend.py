@@ -3,6 +3,7 @@
 import datetime
 import re
 import warnings
+from typing import TYPE_CHECKING, cast
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -13,6 +14,9 @@ from scipy import stats
 
 from openretailscience.options import get_option
 from openretailscience.plots.styles import trend
+
+if TYPE_CHECKING:
+    from openretailscience.plots.styles.trend import TrendType
 
 
 @pytest.fixture(autouse=True)
@@ -75,15 +79,15 @@ class TestTrendLine:
             datetime.datetime(2023, 4, 1, tzinfo=datetime.timezone.utc),
         ]
         values = [10, 15, 14, 25]
-        ax.plot(dates, values)
+        ax.plot(np.array(dates), values)
 
         trend.add_trend_line(ax, show_equation=True, show_r2=False)
 
         assert len(ax.get_lines()) == self.EXPECTED_LINE_COUNT_AFTER_TREND
 
         trend_line = ax.get_lines()[1]
-        line_x = trend_line.get_xdata()
-        line_y = trend_line.get_ydata()
+        line_x = np.asarray(trend_line.get_xdata())
+        line_y = np.asarray(trend_line.get_ydata())
         date_nums = mdates.date2num(dates)
 
         # x-values are emitted in matplotlib date-number form, matching the input range.
@@ -168,7 +172,7 @@ class TestTrendLine:
         trend.add_trend_line(ax, color="red")
 
         assert len(ax.get_lines()) == 1
-        line_x, line_y = ax.get_lines()[0].get_xdata(), ax.get_lines()[0].get_ydata()
+        line_x, line_y = np.asarray(ax.get_lines()[0].get_xdata()), np.asarray(ax.get_lines()[0].get_ydata())
 
         # Linear fit emits two endpoints spanning the axis x-range at the time of fitting.
         assert tuple(line_x) == pytest.approx(xlim_before)
@@ -190,7 +194,7 @@ class TestTrendLine:
         trend.add_trend_line(ax, color="purple")
 
         assert len(ax.get_lines()) == 1
-        line_x, line_y = ax.get_lines()[0].get_xdata(), ax.get_lines()[0].get_ydata()
+        line_x, line_y = np.asarray(ax.get_lines()[0].get_xdata()), np.asarray(ax.get_lines()[0].get_ydata())
 
         # Linear fit emits two endpoints spanning the axis x-range at the time of fitting.
         assert tuple(line_x) == pytest.approx(xlim_before)
@@ -223,7 +227,7 @@ class TestTrendLine:
 
         # Get the trend line to ensure it was calculated
         line = ax.get_lines()[0]
-        line_x = line.get_xdata()
+        line_x = np.asarray(line.get_xdata())
 
         # Verify line spans the x range of the bars
         assert min(line_x) <= min(x)
@@ -253,8 +257,8 @@ class TestTrendLine:
 
         # Get the trend line
         line = ax.get_lines()[0]
-        line_x = line.get_xdata()
-        line_y = line.get_ydata()
+        line_x = np.asarray(line.get_xdata())
+        line_y = np.asarray(line.get_ydata())
 
         # Verify line data exists and spans a reasonable range
         assert len(line_x) == self.TREND_LINE_POINTS  # Trend line should have 2 points
@@ -275,9 +279,10 @@ class TestTrendLine:
         _, ax = plt.subplots()
         ax.scatter(x, y)
 
-        # Should raise ValueError for unsupported type
+        # Should raise ValueError for unsupported type. The cast deliberately bypasses the
+        # TrendType literal to exercise the function's runtime validation of bad input.
         with pytest.raises(ValueError, match="trend_type must be one of"):
-            trend.add_trend_line(ax, trend_type="unsupported")
+            trend.add_trend_line(ax, trend_type=cast("TrendType", "unsupported"))
 
     # Algorithm Tests - Trend types with known data (parametrized to eliminate duplication)
     @pytest.mark.parametrize(
@@ -307,8 +312,8 @@ class TestTrendLine:
 
         # Validate that the trend line points are mathematically correct
         trend_line = ax.lines[0]
-        line_x = trend_line.get_xdata()
-        line_y = trend_line.get_ydata()
+        line_x = np.asarray(trend_line.get_xdata())
+        line_y = np.asarray(trend_line.get_ydata())
 
         # Check that the trend line produces values close to the expected relationship
         # Sample a few points from the trend line to verify correctness
@@ -394,8 +399,8 @@ class TestTrendLine:
         # Verify line was plotted with only finite values (some points should have been filtered)
         assert len(ax.lines) == 1
         trend_line = ax.lines[0]
-        x_line = trend_line.get_xdata()
-        y_data = trend_line.get_ydata()
+        x_line = np.asarray(trend_line.get_xdata())
+        y_data = np.asarray(trend_line.get_ydata())
         assert np.all(np.isfinite(y_data))
         # Verify that filtering actually occurred: line should not extend all the way to x_max
         assert max(x_line) < self.OVERFLOW_X_MAX, "Some points should have been filtered due to overflow"
@@ -590,7 +595,12 @@ class TestTrendLine:
         # Calculate R² in transformed space (log-log for power trend)
         log_x = np.log(x_data)
         log_y = np.log(y_data)
-        _, _, r_value_transformed, _, _ = stats.linregress(log_x, log_y)
+        # SciPy ships no type stub for linregress, so cast its result to the documented
+        # float tuple before squaring the correlation coefficient.
+        _, _, r_value_transformed, _, _ = cast(
+            "tuple[float, float, float, float, float]",
+            stats.linregress(log_x, log_y),
+        )
         r_squared_transformed = r_value_transformed**2
 
         _, ax = plt.subplots()

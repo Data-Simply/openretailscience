@@ -7,7 +7,9 @@ from typing import Any, Literal, cast, get_args
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
+from matplotlib.container import BarContainer
 from matplotlib.dates import date2num
+from matplotlib.patches import Rectangle
 from scipy import stats
 
 from openretailscience.core.validation import ensure_value_choice
@@ -31,6 +33,23 @@ _POSITIVITY_REQUIREMENTS: dict[TrendType, tuple[bool, bool]] = {
 
 # Types whose closed-form curve can overflow float64 at large inputs and need finite-mask filtering.
 _OVERFLOW_SENSITIVE_TYPES: frozenset[TrendType] = frozenset({"power", "exponential"})
+
+
+def _linregress(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float, float, float]:
+    """Run ``scipy.stats.linregress`` with a precise return type.
+
+    SciPy ships no type stub for ``linregress``, so its ``LinregressResult`` is seen as an
+    untyped tuple of ``object`` by static checkers. At runtime it is a namedtuple of float64
+    scalars; this wrapper restores that contract for callers.
+
+    Args:
+        x (np.ndarray): Independent variable samples.
+        y (np.ndarray): Dependent variable samples.
+
+    Returns:
+        tuple[float, float, float, float, float]: slope, intercept, rvalue, pvalue, stderr.
+    """
+    return cast("tuple[float, float, float, float, float]", stats.linregress(x, y))
 
 
 def _calculate_r_squared_original_space(y_actual: np.ndarray, y_predicted: np.ndarray) -> float:
@@ -70,15 +89,15 @@ def _perform_trend_calculation(
     """
     if trend_type == "linear":
         # Linear trend: y = mx + b
-        slope, intercept, r_value, _, _ = stats.linregress(x_filtered, y_filtered)
+        slope, intercept, r_value, _, _ = _linregress(x_filtered, y_filtered)
         return slope, intercept, r_value**2
 
     if trend_type == "power":
         # Power law trend: y = ax^b → log(y) = log(a) + b*log(x)
         log_x = np.log(x_filtered)
         log_y = np.log(y_filtered)
-        slope, intercept, _, _, _ = stats.linregress(log_x, log_y)
-        a = np.exp(intercept)  # Convert back: a = exp(intercept), b = slope
+        slope, intercept, _, _, _ = _linregress(log_x, log_y)
+        a = float(np.exp(intercept))  # Convert back: a = exp(intercept), b = slope
         b = slope
 
         # Calculate R² in original data space
@@ -89,7 +108,7 @@ def _perform_trend_calculation(
     if trend_type == "logarithmic":
         # Logarithmic trend: y = a*ln(x) + b
         log_x = np.log(x_filtered)
-        slope, intercept, _, _, _ = stats.linregress(log_x, y_filtered)
+        slope, intercept, _, _, _ = _linregress(log_x, y_filtered)
         a = slope  # a = slope, b = intercept
         b = intercept
 
@@ -101,8 +120,8 @@ def _perform_trend_calculation(
     if trend_type == "exponential":
         # Exponential trend: y = ae^(bx) → ln(y) = ln(a) + bx
         log_y = np.log(y_filtered)
-        slope, intercept, _, _, _ = stats.linregress(x_filtered, log_y)
-        a = np.exp(intercept)  # Convert back: a = exp(intercept), b = slope
+        slope, intercept, _, _, _ = _linregress(x_filtered, log_y)
+        a = float(np.exp(intercept))  # Convert back: a = exp(intercept), b = slope
         b = slope
 
         # Calculate R² in original data space
@@ -265,20 +284,23 @@ def _extract_plot_data(ax: Axes) -> tuple[np.ndarray, np.ndarray]:
     lines = [line for line in ax.get_lines() if line.get_visible()]
 
     if len(lines) > 0:
-        x_data = lines[0].get_xdata()
-        y_data = lines[0].get_ydata()
+        x_data = np.asarray(lines[0].get_xdata())
+        y_data = np.asarray(lines[0].get_ydata())
     # Check for bar charts (patches)
     elif len(ax.patches) > 0:
         # Detect bar orientation using BarContainer (stable API). Default covers
         # the case where patches were added without a container via ax.add_patch.
-        is_vertical = ax.containers[0].orientation == "vertical" if len(ax.containers) > 0 else True
+        container = ax.containers[0] if len(ax.containers) > 0 else None
+        is_vertical = container.orientation == "vertical" if isinstance(container, BarContainer) else True
 
+        # Bars are Rectangle patches; filter to them for the geometry accessors below.
+        bars = [patch for patch in ax.patches if isinstance(patch, Rectangle)]
         if is_vertical:
             # Vertical bars: x is center position, y is height
-            bar_data = [(patch.get_x() + patch.get_width() / 2, patch.get_height()) for patch in ax.patches]
+            bar_data = [(bar.get_x() + bar.get_width() / 2, bar.get_height()) for bar in bars]
         else:
             # Horizontal bars: x is width, y is center position
-            bar_data = [(patch.get_width(), patch.get_y() + patch.get_height() / 2) for patch in ax.patches]
+            bar_data = [(bar.get_width(), bar.get_y() + bar.get_height() / 2) for bar in bars]
 
         # Sort by x-coordinate to ensure consistency with grouped/stacked bar charts
         bar_data.sort(key=lambda point: point[0])
@@ -288,15 +310,12 @@ def _extract_plot_data(ax: Axes) -> tuple[np.ndarray, np.ndarray]:
         # Extract data from the first collection (e.g., scatter plot)
         collection = ax.collections[0]
         # Get the offsets which contain the x,y coordinates
-        if hasattr(collection, "get_offsets") and callable(collection.get_offsets):
-            offset_data = collection.get_offsets()
-            if len(offset_data) > 0:
-                x_data = offset_data[:, 0]
-                y_data = offset_data[:, 1]
-            else:
-                raise ValueError("No data points found in the collection")
+        offset_data = np.asarray(collection.get_offsets())
+        if len(offset_data) > 0:
+            x_data = offset_data[:, 0]
+            y_data = offset_data[:, 1]
         else:
-            raise ValueError("Cannot extract data from this type of collection")
+            raise ValueError("No data points found in the collection")
     else:
         raise ValueError("No visible lines or collections found in the plot")
 
