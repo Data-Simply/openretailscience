@@ -46,7 +46,7 @@ def get_font_properties(font_name: str) -> fm.FontProperties:
 
     # Try to load built-in bundled fonts first
     if font_name in _BUILTIN_FONTS:
-        font_props = fm.FontProperties(fname=_BUILTIN_FONTS[font_name])
+        font_props = fm.FontProperties(fname=str(_BUILTIN_FONTS[font_name]))
         _font_cache[font_name] = font_props
         return font_props
 

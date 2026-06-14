@@ -3,8 +3,10 @@
 This module provides functions to create and retrieve color palettes.
 """
 
+from typing import cast
+
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+from matplotlib.colors import Colormap, LinearSegmentedColormap, ListedColormap
 
 from openretailscience.constants import COLORS
 from openretailscience.options import get_option
@@ -122,10 +124,12 @@ def get_named_color(color_type: str) -> str:
     Returns:
         Hex color string
     """
-    return get_option(f"plot.color.{color_type}")
+    # The dynamic f-string key resolves to a ``plot.color.*`` option, all of which store hex
+    # color strings, but the dynamic key only matches the ``str -> OptionTypes`` overload.
+    return cast("str", get_option(f"plot.color.{color_type}"))
 
 
-def get_sequential_cmap() -> ListedColormap | LinearSegmentedColormap:
+def get_sequential_cmap() -> Colormap:
     """Resolve the magnitude-ordered colormap (heatmap, cohort, period-on-period).
 
     Reads ``plot.color.sequential``: a Tailwind hue name (``"green"``, ``"blue"``)
@@ -133,7 +137,8 @@ def get_sequential_cmap() -> ListedColormap | LinearSegmentedColormap:
     colormap name (``"viridis"``, ``"Greens"``) is handed to ``plt.get_cmap``.
 
     Returns:
-        ListedColormap | LinearSegmentedColormap: The resolved colormap.
+        Colormap: The resolved colormap (a ``ListedColormap`` for Tailwind hues, or
+            whatever ``plt.get_cmap`` returns for a matplotlib colormap name).
     """
     cmap_name = get_option("plot.color.sequential")
     return get_listed_cmap(cmap_name) if cmap_name in COLORS else plt.get_cmap(cmap_name)
