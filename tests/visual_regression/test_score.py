@@ -6,6 +6,7 @@ from visual_regression.score import (
     build_judge_prompt,
     evaluate,
     evaluate_freetext,
+    evaluate_passfail,
 )
 
 _TAXONOMY = [
@@ -147,6 +148,38 @@ class TestEvaluateFreetext:
         detections = [{"file": "a.png", "description": "", "error": "model unavailable"}]
         with pytest.raises(ValueError, match="No overlapping"):
             evaluate_freetext(plots, detections, _keyword_judge)
+
+
+class TestEvaluatePassfail:
+    """Pass/fail scoring is a plain binary defect-vs-clean classification."""
+
+    def test_binary_confusion_counts(self):
+        """fail==True on defective is TP; fail==True on clean is FP; the rest follow."""
+        plots = [
+            {"file": "a.png", "defects": [{"name": "title_clipped"}]},
+            {"file": "b.png", "defects": [{"name": "legend_overlaps_data"}]},
+            {"file": "c.png", "defects": []},
+            {"file": "d.png", "defects": []},
+        ]
+        detections = [
+            {"file": "a.png", "fail": True},  # TP
+            {"file": "b.png", "fail": False},  # FN
+            {"file": "c.png", "fail": True},  # FP
+            {"file": "d.png", "fail": False},  # TN
+        ]
+        report = evaluate_passfail(plots, detections)
+        binary = report["binary"]
+        assert (binary["tp"], binary["fp"], binary["fn"], binary["tn"]) == (1, 1, 1, 1)
+        assert binary["precision"] == pytest.approx(0.5)
+        assert binary["recall"] == pytest.approx(0.5)
+        assert binary["accuracy"] == pytest.approx(0.5)
+
+    def test_errored_detections_are_skipped(self):
+        """A detection that failed (carries an error) is excluded from scoring."""
+        plots = [{"file": "a.png", "defects": [{"name": "title_clipped"}]}]
+        detections = [{"file": "a.png", "fail": False, "error": "model unavailable"}]
+        with pytest.raises(ValueError, match="No overlapping"):
+            evaluate_passfail(plots, detections)
 
 
 class TestJudge:

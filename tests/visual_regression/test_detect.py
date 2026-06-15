@@ -7,7 +7,9 @@ from visual_regression.detect import (
     _extract_stream_json_result,
     _openrouter_body,
     _parse_detections,
+    _parse_passfail,
     build_freetext_prompt,
+    build_passfail_prompt,
     build_prompt,
     detect_all,
 )
@@ -160,3 +162,28 @@ class TestOpenRouterBody:
         body = _openrouter_body([{"type": "text", "text": "hi"}], "vendor/model")
         assert body["provider"] == {"data_collection": "deny", "zdr": True}
         assert body["model"] == "vendor/model"
+
+
+class TestPassFail:
+    """The pass/fail mode reduces detection to a single FAIL/PASS verdict."""
+
+    def test_prompt_asks_for_pass_or_fail(self):
+        """The prompt names both PASS and FAIL and does not leak the category list."""
+        prompt = build_passfail_prompt()
+        assert "PASS" in prompt
+        assert "FAIL" in prompt
+        assert '{"defects":' not in prompt
+
+    @pytest.mark.parametrize(
+        ("raw", "expected_fail"),
+        [
+            ("FAIL", True),
+            ("PASS", False),
+            ("fail", True),  # case-insensitive
+            ("This chart should FAIL the review.", True),
+            ("PASS - looks clean", False),
+        ],
+    )
+    def test_parse_passfail(self, raw, expected_fail):
+        """A FAIL anywhere in the reply means a defect was flagged."""
+        assert _parse_passfail(raw) is expected_fail

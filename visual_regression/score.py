@@ -237,6 +237,54 @@ def format_freetext_report(report: dict, detector: str | None = None, judge_mode
     return "\n".join(lines)
 
 
+def evaluate_passfail(plots: list[dict], detections: list[dict]) -> dict:
+    """Score PASS/FAIL detections as a binary defect-vs-clean classification (no judge needed).
+
+    Args:
+        plots: The manifest's ``plots`` list (ground truth).
+        detections: Pass/fail detector records (each with ``file`` and a boolean ``fail``).
+
+    Returns:
+        A report dict with ``binary`` metrics and ``num_plots``.
+
+    Raises:
+        ValueError: If no non-errored plot files are shared between the manifest and the detections.
+    """
+    has_defect = {p["file"]: len(p["defects"]) > 0 for p in plots}
+    predicted_fail = {r["file"]: bool(r.get("fail")) for r in detections if r.get("error") is None}
+    files = [f for f in has_defect if f in predicted_fail]
+    if len(files) == 0:
+        raise ValueError("No overlapping (non-errored) plot files between manifest and detections.")
+
+    tp = sum(1 for f in files if has_defect[f] and predicted_fail[f])
+    fp = sum(1 for f in files if not has_defect[f] and predicted_fail[f])
+    fn = sum(1 for f in files if has_defect[f] and not predicted_fail[f])
+    tn = sum(1 for f in files if not has_defect[f] and not predicted_fail[f])
+    binary = _prf(tp, fp, fn)
+    binary["accuracy"] = (tp + tn) / len(files)
+    binary["tn"] = tn
+    return {"num_plots": len(files), "mode": "passfail", "binary": binary}
+
+
+def format_passfail_report(report: dict, detector: str | None = None) -> str:
+    """Render a pass/fail ``report`` as a human-readable text block."""
+    header = "Pass/Fail visual-regression detection report"
+    if detector is not None:
+        header += f"  ({detector})"
+    binary = report["binary"]
+    return "\n".join(
+        [
+            header,
+            f"Plots scored: {report['num_plots']}",
+            "",
+            "Binary (PASS/FAIL vs defect present):",
+            f"  accuracy={binary['accuracy']:.3f}  precision={binary['precision']:.3f}  "
+            f"recall={binary['recall']:.3f}  f1={binary['f1']:.3f}",
+            f"  tp={binary['tp']} fp={binary['fp']} fn={binary['fn']} tn={binary['tn']}",
+        ],
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description="Score detector output against the dataset manifest.")
@@ -270,6 +318,9 @@ def main(argv: list[str] | None = None) -> None:
         )
         report = evaluate_freetext(manifest["plots"], detections, judge, workers=args.workers)
         print(format_freetext_report(report, detector, args.judge_model or f"{args.judge_backend} default"))
+    elif mode == "passfail":
+        report = evaluate_passfail(manifest["plots"], detections)
+        print(format_passfail_report(report, detector))
     else:
         report = evaluate(manifest["plots"], detections, manifest["taxonomy"])
         print(format_report(report, detections_doc.get("backend"), detections_doc.get("model")))

@@ -77,6 +77,23 @@ def build_freetext_prompt() -> str:
     )
 
 
+def build_passfail_prompt() -> str:
+    """Build the binary prompt asking only whether the chart is clean (PASS) or broken (FAIL).
+
+    Returns:
+        A prompt instructing the model to reply with exactly one word: ``PASS`` or ``FAIL``.
+    """
+    return (
+        "You are a data-visualisation QA reviewer. You are shown a single retail chart image.\n"
+        "Decide whether the chart has ANY visual formatting or layout problem — for example text cut off "
+        "at an edge, overlapping or unreadable labels, a legend covering the data, a mis-placed, "
+        "mis-sized or low-contrast title, a large gap or overlap between an axis and its labels, or a "
+        "distorted aspect ratio. Judge only the rendering, not whether the numbers are right.\n"
+        "Reply with exactly one word: PASS if the chart is clean and correctly formatted, or FAIL if it "
+        "has any visual problem."
+    )
+
+
 def _claude_invoke(prompt: str, model: str, *, allow_read: bool) -> str:
     """Run ``claude -p`` and return the assistant's text from the stream-json result event.
 
@@ -211,6 +228,25 @@ def _freetext_record(file: str, raw: str, error: str | None) -> dict:
     return {"file": file, "description": raw.strip(), "error": error}
 
 
+def _parse_passfail(raw: str) -> bool:
+    """Return True (FAIL = a defect is present) when the response says FAIL, else False (PASS)."""
+    return "FAIL" in raw.strip().upper()
+
+
+def _passfail_record(file: str, raw: str, error: str | None) -> dict:
+    """Build a pass/fail detection record (``fail`` True means the model flagged the chart)."""
+    return {"file": file, "fail": _parse_passfail(raw), "raw": raw, "error": error}
+
+
+def _prompt_for_mode(mode: str, taxonomy: list[dict[str, str]]) -> str:
+    """Return the detection prompt for the requested mode."""
+    if mode == "categories":
+        return build_prompt(taxonomy)
+    if mode == "passfail":
+        return build_passfail_prompt()
+    return build_freetext_prompt()
+
+
 def _detect_one(
     plot: dict,
     base_dir: Path,
@@ -227,6 +263,8 @@ def _detect_one(
         error = str(exc)
     if mode == "categories":
         return _categories_record(plot["file"], raw, error, valid_names)
+    if mode == "passfail":
+        return _passfail_record(plot["file"], raw, error)
     return _freetext_record(plot["file"], raw, error)
 
 
@@ -246,16 +284,17 @@ def detect_all(
         backend: Callable ``(image_path, prompt) -> raw_text`` performing one detection.
         taxonomy: Defect catalogue, used to build the prompt and validate reported categories.
         mode: ``"categories"`` for closed-set category detection, ``"freetext"`` for open-ended
-            natural-language descriptions.
+            natural-language descriptions, ``"passfail"`` for a single PASS/FAIL verdict.
         workers: Number of detections to run concurrently. The work is I/O-bound (one subprocess or HTTP
             call per plot), so threads parallelise it; results keep input order regardless.
 
     Returns:
-        One record per plot. In ``categories`` mode: ``{file, detected, has_defect, raw, error}``.
-        In ``freetext`` mode: ``{file, description, error}``.
+        One record per plot. In ``categories`` mode: ``{file, detected, has_defect, raw, error}``;
+        in ``freetext`` mode: ``{file, description, error}``; in ``passfail`` mode: ``{file, fail, raw,
+        error}``.
     """
     base_dir = Path(base_dir)
-    prompt = build_prompt(taxonomy) if mode == "categories" else build_freetext_prompt()
+    prompt = _prompt_for_mode(mode, taxonomy)
     valid_names = {d["name"] for d in taxonomy}
     detect_one = partial(
         _detect_one, base_dir=base_dir, backend=backend, prompt=prompt, mode=mode, valid_names=valid_names
@@ -303,9 +342,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--model", default=None, help="Model id/alias (backend default if omitted).")
     parser.add_argument(
         "--mode",
-        choices=("categories", "freetext"),
+        choices=("categories", "freetext", "passfail"),
         default="categories",
-        help="categories: pick from the closed defect list. freetext: describe problems in prose.",
+        help="categories: pick from the closed defect list. freetext: describe problems in prose. "
+        "passfail: a single PASS/FAIL verdict.",
     )
     parser.add_argument("--out", default=None, help="Output detections JSON (defaults next to the manifest).")
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N plots (cost control).")
