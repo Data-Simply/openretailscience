@@ -105,6 +105,10 @@ def _rewrap_text_to_width(text: Text, original: str, renderer: RendererBase) -> 
     it on every draw is what stops a post-call resize from leaving the wrap frozen at the
     build-time width. ``original`` (the unwrapped source) is supplied by the caller because the
     baked artist no longer holds it.
+
+    Leans on matplotlib's private wrap internals (``_get_wrapped_text`` and the ``_renderer``
+    attribute) — there is no public width-wrap API. A rename fails loudly at the bare call; a
+    silent contract change is caught by the line-count assertions in the chrome tests.
     """
     text.set_text(original)
     text.set_wrap(True)
@@ -168,17 +172,19 @@ def _layout_chrome_header(
 
 def _layout_chrome_source(
     source: _ChromeTextSpec,
-    bottom_offset_in: float,
     fig_h: float,
     dpi: float,
     renderer: RendererBase,
 ) -> float:
-    """Re-wrap the bottom-anchored source line; return its top offset in inches from the figure bottom."""
+    """Re-wrap the bottom-anchored source line; return its top offset in inches from the figure bottom.
+
+    The source is anchored at ``_CHROME_BOTTOM_MARGIN_IN`` from the figure bottom.
+    """
     if source.wrap:
         _rewrap_text_to_width(source.text, source.original, renderer)
-    source.text.set_y(bottom_offset_in / fig_h)
+    source.text.set_y(_CHROME_BOTTOM_MARGIN_IN / fig_h)
     height_in = source.text.get_window_extent(renderer=renderer).height / dpi
-    return bottom_offset_in + height_in
+    return _CHROME_BOTTOM_MARGIN_IN + height_in
 
 
 @dataclass
@@ -224,7 +230,7 @@ def _apply_chrome_layout(
     header_bottom_in = _layout_chrome_header(layout.header, layout.header_top_offset_in, fig_h, dpi, renderer)
     axes_top_in = header_bottom_in + layout.header_to_axes_gap_in
     if layout.source is not None:
-        source_top_in = _layout_chrome_source(layout.source, _CHROME_BOTTOM_MARGIN_IN, fig_h, dpi, renderer)
+        source_top_in = _layout_chrome_source(layout.source, fig_h, dpi, renderer)
         axes_bottom_in = source_top_in + layout.source_to_axes_gap_in
     else:
         axes_bottom_in = layout.axes_bottom_offset_in
@@ -257,7 +263,9 @@ def _recompute_chrome_axes_gaps(layout: _ChromeLayout, fig: Figure, renderer: Re
     """Set ``layout``'s header/source-to-axes gaps from the axes box's current position.
 
     The engine derives the axes top/bottom from these gaps, so they must be re-captured whenever the
-    box is reflowed: at initial layout, and after any later reflow that moved it.
+    box is reflowed: at initial layout, and after any later reflow that moved it. Re-wraps and
+    repositions the header and source artists as a side effect, since the gaps are measured against
+    their freshly laid-out heights.
     """
     fig_h = fig.get_figheight()
     dpi = fig.dpi
@@ -266,7 +274,7 @@ def _recompute_chrome_axes_gaps(layout: _ChromeLayout, fig: Figure, renderer: Re
     layout.header_to_axes_gap_in = (1.0 - pos.y1) * fig_h - header_bottom_in
     axes_bottom_in = pos.y0 * fig_h
     if layout.source is not None:
-        source_top_in = _layout_chrome_source(layout.source, _CHROME_BOTTOM_MARGIN_IN, fig_h, dpi, renderer)
+        source_top_in = _layout_chrome_source(layout.source, fig_h, dpi, renderer)
         layout.source_to_axes_gap_in = axes_bottom_in - source_top_in
     else:
         layout.axes_bottom_offset_in = axes_bottom_in
@@ -530,6 +538,7 @@ def apply_chart_chrome(
     for text_str, font, size, color, wrap, gap_after_in in header_specs:
         if text_str is None:
             continue
+        # y is a placeholder; _layout_chrome_header stacks the elements into their real positions below.
         artist = fig.text(
             chrome_x,
             1.0 - header_top_offset_in / fig_h,
@@ -558,6 +567,7 @@ def apply_chart_chrome(
     source_spec: _ChromeTextSpec | None = None
     axes_bottom_in = _CHROME_BOTTOM_MARGIN_IN
     if source_text is not None:
+        # y is a placeholder; _layout_chrome_source sets the real position below.
         source_artist = fig.text(
             chrome_x,
             _CHROME_BOTTOM_MARGIN_IN / fig_h,
@@ -571,7 +581,7 @@ def apply_chart_chrome(
         )
         source_artist.set_gid(chrome_gid)
         source_spec = _ChromeTextSpec(source_artist, source_text, 0.0, wrap=True)
-        source_top_in = _layout_chrome_source(source_spec, _CHROME_BOTTOM_MARGIN_IN, fig_h, dpi, renderer)
+        source_top_in = _layout_chrome_source(source_spec, fig_h, dpi, renderer)
         axes_bottom_in = source_top_in + _CHROME_GAP_SOURCE_TO_AXES_IN
     axes_bottom = axes_bottom_in / fig_h
 
@@ -601,7 +611,7 @@ def apply_chart_chrome(
         axes_bottom_offset_in=_CHROME_BOTTOM_MARGIN_IN,
         tab=tab_spec,
     )
-    _recompute_chrome_axes_gaps(layout, fig, _active_renderer(fig))
+    _recompute_chrome_axes_gaps(layout, fig, renderer)
     layouts[id(ax)] = layout
     _install_chrome_layout_engine(fig)
 
