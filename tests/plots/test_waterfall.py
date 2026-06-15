@@ -123,6 +123,30 @@ class TestWaterfallPlot:
         for text in bar_label_texts:
             assert text.get_fontsize() == custom_data_label_size
 
+    def test_data_labels_stay_within_axes_when_a_bar_dominates(self):
+        """Edge labels on extreme bars must not spill out of the plot area onto the tick/header bands.
+
+        matplotlib bars carry sticky edges that pin the y-view to the bar extents, so a dominant
+        negative bar leaves its edge label overlapping the x-axis tick labels (and the topmost
+        positive label overlapping the header) unless the y-limits are grown to make room.
+        """
+        amounts = [66444, -284585, 26890]
+        labels = ["New", "Lapsed", "Repeating"]
+
+        result_ax = plot(amounts, labels, data_label_format="both", display_net_bar=True)
+        fig = result_ax.figure
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+
+        axes_box = result_ax.get_window_extent(renderer=renderer)
+        data_labels = [text for text in result_ax.texts if text.get_text()]
+        assert len(data_labels) == len(amounts) + 1  # one per input bar plus the net bar
+
+        for text in data_labels:
+            label_box = text.get_window_extent(renderer=renderer)
+            assert label_box.y0 >= axes_box.y0
+            assert label_box.y1 <= axes_box.y1
+
     @pytest.mark.parametrize("label_format", ["percentage", "both"])
     def test_zero_total_change_does_not_raise(self, label_format):
         """Test that offsetting amounts (zero total) do not raise ZeroDivisionError."""

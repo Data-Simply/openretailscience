@@ -10,6 +10,7 @@ import matplotlib.ticker as mtick
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.axis import XAxis, YAxis
+from matplotlib.text import Annotation
 
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.font_utils import get_font_properties
@@ -24,6 +25,10 @@ _LABEL_GAP_FACTOR = 1.15  # multiple of font line height enforced between adjace
 _LABEL_BUMP_THRESHOLD_PX = 1.0  # display-pixel delta above which a leader line is drawn
 _LEADER_LINEWIDTH = 0.8
 _LEADER_ALPHA = 0.55
+
+# Bar-label headroom
+_BAR_LABEL_CLEARANCE_PX = 2.0  # gap kept between an edge label and the axes boundary
+_MAX_BAR_LABEL_YLIM_PASSES = 3  # expand/measure passes; the geometric correction settles within a few
 
 
 class _EndOfLineCandidate(TypedDict):
@@ -322,6 +327,52 @@ def _resolve_end_of_line_label_ys(ax: Axes, candidates: list[_EndOfLineCandidate
 
     inv = ax.transData.inverted()
     return [float(inv.transform((0, bumped[i]))[1]) for i in range(n)]
+
+
+def expand_ylim_for_bar_labels(ax: Axes, labels: list[Annotation]) -> None:
+    """Grow the y-limits so bar-end value labels sit inside the axes data area.
+
+    matplotlib bars carry sticky edges that suppress autoscale margins, so the y-view is pinned
+    exactly to the bar extents. ``ax.bar_label(label_type="edge")`` then draws each value at a fixed
+    point offset *outside* its bar, leaving the labels on the most extreme bars overflowing past the
+    axes — into the x-axis tick-label band below (negative bars) or the chart header above (positive
+    bars). This expands ``ylim`` on whichever side overflows until every label clears, measuring in
+    pixel space so the reserved room tracks the rendered font height rather than a fixed fraction of
+    the data range.
+
+    Must run after the chrome layout has reflowed the axes: converting the labels' pixel overflow to
+    data units depends on the final axes height.
+
+    Args:
+        ax (Axes): The axes holding the labelled bars.
+        labels (list[Annotation]): The annotation artists returned by ``ax.bar_label``.
+    """
+    labels = [label for label in labels if len(label.get_text()) > 0]
+    if len(labels) == 0:
+        return
+
+    fig = ax.figure
+    for _ in range(_MAX_BAR_LABEL_YLIM_PASSES):
+        # Draw first so the labels and axes box report settled pixel positions; with the canvas
+        # drawn, get_window_extent resolves the active renderer on its own.
+        fig.canvas.draw()
+        axes_box = ax.get_window_extent()
+        label_boxes = [label.get_window_extent() for label in labels]
+
+        # Pixels by which the outermost labels spill past each axes edge (<= 0 once inside).
+        overflow_below = axes_box.y0 - min(box.y0 for box in label_boxes)
+        overflow_above = max(box.y1 for box in label_boxes) - axes_box.y1
+        if overflow_below <= 0 and overflow_above <= 0:
+            return
+
+        # Expanding ylim shifts every bar edge toward the centre, pulling the labels inward; the
+        # clearance overshoots so each spilling label lands just inside its edge. Growing the view
+        # lowers px-per-data, so a single pass under-corrects — the loop re-measures and tops up.
+        y_low, y_high = ax.get_ylim()
+        data_per_px = (y_high - y_low) / axes_box.height
+        extra_below = overflow_below + _BAR_LABEL_CLEARANCE_PX if overflow_below > 0 else 0.0
+        extra_above = overflow_above + _BAR_LABEL_CLEARANCE_PX if overflow_above > 0 else 0.0
+        ax.set_ylim(y_low - extra_below * data_per_px, y_high + extra_above * data_per_px)
 
 
 def apply_hatches(ax: Axes, num_segments: int) -> Axes:
