@@ -291,8 +291,9 @@ def plot(  # noqa: C901, PLR0913
             threshold use the ``plot.color.negative`` option, and values between use the ``plot.color.neutral`` option.
             Requires highlight_range to be set (not None). Only applicable when series_col is None. Defaults to False.
         **kwargs: Additional keyword arguments to pass to the Pandas plot function. When
-            ``color_by_threshold`` is True, kwargs are passed to matplotlib's ``Axes.barh()`` instead
-            and pandas-specific kwargs (figsize, stacked, legend, subplots, layout) are filtered out.
+            ``color_by_threshold`` is True, kwargs are passed to matplotlib's ``Axes.barh()`` instead.
+            ``figsize`` still sizes the figure when ``ax`` is None; it and the other pandas-specific
+            kwargs (stacked, legend, subplots, layout) are excluded only from the ``barh`` call.
 
     Returns:
         SubplotBase: The matplotlib axes object.

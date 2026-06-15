@@ -17,6 +17,7 @@ from openretailscience.plots.styles.graph_utils import draw_end_of_line_labels
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
+    from matplotlib.backend_bases import RendererBase
     from matplotlib.figure import Figure
     from matplotlib.text import Text
 
@@ -95,91 +96,138 @@ def _resolve_end_of_line_legend_args(
     return False, None, False
 
 
-def _freeze_text_wrap(text: Text) -> None:
-    """Bake matplotlib's soft wrap into ``text`` and stop it re-wrapping on later draws.
+def _rewrap_text_to_width(text: Text, original: str, renderer: RendererBase) -> None:
+    """Bake ``original`` into ``text``, wrapped to the figure's current width.
 
-    ``wrap=True`` recomputes line breaks every draw from the figure width, so a later resize (or
-    the extra draw ``bbox_inches='tight'`` triggers) can change the line count and invalidate the
-    layout positioned against the measured height. Baking the wrapped lines as explicit newlines
-    and turning wrap off freezes the count. Requires a prior draw so the wrap is already computed;
-    the caller measures the baked text afterwards via ``get_window_extent``, which re-lays it out
-    without another draw. No-op when wrapping is already off.
+    matplotlib's ``wrap=True`` only re-wraps during ``draw`` and ``get_window_extent`` ignores it,
+    so chrome bakes the wrap into explicit newlines to measure a stable height. Pointing the text
+    at the live ``renderer`` first makes the bake follow the figure's *current* width: re-deriving
+    it on every draw is what stops a post-call resize from leaving the wrap frozen at the
+    build-time width. ``original`` (the unwrapped source) is supplied by the caller because the
+    baked artist no longer holds it.
     """
-    if not text.get_wrap():
-        return
+    text.set_text(original)
+    text.set_wrap(True)
+    text._renderer = renderer
     text.set_text(text._get_wrapped_text())
     text.set_wrap(False)
 
 
-def _place_header_text(
-    ax: Axes,
-    x_fig: float,
-    prev_bottom_fig_y: float,
-    text_str: str,
-    font_name: str,
-    font_size: float,
-    color: str,
-    wrap: bool,
-    gid: str,
-) -> float:
-    """Place a header text element with its top at ``prev_bottom_fig_y`` and return its measured bottom.
+def _active_renderer(fig: Figure) -> RendererBase:
+    """Return the renderer for the figure's current draw, across backends.
 
-    Each element is placed and drawn in turn so that wrapped lines from
-    the previous element are reflected in the y position of the next.
+    The chrome engine measures text on every draw, including ``savefig``, during which matplotlib
+    swaps in a vector canvas (``FigureCanvasSVG``/``Pdf``) that has no ``get_renderer``. Use
+    ``fig._get_renderer()`` (what matplotlib's own tight/constrained layout engines use), not
+    ``fig.canvas.get_renderer()``, which exists only on the Agg canvas.
     """
-    fig = ax.figure
-    t = fig.text(
-        x_fig,
-        prev_bottom_fig_y,
-        text_str,
-        ha="left",
-        va="top",
-        fontproperties=get_font_properties(font_name),
-        fontsize=font_size,
-        color=color,
-        wrap=wrap,
-    )
-    t.set_gid(gid)
-    fig.canvas.draw()
-    _freeze_text_wrap(t)
-    renderer = fig.canvas.get_renderer()
-    return t.get_window_extent(renderer=renderer).y0 / fig.bbox.height
+    return fig._get_renderer()
+
+
+@dataclass
+class _ChromeTextSpec:
+    """A chrome text element plus the inputs needed to re-place it at any figure width.
+
+    Attributes:
+        text: The figure-text artist. Its own content is the baked (newlined) form.
+        original: The unwrapped source string, re-wrapped to the current width on each draw.
+        gap_after_in: Absolute inch gap from this element's bottom to the next stacked element
+            (the trailing slot for the final / bottom-anchored element).
+        wrap: Whether the element re-wraps to the figure width. Eyebrows stay single-line.
+    """
+
+    text: Text
+    original: str
+    gap_after_in: float
+    wrap: bool = True
+
+
+def _layout_chrome_header(
+    specs: list[_ChromeTextSpec],
+    top_offset_in: float,
+    fig_h: float,
+    dpi: float,
+    renderer: RendererBase,
+) -> float:
+    """Re-wrap and stack the top-anchored header elements; return the block's bottom offset in inches.
+
+    Each element is re-wrapped to the current width, positioned with its top ``top_in`` inches below
+    the figure top, then measured so the next element starts below its actual rendered height. The
+    returned bottom offset (inches from the figure top, including the final element's trailing gap)
+    anchors the axes top.
+    """
+    top_in = top_offset_in
+    for spec in specs:
+        if spec.wrap:
+            _rewrap_text_to_width(spec.text, spec.original, renderer)
+        spec.text.set_y(1.0 - top_in / fig_h)
+        height_in = spec.text.get_window_extent(renderer=renderer).height / dpi
+        top_in += height_in + spec.gap_after_in
+    return top_in
+
+
+def _layout_chrome_source(
+    source: _ChromeTextSpec,
+    bottom_offset_in: float,
+    fig_h: float,
+    dpi: float,
+    renderer: RendererBase,
+) -> float:
+    """Re-wrap the bottom-anchored source line; return its top offset in inches from the figure bottom."""
+    if source.wrap:
+        _rewrap_text_to_width(source.text, source.original, renderer)
+    source.text.set_y(bottom_offset_in / fig_h)
+    height_in = source.text.get_window_extent(renderer=renderer).height / dpi
+    return bottom_offset_in + height_in
 
 
 @dataclass
 class _ChromeLayout:
-    """One axes' chrome placement, stored as absolute inch offsets so it survives a resize.
+    """One axes' chrome placement recipe, stored as resize-invariant inputs.
 
-    Text is sized in points (absolute), so its gaps must be absolute too. Fractions captured at
-    layout time go stale when the figure is later resized; inch offsets re-derived at draw time
-    do not. Vertical offsets only — horizontal placement stays in fractions, which already track
-    width and keep the chrome aligned to the axes spine.
+    Text is sized in points, so the inch offsets and gaps are absolute; the engine re-derives the
+    figure-fraction positions from them on every draw, re-wrapping the header and source to the
+    current width so a post-call resize re-flows instead of freezing the wrap at the build-time
+    width. Horizontal placement stays in fractions, which keep the chrome aligned to the axes spine.
 
     Attributes:
         ax: The axes whose box is reflowed beneath the header.
-        top_texts: ``(text, top_offset_in)`` per top-anchored header element; offset measured
-            from the figure top to the text's top.
-        source: ``(text, bottom_offset_in)`` for the bottom-anchored source line, or None.
+        header_top_offset_in: Inches from the figure top to the first header element's top.
+        header: Top-anchored header elements (eyebrow/title/subtitle) in stacking order.
+        header_to_axes_gap_in: Inches from the header block's bottom to the axes top edge. Captured
+            from tight_layout, so it folds in the header-to-axes gap and any top-tick headroom.
+        source: The bottom-anchored source line, or None.
+        source_to_axes_gap_in: Inches from the source's top to the axes bottom edge.
+        axes_bottom_offset_in: Inches from the figure bottom to the axes bottom edge, used when
+            there is no source line.
         tab: ``(rectangle, top_offset_in, height_in, width_in)`` for the tab mark, or None.
-        axes_top_offset_in: Inches from the figure top to the axes top edge.
-        axes_bottom_offset_in: Inches from the figure bottom to the axes bottom edge.
     """
 
     ax: Axes
-    top_texts: list[tuple[Text, float]]
-    source: tuple[Text, float] | None
-    tab: tuple[Rectangle, float, float, float] | None
-    axes_top_offset_in: float
+    header_top_offset_in: float
+    header: list[_ChromeTextSpec]
+    header_to_axes_gap_in: float
+    source: _ChromeTextSpec | None
+    source_to_axes_gap_in: float
     axes_bottom_offset_in: float
+    tab: tuple[Rectangle, float, float, float] | None
 
 
-def _apply_chrome_layout(layout: _ChromeLayout, fig_h: float, fig_w: float) -> None:
-    """Re-derive figure fractions from ``layout``'s inch offsets for the current figure size."""
-    for text, top_offset_in in layout.top_texts:
-        text.set_y(1.0 - top_offset_in / fig_h)
+def _apply_chrome_layout(
+    layout: _ChromeLayout,
+    fig_h: float,
+    fig_w: float,
+    dpi: float,
+    renderer: RendererBase,
+) -> None:
+    """Re-wrap the chrome texts and re-place every artist for the current figure size."""
+    header_bottom_in = _layout_chrome_header(layout.header, layout.header_top_offset_in, fig_h, dpi, renderer)
+    axes_top_in = header_bottom_in + layout.header_to_axes_gap_in
     if layout.source is not None:
-        source_text, bottom_offset_in = layout.source
-        source_text.set_y(bottom_offset_in / fig_h)
+        source_top_in = _layout_chrome_source(layout.source, _CHROME_BOTTOM_MARGIN_IN, fig_h, dpi, renderer)
+        axes_bottom_in = source_top_in + layout.source_to_axes_gap_in
+    else:
+        axes_bottom_in = layout.axes_bottom_offset_in
     if layout.tab is not None:
         tab, tab_top_offset_in, tab_height_in, tab_width_in = layout.tab
         tab_height_fig = tab_height_in / fig_h
@@ -187,30 +235,45 @@ def _apply_chrome_layout(layout: _ChromeLayout, fig_h: float, fig_w: float) -> N
         tab.set_height(tab_height_fig)
         tab.set_width(tab_width_in / fig_w)
     pos = layout.ax.get_position()
-    axes_top = 1.0 - layout.axes_top_offset_in / fig_h
-    axes_bottom = layout.axes_bottom_offset_in / fig_h
+    axes_top = 1.0 - axes_top_in / fig_h
+    axes_bottom = axes_bottom_in / fig_h
     layout.ax.set_position((pos.x0, axes_bottom, pos.width, axes_top - axes_bottom))
 
 
 def _apply_chrome_layouts(fig: Figure) -> None:
-    """Re-apply every stored chrome layout on ``fig`` at its current height."""
+    """Re-apply every stored chrome layout on ``fig`` at its current size."""
     layouts = getattr(fig, "_ors_chrome_layouts", None)
     if layouts is None:
         return
+    renderer = _active_renderer(fig)
     fig_h = fig.get_figheight()
     fig_w = fig.get_figwidth()
+    dpi = fig.dpi
     for layout in layouts.values():
-        _apply_chrome_layout(layout, fig_h, fig_w)
+        _apply_chrome_layout(layout, fig_h, fig_w, dpi, renderer)
 
 
-def _axes_offsets_in(ax: Axes, fig_h: float) -> tuple[float, float]:
-    """Return the axes box's ``(top_offset_in, bottom_offset_in)`` — inches from the figure top/bottom."""
-    pos = ax.get_position()
-    return (1.0 - pos.y1) * fig_h, pos.y0 * fig_h
+def _recompute_chrome_axes_gaps(layout: _ChromeLayout, fig: Figure, renderer: RendererBase) -> None:
+    """Set ``layout``'s header/source-to-axes gaps from the axes box's current position.
+
+    The engine derives the axes top/bottom from these gaps, so they must be re-captured whenever the
+    box is reflowed: at initial layout, and after any later reflow that moved it.
+    """
+    fig_h = fig.get_figheight()
+    dpi = fig.dpi
+    header_bottom_in = _layout_chrome_header(layout.header, layout.header_top_offset_in, fig_h, dpi, renderer)
+    pos = layout.ax.get_position()
+    layout.header_to_axes_gap_in = (1.0 - pos.y1) * fig_h - header_bottom_in
+    axes_bottom_in = pos.y0 * fig_h
+    if layout.source is not None:
+        source_top_in = _layout_chrome_source(layout.source, _CHROME_BOTTOM_MARGIN_IN, fig_h, dpi, renderer)
+        layout.source_to_axes_gap_in = axes_bottom_in - source_top_in
+    else:
+        layout.axes_bottom_offset_in = axes_bottom_in
 
 
 def _refresh_chrome_axes_offsets(fig: Figure) -> None:
-    """Re-snapshot each layout's axes box after a post-install reflow moved it.
+    """Re-derive each layout's axes gaps after a post-install reflow moved the axes box.
 
     ``_auto_rotate_categorical_x_ticks`` reflows the axes to reserve room for rotated labels;
     without this the engine would re-apply the pre-rotation box and push the labels off-figure.
@@ -218,18 +281,18 @@ def _refresh_chrome_axes_offsets(fig: Figure) -> None:
     layouts = getattr(fig, "_ors_chrome_layouts", None)
     if layouts is None:
         return
-    fig_h = fig.get_figheight()
+    renderer = _active_renderer(fig)
     for layout in layouts.values():
-        layout.axes_top_offset_in, layout.axes_bottom_offset_in = _axes_offsets_in(layout.ax, fig_h)
+        _recompute_chrome_axes_gaps(layout, fig, renderer)
 
 
 class _ChromeLayoutEngine(LayoutEngine):
-    """Re-applies chrome geometry before each draw so it tracks the figure's current height.
+    """Re-applies chrome geometry before each draw so it tracks the figure's current size.
 
     Matplotlib runs ``execute`` at the start of every draw (including ``savefig``), before
     artists render, so repositioning lands in the same render even for a single headless save.
-    ``execute`` is pure arithmetic on the stored inch offsets — it never draws or measures — so
-    it cannot recurse.
+    ``execute`` re-wraps the chrome text to the current width and measures it against the live
+    renderer, but never triggers a draw of its own, so it cannot recurse.
     """
 
     # Match tight_layout's flags: the chrome reflow runs through fig.tight_layout (gridspec
@@ -247,41 +310,6 @@ def _install_chrome_layout_engine(fig: Figure) -> None:
     """Register the chrome layout engine on ``fig`` unless it is already active."""
     if not isinstance(fig.get_layout_engine(), _ChromeLayoutEngine):
         fig.set_layout_engine(_ChromeLayoutEngine())
-
-
-def _capture_chrome_layout(fig: Figure, ax: Axes, chrome_gid: str, source_text: Text | None) -> _ChromeLayout:
-    """Snapshot the placed chrome artists and axes box as resize-invariant inch offsets.
-
-    ``source_text`` is passed by reference rather than recovered from the figure, so the source
-    (the one bottom-anchored element) is identified explicitly; every other chrome text is a
-    top-anchored header element.
-    """
-    renderer = fig.canvas.get_renderer()
-    fig_h = fig.get_figheight()
-    fig_w = fig.get_figwidth()
-    bbox_h = fig.bbox.height
-    top_texts: list[tuple[Text, float]] = []
-    for text in fig.texts:
-        if text.get_gid() != chrome_gid or text is source_text:
-            continue
-        extent = text.get_window_extent(renderer=renderer)
-        top_texts.append((text, (1.0 - extent.y1 / bbox_h) * fig_h))
-    source: tuple[Text, float] | None = None
-    if source_text is not None:
-        source = (source_text, source_text.get_window_extent(renderer=renderer).y0 / bbox_h * fig_h)
-    tab: tuple[Rectangle, float, float, float] | None = None
-    for patch in [p for p in fig.patches if p.get_gid() == chrome_gid]:
-        top_frac = patch.get_y() + patch.get_height()
-        tab = (patch, (1.0 - top_frac) * fig_h, patch.get_height() * fig_h, patch.get_width() * fig_w)
-    axes_top_offset_in, axes_bottom_offset_in = _axes_offsets_in(ax, fig_h)
-    return _ChromeLayout(
-        ax=ax,
-        top_texts=top_texts,
-        source=source,
-        tab=tab,
-        axes_top_offset_in=axes_top_offset_in,
-        axes_bottom_offset_in=axes_bottom_offset_in,
-    )
 
 
 def _resolve_chrome_left(fig: Figure, ax: Axes) -> float:
@@ -384,12 +412,18 @@ def apply_chart_chrome(
 ) -> None:
     """Place the figure-level chrome (eyebrow, tab, title, subtitle, source) and reflow the axes.
 
-    Sequential layout: each header element is placed and drawn in turn so
-    the next element starts directly below the previous one's measured
-    bbox. Wrapped titles therefore push subsequent elements down by their
-    actual rendered height, never their estimated height. After the header
-    and source are placed, ``tight_layout`` reflows the axes (with their
-    tick and axis labels) into the remaining vertical band.
+    Sequential layout: each header element is placed in turn so the next
+    starts directly below the previous one's measured bbox. Wrapped titles
+    therefore push subsequent elements down by their actual rendered height,
+    never their estimated height. After the header and source are placed,
+    ``tight_layout`` reflows the axes (with their tick and axis labels) into
+    the remaining vertical band.
+
+    The placement is stored as a resize-invariant recipe and re-derived on
+    every draw by ``_ChromeLayoutEngine``: the title and subtitle re-wrap to
+    the figure's current width, so resizing the figure after this call (e.g.
+    ``fig.set_size_inches``) re-flows the chrome instead of freezing the wrap
+    at the build-time width.
 
     Each absent element collapses its slot, so a chart with only a title
     takes only the vertical space the title needs.
@@ -418,6 +452,12 @@ def apply_chart_chrome(
     chrome_gid = f"_ors_chrome:{id(ax)}"
 
     _clear_prior_chrome(fig, chrome_gid)
+    # Drop any prior layout for this axes too: _clear_prior_chrome just detached its chrome texts
+    # (their figure is now None), so the reflow below and the engine must not try to re-wrap them.
+    # The fresh layout replaces this entry at the end of the call.
+    prior_layouts = getattr(fig, "_ors_chrome_layouts", None)
+    if prior_layouts is not None:
+        prior_layouts.pop(id(ax), None)
 
     if any_chrome:
         _track_chrome_axes(fig, ax, warn_stacklevel=warn_stacklevel)
@@ -425,17 +465,22 @@ def apply_chart_chrome(
     chrome_x = _resolve_chrome_left(fig, ax) if any_chrome else _CHROME_FALLBACK_LEFT_MARGIN
 
     fig_h = fig.get_figheight()
+    fig_w = fig.get_figwidth()
+    dpi = fig.dpi
+    renderer = _active_renderer(fig)
     cur_y = 1.0 - _CHROME_TOP_MARGIN_IN / fig_h
 
     # Always reserve the tab's vertical slot when a header is present, even when
     # the tab is hidden. This keeps the title's distance from the figure edge
     # consistent whether the tab is drawn or hidden, so suppressing the tab
     # doesn't push the title against the top margin.
+    tab_spec: tuple[Rectangle, float, float, float] | None = None
+    header_top_offset_in = _CHROME_TOP_MARGIN_IN
     if has_header:
         tab_height_fig = _CHROME_TAB_HEIGHT_IN / fig_h
         tab_to_eyebrow_fig = _CHROME_TAB_TO_EYEBROW_GAP_IN / fig_h
         if show_tab:
-            tab_width_fig = _CHROME_TAB_WIDTH_IN / fig.get_figwidth()
+            tab_width_fig = _CHROME_TAB_WIDTH_IN / fig_w
             tab = Rectangle(
                 (chrome_x, cur_y - tab_height_fig),
                 tab_width_fig,
@@ -447,11 +492,14 @@ def apply_chart_chrome(
             )
             tab.set_gid(chrome_gid)
             fig.patches.append(tab)
+            tab_spec = (tab, _CHROME_TOP_MARGIN_IN, _CHROME_TAB_HEIGHT_IN, _CHROME_TAB_WIDTH_IN)
         cur_y -= tab_height_fig + tab_to_eyebrow_fig
+        header_top_offset_in = (1.0 - cur_y) * fig_h
 
     # Eyebrow's gap is always applied; the title→subtitle gap only when both
     # are present. Subtitle has no trailing gap — _CHROME_GAP_HEADER_TO_AXES_IN
-    # below covers the whitespace down to the plot.
+    # below covers the whitespace down to the plot. Eyebrows stay single-line; the
+    # title and subtitle re-wrap to the figure's current width on every draw.
     header_specs = (
         (
             eyebrow.upper() if eyebrow is not None else None,
@@ -459,7 +507,7 @@ def apply_chart_chrome(
             style.eyebrow_size,
             style.eyebrow_color,
             False,
-            _CHROME_GAP_EYEBROW_TO_TITLE_IN / fig_h,
+            _CHROME_GAP_EYEBROW_TO_TITLE_IN,
         ),
         (
             title,
@@ -467,7 +515,7 @@ def apply_chart_chrome(
             style.title_size,
             style.title_color,
             True,
-            _CHROME_GAP_TITLE_TO_SUBTITLE_IN / fig_h if subtitle is not None else 0.0,
+            _CHROME_GAP_TITLE_TO_SUBTITLE_IN if subtitle is not None else 0.0,
         ),
         (
             subtitle,
@@ -478,11 +526,25 @@ def apply_chart_chrome(
             0.0,
         ),
     )
-    for text, font, size, color, wrap, gap_after in header_specs:
-        if text is None:
+    header: list[_ChromeTextSpec] = []
+    for text_str, font, size, color, wrap, gap_after_in in header_specs:
+        if text_str is None:
             continue
-        cur_y = _place_header_text(ax, chrome_x, cur_y, text, font, size, color, wrap=wrap, gid=chrome_gid)
-        cur_y -= gap_after
+        artist = fig.text(
+            chrome_x,
+            1.0 - header_top_offset_in / fig_h,
+            text_str,
+            ha="left",
+            va="top",
+            fontproperties=get_font_properties(font),
+            fontsize=size,
+            color=color,
+            wrap=wrap,
+        )
+        artist.set_gid(chrome_gid)
+        header.append(_ChromeTextSpec(artist, text_str, gap_after_in, wrap=wrap))
+
+    header_bottom_in = _layout_chrome_header(header, header_top_offset_in, fig_h, dpi, renderer)
 
     # tight_layout reserves most top tick-label height inside [bottom, header_bottom],
     # but its default label padding leaves a little less visible subtitle-to-content
@@ -490,15 +552,15 @@ def apply_chart_chrome(
     # to keep that visible gap consistent.
     has_top_labels = any(t.label2.get_visible() for t in [*ax.xaxis.get_major_ticks(), *ax.yaxis.get_major_ticks()])
     extra_gap_in = style.tick_size * _CHROME_TOP_LABEL_HEADROOM_FACTOR / 72.0 if has_top_labels else 0.0
-    header_bottom = cur_y - (_CHROME_GAP_HEADER_TO_AXES_IN + extra_gap_in) / fig_h if has_header else cur_y
+    rect_top_in = header_bottom_in + _CHROME_GAP_HEADER_TO_AXES_IN + extra_gap_in if has_header else header_bottom_in
+    header_bottom = 1.0 - rect_top_in / fig_h
 
-    bottom_margin_fig = _CHROME_BOTTOM_MARGIN_IN / fig_h
-    axes_bottom = bottom_margin_fig
-    source_t = None
+    source_spec: _ChromeTextSpec | None = None
+    axes_bottom_in = _CHROME_BOTTOM_MARGIN_IN
     if source_text is not None:
-        source_t = fig.text(
+        source_artist = fig.text(
             chrome_x,
-            bottom_margin_fig,
+            _CHROME_BOTTOM_MARGIN_IN / fig_h,
             source_text,
             ha="left",
             va="bottom",
@@ -507,13 +569,11 @@ def apply_chart_chrome(
             color=style.source_color,
             wrap=True,
         )
-        source_t.set_gid(chrome_gid)
-        fig.canvas.draw()
-        # Freeze the wrap like the header: an unfrozen source re-wraps to a different line count
-        # on a width resize, invalidating the axes_bottom reserved here and crowding the axes.
-        _freeze_text_wrap(source_t)
-        source_top_px = source_t.get_window_extent(renderer=fig.canvas.get_renderer()).y1
-        axes_bottom = source_top_px / fig.bbox.height + _CHROME_GAP_SOURCE_TO_AXES_IN / fig_h
+        source_artist.set_gid(chrome_gid)
+        source_spec = _ChromeTextSpec(source_artist, source_text, 0.0, wrap=True)
+        source_top_in = _layout_chrome_source(source_spec, _CHROME_BOTTOM_MARGIN_IN, fig_h, dpi, renderer)
+        axes_bottom_in = source_top_in + _CHROME_GAP_SOURCE_TO_AXES_IN
+    axes_bottom = axes_bottom_in / fig_h
 
     # Cache the chrome rect so callers (e.g. _auto_rotate_categorical_x_ticks)
     # can re-reflow after they change tick label heights. Without this, a
@@ -524,15 +584,25 @@ def apply_chart_chrome(
     if not _reflow_axes(fig, top=header_bottom, bottom=axes_bottom):
         fig.subplots_adjust(top=header_bottom, bottom=axes_bottom)
 
-    # Snapshot the placement as inch offsets and install the engine so the chrome tracks the
-    # figure's current height on later draws; otherwise the fraction-based gaps balloon (or
-    # overlap, when shrunk) on resize. Header/source placement and the reflow above already
-    # drew, so artist extents are current for the snapshot.
+    # Store the placement as a resize-invariant recipe and install the engine so the chrome
+    # re-wraps and re-flows to the figure's current size on later draws; otherwise the wrap
+    # freezes at the build-time width and the fraction-based gaps balloon (or overlap) on resize.
     layouts = getattr(fig, "_ors_chrome_layouts", None)
     if layouts is None:
         layouts = {}
         fig._ors_chrome_layouts = layouts
-    layouts[id(ax)] = _capture_chrome_layout(fig, ax, chrome_gid, source_t)
+    layout = _ChromeLayout(
+        ax=ax,
+        header_top_offset_in=header_top_offset_in,
+        header=header,
+        header_to_axes_gap_in=0.0,
+        source=source_spec,
+        source_to_axes_gap_in=0.0,
+        axes_bottom_offset_in=_CHROME_BOTTOM_MARGIN_IN,
+        tab=tab_spec,
+    )
+    _recompute_chrome_axes_gaps(layout, fig, _active_renderer(fig))
+    layouts[id(ax)] = layout
     _install_chrome_layout_engine(fig)
 
 

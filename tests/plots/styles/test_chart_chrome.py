@@ -1,5 +1,6 @@
 """Tests for the chart chrome layout engine."""
 
+import io
 import warnings
 
 import matplotlib.pyplot as plt
@@ -79,6 +80,32 @@ def _measure_chrome_spacing(figheight: float, build_height: float | None = None)
 
 
 _CHROME_TEST_FIGHEIGHT_IN = 5.0
+
+_TITLE_WRAP_RESIZE_TITLE = "Two regions are carrying the entire quarter while the rest of the portfolio lags"
+_TITLE_WRAP_RESIZE_SUBTITLE = "Sales index by region versus the company-wide average baseline of one hundred"
+
+# A real chrome figure rendered to SVG/PDF is tens of KB; a failed/empty render is far smaller.
+_MIN_RENDERED_VECTOR_BYTES = 1000
+
+
+def _render_title_wrap(build_w: float, final_w: float) -> tuple[int, float]:
+    """Build chrome at ``build_w`` wide, resize to ``final_w``, and return the title's line count and width fraction.
+
+    The width fraction is the title's rendered width as a fraction of the figure width. Resizing
+    after the build reproduces the export flow that froze the wrap at the build-time width.
+    """
+    fig, ax = plt.subplots(figsize=(build_w, 5))
+    ax.barh(["North", "South"], [120, 80])
+    apply_chart_chrome(ax, title=_TITLE_WRAP_RESIZE_TITLE, subtitle=_TITLE_WRAP_RESIZE_SUBTITLE)
+    if build_w != final_w:
+        fig.set_size_inches(final_w, 5)
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    title_artist = next(t for t in fig.texts if t.get_text().replace("\n", " ") == _TITLE_WRAP_RESIZE_TITLE)
+    line_count = title_artist.get_text().count("\n") + 1
+    width_frac = title_artist.get_window_extent(renderer=renderer).width / fig.bbox.width
+    plt.close(fig)
+    return line_count, width_frac
 
 
 def _topmost_axes_content_fig_y(*, labeltop: bool) -> float:
@@ -196,24 +223,21 @@ class TestApplyChartChrome:
         # Subtitle's top must sit below the title's bottom (no overlap).
         assert subtitle_top <= title_bottom
 
-    def test_wrap_is_frozen_so_redraws_do_not_change_line_count(self):
-        """Chrome must bake matplotlib's wrap into the text content with explicit newlines.
+    def test_title_wrap_is_baked_into_explicit_newlines(self):
+        """Chrome bakes the title's wrap into explicit newlines (wrap off), not matplotlib soft-wrap.
 
-        matplotlib's ``wrap=True`` recomputes line breaks on every draw based on the
-        current figure bbox. ``bbox_inches='tight'`` (used by jupyter notebook saves)
-        triggers an extra draw cycle with a different bbox, which can change the
-        line count. Chrome positions sibling elements relative to the title's
-        measured bottom, so any post-layout re-wrap leaves an oversized gap.
-        Freezing the wrap ensures the layout stays correct across redraws.
+        ``get_window_extent`` ignores ``wrap=True``, so a soft-wrapped title would measure a
+        single-line height and collapse the layout. Chrome instead bakes the wrapped lines into the
+        text content with wrap off, giving a stable multi-line height to position siblings against;
+        the engine re-bakes to the current width on each draw.
         """
         fig, ax = plt.subplots(figsize=(6.4, 4.8))
         long_title = "High-AOV stores convert fewer visits but earn the most revenue per day"
         apply_chart_chrome(ax, title=long_title)
 
         title_artist = fig.texts[0]
-        # Wrap must be off so the text doesn't re-wrap on subsequent draws.
+        # Wrap is baked into explicit newlines with soft-wrap off, so a redraw measures a stable height.
         assert title_artist.get_wrap() is False
-        # The wrapped form is baked into the text content as explicit newlines.
         assert "\n" in title_artist.get_text()
         # All original words preserved, only whitespace replaced with newlines.
         assert title_artist.get_text().replace("\n", " ") == long_title
@@ -259,11 +283,12 @@ class TestApplyChartChrome:
                 f"track the resized figure height"
             )
 
-    def test_source_text_does_not_rewrap_into_axes_on_width_resize(self):
-        """Narrowing the figure after layout must not re-wrap the source line into the axes.
+    def test_source_rewraps_but_axes_follow_on_width_resize(self):
+        """Narrowing the figure re-wraps the source to more lines, and the axes bottom follows it.
 
-        The source wrap is frozen like the header; otherwise a width change re-wraps it to more
-        lines, growing it up into the reserved source-to-axes gap.
+        The source re-wraps to the current width like the header; the engine then pushes the axes
+        bottom up so the reserved source-to-axes gap is preserved, instead of the taller source
+        crowding into the data area.
         """
         long_source = (
             "Source: 2024 loyalty-program transactions across all banners, excluding staff "
@@ -276,16 +301,75 @@ class TestApplyChartChrome:
 
         fig.canvas.draw()
         renderer = fig.canvas.get_renderer()
+        wide_lines = source_artist.get_text().count("\n") + 1
         gap_wide = ax.get_position().y0 * fig.bbox.height - source_artist.get_window_extent(renderer=renderer).y1
 
         fig.set_size_inches(4, 5)
         fig.canvas.draw()
         renderer = fig.canvas.get_renderer()
+        narrow_lines = source_artist.get_text().count("\n") + 1
         gap_narrow = ax.get_position().y0 * fig.bbox.height - source_artist.get_window_extent(renderer=renderer).y1
 
+        assert narrow_lines > wide_lines, (
+            f"source stayed at {wide_lines} lines when the figure narrowed; its wrap did not track the current width"
+        )
         assert abs(gap_narrow - gap_wide) <= 1.0, (
-            f"source-to-axes gap changed from {gap_wide:.1f}px to {gap_narrow:.1f}px when the "
-            "figure narrowed; the source re-wrapped because its wrap was not frozen"
+            f"source-to-axes gap changed from {gap_wide:.1f}px to {gap_narrow:.1f}px when the figure "
+            "narrowed; the axes bottom did not follow the re-wrapped source"
+        )
+
+    # The build-time width is narrow enough that the title wraps there; each target is wide enough
+    # that a direct build wraps to fewer lines.
+    _NARROW_BUILD_WIDTH_IN = 6.0
+    # A title still frozen on the narrow figure's breaks spans only ~40-55% of the widened figure;
+    # a re-wrapped one spans ~80-90%. 0.7 sits cleanly between the two regimes.
+    _TITLE_SPANS_WIDTH_FRAC = 0.7
+
+    @pytest.mark.parametrize("final_w", [10.0, 12.0, 14.0])
+    def test_title_rewraps_to_match_width_after_resize(self, final_w):
+        """A title built narrow then widened must re-wrap to match the line count of a direct wide build.
+
+        Chrome baked matplotlib's wrap at the build-time width, so widening the figure afterwards
+        left the title broken onto the narrow figure's line breaks, spanning only a fraction of the
+        wider figure. The wrap must re-flow to the figure's current width.
+        """
+        lines_resized, width_frac_resized = _render_title_wrap(build_w=self._NARROW_BUILD_WIDTH_IN, final_w=final_w)
+        lines_direct, _ = _render_title_wrap(build_w=final_w, final_w=final_w)
+
+        assert lines_resized == lines_direct, (
+            f"title wrapped to {lines_resized} lines after widening to {final_w}in but {lines_direct} "
+            "when built wide directly; the wrap stayed frozen at the build-time width"
+        )
+        assert width_frac_resized > self._TITLE_SPANS_WIDTH_FRAC, (
+            f"title spans only {width_frac_resized:.0%} of the widened figure; it stayed collapsed on "
+            "the narrow figure's line breaks instead of re-wrapping to the current width"
+        )
+
+    @pytest.mark.parametrize(("fmt", "signature"), [("svg", b"<svg"), ("pdf", b"%PDF")])
+    def test_chrome_saves_to_vector_backend_after_resize(self, fmt, signature):
+        """Saving a chromed figure to a vector backend (SVG/PDF) must work, including after a resize.
+
+        The layout engine re-measures on every draw via the figure renderer. Saving to a vector
+        format swaps in a canvas with no Agg ``get_renderer``, so looking the renderer up off the
+        canvas crashed the save; the export is the bug report's own repro and was untested.
+        """
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.barh(["North", "South"], [120, 80])
+        apply_chart_chrome(
+            ax,
+            title="Two regions are carrying the entire quarter while the rest of the portfolio lags",
+            subtitle="Sales index by region versus the company-wide average baseline of one hundred",
+            source_text="Source: 2024 loyalty transactions",
+        )
+        fig.set_size_inches(11, 9)  # resize after layout, then export
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format=fmt)
+        data = buf.getvalue()
+
+        assert signature in data[:1024], f"{fmt} output is missing its format signature; the save did not render"
+        assert len(data) > _MIN_RENDERED_VECTOR_BYTES, (
+            f"{fmt} output is only {len(data)} bytes; the chrome figure did not render"
         )
 
     def test_chrome_survives_resize_on_figure_with_colorbar(self):
