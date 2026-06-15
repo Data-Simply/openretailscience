@@ -142,3 +142,6 @@ cython_debug/
 
 .claude-review
 .claude/scheduled_tasks.lock
+
+# Visual-regression benchmark generated dataset
+visual_regression/output/

@@ -146,6 +146,7 @@ skip_covered  = true
 "docs/getting_started/**/*.ipynb" = [ "ANN", "D103", "PLR2004" ]
 "docs/scripts/*"                  = [ "D103", "INP001", "PERF401", "PLR2004", "RUF001", "T201" ]
 "tests/*"                         = [ "ANN", "ARG", "INP001", "S101", "SLF001" ]
+"visual_regression/*"             = [ "ARG001", "BLE001", "PLR2004", "S310", "S603", "S607", "T201" ]
 
 [tool.ruff.lint.pylint]
 max-args       = 15
