@@ -5,7 +5,9 @@ import json
 import pytest
 from visual_regression.detect import (
     _extract_stream_json_result,
+    _openrouter_body,
     _parse_detections,
+    build_freetext_prompt,
     build_prompt,
     detect_all,
 )
@@ -121,3 +123,33 @@ class TestDetectAll:
         assert len(results) == len(plots)
         assert all(r["error"] == "model unavailable" for r in results)
         assert all(r["detected"] == [] for r in results)
+
+    def test_freetext_mode_records_descriptions(self, dataset):
+        """In free-text mode records carry the model's stripped prose, not a category list."""
+        base_dir, plots = dataset
+        results = detect_all(plots, base_dir, _stub_backend, _TAXONOMY, mode="freetext")
+
+        by_file = {r["file"]: r for r in results}
+        assert by_file["images/p0.png"]["description"] == '{"defects": ["title_clipped", "bogus"]}'
+        assert by_file["images/p1.png"]["description"] == "looks clean"
+        assert "detected" not in by_file["images/p0.png"]
+
+
+class TestBuildFreetextPrompt:
+    """The free-text prompt asks for prose and a clean-chart sentinel, not categories."""
+
+    def test_prompt_requests_description_or_no_issues(self):
+        """The prompt names the NO ISSUES sentinel and does not leak the closed category list."""
+        prompt = build_freetext_prompt()
+        assert "NO ISSUES" in prompt
+        assert '{"defects":' not in prompt
+
+
+class TestOpenRouterBody:
+    """The OpenRouter request opts out of provider data collection."""
+
+    def test_request_denies_provider_data_collection(self):
+        """Every OpenRouter request opts out of data collection and requires zero data retention."""
+        body = _openrouter_body([{"type": "text", "text": "hi"}], "vendor/model")
+        assert body["provider"] == {"data_collection": "deny", "zdr": True}
+        assert body["model"] == "vendor/model"

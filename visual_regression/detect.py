@@ -6,7 +6,9 @@ Two backends are supported:
                     read the image with the Read tool.
 * ``openrouter``  — POSTs the image to OpenRouter's OpenAI-compatible chat endpoint, so any vision model
                     on OpenRouter (e.g. ``meta-llama/llama-3.2-11b-vision-instruct``) can be evaluated.
-                    Needs ``OPENROUTER_API_KEY`` in the environment.
+                    Needs ``OPENROUTER_API_KEY`` in the environment. Requests set
+                    ``provider.data_collection = "deny"`` and ``provider.zdr = true`` so only
+                    zero-data-retention providers see the prompt or chart image.
 
 Reads the dataset ``manifest.json``, runs each plot through the chosen backend, and writes
 ``detections.json``. Run ``python -m visual_regression.detect --help`` for options.
@@ -31,6 +33,8 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_CLAUDE_MODEL = "haiku"
 DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.2-11b-vision-instruct"
 REQUEST_TIMEOUT_S = 180
+# Only route to zero-data-retention providers that will not store/train on the prompt or chart image.
+OPENROUTER_PROVIDER_PREFS = {"data_collection": "deny", "zdr": True}
 
 
 def build_prompt(taxonomy: list[dict[str, str]]) -> str:
@@ -54,36 +58,49 @@ def build_prompt(taxonomy: list[dict[str, str]]) -> str:
     )
 
 
-def _run_claude(image_path: str, prompt: str, model: str) -> str:
-    """Detect via ``claude -p`` (Claude Code headless); returns the model's raw text response.
+def build_freetext_prompt() -> str:
+    """Build the open-ended prompt asking the model to describe any problems in natural language.
 
-    Uses ``--output-format stream-json``, which emits newline-delimited JSON events and works across
-    Claude Code environments (some inject ``--include-partial-messages``, which only ``stream-json``
-    accepts). The final ``{"type": "result", ...}`` event carries the assistant's text.
+    Returns:
+        A prompt instructing the model to either say ``NO ISSUES`` or briefly describe what is wrong.
     """
-    full_prompt = f"{prompt}\n\nRead the chart image at this path and analyse it: {image_path}"
-    result = subprocess.run(
-        [
-            "claude",
-            "-p",
-            full_prompt,
-            "--model",
-            model,
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            "--allowedTools",
-            "Read",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=REQUEST_TIMEOUT_S,
-        check=False,
+    return (
+        "You are a meticulous data-visualisation QA reviewer. You are shown a single retail chart image.\n"
+        "Describe any visual formatting or layout problems you can see — for example text cut off at an "
+        "edge, overlapping or unreadable labels, a legend covering the data, a title in the wrong place, "
+        "wrong size or low contrast, a large gap or overlap between an axis and its labels, or a distorted "
+        "aspect ratio. Judge only the rendering, not whether the underlying numbers are right.\n"
+        "If the chart looks clean and correctly formatted, reply with exactly: NO ISSUES\n"
+        "Otherwise reply with a brief description (1-3 sentences) of what is wrong."
     )
+
+
+def _claude_invoke(prompt: str, model: str, *, allow_read: bool) -> str:
+    """Run ``claude -p`` and return the assistant's text from the stream-json result event.
+
+    Uses ``--output-format stream-json``, which works across Claude Code environments (some inject
+    ``--include-partial-messages``, which only ``stream-json`` accepts). ``allow_read`` whitelists the
+    Read tool so image prompts can open the file; text-only judge prompts leave it off.
+    """
+    command = ["claude", "-p", prompt, "--model", model, "--output-format", "stream-json", "--verbose"]
+    if allow_read:
+        command += ["--allowedTools", "Read"]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=REQUEST_TIMEOUT_S, check=False)
     if result.returncode != 0:
         msg = f"claude exited {result.returncode}: {result.stderr.strip()[:300]}"
         raise RuntimeError(msg)
     return _extract_stream_json_result(result.stdout)
+
+
+def _run_claude(image_path: str, prompt: str, model: str) -> str:
+    """Detect via ``claude -p`` (Claude Code headless), letting it read the image file."""
+    full_prompt = f"{prompt}\n\nRead the chart image at this path and analyse it: {image_path}"
+    return _claude_invoke(full_prompt, model, allow_read=True)
+
+
+def _run_claude_text(prompt: str, model: str) -> str:
+    """Run a text-only ``claude -p`` prompt (used by the free-text scoring judge)."""
+    return _claude_invoke(prompt, model, allow_read=False)
 
 
 def _extract_stream_json_result(stdout: str) -> str:
@@ -102,24 +119,23 @@ def _extract_stream_json_result(stdout: str) -> str:
     raise RuntimeError(msg)
 
 
-def _run_openrouter(image_path: str, prompt: str, model: str, api_key: str) -> str:
-    """Detect via OpenRouter's chat-completions API; returns the model's raw text response."""
-    encoded = base64.b64encode(Path(image_path).read_bytes()).decode("ascii")
-    body = json.dumps(
-        {
-            "model": model,
-            "temperature": 0,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded}"}},
-                    ],
-                },
-            ],
-        },
-    ).encode("utf-8")
+def _openrouter_body(content: list[dict], model: str) -> dict:
+    """Build the OpenRouter chat-completions request body.
+
+    Sets ``provider.data_collection = "deny"`` and ``provider.zdr = true`` so OpenRouter only routes to
+    zero-data-retention providers that will not store or train on the prompt and chart image.
+    """
+    return {
+        "model": model,
+        "temperature": 0,
+        "messages": [{"role": "user", "content": content}],
+        "provider": OPENROUTER_PROVIDER_PREFS,
+    }
+
+
+def _openrouter_request(content: list[dict], model: str, api_key: str) -> str:
+    """POST one user message to OpenRouter's chat-completions API and return the reply text."""
+    body = json.dumps(_openrouter_body(content, model)).encode("utf-8")
     request = urllib.request.Request(
         OPENROUTER_URL,
         data=body,
@@ -128,6 +144,21 @@ def _run_openrouter(image_path: str, prompt: str, model: str, api_key: str) -> s
     with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
         payload = json.loads(response.read())
     return str(payload["choices"][0]["message"]["content"])
+
+
+def _run_openrouter(image_path: str, prompt: str, model: str, api_key: str) -> str:
+    """Detect via OpenRouter's chat-completions API with an image; returns the raw text response."""
+    encoded = base64.b64encode(Path(image_path).read_bytes()).decode("ascii")
+    content = [
+        {"type": "text", "text": prompt},
+        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded}"}},
+    ]
+    return _openrouter_request(content, model, api_key)
+
+
+def _run_openrouter_text(prompt: str, model: str, api_key: str) -> str:
+    """Run a text-only OpenRouter prompt (used by the free-text scoring judge)."""
+    return _openrouter_request([{"type": "text", "text": prompt}], model, api_key)
 
 
 def _extract_json(raw: str) -> dict | None:
@@ -167,8 +198,23 @@ def _parse_detections(raw: str, valid_names: set[str]) -> list[str]:
     return sorted(names)
 
 
+def _categories_record(file: str, raw: str, error: str | None, valid_names: set[str]) -> dict:
+    """Build a closed-set detection record from a raw response."""
+    detected = _parse_detections(raw, valid_names)
+    return {"file": file, "detected": detected, "has_defect": len(detected) > 0, "raw": raw, "error": error}
+
+
+def _freetext_record(file: str, raw: str, error: str | None) -> dict:
+    """Build an open-ended detection record carrying the model's free-text description."""
+    return {"file": file, "description": raw.strip(), "error": error}
+
+
 def detect_all(
-    plots: list[dict], base_dir: Path | str, backend: Callable[[str, str], str], taxonomy: list[dict[str, str]]
+    plots: list[dict],
+    base_dir: Path | str,
+    backend: Callable[[str, str], str],
+    taxonomy: list[dict[str, str]],
+    mode: str = "categories",
 ) -> list[dict]:
     """Run every plot through ``backend`` and return per-plot detection records.
 
@@ -177,12 +223,15 @@ def detect_all(
         base_dir: Directory the plot ``file`` paths are relative to (the manifest's directory).
         backend: Callable ``(image_path, prompt) -> raw_text`` performing one detection.
         taxonomy: Defect catalogue, used to build the prompt and validate reported categories.
+        mode: ``"categories"`` for closed-set category detection, ``"freetext"`` for open-ended
+            natural-language descriptions.
 
     Returns:
-        One record per plot: ``{file, detected, has_defect, raw, error}``.
+        One record per plot. In ``categories`` mode: ``{file, detected, has_defect, raw, error}``.
+        In ``freetext`` mode: ``{file, description, error}``.
     """
     base_dir = Path(base_dir)
-    prompt = build_prompt(taxonomy)
+    prompt = build_prompt(taxonomy) if mode == "categories" else build_freetext_prompt()
     valid_names = {d["name"] for d in taxonomy}
 
     results: list[dict] = []
@@ -191,24 +240,41 @@ def detect_all(
         raw, error = "", None
         try:
             raw = backend(str(image_path), prompt)
-            detected = _parse_detections(raw, valid_names)
         except Exception as exc:
-            detected, error = [], str(exc)
-        results.append(
-            {"file": plot["file"], "detected": detected, "has_defect": len(detected) > 0, "raw": raw, "error": error},
-        )
+            error = str(exc)
+        if mode == "categories":
+            results.append(_categories_record(plot["file"], raw, error, valid_names))
+        else:
+            results.append(_freetext_record(plot["file"], raw, error))
     return results
 
 
-def _make_backend(args: argparse.Namespace) -> Callable[[str, str], str]:
-    """Build the detection callable for the selected backend, binding model/credentials."""
-    if args.backend == "claude":
-        return lambda image_path, prompt: _run_claude(image_path, prompt, args.model or DEFAULT_CLAUDE_MODEL)
+def _resolve_openrouter_key() -> str:
+    """Return the OpenRouter API key from the environment or exit with a clear message."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if api_key is None or len(api_key) == 0:
-        raise SystemExit("OPENROUTER_API_KEY is not set; export it before using --backend openrouter.")
-    model = args.model or DEFAULT_OPENROUTER_MODEL
-    return lambda image_path, prompt: _run_openrouter(image_path, prompt, model, api_key)
+        raise SystemExit("OPENROUTER_API_KEY is not set; export it before using the openrouter backend.")
+    return api_key
+
+
+def make_image_backend(backend: str, model: str | None = None) -> Callable[[str, str], str]:
+    """Build an image detection callable ``(image_path, prompt) -> raw_text`` for ``backend``."""
+    if backend == "claude":
+        claude_model = model or DEFAULT_CLAUDE_MODEL
+        return lambda image_path, prompt: _run_claude(image_path, prompt, claude_model)
+    router_model = model or DEFAULT_OPENROUTER_MODEL
+    api_key = _resolve_openrouter_key()
+    return lambda image_path, prompt: _run_openrouter(image_path, prompt, router_model, api_key)
+
+
+def make_text_backend(backend: str, model: str | None = None) -> Callable[[str], str]:
+    """Build a text-only callable ``(prompt) -> raw_text`` for ``backend`` (used by the judge)."""
+    if backend == "claude":
+        claude_model = model or DEFAULT_CLAUDE_MODEL
+        return lambda prompt: _run_claude_text(prompt, claude_model)
+    router_model = model or DEFAULT_OPENROUTER_MODEL
+    api_key = _resolve_openrouter_key()
+    return lambda prompt: _run_openrouter_text(prompt, router_model, api_key)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -217,6 +283,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--manifest", required=True, help="Path to the dataset manifest.json.")
     parser.add_argument("--backend", choices=("claude", "openrouter"), default="claude", help="Detection backend.")
     parser.add_argument("--model", default=None, help="Model id/alias (backend default if omitted).")
+    parser.add_argument(
+        "--mode",
+        choices=("categories", "freetext"),
+        default="categories",
+        help="categories: pick from the closed defect list. freetext: describe problems in prose.",
+    )
     parser.add_argument("--out", default=None, help="Output detections JSON (defaults next to the manifest).")
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N plots (cost control).")
     args = parser.parse_args(argv)
@@ -226,13 +298,13 @@ def main(argv: list[str] | None = None) -> None:
     plots = manifest["plots"][: args.limit] if args.limit is not None else manifest["plots"]
     model = args.model or (DEFAULT_CLAUDE_MODEL if args.backend == "claude" else DEFAULT_OPENROUTER_MODEL)
 
-    backend = _make_backend(args)
-    print(f"Detecting with backend={args.backend} model={model} over {len(plots)} plots...")
-    results = detect_all(plots, manifest_path.parent, backend, manifest["taxonomy"])
+    backend = make_image_backend(args.backend, args.model)
+    print(f"Detecting with backend={args.backend} model={model} mode={args.mode} over {len(plots)} plots...")
+    results = detect_all(plots, manifest_path.parent, backend, manifest["taxonomy"], mode=args.mode)
 
     out_path = Path(args.out) if args.out is not None else manifest_path.parent / "detections.json"
     out_path.write_text(
-        json.dumps({"backend": args.backend, "model": model, "detections": results}, indent=2),
+        json.dumps({"backend": args.backend, "model": model, "mode": args.mode, "detections": results}, indent=2),
         encoding="utf-8",
     )
     errors = sum(1 for r in results if r["error"] is not None)
