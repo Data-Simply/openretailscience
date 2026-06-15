@@ -134,6 +134,13 @@ class TestDetectAll:
         assert by_file["images/p1.png"]["description"] == "looks clean"
         assert "detected" not in by_file["images/p0.png"]
 
+    def test_workers_preserve_order_and_results(self, dataset):
+        """Concurrent detection returns the same records in the same order as serial."""
+        base_dir, plots = dataset
+        serial = detect_all(plots, base_dir, _stub_backend, _TAXONOMY)
+        parallel = detect_all(plots, base_dir, _stub_backend, _TAXONOMY, workers=4)
+        assert parallel == serial
+
 
 class TestBuildFreetextPrompt:
     """The free-text prompt asks for prose and a clean-chart sentinel, not categories."""

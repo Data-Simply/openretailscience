@@ -23,6 +23,8 @@ import os
 import re
 import subprocess
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -209,12 +211,32 @@ def _freetext_record(file: str, raw: str, error: str | None) -> dict:
     return {"file": file, "description": raw.strip(), "error": error}
 
 
+def _detect_one(
+    plot: dict,
+    base_dir: Path,
+    backend: Callable[[str, str], str],
+    prompt: str,
+    mode: str,
+    valid_names: set[str],
+) -> dict:
+    """Run one plot through ``backend`` and build its detection record (errors captured, not raised)."""
+    raw, error = "", None
+    try:
+        raw = backend(str(base_dir / plot["file"]), prompt)
+    except Exception as exc:
+        error = str(exc)
+    if mode == "categories":
+        return _categories_record(plot["file"], raw, error, valid_names)
+    return _freetext_record(plot["file"], raw, error)
+
+
 def detect_all(
     plots: list[dict],
     base_dir: Path | str,
     backend: Callable[[str, str], str],
     taxonomy: list[dict[str, str]],
     mode: str = "categories",
+    workers: int = 1,
 ) -> list[dict]:
     """Run every plot through ``backend`` and return per-plot detection records.
 
@@ -225,6 +247,8 @@ def detect_all(
         taxonomy: Defect catalogue, used to build the prompt and validate reported categories.
         mode: ``"categories"`` for closed-set category detection, ``"freetext"`` for open-ended
             natural-language descriptions.
+        workers: Number of detections to run concurrently. The work is I/O-bound (one subprocess or HTTP
+            call per plot), so threads parallelise it; results keep input order regardless.
 
     Returns:
         One record per plot. In ``categories`` mode: ``{file, detected, has_defect, raw, error}``.
@@ -233,20 +257,14 @@ def detect_all(
     base_dir = Path(base_dir)
     prompt = build_prompt(taxonomy) if mode == "categories" else build_freetext_prompt()
     valid_names = {d["name"] for d in taxonomy}
+    detect_one = partial(
+        _detect_one, base_dir=base_dir, backend=backend, prompt=prompt, mode=mode, valid_names=valid_names
+    )
 
-    results: list[dict] = []
-    for plot in plots:
-        image_path = base_dir / plot["file"]
-        raw, error = "", None
-        try:
-            raw = backend(str(image_path), prompt)
-        except Exception as exc:
-            error = str(exc)
-        if mode == "categories":
-            results.append(_categories_record(plot["file"], raw, error, valid_names))
-        else:
-            results.append(_freetext_record(plot["file"], raw, error))
-    return results
+    if workers <= 1:
+        return [detect_one(plot) for plot in plots]
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        return list(executor.map(detect_one, plots))
 
 
 def _resolve_openrouter_key() -> str:
@@ -291,6 +309,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--out", default=None, help="Output detections JSON (defaults next to the manifest).")
     parser.add_argument("--limit", type=int, default=None, help="Only run the first N plots (cost control).")
+    parser.add_argument("--workers", type=int, default=1, help="Number of detections to run concurrently.")
     args = parser.parse_args(argv)
 
     manifest_path = Path(args.manifest)
@@ -299,8 +318,13 @@ def main(argv: list[str] | None = None) -> None:
     model = args.model or (DEFAULT_CLAUDE_MODEL if args.backend == "claude" else DEFAULT_OPENROUTER_MODEL)
 
     backend = make_image_backend(args.backend, args.model)
-    print(f"Detecting with backend={args.backend} model={model} mode={args.mode} over {len(plots)} plots...")
-    results = detect_all(plots, manifest_path.parent, backend, manifest["taxonomy"], mode=args.mode)
+    print(
+        f"Detecting with backend={args.backend} model={model} mode={args.mode} "
+        f"over {len(plots)} plots ({args.workers} workers)...",
+    )
+    results = detect_all(
+        plots, manifest_path.parent, backend, manifest["taxonomy"], mode=args.mode, workers=args.workers
+    )
 
     out_path = Path(args.out) if args.out is not None else manifest_path.parent / "detections.json"
     out_path.write_text(

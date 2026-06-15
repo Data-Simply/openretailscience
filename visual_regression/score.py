@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -156,10 +158,25 @@ def make_judge(text_backend: Callable[[str], str]) -> Callable[[bool, list[str],
     return lambda is_clean, truth, desc: _parse_judge(text_backend(build_judge_prompt(is_clean, truth, desc)))
 
 
+def _judge_one(
+    item: tuple[str, bool, list[str], str],
+    judge: Callable[[bool, list[str], str], dict[str, bool]],
+) -> dict:
+    """Grade one ``(file, is_clean, truth, description)`` and classify it into a TP/FP/FN/TN verdict."""
+    file, is_clean, truth, description = item
+    verdict = judge(is_clean, truth, description)
+    if is_clean:
+        outcome = "fp" if verdict["claims_problem"] else "tn"
+    else:
+        outcome = "tp" if verdict["identifies_real_issue"] else "fn"
+    return {"file": file, "is_clean": is_clean, "outcome": outcome, "description": description}
+
+
 def evaluate_freetext(
     plots: list[dict],
     detections: list[dict],
     judge: Callable[[bool, list[str], str], dict[str, bool]],
+    workers: int = 1,
 ) -> dict:
     """Score open-ended detections with an LLM ``judge`` into binary detection metrics.
 
@@ -171,6 +188,7 @@ def evaluate_freetext(
         plots: The manifest's ``plots`` list (ground truth).
         detections: Free-text detector records (each with ``file`` and ``description``).
         judge: Per-plot grader returning ``{"identifies_real_issue", "claims_problem"}``.
+        workers: Number of judge calls to run concurrently (the judging is I/O-bound).
 
     Returns:
         A report dict with ``binary`` metrics, per-plot ``verdicts`` and ``num_plots``.
@@ -181,26 +199,24 @@ def evaluate_freetext(
     is_clean_map = {p["file"]: len(p["defects"]) == 0 for p in plots}
     truth = {p["file"]: [d["description"] for d in p["defects"]] for p in plots}
     described = {r["file"]: r.get("description", "") for r in detections if r.get("error") is None}
-    files = [f for f in truth if f in described]
-    if len(files) == 0:
+    items = [(f, is_clean_map[f], truth[f], described[f]) for f in truth if f in described]
+    if len(items) == 0:
         raise ValueError("No overlapping (non-errored) plot files between manifest and detections.")
 
-    counts = {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
-    verdicts: list[dict] = []
-    for file in files:
-        is_clean = is_clean_map[file]
-        verdict = judge(is_clean, truth[file], described[file])
-        if is_clean:
-            outcome = "fp" if verdict["claims_problem"] else "tn"
-        else:
-            outcome = "tp" if verdict["identifies_real_issue"] else "fn"
-        counts[outcome] += 1
-        verdicts.append({"file": file, "is_clean": is_clean, "outcome": outcome, "description": described[file]})
+    judge_one = partial(_judge_one, judge=judge)
+    if workers <= 1:
+        verdicts = [judge_one(item) for item in items]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            verdicts = list(executor.map(judge_one, items))
 
+    counts = {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
+    for verdict in verdicts:
+        counts[verdict["outcome"]] += 1
     binary = _prf(counts["tp"], counts["fp"], counts["fn"])
-    binary["accuracy"] = (counts["tp"] + counts["tn"]) / len(files)
+    binary["accuracy"] = (counts["tp"] + counts["tn"]) / len(items)
     binary["tn"] = counts["tn"]
-    return {"num_plots": len(files), "mode": "freetext", "binary": binary, "verdicts": verdicts}
+    return {"num_plots": len(items), "mode": "freetext", "binary": binary, "verdicts": verdicts}
 
 
 def format_freetext_report(report: dict, detector: str | None = None, judge_model: str | None = None) -> str:
@@ -238,6 +254,7 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Judge model (free-text mode only; a stronger model such as 'sonnet' grades more reliably).",
     )
+    parser.add_argument("--workers", type=int, default=1, help="Number of judge calls to run concurrently.")
     args = parser.parse_args(argv)
 
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
@@ -251,7 +268,7 @@ def main(argv: list[str] | None = None) -> None:
         print(
             f"Judging {len(detections)} free-text reviews with {args.judge_backend}/{args.judge_model or 'default'}..."
         )
-        report = evaluate_freetext(manifest["plots"], detections, judge)
+        report = evaluate_freetext(manifest["plots"], detections, judge, workers=args.workers)
         print(format_freetext_report(report, detector, args.judge_model or f"{args.judge_backend} default"))
     else:
         report = evaluate(manifest["plots"], detections, manifest["taxonomy"])

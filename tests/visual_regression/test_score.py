@@ -127,6 +127,20 @@ class TestEvaluateFreetext:
         outcomes = {v["file"]: v["outcome"] for v in report["verdicts"]}
         assert outcomes == {"a.png": "tp", "b.png": "tn", "c.png": "fn", "d.png": "fp"}
 
+    def test_workers_match_serial(self):
+        """Concurrent judging yields the same verdicts and metrics as serial."""
+        plots = [
+            {"file": "a.png", "defects": [{"name": "title_clipped", "description": "title cut off"}]},
+            {"file": "b.png", "defects": []},
+        ]
+        detections = [
+            {"file": "a.png", "description": "correctly: title is cut off"},
+            {"file": "b.png", "description": "looks fine"},
+        ]
+        serial = evaluate_freetext(plots, detections, _keyword_judge)
+        parallel = evaluate_freetext(plots, detections, _keyword_judge, workers=4)
+        assert parallel == serial
+
     def test_errored_detections_are_skipped(self):
         """A detection that failed (carries an error) is excluded from scoring."""
         plots = [{"file": "a.png", "defects": [{"name": "title_clipped", "description": "title cut off"}]}]
