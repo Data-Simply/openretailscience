@@ -36,7 +36,7 @@ performance tracking, and visualizing changes over time.
 """
 
 import warnings
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 from matplotlib.axes import Axes
@@ -47,6 +47,9 @@ from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_named_color
 from openretailscience.plots.styles.font_utils import get_font_properties
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
+
+if TYPE_CHECKING:
+    from matplotlib.text import Annotation
 
 VALID_DATA_LABEL_FORMATS = ("absolute", "percentage", "both")
 
@@ -139,6 +142,7 @@ def plot(
 
     # Add a black line at the y=0 position
     ax.axhline(y=0, color="black", linewidth=1, zorder=-1)
+    bar_labels: list[Annotation] = []
     if data_label_format is not None:
         decimals = gu.get_decimals(ax.get_ylim(), ax.get_yticks())
         labels = format_data_labels(
@@ -149,7 +153,7 @@ def plot(
         )
 
         style = PlotStyleHelper()
-        ax.bar_label(
+        bar_labels = ax.bar_label(
             ax.containers[0],
             label_type="edge",
             labels=labels,
@@ -161,7 +165,7 @@ def plot(
     if display_net_line:
         ax.axhline(y=amount_total, color="black", linewidth=1, linestyle="--")
 
-    return standard_graph_styles(
+    ax = standard_graph_styles(
         ax,
         title=title,
         eyebrow=eyebrow,
@@ -171,6 +175,13 @@ def plot(
         source_text=source_text,
         grid_axis="y",
     )
+
+    # Bars carry sticky edges that pin the y-view to the bar extents, so each bar's edge label is
+    # drawn just outside the data area. Grow ylim until the labels on the most extreme bars clear the
+    # x-axis tick band (below) and the header (above). Runs after chrome has reflowed the axes.
+    gu.expand_ylim_for_bar_labels(ax, bar_labels)
+
+    return ax
 
 
 def format_data_labels(
