@@ -35,9 +35,9 @@ name  = "Murray Vanwyk"
 dev = [
     "freezegun>=1.5.1,<2",
     "ibis-framework[bigquery,pyspark,snowflake]>=10.0.0,<13",
-    "nbstripout>=0.7.1,<0.8",
-    "pre-commit>=3.6.2,<4",
-    "pytest-cov>=4.1.0,<5",
+    "nbstripout>=0.7.1,<0.10",
+    "pre-commit>=3.6.2,<5",
+    "pytest-cov>=4.1.0,<8",
     "pytest-mock>=3.14.0,<4",
     "pytest>=9.0.3,<10",                                      # >=9.0.3 fixes CVE-2025-71176 (predictable tmpdir)
     "ruff>=0.9,<1",
@@ -45,11 +45,11 @@ dev = [
     "tox>=4.0.0,<5",
 ]
 docs = [
-    "mkdocs-jupyter>=0.24.6,<0.25",
+    "mkdocs-jupyter>=0.24.6,<0.27",
     "mkdocs-material>=9.5.4,<10",
     "mkdocs>=1.5.3,<2",
-    "mkdocstrings>=0.26,<0.30",
-    "mkdocstrings-python>=1.11,<2",
+    "mkdocstrings>=0.26,<1.1",
+    "mkdocstrings-python>=1.11,<3",
 ]
 examples = [ "jupyterlab>=4.2.5,<5", "tqdm>=4.66.1,<5" ]
 
