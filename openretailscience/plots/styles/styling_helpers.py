@@ -97,18 +97,16 @@ def _resolve_end_of_line_legend_args(
 
 
 def _rewrap_text_to_width(text: Text, original: str, renderer: RendererBase) -> None:
-    """Bake ``original`` into ``text``, wrapped to the figure's current width.
+    """Bake ``original`` into ``text`` as newlines wrapped to the figure's current width.
 
-    matplotlib's ``wrap=True`` only re-wraps during ``draw`` and ``get_window_extent`` ignores it,
-    so chrome bakes the wrap into explicit newlines to measure a stable height. Pointing the text
-    at the live ``renderer`` first makes the bake follow the figure's *current* width: re-deriving
-    it on every draw is what stops a post-call resize from leaving the wrap frozen at the
-    build-time width. ``original`` (the unwrapped source) is supplied by the caller because the
-    baked artist no longer holds it.
+    matplotlib's ``wrap=True`` re-wraps only during ``draw`` and ``get_window_extent`` ignores it,
+    so chrome bakes the wrap to measure a stable height. Pointing the text at the live ``renderer``
+    first makes the bake track the *current* width, so a post-call resize re-wraps instead of
+    freezing at the build-time width. ``original`` is passed in because the baked artist no longer
+    holds the unwrapped source.
 
-    Leans on matplotlib's private wrap internals (``_get_wrapped_text`` and the ``_renderer``
-    attribute) — there is no public width-wrap API. A rename fails loudly at the bare call; a
-    silent contract change is caught by the line-count assertions in the chrome tests.
+    Uses matplotlib internals (``_get_wrapped_text``, ``_renderer``); no public width-wrap API
+    exists. A rename fails loudly here, and the chrome line-count tests catch a silent change.
     """
     text.set_text(original)
     text.set_wrap(True)
@@ -120,10 +118,9 @@ def _rewrap_text_to_width(text: Text, original: str, renderer: RendererBase) -> 
 def _active_renderer(fig: Figure) -> RendererBase:
     """Return the renderer for the figure's current draw, across backends.
 
-    The chrome engine measures text on every draw, including ``savefig``, during which matplotlib
-    swaps in a vector canvas (``FigureCanvasSVG``/``Pdf``) that has no ``get_renderer``. Use
-    ``fig._get_renderer()`` (what matplotlib's own tight/constrained layout engines use), not
-    ``fig.canvas.get_renderer()``, which exists only on the Agg canvas.
+    The engine measures on every draw including ``savefig``, where matplotlib swaps in a vector
+    canvas (SVG/PDF) with no ``get_renderer``. ``fig._get_renderer()`` (used by matplotlib's own
+    layout engines) works on every backend; ``fig.canvas.get_renderer()`` is Agg-only.
     """
     return fig._get_renderer()
 
@@ -178,10 +175,9 @@ def _layout_chrome_source(
 ) -> float:
     """Re-wrap the bottom-anchored source line; return its top offset in inches from the figure bottom.
 
-    The source is anchored at ``_CHROME_BOTTOM_MARGIN_IN`` from the figure bottom.
+    The source always wraps and is anchored at ``_CHROME_BOTTOM_MARGIN_IN`` from the figure bottom.
     """
-    if source.wrap:
-        _rewrap_text_to_width(source.text, source.original, renderer)
+    _rewrap_text_to_width(source.text, source.original, renderer)
     source.text.set_y(_CHROME_BOTTOM_MARGIN_IN / fig_h)
     height_in = source.text.get_window_extent(renderer=renderer).height / dpi
     return _CHROME_BOTTOM_MARGIN_IN + height_in
@@ -262,10 +258,9 @@ def _apply_chrome_layouts(fig: Figure) -> None:
 def _recompute_chrome_axes_gaps(layout: _ChromeLayout, fig: Figure, renderer: RendererBase) -> None:
     """Set ``layout``'s header/source-to-axes gaps from the axes box's current position.
 
-    The engine derives the axes top/bottom from these gaps, so they must be re-captured whenever the
-    box is reflowed: at initial layout, and after any later reflow that moved it. Re-wraps and
-    repositions the header and source artists as a side effect, since the gaps are measured against
-    their freshly laid-out heights.
+    The engine derives the axes top/bottom from these gaps, so re-capture them after every reflow.
+    Re-wraps and repositions the header and source artists as a side effect, since the gaps are
+    measured against their fresh heights.
     """
     fig_h = fig.get_figheight()
     dpi = fig.dpi
@@ -427,11 +422,9 @@ def apply_chart_chrome(
     ``tight_layout`` reflows the axes (with their tick and axis labels) into
     the remaining vertical band.
 
-    The placement is stored as a resize-invariant recipe and re-derived on
-    every draw by ``_ChromeLayoutEngine``: the title and subtitle re-wrap to
-    the figure's current width, so resizing the figure after this call (e.g.
-    ``fig.set_size_inches``) re-flows the chrome instead of freezing the wrap
-    at the build-time width.
+    The placement is stored as a resize-invariant recipe and re-derived on every
+    draw by ``_ChromeLayoutEngine``, so resizing the figure after this call (e.g.
+    ``fig.set_size_inches``) re-wraps and re-flows the chrome to the new size.
 
     Each absent element collapses its slot, so a chart with only a title
     takes only the vertical space the title needs.
@@ -580,7 +573,7 @@ def apply_chart_chrome(
             wrap=True,
         )
         source_artist.set_gid(chrome_gid)
-        source_spec = _ChromeTextSpec(source_artist, source_text, 0.0, wrap=True)
+        source_spec = _ChromeTextSpec(source_artist, source_text, 0.0)
         source_top_in = _layout_chrome_source(source_spec, fig_h, dpi, renderer)
         axes_bottom_in = source_top_in + _CHROME_GAP_SOURCE_TO_AXES_IN
     axes_bottom = axes_bottom_in / fig_h
@@ -595,8 +588,7 @@ def apply_chart_chrome(
         fig.subplots_adjust(top=header_bottom, bottom=axes_bottom)
 
     # Store the placement as a resize-invariant recipe and install the engine so the chrome
-    # re-wraps and re-flows to the figure's current size on later draws; otherwise the wrap
-    # freezes at the build-time width and the fraction-based gaps balloon (or overlap) on resize.
+    # re-wraps and re-flows to the figure's current size on later draws.
     layouts = getattr(fig, "_ors_chrome_layouts", None)
     if layouts is None:
         layouts = {}
@@ -704,7 +696,7 @@ def _set_xtick_rotation(ax: Axes, angle: float) -> None:
 def _xtick_labels_overlap(ax: Axes, fig: Figure) -> bool:
     """Return True when adjacent x-tick label bboxes encroach on the configured gap."""
     fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
+    renderer = _active_renderer(fig)
     bboxes = sorted(
         (label.get_window_extent(renderer=renderer) for label in ax.get_xticklabels()),
         key=lambda b: b.x0,
