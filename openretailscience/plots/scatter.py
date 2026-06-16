@@ -254,6 +254,7 @@ def plot(  # noqa: PLR0913
     group_col: str | None = None,
     size_col: str | None = None,
     size_scale: float = 1.0,
+    figsize: tuple[int, int] | None = None,
     ax: Axes | None = None,
     source_text: str | None = None,
     legend_title: str | None = None,
@@ -279,6 +280,7 @@ def plot(  # noqa: PLR0913
             When used with multiple value_col columns, the same size values apply to all series.
         size_scale (float, optional): Scaling factor for point sizes. Default: 1.0.
             Actual size = size_col_value * size_scale.
+        figsize (tuple[int, int], optional): Size of the new figure when ``ax`` is None. Defaults to None.
         ax (Axes, optional): Matplotlib axes object to plot on.
         source_text (str, optional): The source text to add to the plot.
         legend_title (str, optional): The title of the legend.
@@ -345,7 +347,8 @@ def plot(  # noqa: PLR0913
     # Process size data if size_col is specified
     size_data = _process_size_data(df, size_col, size_scale, x_col, group_col)
 
-    ax = ax or plt.gca()
+    if ax is None:
+        _, ax = plt.subplots(figsize=figsize)
     alpha = kwargs.pop("alpha", 0.7)
 
     _create_scatter_plot(ax, pivot_df, colors, size_data, group_col, is_multi_scatter, alpha, **kwargs)
