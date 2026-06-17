@@ -12,11 +12,8 @@ This guide shows how to connect Ibis to each of those sources, how to hand the r
 When you pass an Ibis table to an OpenRetailScience function, the filtering and aggregation run inside your database or
 warehouse. Ibis compiles your expression to SQL, the engine executes it, and only the result comes back to Python.
 
-This matters once your data outgrows memory:
-
-- **Query pushdown**: filters and aggregations run in the database, close to the data, not in a Python loop.
-- **Less data movement**: only the aggregated result crosses the network, not the raw transaction rows.
-- **Lower memory use**: you never materialize the full table in Python.
+This keeps the work in the database rather than in Python, so the same analysis scales from a local file to a
+billion-row warehouse table without loading it all into memory.
 
 A pandas DataFrame still works for smaller datasets and quick experiments. The same OpenRetailScience code runs on
 either input, so you can prototype on a pandas sample and switch to a warehouse table for production without rewriting
@@ -208,6 +205,7 @@ cfg = Config(profile="my_profile")
 con = ibis.databricks.connect(
     server_hostname=cfg.host,
     http_path="/sql/1.0/warehouses/abc123def456",
+    # pass a callable that returns cfg.authenticate, not cfg.authenticate itself
     credentials_provider=lambda: cfg.authenticate,
 )
 transactions = con.table("transactions")
@@ -282,7 +280,7 @@ con = ibis.mssql.connect(
     password=os.environ["MSSQL_PASSWORD"],
     driver="ODBC Driver 18 for SQL Server",
 )
-transactions = con.table("transactions", database="dbo")
+transactions = con.table("transactions", database="dbo")  # database is the SQL Server schema
 ```
 
 For Windows integrated authentication, leave `user` and `password` unset. Ibis then sets `Trusted_Connection=yes` and
@@ -359,7 +357,7 @@ transactions = con.table("transactions")
 ```
 
 Identify the database by its `service_name`, its `sid`, or a full `dsn`. Supply only one of these. If your tables live
-in another user's schema, qualify the table name with `con.table("transactions", database="SALES")`.
+in another user's schema, pass that schema as the `database` argument: `con.table("transactions", database="SALES")`.
 
 ## Filter before you analyze
 
@@ -379,6 +377,8 @@ q1_data = transactions.filter(
 Combine the date range with category, store, or other dimension filters as the question requires:
 
 ```python
+from openretailscience.segmentation.segstats import SegTransactionStats
+
 electronics_q1 = transactions.filter(
     transactions.transaction_date.between("2023-01-01", "2023-03-31")
     & (transactions.category_0_name == "Electronics")
