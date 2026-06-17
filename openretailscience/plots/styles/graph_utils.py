@@ -347,8 +347,8 @@ def expand_ylim_for_bar_labels(ax: Axes, labels: list[Annotation]) -> None:
         ax (Axes): The axes holding the labelled bars.
         labels (list[Annotation]): The annotation artists returned by ``ax.bar_label``.
     """
-    labels = [label for label in labels if len(label.get_text()) > 0]
-    if len(labels) == 0:
+    visible_labels = [label for label in labels if len(label.get_text()) > 0]
+    if len(visible_labels) == 0:
         return
 
     fig = ax.figure
@@ -357,7 +357,7 @@ def expand_ylim_for_bar_labels(ax: Axes, labels: list[Annotation]) -> None:
         # drawn, get_window_extent resolves the active renderer on its own.
         fig.canvas.draw()
         axes_box = ax.get_window_extent()
-        label_boxes = [label.get_window_extent() for label in labels]
+        label_boxes = [label.get_window_extent() for label in visible_labels]
 
         # Pixels by which the outermost labels spill past each axes edge (<= 0 once inside).
         overflow_below = axes_box.y0 - min(box.y0 for box in label_boxes)

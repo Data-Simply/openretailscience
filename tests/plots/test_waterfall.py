@@ -134,7 +134,7 @@ class TestWaterfallPlot:
         with option_context("plot.font.data_label_size", custom_data_label_size):
             result_ax = plot(amounts, labels, data_label_format="absolute")
 
-        bar_label_texts = [t for t in result_ax.texts if t.get_text()]
+        bar_label_texts = [t for t in result_ax.texts if len(t.get_text()) > 0]
         assert len(bar_label_texts) == len(amounts)
         for text in bar_label_texts:
             assert text.get_fontsize() == custom_data_label_size
@@ -155,7 +155,7 @@ class TestWaterfallPlot:
         renderer = fig.canvas.get_renderer()
 
         axes_box = result_ax.get_window_extent(renderer=renderer)
-        data_labels = [text for text in result_ax.texts if text.get_text()]
+        data_labels = [text for text in result_ax.texts if len(text.get_text()) > 0]
         assert len(data_labels) == len(amounts) + 1  # one per input bar plus the net bar
 
         for text in data_labels:
