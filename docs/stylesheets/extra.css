@@ -972,7 +972,11 @@ body {
   align-items: center;
   justify-content: center;
   aspect-ratio: 16 / 10;
-  margin-top: 16px;
+  /* Push the thumbnail to the bottom of the (equal-height) card so chart
+     tops align across a row even when titles/descriptions wrap to
+     different line counts. Thumbs share width + aspect-ratio, so equal
+     height + bottom alignment == aligned tops. */
+  margin-top: auto;
 }
 .md-typeset .orsg-card__thumb img {
   max-width: 100%;
@@ -986,6 +990,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  margin-bottom: 16px; /* minimum gap between text and thumbnail */
 }
 .md-typeset .orsg-card__title {
   font-family: "Poppins", sans-serif;
