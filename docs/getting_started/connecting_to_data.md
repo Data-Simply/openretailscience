@@ -66,8 +66,7 @@ argument adds a grand total row:
 from openretailscience.segmentation.segstats import SegTransactionStats
 
 q1 = transactions.filter(
-    (transactions.transaction_date >= "2023-01-01")
-    & (transactions.transaction_date <= "2023-03-31")
+    transactions.transaction_date.between("2023-01-01", "2023-03-31")
 )
 
 stats = SegTransactionStats(data=q1, segment_col="category_0_name", grouping_sets="total")
@@ -373,8 +372,7 @@ the last 12 months) and filter to it:
 
 ```python
 q1_data = transactions.filter(
-    (transactions.transaction_date >= "2023-01-01")
-    & (transactions.transaction_date <= "2023-03-31")
+    transactions.transaction_date.between("2023-01-01", "2023-03-31")
 )
 ```
 
@@ -382,8 +380,7 @@ Combine the date range with category, store, or other dimension filters as the q
 
 ```python
 electronics_q1 = transactions.filter(
-    (transactions.transaction_date >= "2023-01-01")
-    & (transactions.transaction_date <= "2023-03-31")
+    transactions.transaction_date.between("2023-01-01", "2023-03-31")
     & (transactions.category_0_name == "Electronics")
 )
 
@@ -418,8 +415,7 @@ transactions = con.read_parquet("data/transactions.parquet")
 
 # 2. Filter to the scope of the business question
 q1_electronics = transactions.filter(
-    (transactions.transaction_date >= "2023-01-01")
-    & (transactions.transaction_date <= "2023-03-31")
+    transactions.transaction_date.between("2023-01-01", "2023-03-31")
     & (transactions.category_0_name == "Electronics")
 )
 
