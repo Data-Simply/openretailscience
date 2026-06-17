@@ -290,8 +290,8 @@ con = ibis.mssql.connect(
 transactions = con.table("transactions", database="dbo")
 ```
 
-For Windows integrated authentication, leave `user` and `password` unset and the driver uses your current Windows
-identity:
+For Windows integrated authentication, leave `user` and `password` unset. Ibis then sets `Trusted_Connection=yes` and
+the driver authenticates with your current identity:
 
 ```python
 con = ibis.mssql.connect(
@@ -301,9 +301,17 @@ con = ibis.mssql.connect(
 )
 ```
 
-SQL authentication needs a username and password and works from any platform. Windows authentication avoids storing a
-password but only works inside the Active Directory domain. The connection needs an ODBC driver installed: "ODBC Driver
-18 for SQL Server" on Windows, or FreeTDS on macOS and Linux.
+SQL authentication needs a username and password and works the same on Windows, macOS, and Linux. Integrated
+authentication avoids storing a password: on Windows the driver uses your signed-in account, and on Linux it goes
+through Kerberos. The connection also needs an ODBC driver installed, either the Microsoft ODBC Driver 18 for SQL
+Server or, for SQL authentication on macOS and Linux, FreeTDS.
+
+!!! note "Integrated authentication from Linux needs a Kerberos ticket"
+    FreeTDS does not handle trusted connections, so install the Microsoft ODBC Driver 18 for SQL Server
+    (`msodbcsql18`) and an MIT Kerberos client (`krb5-user` on Debian or Ubuntu, `krb5-workstation` on RHEL). Run
+    `kinit you@YOUR.DOMAIN` to cache a ticket, then call `ibis.mssql.connect()` with `user` and `password` unset so
+    Ibis applies `Trusted_Connection=yes`. If the server uses a self-signed certificate, also pass
+    `TrustServerCertificate="yes"`; Ibis forwards it and any other ODBC keyword to pyodbc.
 
 ### Microsoft Fabric
 
