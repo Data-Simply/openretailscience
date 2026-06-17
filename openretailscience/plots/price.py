@@ -141,6 +141,7 @@ def plot(
     x_label: str | None = None,
     y_label: str | None = None,
     legend_title: str | None = None,
+    figsize: tuple[int, int] | None = None,
     ax: Axes | None = None,
     source_text: str | None = None,
     move_legend_outside: bool = False,
@@ -162,6 +163,7 @@ def plot(
         x_label (str, optional): The label for the x-axis. Defaults to None.
         y_label (str, optional): The label for the y-axis. Defaults to None.
         legend_title (str, optional): The title for the legend. Defaults to None.
+        figsize (tuple[int, int], optional): Size of the new figure when ``ax`` is None. Defaults to None.
         ax (Axes, optional): The Matplotlib Axes object to plot on. Defaults to None.
         source_text (str, optional): Text to be displayed as a source at the bottom of the plot. Defaults to None.
         move_legend_outside (bool, optional): Whether to move the legend outside the plot area. Defaults to False.
@@ -188,7 +190,8 @@ def plot(
     # Convert to proportions (0-1 range)
     proportions = bin_counts.div(group_totals, axis=0)
 
-    ax = ax or plt.gca()
+    if ax is None:
+        _, ax = plt.subplots(figsize=figsize)
 
     # Get unique groups and bins
     groups = proportions.index.tolist()

@@ -107,7 +107,7 @@ def plot(
     df = pd.DataFrame({"labels": labels, "amounts": amounts})
 
     if remove_zero_amounts:
-        df = df[df["amounts"] != 0]
+        df = df[df["amounts"] != 0].reset_index(drop=True)
 
     amount_total = df["amounts"].sum()
 

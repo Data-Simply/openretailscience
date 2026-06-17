@@ -34,7 +34,7 @@ jobs:
       - name: Run Pre-commit
         run: uv run pre-commit run --all-files
       - name: Pre-import Codecov uploader signing key
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
         # Workaround for codecov/codecov-action#1876: the uploader intermittently
         # fails to fetch its own verification key, producing "Can't check signature:
         # No public key" and failing the job under fail_ci_if_error. Pre-seed Codecov's
@@ -59,8 +59,8 @@ jobs:
           rm -f codecov.asc
           exit 0
       - name: Upload coverage to Codecov
-        if: github.event_name == 'pull_request'
-        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
