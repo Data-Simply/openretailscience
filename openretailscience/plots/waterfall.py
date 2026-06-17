@@ -176,9 +176,8 @@ def plot(
         grid_axis="y",
     )
 
-    # Bars carry sticky edges that pin the y-view to the bar extents, so each bar's edge label is
-    # drawn just outside the data area. Grow ylim until the labels on the most extreme bars clear the
-    # x-axis tick band (below) and the header (above). Runs after chrome has reflowed the axes.
+    # Bar sticky edges pin the y-view to the bar extents, so edge labels overflow the axes; grow
+    # ylim to bring them inside. Must run after chrome has reflowed the axes.
     gu.expand_ylim_for_bar_labels(ax, bar_labels)
 
     return ax

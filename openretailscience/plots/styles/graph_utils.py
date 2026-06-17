@@ -33,7 +33,7 @@ _LEADER_ALPHA = 0.55
 
 # Bar-label headroom
 _BAR_LABEL_CLEARANCE_PX = 2.0  # gap kept between an edge label and the axes boundary
-_MAX_BAR_LABEL_YLIM_PASSES = 3  # expand/measure passes; the geometric correction settles within a few
+_MAX_BAR_LABEL_YLIM_PASSES = 3  # expand/measure passes; converges within a few
 
 
 class _EndOfLineCandidate(TypedDict):
@@ -337,16 +337,11 @@ def _resolve_end_of_line_label_ys(ax: Axes, candidates: list[_EndOfLineCandidate
 def expand_ylim_for_bar_labels(ax: Axes, labels: list[Annotation]) -> None:
     """Grow the y-limits so bar-end value labels sit inside the axes data area.
 
-    matplotlib bars carry sticky edges that suppress autoscale margins, so the y-view is pinned
-    exactly to the bar extents. ``ax.bar_label(label_type="edge")`` then draws each value at a fixed
-    point offset *outside* its bar, leaving the labels on the most extreme bars overflowing past the
-    axes — into the x-axis tick-label band below (negative bars) or the chart header above (positive
-    bars). This expands ``ylim`` on whichever side overflows until every label clears, measuring in
-    pixel space so the reserved room tracks the rendered font height rather than a fixed fraction of
-    the data range.
-
-    Must run after the chrome layout has reflowed the axes: converting the labels' pixel overflow to
-    data units depends on the final axes height.
+    matplotlib bars have sticky edges that suppress autoscale margins, so the y-view is pinned to the
+    bar extents and ``bar_label``'s edge labels overflow the axes. This grows ``ylim`` on whichever
+    side overflows until every label clears, in pixel space so the reserved room tracks the font
+    height, not a fixed fraction of the data range. Must run after the chrome layout has reflowed the
+    axes, since the overflow-to-data conversion needs the final axes height.
 
     Args:
         ax (Axes): The axes holding the labelled bars.
@@ -358,30 +353,27 @@ def expand_ylim_for_bar_labels(ax: Axes, labels: list[Annotation]) -> None:
 
     fig = ax.figure
     for _ in range(_MAX_BAR_LABEL_YLIM_PASSES):
-        # Draw first so the labels and axes box report settled pixel positions; with the canvas
-        # drawn, get_window_extent resolves the active renderer on its own.
+        # Draw so get_window_extent reports settled positions and can resolve the renderer itself.
         fig.canvas.draw()
         axes_box = ax.get_window_extent()
         label_boxes = [label.get_window_extent() for label in visible_labels]
 
-        # Pixels by which the outermost labels spill past each axes edge (<= 0 once inside).
+        # px the outermost labels spill past each axes edge (<= 0 once inside).
         overflow_below = axes_box.y0 - min(box.y0 for box in label_boxes)
         overflow_above = max(box.y1 for box in label_boxes) - axes_box.y1
         if overflow_below <= 0 and overflow_above <= 0:
             return
 
-        # Expanding ylim shifts every bar edge toward the centre, pulling the labels inward; the
-        # clearance overshoots so each spilling label lands just inside its edge. Growing the view
-        # lowers px-per-data, so a single pass under-corrects — the loop re-measures and tops up.
+        # Expanding ylim pulls the labels inward; overshoot by the clearance so they land just inside.
+        # One pass under-corrects (the view grows, lowering px-per-data), so the loop tops up.
         y_low, y_high = ax.get_ylim()
         data_per_px = (y_high - y_low) / axes_box.height
         extra_below = overflow_below + _BAR_LABEL_CLEARANCE_PX if overflow_below > 0 else 0.0
         extra_above = overflow_above + _BAR_LABEL_CLEARANCE_PX if overflow_above > 0 else 0.0
         ax.set_ylim(y_low - extra_below * data_per_px, y_high + extra_above * data_per_px)
 
-    # The correction converges within a couple of passes at normal proportions; if it has not after
-    # the cap (e.g. a label taller than a very short axes), surface it rather than leaving the labels
-    # silently clipped — mirrors the end-of-line label resolver's behaviour for infeasible geometry.
+    # Not converged after the cap (e.g. a label taller than a short axes): warn rather than clip
+    # silently, as the end-of-line label resolver does for infeasible geometry.
     warnings.warn(
         f"Bar labels could not be brought fully inside the axes within {_MAX_BAR_LABEL_YLIM_PASSES} "
         "passes; consider a taller figure or a smaller plot.font.data_label_size.",

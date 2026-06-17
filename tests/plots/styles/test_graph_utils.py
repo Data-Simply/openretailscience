@@ -293,11 +293,7 @@ class TestExpandYlimForBarLabels:
     """Tests for expand_ylim_for_bar_labels."""
 
     def test_already_inside_axes_leaves_ylim_unchanged(self):
-        """Labels that already sit inside the data area need no room, so ylim is left untouched.
-
-        Exercises the first-pass early return: with generous headroom the edge labels never spill
-        past the axes, so the function must detect that and return without growing the view.
-        """
+        """Labels already inside the data area need no room: the first-pass early return leaves ylim untouched."""
         fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
         ax.bar(["North", "South"], [120.0, 240.0])
         bar_labels = ax.bar_label(ax.containers[0])
@@ -321,11 +317,7 @@ class TestExpandYlimForBarLabels:
         ],
     )
     def test_grows_ylim_until_overflowing_labels_clear_axes(self, heights, pinned_ylim):
-        """A bar-end label spilling past the axes pulls ylim out until every label sits inside.
-
-        Pinning ylim to the bar extents reproduces the waterfall's sticky-edge view; the positive and
-        negative cases exercise the above- and below-overflow corrections respectively.
-        """
+        """An overflowing label pulls ylim out until every label sits inside (above- and below-overflow cases)."""
         fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
         ax.bar(["North", "South"], heights)
         bar_labels = ax.bar_label(ax.containers[0])
@@ -351,11 +343,7 @@ class TestExpandYlimForBarLabels:
             assert label_box.y1 <= axes_box.y1
 
     def test_warns_when_labels_cannot_fit(self):
-        """A label taller than a very short axes can never fit; the function warns after the cap.
-
-        An outsized font makes each label taller than the whole axes, so no amount of ylim growth
-        brings it inside — the pass cap is exhausted and a UserWarning surfaces the infeasible geometry.
-        """
+        """A label taller than the axes can never fit, so the pass cap is exhausted and a UserWarning fires."""
         fig, ax = plt.subplots(figsize=(4, 0.6), dpi=100)
         ax.bar(["North", "South"], [120.0, 240.0])
         bar_labels = ax.bar_label(ax.containers[0], fontsize=80)
