@@ -233,11 +233,6 @@ This reuses the notebook's own session, so queries run on the attached cluster a
 needed. The `databricks` backend also works from a notebook, but it opens a separate connection to a SQL warehouse, so
 reusing the built-in `spark` session is usually simpler.
 
-!!! warning "Databricks Connect sessions are not supported"
-    `ibis.pyspark.connect()` works with the notebook's built-in `spark` session, but not with a Databricks Connect
-    remote session (`DatabricksSession`). Ibis reads the `sparkContext` attribute during connection, which the remote
-    session does not implement (see [ibis issue #9060](https://github.com/ibis-project/ibis/issues/9060)).
-
 ### PySpark
 
 ```bash
