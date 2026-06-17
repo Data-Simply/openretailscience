@@ -22,27 +22,12 @@ A pandas DataFrame still works for smaller datasets and quick experiments. The s
 either input, so you can prototype on a pandas sample and switch to a warehouse table for production without rewriting
 your analysis.
 
-## Install the backend you need
-
-The core install includes DuckDB. Every other backend is an optional Ibis extra. Install the one that matches your
-source:
-
-```bash
-pip install "ibis-framework[duckdb]"      # local files and the sample data
-pip install "ibis-framework[bigquery]"    # Google BigQuery
-pip install "ibis-framework[snowflake]"   # Snowflake
-pip install "ibis-framework[databricks]"  # Databricks
-pip install "ibis-framework[pyspark]"     # PySpark and Spark clusters
-pip install "ibis-framework[mssql]"       # SQL Server and Microsoft Fabric
-pip install "ibis-framework[oracle]"      # Oracle Database
-```
-
 ## Quick start with the sample data
 
 The repository ships a sample dataset at
 [`data/transactions.parquet`](https://github.com/Data-Simply/openretailscience/blob/main/data/transactions.parquet).
-It holds 127,180 rows of synthetic retail transactions for the 2023 calendar year. DuckDB reads Parquet files
-directly, so no server or credentials are required.
+It holds 127,180 rows of synthetic retail transactions for the 2023 calendar year. DuckDB ships with the core install
+and reads Parquet files directly, so no extra package, server, or credentials are required.
 
 ```python
 import ibis
@@ -109,8 +94,9 @@ The output above omits the quantity-derived columns for width. The full result a
 
 ## Connecting to your data source
 
-Every backend follows the same shape: open a connection, then get a table reference with `con.table("table_name")`.
-After that, the table behaves the same regardless of where it lives.
+Every backend follows the same shape: install its Ibis extra, open a connection, then get a table reference with
+`con.table("table_name")`. After that, the table behaves the same regardless of where it lives. DuckDB ships with the
+core install; the others are optional extras shown with each example below.
 
 !!! warning "Never hardcode credentials"
     Read passwords and tokens from environment variables or a secrets manager. Do not paste them into notebooks or
@@ -119,7 +105,7 @@ After that, the table behaves the same regardless of where it lives.
 ### DuckDB (local files)
 
 DuckDB runs in-process and reads Parquet, CSV, and its own database files. Use it for local files, the sample data,
-and testing.
+and testing. It comes with the core install, so no extra Ibis package is needed.
 
 ```python
 import ibis
@@ -134,6 +120,10 @@ transactions = con.table("transactions")
 ```
 
 ### Google BigQuery
+
+```bash
+pip install "ibis-framework[bigquery]"
+```
 
 ```python
 import ibis
@@ -151,6 +141,10 @@ account, pass a `google.oauth2.service_account.Credentials` object to the `crede
     transaction date) reduces both query time and cost, because the engine skips partitions outside your range.
 
 ### Snowflake
+
+```bash
+pip install "ibis-framework[snowflake]"
+```
 
 ```python
 import os
@@ -173,6 +167,10 @@ password, pass the `authenticator` argument (see the
 
 ### Databricks
 
+```bash
+pip install "ibis-framework[databricks]"
+```
+
 ```python
 import os
 import ibis
@@ -191,6 +189,10 @@ Find the `server_hostname` and `http_path` under the connection details of your 
 workspace. The `catalog` and `schema` arguments set the Unity Catalog location that table names resolve against.
 
 ### PySpark
+
+```bash
+pip install "ibis-framework[pyspark]"
+```
 
 The `pyspark` backend connects Ibis to a running Spark cluster through a `SparkSession`. Use it when your code runs on
 Spark, including inside a Databricks notebook where the session already exists.
@@ -219,6 +221,10 @@ only the aggregated result returns to the driver. To reach a Databricks SQL ware
 `databricks` backend shown above instead.
 
 ### Microsoft SQL Server
+
+```bash
+pip install "ibis-framework[mssql]"
+```
 
 ```python
 import os
@@ -253,9 +259,15 @@ password but only works inside the Active Directory domain. The connection needs
 
 ### Microsoft Fabric
 
-A Fabric warehouse and the SQL analytics endpoint of a lakehouse both speak the SQL Server wire protocol, so the
-`mssql` backend connects to them. Point `host` at the Fabric SQL connection string and authenticate with Azure Active
-Directory by passing the ODBC `Authentication` keyword through to the driver:
+Fabric uses the same `mssql` extra as SQL Server, because a Fabric warehouse and the SQL analytics endpoint of a
+lakehouse both speak the SQL Server wire protocol:
+
+```bash
+pip install "ibis-framework[mssql]"
+```
+
+Point `host` at the Fabric SQL connection string and authenticate with Azure Active Directory by passing the ODBC
+`Authentication` keyword through to the driver:
 
 ```python
 import ibis
@@ -275,6 +287,10 @@ OpenRetailScience. A Fabric warehouse supports reads and writes. Both use the
 `Authentication="ActiveDirectoryServicePrincipal"` with a client ID and secret rather than the interactive flow.
 
 ### Oracle Database
+
+```bash
+pip install "ibis-framework[oracle]"
+```
 
 ```python
 import os
