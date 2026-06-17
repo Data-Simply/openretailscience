@@ -352,6 +352,21 @@ def test_plot_legend_outside_reflows_axes_to_reserve_room(simple_price_dataframe
     )
 
 
+def test_plot_with_figsize(simple_price_dataframe):
+    """Test price plot sizes the figure when figsize is passed and no ax is provided."""
+    width, height = 12, 8
+    result_ax = price.plot(
+        df=simple_price_dataframe,
+        value_col="unit_price",
+        group_col="retailer",
+        bins=3,
+        figsize=(width, height),
+    )
+
+    assert result_ax.figure.get_size_inches()[0] == width
+    assert result_ax.figure.get_size_inches()[1] == height
+
+
 def test_plot_adds_source_text(simple_price_dataframe):
     """The price plot renders source_text as a figure-level text element."""
     source_text = "Source: Test Data"
