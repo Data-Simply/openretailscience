@@ -289,6 +289,65 @@ class TestDrawEndOfLineLabels:
         assert labelled[0].get_fontsize() == get_option("plot.font.legend_size")
 
 
+class TestExpandYlimForBarLabels:
+    """Tests for expand_ylim_for_bar_labels."""
+
+    def test_already_inside_axes_leaves_ylim_unchanged(self):
+        """Labels that already sit inside the data area need no room, so ylim is left untouched.
+
+        Exercises the first-pass early return: with generous headroom the edge labels never spill
+        past the axes, so the function must detect that and return without growing the view.
+        """
+        fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
+        ax.bar(["North", "South"], [120.0, 240.0])
+        bar_labels = ax.bar_label(ax.containers[0])
+        ax.set_ylim(-100.0, 600.0)
+        fig.canvas.draw()
+        ylim_before = ax.get_ylim()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            gu.expand_ylim_for_bar_labels(ax, list(bar_labels))
+
+        assert ax.get_ylim() == ylim_before
+
+    def test_grows_ylim_until_overflowing_label_clears_axes(self):
+        """A bar-end label spilling past the axes pulls ylim out until the label sits inside.
+
+        Pinning ylim to the bar extents reproduces the waterfall's sticky-edge view: the top label
+        then starts above the axes, and the function must grow ylim so it lands within the data area.
+        """
+        fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
+        ax.bar(["North", "South"], [120.0, 240.0])
+        bar_labels = ax.bar_label(ax.containers[0])
+        ax.set_ylim(0.0, 240.0)  # pin the view to the bar extents, as waterfall's sticky edges do
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        top_before = max(label.get_window_extent(renderer=renderer).y1 for label in bar_labels)
+        assert top_before > ax.get_window_extent(renderer=renderer).y1  # precondition: spills out
+
+        gu.expand_ylim_for_bar_labels(ax, list(bar_labels))
+
+        fig.canvas.draw()
+        axes_top = ax.get_window_extent(renderer=renderer).y1
+        for label in bar_labels:
+            assert label.get_window_extent(renderer=renderer).y1 <= axes_top
+
+    def test_warns_when_labels_cannot_fit(self):
+        """A label taller than a very short axes can never fit; the function warns after the cap.
+
+        An outsized font makes each label taller than the whole axes, so no amount of ylim growth
+        brings it inside — the pass cap is exhausted and a UserWarning surfaces the infeasible geometry.
+        """
+        fig, ax = plt.subplots(figsize=(4, 0.6), dpi=100)
+        ax.bar(["North", "South"], [120.0, 240.0])
+        bar_labels = ax.bar_label(ax.containers[0], fontsize=80)
+        fig.canvas.draw()
+
+        with pytest.warns(UserWarning, match="could not be brought fully inside"):
+            gu.expand_ylim_for_bar_labels(ax, list(bar_labels))
+
+
 class TestVisualRegression:
     """Visual regression tests to ensure refactored code produces identical output."""
 
