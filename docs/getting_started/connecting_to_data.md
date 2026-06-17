@@ -197,7 +197,7 @@ Databricks workspace. The `catalog` and `schema` arguments set the Unity Catalog
 against.
 
 To avoid a token in your code, authenticate through a configuration profile instead. The Databricks CLI command
-`databricks auth login --profile ds_env` runs the OAuth sign-in flow and stores the host and refreshing credentials
+`databricks auth login --profile my_profile` runs the OAuth sign-in flow and stores the host and refreshing credentials
 under a named profile in `~/.databrickscfg`. Read that profile with the SDK `Config` object and pass its host and
 authentication to the connection:
 
@@ -205,7 +205,7 @@ authentication to the connection:
 import ibis
 from databricks.sdk.core import Config
 
-cfg = Config(profile="ds_env")
+cfg = Config(profile="my_profile")
 con = ibis.databricks.connect(
     server_hostname=cfg.host,
     http_path="/sql/1.0/warehouses/abc123def456",
