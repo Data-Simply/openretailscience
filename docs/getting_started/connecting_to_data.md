@@ -229,8 +229,9 @@ con = ibis.pyspark.connect(spark)
 transactions = con.table("transactions")
 ```
 
-This reuses the notebook's own session, so queries run on the attached cluster and no install or credentials are
-needed. The `databricks` backend is for reaching the workspace from outside, so it is not the right choice here.
+This reuses the notebook's own session, so queries run on the attached cluster and no install, warehouse, or token is
+needed. The `databricks` backend also works from a notebook, but it opens a separate connection to a SQL warehouse, so
+reusing the built-in `spark` session is usually simpler.
 
 !!! warning "Databricks Connect sessions are not supported"
     `ibis.pyspark.connect()` works with the notebook's built-in `spark` session, but not with a Databricks Connect
