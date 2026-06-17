@@ -38,7 +38,7 @@ import ibis
 import pandas as pd
 
 # Using Ibis
-con = ibis.connect("duckdb://")
+con = ibis.duckdb.connect()
 table = con.table("transactions")
 table = table.rename(
     cust_id="customer_id",
