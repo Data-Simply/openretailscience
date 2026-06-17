@@ -280,7 +280,7 @@ con = ibis.mssql.connect(
     password=os.environ["MSSQL_PASSWORD"],
     driver="ODBC Driver 18 for SQL Server",
 )
-transactions = con.table("transactions", database="dbo")  # database is the SQL Server schema
+transactions = con.table("transactions", database="dbo")
 ```
 
 For Windows integrated authentication, leave `user` and `password` unset. Ibis then sets `Trusted_Connection=yes` and
