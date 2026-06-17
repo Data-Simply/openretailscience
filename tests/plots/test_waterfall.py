@@ -140,12 +140,7 @@ class TestWaterfallPlot:
             assert text.get_fontsize() == custom_data_label_size
 
     def test_data_labels_stay_within_axes_when_a_bar_dominates(self):
-        """Edge labels on extreme bars must not spill out of the plot area onto the tick/header bands.
-
-        matplotlib bars carry sticky edges that pin the y-view to the bar extents, so a dominant
-        negative bar leaves its edge label overlapping the x-axis tick labels (and the topmost
-        positive label overlapping the header) unless the y-limits are grown to make room.
-        """
+        """A dominant bar's edge labels must stay inside the plot area, not spill onto the tick/header bands."""
         amounts = [66444, -284585, 26890]
         labels = ["New", "Lapsed", "Repeating"]
 
