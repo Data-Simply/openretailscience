@@ -1,19 +1,24 @@
 """Helper functions for styling graphs."""
 
+from __future__ import annotations
+
 import importlib.resources as pkg_resources
 import warnings
-from collections.abc import Generator
 from itertools import cycle
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import matplotlib.ticker as mtick
 import numpy as np
-from matplotlib.axes import Axes
-from matplotlib.axis import XAxis, YAxis
-from matplotlib.text import Annotation
 
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.font_utils import get_font_properties
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from matplotlib.axes import Axes
+    from matplotlib.axis import XAxis, YAxis
+    from matplotlib.text import Annotation
 
 ASSETS_PATH = pkg_resources.files("openretailscience").joinpath("assets")
 _MAGNITUDE_SUFFIXES = ["", "K", "M", "B", "T", "P"]
@@ -373,6 +378,16 @@ def expand_ylim_for_bar_labels(ax: Axes, labels: list[Annotation]) -> None:
         extra_below = overflow_below + _BAR_LABEL_CLEARANCE_PX if overflow_below > 0 else 0.0
         extra_above = overflow_above + _BAR_LABEL_CLEARANCE_PX if overflow_above > 0 else 0.0
         ax.set_ylim(y_low - extra_below * data_per_px, y_high + extra_above * data_per_px)
+
+    # The correction converges within a couple of passes at normal proportions; if it has not after
+    # the cap (e.g. a label taller than a very short axes), surface it rather than leaving the labels
+    # silently clipped — mirrors the end-of-line label resolver's behaviour for infeasible geometry.
+    warnings.warn(
+        f"Bar labels could not be brought fully inside the axes within {_MAX_BAR_LABEL_YLIM_PASSES} "
+        "passes; consider a taller figure or a smaller plot.font.data_label_size.",
+        UserWarning,
+        stacklevel=2,
+    )
 
 
 def apply_hatches(ax: Axes, num_segments: int) -> Axes:
