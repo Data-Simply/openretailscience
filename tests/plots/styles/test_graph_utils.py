@@ -311,27 +311,44 @@ class TestExpandYlimForBarLabels:
 
         assert ax.get_ylim() == ylim_before
 
-    def test_grows_ylim_until_overflowing_label_clears_axes(self):
-        """A bar-end label spilling past the axes pulls ylim out until the label sits inside.
+    @pytest.mark.parametrize(
+        ("heights", "pinned_ylim"),
+        [
+            # Positive bars pinned at their top extent: edge labels overflow above the axes.
+            ([120.0, 240.0], (0.0, 240.0)),
+            # Negative bars pinned at their bottom extent: edge labels overflow below the axes.
+            ([-120.0, -240.0], (-240.0, 0.0)),
+        ],
+    )
+    def test_grows_ylim_until_overflowing_labels_clear_axes(self, heights, pinned_ylim):
+        """A bar-end label spilling past the axes pulls ylim out until every label sits inside.
 
-        Pinning ylim to the bar extents reproduces the waterfall's sticky-edge view: the top label
-        then starts above the axes, and the function must grow ylim so it lands within the data area.
+        Pinning ylim to the bar extents reproduces the waterfall's sticky-edge view; the positive and
+        negative cases exercise the above- and below-overflow corrections respectively.
         """
         fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
-        ax.bar(["North", "South"], [120.0, 240.0])
+        ax.bar(["North", "South"], heights)
         bar_labels = ax.bar_label(ax.containers[0])
-        ax.set_ylim(0.0, 240.0)  # pin the view to the bar extents, as waterfall's sticky edges do
+        ax.set_ylim(*pinned_ylim)
         fig.canvas.draw()
         renderer = fig.canvas.get_renderer()
-        top_before = max(label.get_window_extent(renderer=renderer).y1 for label in bar_labels)
-        assert top_before > ax.get_window_extent(renderer=renderer).y1  # precondition: spills out
+
+        axes_box = ax.get_window_extent(renderer=renderer)
+        spills_out = any(
+            label.get_window_extent(renderer=renderer).y0 < axes_box.y0
+            or label.get_window_extent(renderer=renderer).y1 > axes_box.y1
+            for label in bar_labels
+        )
+        assert spills_out  # precondition: at least one label starts outside the pinned data area
 
         gu.expand_ylim_for_bar_labels(ax, list(bar_labels))
 
         fig.canvas.draw()
-        axes_top = ax.get_window_extent(renderer=renderer).y1
+        axes_box = ax.get_window_extent(renderer=renderer)
         for label in bar_labels:
-            assert label.get_window_extent(renderer=renderer).y1 <= axes_top
+            label_box = label.get_window_extent(renderer=renderer)
+            assert label_box.y0 >= axes_box.y0
+            assert label_box.y1 <= axes_box.y1
 
     def test_warns_when_labels_cannot_fit(self):
         """A label taller than a very short axes can never fit; the function warns after the cap.
