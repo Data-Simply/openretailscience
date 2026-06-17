@@ -443,14 +443,6 @@ Wearable Technology  220483.47           512        486              453.67     
 To run the same analysis against BigQuery, replace step 1 with `con = ibis.bigquery.connect(...)` and
 `transactions = con.table("transactions")`. Steps 2 and 3 stay the same.
 
-## Handling credentials securely
-
-- Read passwords, tokens, and connection strings from environment variables or a secrets manager (such as AWS Secrets
-  Manager, Azure Key Vault, or Google Secret Manager). The examples above use `os.environ` for this.
-- Keep credentials out of notebooks and source control. Add credential files to `.gitignore`.
-- Prefer managed identity where the platform offers it: application default credentials on BigQuery, Azure Active
-  Directory on SQL Server and Fabric, and OAuth or key-pair authentication on Snowflake.
-
 ## Troubleshooting
 
 ### Connection or driver errors
