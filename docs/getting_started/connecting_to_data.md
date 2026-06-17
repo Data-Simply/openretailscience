@@ -167,6 +167,13 @@ password, pass the `authenticator` argument (see the
 
 ### Databricks
 
+How you connect depends on where your code runs.
+
+#### From outside Databricks
+
+For a local script, a scheduled job, or an application that reaches Databricks over the network, use the `databricks`
+backend. It wraps the Databricks SQL connector and talks to a SQL warehouse or compute cluster over its HTTP endpoint:
+
 ```bash
 pip install "ibis-framework[databricks]"
 ```
@@ -176,8 +183,8 @@ import os
 import ibis
 
 con = ibis.databricks.connect(
-    server_hostname="adb-1234567890.11.azuredatabricks.net",
-    http_path="/sql/1.0/warehouses/abc123def456",
+    server_hostname=os.environ["DATABRICKS_SERVER_HOSTNAME"],
+    http_path=os.environ["DATABRICKS_HTTP_PATH"],
     access_token=os.environ["DATABRICKS_TOKEN"],
     catalog="retail",
     schema="sales",
@@ -185,8 +192,29 @@ con = ibis.databricks.connect(
 transactions = con.table("transactions")
 ```
 
-Find the `server_hostname` and `http_path` under the connection details of your SQL warehouse in the Databricks
-workspace. The `catalog` and `schema` arguments set the Unity Catalog location that table names resolve against.
+Find `server_hostname` and `http_path` under the connection details of your SQL warehouse or cluster in the
+Databricks workspace. The `catalog` and `schema` arguments set the Unity Catalog location that table names resolve
+against.
+
+#### From inside a Databricks notebook
+
+A Databricks notebook already provides a `spark` variable holding an active `SparkSession`. Pass it to the `pyspark`
+backend rather than opening a new connection:
+
+```python
+import ibis
+
+con = ibis.pyspark.connect(spark)
+transactions = con.table("transactions")
+```
+
+This reuses the notebook's own session, so queries run on the attached cluster and no install or credentials are
+needed. The `databricks` backend is for reaching the workspace from outside, so it is not the right choice here.
+
+!!! warning "Databricks Connect sessions are not supported"
+    `ibis.pyspark.connect()` works with the notebook's built-in `spark` session, but not with a Databricks Connect
+    remote session (`DatabricksSession`). Ibis reads the `sparkContext` attribute during connection, which the remote
+    session does not implement (see [ibis issue #9060](https://github.com/ibis-project/ibis/issues/9060)).
 
 ### PySpark
 
@@ -215,10 +243,9 @@ spark_df.createOrReplaceTempView("transactions")
 transactions = con.table("transactions")
 ```
 
-Inside a Databricks notebook the `spark` session is already defined, so pass it straight to
-`ibis.pyspark.connect(spark)`. Ibis pushes filters and aggregations down to Spark, so the cluster does the work and
-only the aggregated result returns to the driver. To reach a Databricks SQL warehouse from outside a cluster, use the
-`databricks` backend shown above instead.
+Ibis pushes filters and aggregations down to Spark, so the cluster does the work and only the aggregated result
+returns to the driver. On Databricks, this same backend handles the in-notebook case using the built-in `spark`
+session; see [Databricks](#databricks) above for both the notebook and SQL warehouse options.
 
 ### Microsoft SQL Server
 
