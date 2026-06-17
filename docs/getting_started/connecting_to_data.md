@@ -196,6 +196,27 @@ Find `server_hostname` and `http_path` under the connection details of your SQL 
 Databricks workspace. The `catalog` and `schema` arguments set the Unity Catalog location that table names resolve
 against.
 
+To avoid a token in your code, authenticate through a configuration profile instead. The Databricks CLI command
+`databricks auth login --profile ds_env` runs the OAuth sign-in flow and stores the host and refreshing credentials
+under a named profile in `~/.databrickscfg`. Read that profile with the SDK `Config` object and pass its host and
+authentication to the connection:
+
+```python
+import ibis
+from databricks.sdk.core import Config
+
+cfg = Config(profile="ds_env")
+con = ibis.databricks.connect(
+    server_hostname=cfg.host,
+    http_path="/sql/1.0/warehouses/abc123def456",
+    credentials_provider=lambda: cfg.authenticate,
+)
+transactions = con.table("transactions")
+```
+
+`Config` reads the profile for the host and credentials, so the only value left to supply is the warehouse
+`http_path`. A profile with no name argument (`Config()`) uses the `DEFAULT` profile.
+
 #### From inside a Databricks notebook
 
 A Databricks notebook already provides a `spark` variable holding an active `SparkSession`. Pass it to the `pyspark`
