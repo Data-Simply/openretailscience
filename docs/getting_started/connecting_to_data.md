@@ -2,7 +2,7 @@
 
 OpenRetailScience analyses accept two kinds of input: a pandas DataFrame or an
 [Ibis](https://ibis-project.org/) table. Ibis lets you write one analysis and run it against DuckDB, BigQuery,
-Snowflake, Databricks, SQL Server, Microsoft Fabric, Oracle, and other backends without changing your code.
+Snowflake, Databricks, PySpark, SQL Server, Microsoft Fabric, Oracle, and other backends without changing your code.
 
 This guide shows how to connect Ibis to each of those sources, how to hand the resulting table to a function such as
 `SegTransactionStats`, and how to filter your data before analysis so the database does the heavy lifting.
@@ -32,6 +32,7 @@ pip install "ibis-framework[duckdb]"      # local files and the sample data
 pip install "ibis-framework[bigquery]"    # Google BigQuery
 pip install "ibis-framework[snowflake]"   # Snowflake
 pip install "ibis-framework[databricks]"  # Databricks
+pip install "ibis-framework[pyspark]"     # PySpark and Spark clusters
 pip install "ibis-framework[mssql]"       # SQL Server and Microsoft Fabric
 pip install "ibis-framework[oracle]"      # Oracle Database
 ```
@@ -188,6 +189,34 @@ transactions = con.table("transactions")
 
 Find the `server_hostname` and `http_path` under the connection details of your SQL warehouse in the Databricks
 workspace. The `catalog` and `schema` arguments set the Unity Catalog location that table names resolve against.
+
+### PySpark
+
+The `pyspark` backend connects Ibis to a running Spark cluster through a `SparkSession`. Use it when your code runs on
+Spark, including inside a Databricks notebook where the session already exists.
+
+```python
+import ibis
+from pyspark.sql import SparkSession
+
+session = SparkSession.builder.getOrCreate()
+con = ibis.pyspark.connect(session)
+transactions = con.table("transactions")
+```
+
+`con.table("transactions")` references a table registered in the Spark catalog, such as a Hive metastore or Unity
+Catalog table. To analyze a Spark DataFrame you already hold in memory, register it as a temporary view first, then
+reference it by name:
+
+```python
+spark_df.createOrReplaceTempView("transactions")
+transactions = con.table("transactions")
+```
+
+Inside a Databricks notebook the `spark` session is already defined, so pass it straight to
+`ibis.pyspark.connect(spark)`. Ibis pushes filters and aggregations down to Spark, so the cluster does the work and
+only the aggregated result returns to the driver. To reach a Databricks SQL warehouse from outside a cluster, use the
+`databricks` backend shown above instead.
 
 ### Microsoft SQL Server
 
