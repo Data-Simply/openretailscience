@@ -102,6 +102,22 @@ class TestWaterfallPlot:
         assert isinstance(result_ax, plt.Axes)
         assert len(result_ax.patches) == non_zero_amounts
 
+    def test_net_bar_with_zero_amount_removed_preserves_remaining_bars(self):
+        """Dropping a zero amount must not let the appended net bar clobber a surviving bar."""
+        # Revenue by customer segment, with a zero "Repeating" segment that gets dropped.
+        amounts = [311475.0, 66444.0, 0.0, -284585.0]
+        labels = ["Pre Period", "New", "Repeating", "Lapsed"]
+
+        result_ax = plot(amounts, labels, display_net_bar=True)
+
+        surviving = [(label, amount) for label, amount in zip(labels, amounts, strict=True) if amount != 0]
+        net_total = sum(amount for _, amount in surviving)
+
+        assert len(result_ax.patches) == len(surviving) + 1
+        assert [t.get_text() for t in result_ax.get_xticklabels()] == [label for label, _ in surviving] + ["Net"]
+        bar_heights = [patch.get_height() for patch in result_ax.patches]
+        assert bar_heights == [amount for _, amount in surviving] + [net_total]
+
     # Raises a ValueError for an invalid data label format
     def test_raises_value_error_for_invalid_data_label_format(self, test_data):
         """Test that the function raises a ValueError for an invalid data label format."""
