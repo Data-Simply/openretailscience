@@ -6,207 +6,151 @@ use a consistent API and come pre-styled with retail-friendly color schemes and 
 ## Plot Types
 
 <!-- markdownlint-disable MD033 -->
-<style>
-/* Matplotlib-style gallery container */
-.glr-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, 200px);
-  gap: 15px;
-  margin: 20px 0;
-  justify-content: start;
-}
 
-/* Individual thumbnail container - consistent card style */
-.glr-thumbcontainer {
-  text-decoration: none;
-  color: inherit;
-  display: block;
-  text-align: center;
-  transition: transform 0.2s ease;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 12px;
-  background: var(--md-default-bg-color, #fff);
-  width: 200px;
-}
-
-.glr-thumbcontainer:hover {
-  transform: scale(1.02);
-  text-decoration: none;
-  border-color: #007acc;
-  box-shadow: 0 2px 8px rgba(0, 122, 204, 0.15);
-}
-
-/* Card header - plot type name */
-.glr-thumb-title {
-  font-size: 14px;
-  margin-bottom: 12px;
-  font-weight: 600;
-  color: var(--md-default-fg-color, #333);
-  line-height: 1.2;
-  border-bottom: 1px solid var(--md-default-fg-color--lightest, #eee);
-  padding-bottom: 8px;
-}
-
-/* Thumbnail image */
-.glr-thumb img {
-  width: 160px;
-  height: 112px;
-  object-fit: contain;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  display: block;
-  margin: 0 auto;
-  background: #fff;
-  padding: 4px;
-}
-
-/* Remove image-specific hover effects - only hover on outer container */
-
-/* Coming soon placeholder */
-.coming-soon-thumb {
-  width: 160px;
-  height: 112px;
-  background: #f0f0f0;
-  border: 1px dashed #ccc;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  color: #999;
-  margin: 0 auto;
-}
-
-.coming-soon-container {
-  color: #666;
-  cursor: default;
-  border: 1px solid #ddd;
-  background: var(--md-default-bg-color, #f9f9f9);
-}
-
-.coming-soon-container:hover {
-  transform: none;
-  border-color: #ddd;
-  box-shadow: none;
-}
-
-.coming-soon-title {
-  font-size: 14px;
-  margin-bottom: 12px;
-  font-weight: 600;
-  color: var(--md-default-fg-color--light, #666);
-  line-height: 1.2;
-  border-bottom: 1px solid var(--md-default-fg-color--lightest, #ddd);
-  padding-bottom: 8px;
-}
-</style>
-
-<div class="glr-gallery">
-  <a href="plots/area/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Area Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/area_thumbnail.png" alt="Area Plot">
-    </div>
-  </a>
-
-  <a href="plots/bar/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Bar Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/bar_thumbnail.png" alt="Bar Plot">
-    </div>
-  </a>
-  <a href="plots/broken_timeline/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Broken Timeline Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/broken_timeline_thumbnail.png" alt="Broken Timeline Plot">
-    </div>
-  </a>
-  <a href="plots/cohort/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Cohort Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/cohort_thumbnail.png" alt="Cohort Plot">
-    </div>
-  </a>
-  <a href="plots/customer_decision_hierarchy/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Customer Decision Hierarchy</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/customer_decision_hierarchy_thumbnail.png" alt="Customer Decision Hierarchy">
-    </div>
-  </a>
-  <a href="plots/heatmap/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Heatmap Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/heatmap_thumbnail.png" alt="Heatmap Plot">
-    </div>
-  </a>
-  <a href="plots/histogram/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Histogram Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/histogram_thumbnail.png" alt="Histogram Plot">
-    </div>
-  </a>
-  <a href="plots/line/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Line Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/line_thumbnail.png" alt="Line Plot">
-    </div>
-  </a>
-
-  <a href="plots/period_on_period/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Period on Period Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/period_on_period_thumbnail.png" alt="Period on Period Plot">
-    </div>
-    </a>
-
-  <a href="plots/revenue_tree/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Revenue Tree</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/revenue_tree_thumbnail.png" alt="Revenue Tree">
-    </div>
-  </a>
-
-  <a href="plots/time/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Time Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/time_thumbnail.png" alt="Time Plot">
-    </div>
-  </a>
-
-  <a href="plots/venn/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Venn Diagram</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/venn_thumbnail.png" alt="Venn Diagram">
-    </div>
-  </a>
-
-  <a href="plots/waterfall/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Waterfall Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/waterfall_thumbnail.png" alt="Waterfall Plot">
-    </div>
-  </a>
-
-  <a href="plots/index_plot/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Index Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/index_thumbnail.png" alt="Index Plot">
-    </div>
-  </a>
-
-  <a href="plots/scatter/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Scatter Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/scatter_thumbnail.png" alt="Scatter Plot">
-    </div>
-  </a>
-
-  <a href="plots/price/" class="glr-thumbcontainer">
-    <div class="glr-thumb-title">Price Plot</div>
-    <div class="glr-thumb">
-      <img src="../assets/images/gallery/price_thumbnail.png" alt="Price Plot">
-    </div>
-  </a>
-
+<section class="orsg-cat">
+<div class="orsg-cat__head">
+  <h2 class="orsg-cat__title">Trends over time</h2>
+  <span class="orsg-cat__blurb">How metrics move across a continuous period.</span>
 </div>
+<div class="orsg-grid">
+  <a class="orsg-card" href="plots/area/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/area_thumbnail.png" alt="Area Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Area Plot</h3>
+      <p class="orsg-card__desc">Cumulative trends and volume over time</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/line/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/line_thumbnail.png" alt="Line Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Line Plot</h3>
+      <p class="orsg-card__desc">Track a metric across a continuous period</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/time/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/time_thumbnail.png" alt="Time Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Time Plot</h3>
+      <p class="orsg-card__desc">Time series with smart date handling</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/period_on_period/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/period_on_period_thumbnail.png" alt="Period on Period Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Period on Period Plot</h3>
+      <p class="orsg-card__desc">Compare the same period across years</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/broken_timeline/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/broken_timeline_thumbnail.png" alt="Broken Timeline Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Broken Timeline Plot</h3>
+      <p class="orsg-card__desc">Spot gaps in product or store activity</p>
+    </div>
+  </a>
+</div>
+</section>
+
+<section class="orsg-cat">
+<div class="orsg-cat__head">
+  <h2 class="orsg-cat__title">Comparison &amp; composition</h2>
+  <span class="orsg-cat__blurb">Rank categories and break totals into their parts.</span>
+</div>
+<div class="orsg-grid">
+  <a class="orsg-card" href="plots/bar/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/bar_thumbnail.png" alt="Bar Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Bar Plot</h3>
+      <p class="orsg-card__desc">Compare values across categories</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/index_plot/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/index_thumbnail.png" alt="Index Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Index Plot</h3>
+      <p class="orsg-card__desc">Benchmark performance against an index</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/waterfall/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/waterfall_thumbnail.png" alt="Waterfall Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Waterfall Plot</h3>
+      <p class="orsg-card__desc">Break a total into its contributing parts</p>
+    </div>
+  </a>
+</div>
+</section>
+
+<section class="orsg-cat">
+<div class="orsg-cat__head">
+  <h2 class="orsg-cat__title">Distribution &amp; relationships</h2>
+  <span class="orsg-cat__blurb">Understand spread, shape and correlation.</span>
+</div>
+<div class="orsg-grid">
+  <a class="orsg-card" href="plots/histogram/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/histogram_thumbnail.png" alt="Histogram Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Histogram Plot</h3>
+      <p class="orsg-card__desc">See how a single measure is distributed</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/scatter/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/scatter_thumbnail.png" alt="Scatter Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Scatter Plot</h3>
+      <p class="orsg-card__desc">Reveal relationships between two measures</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/heatmap/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/heatmap_thumbnail.png" alt="Heatmap Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Heatmap Plot</h3>
+      <p class="orsg-card__desc">Spot patterns across a two-way matrix</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/price/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/price_thumbnail.png" alt="Price Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Price Plot</h3>
+      <p class="orsg-card__desc">Compare price distributions across retailers</p>
+    </div>
+  </a>
+</div>
+</section>
+
+<section class="orsg-cat">
+<div class="orsg-cat__head">
+  <h2 class="orsg-cat__title">Customer &amp; retail analytics</h2>
+  <span class="orsg-cat__blurb">Purpose-built views for retail decisions.</span>
+</div>
+<div class="orsg-grid">
+  <a class="orsg-card" href="plots/cohort/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/cohort_thumbnail.png" alt="Cohort Plot" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Cohort Plot</h3>
+      <p class="orsg-card__desc">Track retention by customer cohort</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/customer_decision_hierarchy/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/customer_decision_hierarchy_thumbnail.png" alt="Customer Decision Hierarchy" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Customer Decision Hierarchy</h3>
+      <p class="orsg-card__desc">Map how shoppers substitute products</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/revenue_tree/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/revenue_tree_thumbnail.png" alt="Revenue Tree" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Revenue Tree</h3>
+      <p class="orsg-card__desc">Decompose revenue into its drivers</p>
+    </div>
+  </a>
+  <a class="orsg-card" href="plots/venn/">
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/venn_thumbnail.png" alt="Venn Diagram" loading="lazy"></div>
+    <div class="orsg-card__body">
+      <h3 class="orsg-card__title">Venn Diagram</h3>
+      <p class="orsg-card__desc">Measure overlap between customer groups</p>
+    </div>
+  </a>
+</div>
+</section>
