@@ -84,6 +84,21 @@ def test_plot_with_figsize(sample_sales_dataframe):
     assert result_ax.figure.get_size_inches()[1] == height
 
 
+def test_plot_draws_on_provided_ax(sample_sales_dataframe):
+    """Scatter plot reuses a caller-provided ax instead of creating a new figure."""
+    _, ax = plt.subplots()
+    result_ax = scatter.plot(
+        df=sample_sales_dataframe,
+        value_col="sales",
+        x_col="date",
+        ax=ax,
+    )
+
+    assert result_ax is ax
+    collections = [child for child in ax.get_children() if hasattr(child, "get_offsets")]
+    assert len(collections) == 1
+
+
 def test_plot_single_column(sample_sales_dataframe):
     """Test scatter plot with a single value column."""
     result_ax = scatter.plot(
