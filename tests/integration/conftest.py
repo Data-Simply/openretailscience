@@ -37,6 +37,9 @@ _ORACLE_PORT = 1521
 _ORACLE_USER = "ors"
 _ORACLE_PASSWORD = "orsTestApp1"  # noqa: S105 - local throwaway container credential
 _DEFAULT_ORACLE_SERVICE_NAME = "FREEPDB1"
+# Oracle 23c first supported the boolean SELECT expression that Ibis's get_schema uses;
+# older versions (21c XE) need the executemany seed in _seed_oracle_transactions.
+_ORACLE_INTROSPECTION_MIN_VERSION = 23
 
 # Containers accept TCP connections before the engine is ready to authenticate,
 # so connection attempts are retried for a short window while the database starts.
@@ -126,6 +129,47 @@ def _seed_transactions(connection: BaseBackend) -> Table:
     return connection.table(_TRANSACTIONS_TABLE_NAME)
 
 
+def _seed_oracle_transactions(connection: BaseBackend) -> Table:
+    """Seed the transactions table on Oracle, accommodating pre-23c introspection.
+
+    Oracle 23c and later use the standard Ibis seed. Older versions (21c XE) instead get
+    an explicit empty create, an oracledb ``executemany`` bulk load, and a ``con.sql``
+    reference, because Ibis's create_table/insert/table all call get_schema, whose query
+    uses a boolean SELECT expression that only compiles on Oracle 23c+ (ORA-00923 before
+    that).
+
+    REMOVE-WHEN: drop this older-version branch and call ``_seed_transactions`` directly
+    once Oracle 21c leaves the matrix. Oracle 21c is an innovation release whose premier
+    support ends 2027-07-31; once it is gone, no supported Oracle version needs this.
+
+    Args:
+        connection: An Ibis Oracle backend connection to seed.
+
+    Returns:
+        Table: The seeded transactions table expression.
+    """
+    oracle_major_version = int(connection.con.version.split(".", maxsplit=1)[0])
+    if oracle_major_version >= _ORACLE_INTROSPECTION_MIN_VERSION:
+        return _seed_transactions(connection)
+
+    df = _read_transactions()
+    # executemany loads a real DATE column, so pass date objects rather than strings.
+    df["transaction_date"] = pd.to_datetime(df["transaction_date"]).dt.date
+    schema = ibis.memtable(df).schema()
+    if _TRANSACTIONS_TABLE_NAME in connection.list_tables():
+        connection.drop_table(_TRANSACTIONS_TABLE_NAME)
+    connection.create_table(_TRANSACTIONS_TABLE_NAME, schema=schema)
+
+    columns = ", ".join(f'"{name}"' for name in df.columns)
+    placeholders = ", ".join(f":{index + 1}" for index in range(len(df.columns)))
+    insert_sql = f'INSERT INTO "{_TRANSACTIONS_TABLE_NAME}" ({columns}) VALUES ({placeholders})'  # noqa: S608 - identifiers are local constants
+    with connection.con.cursor() as cursor:
+        cursor.executemany(insert_sql, list(df.itertuples(index=False, name=None)))
+    connection.con.commit()
+    select_sql = f'SELECT * FROM "{_TRANSACTIONS_TABLE_NAME}"'  # noqa: S608 - identifier is a local constant
+    return connection.sql(select_sql, schema=schema)
+
+
 @pytest.fixture(scope="session")
 def _mssql_transactions_table() -> Table:
     """Seed transactions into a containerized SQL Server backend once per session.
@@ -176,6 +220,7 @@ def _oracle_transactions_table() -> Table:
     to start is never silently passed over. Connects in python-oracledb thin mode,
     which requires no Oracle client libraries. The PDB service name defaults to 23ai
     Free's ``FREEPDB1`` and is overridden to ``XEPDB1`` for the XE matrix entries.
+    Seeding routes through _seed_oracle_transactions to handle pre-23c introspection.
 
     Returns:
         Table: The transactions table on the Oracle backend.
@@ -190,7 +235,7 @@ def _oracle_transactions_table() -> Table:
             service_name=os.environ.get("ORACLE_SERVICE_NAME", _DEFAULT_ORACLE_SERVICE_NAME),
         ),
     )
-    return _seed_transactions(connection)
+    return _seed_oracle_transactions(connection)
 
 
 @pytest.fixture(
