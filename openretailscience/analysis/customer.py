@@ -51,6 +51,7 @@ import ibis
 from openretailscience.core.validation import (
     ensure_data_has_columns,
     ensure_ibis_table,
+    ensure_integer,
     ensure_number,
     ensure_positive,
     ensure_tznaive_datetime,
@@ -292,20 +293,22 @@ class TransactionChurn:
         Args:
             df (pd.DataFrame | ibis.Table): Transaction data containing the
                 ``customer_id`` and ``transaction_date`` columns.
-            churn_period (int): Number of days of inactivity after which a
-                customer is considered churned. Must be positive.
+            churn_period (int): Whole number of days of inactivity after which a
+                customer is considered churned. Must be a positive integer; a
+                fractional value would place the boundary at a sub-day time.
 
         Raises:
             ValueError: If the required columns are missing, transaction_date is
                 timezone-aware, or ``churn_period`` is not positive.
             TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table,
                 transaction_date is not a date/datetime type, or ``churn_period``
-                is not a number.
+                is not an integer.
         """
         cols = ColumnHelper()
         df = ensure_ibis_table(df)
         ensure_data_has_columns(df, [cols.customer_id, cols.transaction_date])
         ensure_tznaive_datetime(df, cols.transaction_date)
+        ensure_integer(churn_period, "churn_period")
         ensure_positive(churn_period, "churn_period")
 
         # One round-trip for both scalars the build needs: the distinct customer count

@@ -530,12 +530,8 @@ class TestInputValidation:
         with pytest.raises(TypeError, match="must be a number"):
             obj.purchases_percentile("high")
 
-    def test_churn_period_rejects_bool(self, transactions_df):
-        """A bool churn_period is rejected, not silently treated as a 1-day window."""
-        with pytest.raises(TypeError, match="must be a number"):
-            TransactionChurn(transactions_df, churn_period=True)
-
-    def test_churn_period_rejects_non_numeric(self, transactions_df):
-        """A non-numeric churn_period (e.g. a string) is rejected with the same clear error."""
-        with pytest.raises(TypeError, match="must be a number"):
-            TransactionChurn(transactions_df, churn_period="high")
+    @pytest.mark.parametrize("bad_churn_period", [True, "30", 30.5, 30.0])
+    def test_churn_period_must_be_an_integer(self, transactions_df, bad_churn_period):
+        """A non-integer churn_period (bool, string, or float) is rejected to avoid a sub-day boundary."""
+        with pytest.raises(TypeError, match="churn_period must be an integer"):
+            TransactionChurn(transactions_df, churn_period=bad_churn_period)
