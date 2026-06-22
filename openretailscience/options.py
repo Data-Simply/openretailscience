@@ -516,9 +516,7 @@ def option_context(*args: OptionTypes) -> Generator[None, None, None]:
 
     Temporarily set options and restore them to their previous values after the
     context exits. Options may be supplied either as alternating option names and
-    values, or as a single mapping of option names to values. The mapping form is
-    convenient when overriding a single named option without tracking its position
-    in a flat argument list.
+    values, or as a single mapping of option names to values.
 
     Args:
         *args: Either an even number of arguments alternating between option names
