@@ -202,12 +202,13 @@ expectations are worth checking before you run an analysis.
 
 ### Types
 
-- **Dates and times** must be genuine temporal types (`date` / `datetime`), not strings. Date-based analyses
-  (`RFMSegmentation`, `CohortAnalysis`, `DaysBetweenPurchases`, `TransactionChurn`) validate this and reject a
-  non-temporal column.
-- **Timestamps must be timezone-naive.** A timezone-aware timestamp is rejected, because the backend normalizes it
-  to UTC, which can shift day boundaries. For a pandas column, strip the zone with
-  `df["transaction_date"] = df["transaction_date"].dt.tz_localize(None)`.
+- **Dates and times** should be genuine temporal types (`date` / `datetime`), not strings. `DaysBetweenPurchases`
+  and `TransactionChurn` validate this and reject a non-temporal column; other date-based analyses such as
+  `RFMSegmentation` and `CohortAnalysis` assume a temporal column rather than checking it, so a string date can
+  produce wrong results.
+- **Timestamps should be timezone-naive.** `DaysBetweenPurchases` and `TransactionChurn` reject a timezone-aware
+  timestamp outright, because the backend normalizes it to UTC, which can shift day boundaries. Strip the zone on a
+  pandas column with `df["transaction_date"] = df["transaction_date"].dt.tz_localize(None)`.
 - **Numeric measures** (`unit_spend`, `unit_quantity`, `unit_cost`) must be numeric types so they sum and average
   correctly. A spend column read as a string will not aggregate.
 
@@ -248,7 +249,7 @@ function aggregates to.
 | GainLoss                  | customer_id, value_col                                    | pandas       | customer |
 | CrossShop                 | customer_id, value_col, group_1_col, group_2_col          | pandas, Ibis | customer |
 | RevenueTree               | customer_id, transaction_id, unit_spend, period_col       | pandas, Ibis | period   |
-| ProductAssociation        | customer_id, value_col                                    | pandas, Ibis | basket   |
+| ProductAssociation        | customer_id, value_col                                    | pandas, Ibis | customer |
 | CustomerDecisionHierarchy | customer_id, transaction_id, product_col                  | pandas       | products |
 | CohortAnalysis            | customer_id, transaction_date, aggregation_column         | pandas, Ibis | cohort   |
 | PurchasesPerCustomer      | customer_id, transaction_id                               | pandas, Ibis | customer |
