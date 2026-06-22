@@ -200,7 +200,7 @@ def transactions_table(request):
         connection = ibis.pyspark.connect()
         # Use pandas to read the parquet file first, then convert to Spark
         # This handles timestamp compatibility issues automatically
-        df = pd.read_parquet("data/transactions.parquet")
+        df = pd.read_parquet(_TRANSACTIONS_PARQUET)
         # Pyspark has no time column so we have to convert it to a datetime
         df["transaction_time"] = pd.to_datetime(
             df["transaction_date"].astype(str) + " " + df["transaction_time"].astype(str),
