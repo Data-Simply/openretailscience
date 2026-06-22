@@ -12,17 +12,6 @@ jobs:
     name: Run Oracle Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        # Free Oracle editions: XE 21c and 23ai Free (the XE successor). 18c is omitted
-        # (premier support ended 2021). The gvenzl images are purpose-built for testing;
-        # each PDB service name differs (XEPDB1 for XE, FREEPDB1 for 23ai Free).
-        include:
-          - oracle-image: gvenzl/oracle-xe:21-slim-faststart
-            oracle-service: XEPDB1
-          - oracle-image: gvenzl/oracle-free:23-slim-faststart
-            oracle-service: FREEPDB1
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -42,15 +31,12 @@ jobs:
         run: |
           uv sync --locked
 
-      - name: Start Oracle (${{ matrix.oracle-image }})
-        env:
-          ORACLE_IMAGE: ${{ matrix.oracle-image }}
+      # Oracle 23ai Free (the supported LTS); the Compose file pins the gvenzl image.
+      - name: Start Oracle
         run: |
           docker compose -f tests/integration/docker/docker-compose.oracle.yml up -d --wait --wait-timeout 600
 
       - name: Run Integration Tests
-        env:
-          ORACLE_SERVICE_NAME: ${{ matrix.oracle-service }}
         run: |
           uv run pytest tests/integration -k "oracle" -v
 

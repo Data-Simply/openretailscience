@@ -1,12 +1,10 @@
 # Oracle backend for integration tests.
 #
 # Credentials are fixed throwaway values that match the constants in ../conftest.py.
-# Only the image tag is overridable: the matrix in
-# .github/workflows/oracle-integration.yml sets ORACLE_IMAGE to cover the free editions
-# (XE 18c, XE 21c, 23ai Free). The gvenzl images are purpose-built for testing (built-in
-# healthcheck, fast startup, automatic app-user creation). `docker compose up` works
-# with no config. Note: the PDB service name differs by image (XEPDB1 for XE,
-# FREEPDB1 for 23ai Free) and is selected in conftest via ORACLE_SERVICE_NAME.
+# Tests run against Oracle 23ai Free (service FREEPDB1), the supported LTS. The gvenzl
+# image is purpose-built for testing (built-in healthcheck, fast startup, automatic
+# app-user creation), so `docker compose up` works with no config. ORACLE_IMAGE stays
+# overridable for ad-hoc local use.
 services:
   oracle:
     image: ${ORACLE_IMAGE:-gvenzl/oracle-free:23-slim-faststart}
