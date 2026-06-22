@@ -100,11 +100,24 @@ fact = con.table("fact_sales")
 product = con.table("dim_product")
 store = con.table("dim_store")
 
-analysis_view = fact.join(product, "product_id").join(store, "store_id")
+analysis_view = (
+    fact.join(product, "product_id")
+    .join(store, "store_id")
+    .select(
+        "transaction_id",
+        "transaction_date",
+        "customer_id",
+        "unit_quantity",
+        "unit_spend",
+        "category_0_name",
+        "brand_name",
+        "store_region",
+    )
+)
 ```
 
-Keep the join lightweight: select only the dimension attributes the analysis needs. A view dragging every column
-from every dimension is slower to scan and no more useful.
+The `.select(...)` keeps the view lightweight — pull only the dimension attributes the analysis needs. A view
+dragging every column from every dimension is slower to scan and no more useful.
 
 ## Column requirements
 
@@ -247,9 +260,9 @@ function aggregates to.
 | RFMSegmentation           | customer_id, transaction_id, transaction_date, unit_spend | pandas, Ibis | customer |
 | NLRSegmentation           | customer_id, period_col, value_col                        | pandas, Ibis | customer |
 | GainLoss                  | customer_id, value_col                                    | pandas       | customer |
-| CrossShop                 | customer_id, value_col, group_1_col, group_2_col          | pandas, Ibis | customer |
+| CrossShop                 | group_col, value_col, group_1_col, group_2_col            | pandas, Ibis | customer |
 | RevenueTree               | customer_id, transaction_id, unit_spend, period_col       | pandas, Ibis | period   |
-| ProductAssociation        | customer_id, value_col                                    | pandas, Ibis | customer |
+| ProductAssociation        | value_col, group_col                                      | pandas, Ibis | customer |
 | CustomerDecisionHierarchy | customer_id, transaction_id, product_col                  | pandas       | products |
 | CohortAnalysis            | customer_id, transaction_date, aggregation_column         | pandas, Ibis | cohort   |
 | PurchasesPerCustomer      | customer_id, transaction_id                               | pandas, Ibis | customer |
@@ -262,8 +275,9 @@ Notes on optional, behaviour-enhancing columns:
 - `SegTransactionStats` adds per-customer metrics when `customer_id` is present, and price-per-unit and
   units-per-transaction metrics when `unit_quantity` is present.
 - `RevenueTree` decomposes spend into price and quantity drivers when `unit_quantity` is present.
-- For `ProductAssociation`, `value_col` is the product identifier whose co-occurrence is measured, and `group_col`
-  (the basket or customer key) defaults to `customer_id`.
+- For `ProductAssociation`, `value_col` is the product identifier whose co-occurrence is measured.
+- `CrossShop` and `ProductAssociation` group by `group_col`, which defaults to `customer_id`; pass
+  `group_col` (for example `transaction_id`) to analyse per basket or transaction instead.
 
 !!! note "pandas-only analyses"
     Most functions accept either backend, but `GainLoss` and `CustomerDecisionHierarchy` operate on pandas
