@@ -252,9 +252,10 @@ tox -p auto
 
 ### Integration Tests
 
-Integration tests verify that all analysis modules work correctly with distributed computing engines (PySpark,
-BigQuery, and Snowflake). These tests ensure the Ibis-based code paths function properly across different execution
-environments.
+Integration tests verify that all analysis modules work correctly across different backends: distributed computing
+engines (PySpark, BigQuery, Snowflake) and relational databases (SQL Server, Oracle). These tests ensure the
+Ibis-based code paths function properly across different execution environments. SQL Server and Oracle run against
+throwaway Docker containers, so they execute the same way locally and in CI.
 
 #### PySpark Integration Tests
 
@@ -331,6 +332,57 @@ uv run pytest tests/integration -k "snowflake" -v
 
 # Run specific test module
 uv run pytest tests/integration/test_cohort_analysis.py -k "snowflake" -v
+```
+
+#### SQL Server Integration Tests
+
+The SQL Server integration tests run against a dockerized SQL Server (Developer edition). CI covers every free
+release since 2019 (2019, 2022, 2025) via a version matrix.
+
+**Prerequisites:**
+
+- Docker with the Compose plugin
+- The Microsoft ODBC Driver 18 and unixODBC on the host (Ibis's `mssql` backend uses `pyodbc`)
+
+**Running locally:**
+
+```bash
+# Start the container (defaults to SQL Server 2022; see tests/integration/docker/README.md)
+docker compose -f tests/integration/docker/docker-compose.sqlserver.yml up -d --wait
+
+# Point pytest at the container (defaults match the Compose file)
+export MSSQL_HOST=localhost MSSQL_USER=sa MSSQL_PASSWORD='orsTest!Passw0rd' MSSQL_DATABASE=openretailscience
+
+# Run all SQL Server tests
+uv run pytest tests/integration -k "mssql" -v
+
+# Tear down
+docker compose -f tests/integration/docker/docker-compose.sqlserver.yml down -v
+```
+
+#### Oracle Integration Tests
+
+The Oracle integration tests run against a dockerized Oracle database in `oracledb` thin mode (no Oracle client
+libraries required). CI covers the free editions (XE 18c, XE 21c, 23ai Free) via a version matrix.
+
+**Prerequisites:**
+
+- Docker with the Compose plugin
+
+**Running locally:**
+
+```bash
+# Start the container (defaults to Oracle 23ai Free; see tests/integration/docker/README.md)
+docker compose -f tests/integration/docker/docker-compose.oracle.yml up -d --wait
+
+# Point pytest at the container (defaults match the Compose file)
+export ORACLE_HOST=localhost ORACLE_USER=ors ORACLE_PASSWORD=orsTestApp1 ORACLE_SERVICE_NAME=FREEPDB1
+
+# Run all Oracle tests
+uv run pytest tests/integration -k "oracle" -v
+
+# Tear down
+docker compose -f tests/integration/docker/docker-compose.oracle.yml down -v
 ```
 
 ## License

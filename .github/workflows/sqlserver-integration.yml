@@ -1,0 +1,73 @@
+name: SQL Server Integration Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  integration-tests:
+    name: Run SQL Server Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Free (Developer edition) SQL Server releases since 2019. SQL Server has
+        # no 2020/2021/2023/2024 releases, so these are every applicable version.
+        mssql-image:
+          - mcr.microsoft.com/mssql/server:2019-latest
+          - mcr.microsoft.com/mssql/server:2022-latest
+          - mcr.microsoft.com/mssql/server:2025-latest
+    env:
+      MSSQL_IMAGE: ${{ matrix.mssql-image }}
+      MSSQL_HOST: localhost
+      MSSQL_PORT: "1433"
+      MSSQL_USER: sa
+      MSSQL_PASSWORD: orsTest!Passw0rd
+      MSSQL_DATABASE: openretailscience
+      MSSQL_ODBC_DRIVER: ODBC Driver 18 for SQL Server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+
+      - name: Install Dependencies
+        run: |
+          uv sync --locked
+
+      - name: Install Microsoft ODBC Driver 18
+        run: |
+          set -euo pipefail
+          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+          source /etc/os-release
+          echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
+            | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc unixodbc-dev
+
+      - name: Start SQL Server (${{ matrix.mssql-image }})
+        run: |
+          docker compose -f tests/integration/docker/docker-compose.sqlserver.yml up -d --wait --wait-timeout 300
+
+      - name: Run Integration Tests
+        run: |
+          uv run pytest tests/integration -k "mssql" -v
+
+      - name: Stop SQL Server
+        if: always()
+        run: |
+          docker compose -f tests/integration/docker/docker-compose.sqlserver.yml down -v

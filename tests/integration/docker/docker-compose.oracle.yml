@@ -1,0 +1,24 @@
+# Oracle backend for integration tests.
+#
+# The image tag selects the version under test; the matrix in
+# .github/workflows/oracle-integration.yml overrides ORACLE_IMAGE (and the matching
+# service name) to cover the free editions: XE 18c, XE 21c, and 23ai Free. The gvenzl
+# images are purpose-built for testing (built-in healthcheck, fast startup, automatic
+# app-user creation). Defaults make `docker compose up` work with no extra configuration.
+services:
+  oracle:
+    image: ${ORACLE_IMAGE:-gvenzl/oracle-free:23-slim-faststart}
+    environment:
+      # SYS/SYSTEM password (required by the image; not used by the tests).
+      ORACLE_PASSWORD: ${ORACLE_SYS_PASSWORD:-orsTestSys1}
+      # Application user the tests connect as; gets its own schema in the default PDB.
+      APP_USER: ${ORACLE_USER:-ors}
+      APP_USER_PASSWORD: ${ORACLE_PASSWORD:-orsTestApp1}
+    ports:
+      - "${ORACLE_PORT:-1521}:1521"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
