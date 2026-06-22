@@ -1,5 +1,7 @@
 """Tests for openretailscience.core.validation."""
 
+import datetime
+
 import ibis
 import pandas as pd
 import pytest
@@ -8,6 +10,11 @@ from openretailscience.core.validation import (
     ensure_columns,
     ensure_data_has_columns,
     ensure_ibis_table,
+    ensure_integer,
+    ensure_number,
+    ensure_positive,
+    ensure_tznaive_datetime,
+    ensure_unit_interval,
     ensure_value_choice,
 )
 
@@ -177,3 +184,103 @@ class TestEnsureIbisTable:
         """Test that a caller-supplied param_name appears in the TypeError message."""
         with pytest.raises(TypeError, match="data must be either a pandas DataFrame or an Ibis Table"):
             ensure_ibis_table("not a dataframe", param_name="data")
+
+
+class TestEnsureNumber:
+    """Tests for the ensure_number helper."""
+
+    @pytest.mark.parametrize("value", [0, 5, -3, 2.5, -0.1])
+    def test_accepts_int_and_float(self, value):
+        """Ints and floats pass without raising."""
+        assert ensure_number(value, "value") is None
+
+    @pytest.mark.parametrize("value", [True, False, "5", None, [1]], ids=["true", "false", "str", "none", "list"])
+    def test_rejects_non_number(self, value):
+        """Bools (an int subclass) and non-numeric types are rejected with a TypeError."""
+        with pytest.raises(TypeError, match="value must be a number"):
+            ensure_number(value, "value")
+
+
+class TestEnsureUnitInterval:
+    """Tests for the ensure_unit_interval helper."""
+
+    @pytest.mark.parametrize("value", [0.0, 0.5, 1.0, 0, 1])
+    def test_accepts_values_in_closed_interval(self, value):
+        """Values in [0, 1] pass without raising."""
+        assert ensure_unit_interval(value, "percentile") is None
+
+    @pytest.mark.parametrize("value", [-0.1, 1.1, 2, -5])
+    def test_rejects_out_of_range(self, value):
+        """Values outside [0, 1] raise ValueError."""
+        with pytest.raises(ValueError, match="percentile must be between 0 and 1"):
+            ensure_unit_interval(value, "percentile")
+
+    def test_rejects_bool(self):
+        """Booleans are rejected with a TypeError before the range check."""
+        with pytest.raises(TypeError, match="percentile must be a number"):
+            ensure_unit_interval(True, "percentile")
+
+
+class TestEnsurePositive:
+    """Tests for the ensure_positive helper."""
+
+    @pytest.mark.parametrize("value", [1, 5, 0.5, 100])
+    def test_accepts_positive(self, value):
+        """Strictly positive numbers pass without raising."""
+        assert ensure_positive(value, "churn_period") is None
+
+    @pytest.mark.parametrize("value", [0, -1, -0.5])
+    def test_rejects_non_positive(self, value):
+        """Zero and negatives raise ValueError."""
+        with pytest.raises(ValueError, match="churn_period must be positive"):
+            ensure_positive(value, "churn_period")
+
+    def test_rejects_bool(self):
+        """Booleans are rejected with a TypeError before the range check."""
+        with pytest.raises(TypeError, match="churn_period must be a number"):
+            ensure_positive(True, "churn_period")
+
+
+class TestEnsureInteger:
+    """Tests for the ensure_integer helper."""
+
+    @pytest.mark.parametrize("value", [0, 1, -3, 1000])
+    def test_accepts_int(self, value):
+        """Integers pass without raising."""
+        assert ensure_integer(value, "churn_period") is None
+
+    @pytest.mark.parametrize("value", [True, 1.0, 30.5, "30", None], ids=["bool", "int_float", "float", "str", "none"])
+    def test_rejects_non_integer(self, value):
+        """Bools, floats, strings, and None raise TypeError."""
+        with pytest.raises(TypeError, match="churn_period must be an integer"):
+            ensure_integer(value, "churn_period")
+
+
+class TestEnsureTznaiveDatetime:
+    """Tests for the ensure_tznaive_datetime helper."""
+
+    def test_accepts_tznaive_datetime(self):
+        """A timezone-naive datetime column passes without raising."""
+        table = ibis.memtable(pd.DataFrame({"transaction_date": pd.to_datetime(["2024-01-01", "2024-01-02"])}))
+        assert ensure_tznaive_datetime(table, "transaction_date") is None
+
+    def test_accepts_date_column(self):
+        """A plain date column passes without raising."""
+        table = ibis.memtable(
+            pd.DataFrame({"transaction_date": [datetime.date(2024, 1, 1), datetime.date(2024, 1, 2)]}),
+        )
+        assert ensure_tznaive_datetime(table, "transaction_date") is None
+
+    def test_rejects_tz_aware(self):
+        """A timezone-aware column raises ValueError pointing at the tz."""
+        table = ibis.memtable(
+            pd.DataFrame({"transaction_date": pd.to_datetime(["2024-01-01"]).tz_localize("US/Eastern")}),
+        )
+        with pytest.raises(ValueError, match="timezone-aware"):
+            ensure_tznaive_datetime(table, "transaction_date")
+
+    def test_rejects_non_temporal(self):
+        """A non-temporal (string) column raises TypeError."""
+        table = ibis.memtable(pd.DataFrame({"transaction_date": ["2024-01-01", "2024-01-02"]}))
+        with pytest.raises(TypeError, match="date or datetime"):
+            ensure_tznaive_datetime(table, "transaction_date")
