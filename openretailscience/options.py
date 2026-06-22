@@ -527,7 +527,8 @@ def option_context(*args: OptionTypes) -> Generator[None, None, None]:
         None
 
     Raises:
-        ValueError: If an odd number of arguments is supplied (positional form).
+        ValueError: If an odd number of arguments is supplied (positional form), or if an
+            unknown option name is supplied (either form).
 
     Example:
         >>> with option_context('column.customer_id', 'cust_id', 'column.store_id', 'outlet_id'):
