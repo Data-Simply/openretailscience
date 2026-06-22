@@ -68,6 +68,14 @@ jobs:
       SNOWFLAKE_CI_DATABASE: ${{ secrets.SNOWFLAKE_CI_DATABASE }}
       SNOWFLAKE_CI_SCHEMA: ${{ secrets.SNOWFLAKE_CI_SCHEMA }}
 
+  sqlserver-integration-tests:
+    name: SQL Server Integration Tests
+    uses: ./.github/workflows/sqlserver-integration.yml
+
+  oracle-integration-tests:
+    name: Oracle Integration Tests
+    uses: ./.github/workflows/oracle-integration.yml
+
   multi-python-tests:
     name: Multi-Python Version Tests
     runs-on: ubuntu-latest
@@ -100,7 +108,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [security-audit, pre-commit, bigquery-integration-tests, pyspark-integration-tests, snowflake-integration-tests, multi-python-tests]
+    needs: [security-audit, pre-commit, bigquery-integration-tests, pyspark-integration-tests, snowflake-integration-tests, sqlserver-integration-tests, oracle-integration-tests, multi-python-tests]
     permissions:
       contents: write
       id-token: write

@@ -14,6 +14,8 @@ on:
       - "BigQuery Integration Tests"
       - "PySpark Integration Tests"
       - "Snowflake Integration Tests"
+      - "SQL Server Integration Tests"
+      - "Oracle Integration Tests"
     types: [completed]
 
 permissions: {}
