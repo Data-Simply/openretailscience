@@ -45,10 +45,10 @@ uv run pytest tests/integration -k mssql -v
 docker compose -f tests/integration/docker/docker-compose.sqlserver.yml down -v
 ```
 
-Test another version by overriding the image (nothing else changes):
+Test another supported version by overriding the image (nothing else changes):
 
 ```bash
-MSSQL_IMAGE=mcr.microsoft.com/mssql/server:2019-latest \
+MSSQL_IMAGE=mcr.microsoft.com/mssql/server:2025-latest \
   docker compose -f tests/integration/docker/docker-compose.sqlserver.yml up -d --wait
 ```
 
