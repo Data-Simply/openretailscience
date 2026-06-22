@@ -541,11 +541,11 @@ def option_context(*args: OptionTypes) -> Generator[None, None, None]:
         >>> # Options are restored to their previous values here
     """
     if len(args) == 1 and isinstance(args[0], dict):
-        items = list(args[0].items())
+        items = args[0].items()
+    elif len(args) % 2 != 0:
+        raise ValueError("The context manager requires an even number of arguments")
     else:
-        if len(args) % 2 != 0:
-            raise ValueError("The context manager requires an even number of arguments")
-        items = list(zip(args[::2], args[1::2], strict=True))
+        items = zip(args[::2], args[1::2], strict=True)
 
     old_options: dict[str, OptionTypes] = {}
     try:
