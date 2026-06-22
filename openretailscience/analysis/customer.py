@@ -212,11 +212,11 @@ class DaysBetweenPurchases:
             group_by=per_customer_day[cols.customer_id],
             order_by=per_customer_day.transaction_day,
         )
-        with_prev = per_customer_day.mutate(
-            prev_day=per_customer_day.transaction_day.lag(1).over(window),
-        )
-        with_gap = with_prev.mutate(
-            gap_days=with_prev.transaction_day.delta(with_prev.prev_day, unit="day"),
+        with_gap = per_customer_day.mutate(
+            gap_days=per_customer_day.transaction_day.delta(
+                per_customer_day.transaction_day.lag(1).over(window),
+                unit="day",
+            ),
         )
         return (
             with_gap.filter(with_gap.gap_days.notnull())  # noqa: PD004 (ibis API, not pandas)
@@ -269,8 +269,9 @@ class TransactionChurn:
         Raises:
             ValueError: If the required columns are missing, transaction_date is
                 timezone-aware, or ``churn_period`` is not positive.
-            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table, or
-                transaction_date is not a date/datetime type.
+            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table,
+                transaction_date is not a date/datetime type, or ``churn_period``
+                is not a number.
         """
         cols = ColumnHelper()
         df = ensure_ibis_table(df)

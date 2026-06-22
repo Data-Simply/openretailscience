@@ -142,7 +142,7 @@ class TestSharedConstructorContract:
         """An ibis Table passed in directly produces identical results to a DataFrame."""
         obj = make(ibis.memtable(transactions_df))
         expected = request.getfixturevalue(expected_fixture)
-        assert_frame_equal(obj.df, expected, check_dtype=False)
+        assert_frame_equal(obj.df, expected)
 
     @pytest.mark.parametrize(
         ("make", "missing_col"),
@@ -213,7 +213,7 @@ class TestSharedConstructorContract:
         # TransactionChurn indexes on the derived transaction_number, which is unaffected.
         if axis_name is not None:
             expected = expected.rename_axis(axis_name)
-        assert_frame_equal(actual, expected, check_dtype=False)
+        assert_frame_equal(actual, expected)
 
     @pytest.mark.parametrize("make", [MAKE_PURCHASES, MAKE_DAYS], ids=["purchases", "days_between"])
     def test_df_access_under_option_context_uses_init_time_column(self, transactions_df, make):
@@ -241,7 +241,7 @@ class TestPurchasesPerCustomer:
     def test_df_holds_unique_transactions_per_customer(self, transactions_df, expected_purchase_counts):
         """The materialized df holds the unique transaction count per customer."""
         ppc = PurchasesPerCustomer(transactions_df)
-        assert_frame_equal(ppc.df, expected_purchase_counts, check_dtype=False)
+        assert_frame_equal(ppc.df, expected_purchase_counts)
 
     @pytest.mark.parametrize(
         ("percentile", "expected"),
@@ -317,7 +317,7 @@ class TestDaysBetweenPurchases:
     def test_df_holds_average_days_between_purchases(self, transactions_df, expected_days_between_purchases):
         """The materialized df holds the per-customer mean gap, excluding single-purchase customers."""
         dbp = DaysBetweenPurchases(transactions_df)
-        assert_frame_equal(dbp.df, expected_days_between_purchases, check_dtype=False)
+        assert_frame_equal(dbp.df, expected_days_between_purchases)
 
     def test_same_day_transactions_collapse_to_one_purchase_day(self):
         """Multiple transactions on the same day count as a single purchase day."""
@@ -361,7 +361,7 @@ class TestTransactionChurn:
     ):
         """The materialized df reports retained, churned counts and the churned percentage."""
         tc = TransactionChurn(transactions_df, churn_period=30)
-        assert_frame_equal(tc.df, expected_churn_table, check_dtype=False)
+        assert_frame_equal(tc.df, expected_churn_table)
 
     def test_counts_unique_customers_in_source(self, transactions_df):
         """n_unique_customers reflects the distinct customers in the input, not the filtered window."""
@@ -448,3 +448,15 @@ class TestInputValidation:
         df = pd.DataFrame({"customer_id": [1, 1], "transaction_date": ["2024-01-01", "2024-01-05"]})
         with pytest.raises(TypeError, match="date or datetime"):
             make(df)
+
+    @pytest.mark.parametrize("make", [MAKE_PURCHASES, MAKE_DAYS], ids=["purchases", "days_between"])
+    def test_percentile_rejects_bool(self, transactions_df, make):
+        """A bool percentile is rejected, not silently treated as 0.0/1.0 (bool is an int subclass)."""
+        obj = make(transactions_df)
+        with pytest.raises(TypeError, match="must be a number"):
+            obj.purchases_percentile(True)
+
+    def test_churn_period_rejects_bool(self, transactions_df):
+        """A bool churn_period is rejected, not silently treated as a 1-day window."""
+        with pytest.raises(TypeError, match="must be a number"):
+            TransactionChurn(transactions_df, churn_period=True)
