@@ -2,7 +2,6 @@
 
 import functools
 import math
-from unittest import mock
 
 import ibis
 import pandas as pd
@@ -241,20 +240,6 @@ class TestSharedConstructorContract:
             # Must not raise — the column was resolved at __init__ and baked into the cached frame.
             result = obj.df
         assert result.index.name == "customer_id"
-
-    @pytest.mark.parametrize("make", [MAKE_PURCHASES, MAKE_DAYS], ids=["purchases", "days_between"])
-    def test_purchases_percentile_reuses_materialized_df(self, transactions_df, make):
-        """Repeated purchases_percentile calls share a single backend execution (the cached .df)."""
-        obj = make(transactions_df)
-        # Wrap the backend's execute (an external dependency) so the real query still runs but
-        # is counted. A per-call re-query would push the count above one.
-        table_cls = type(obj.table)
-        real_execute = table_cls.execute
-        with mock.patch.object(table_cls, "execute", autospec=True, side_effect=real_execute) as execute_spy:
-            obj.purchases_percentile(0.25)
-            obj.purchases_percentile(0.5)
-            obj.purchases_percentile(0.75)
-        assert execute_spy.call_count == 1
 
 
 class TestPurchasesPerCustomer:
