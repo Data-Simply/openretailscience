@@ -144,9 +144,11 @@ def _mssql_transactions_table() -> Table:
             autocommit=True,
         ),
     )
-    if _MSSQL_DATABASE not in admin.list_catalogs():
-        admin.create_catalog(_MSSQL_DATABASE)
-    admin.disconnect()
+    try:
+        if _MSSQL_DATABASE not in admin.list_catalogs():
+            admin.create_catalog(_MSSQL_DATABASE)
+    finally:
+        admin.disconnect()
 
     connection = ibis.mssql.connect(
         host=_MSSQL_HOST,
@@ -189,7 +191,7 @@ def _oracle_transactions_table() -> Table:
     params=["bigquery", "pyspark", "snowflake", "mssql", "oracle"],
     ids=lambda backend: f"backend={backend}",
 )
-def transactions_table(request):
+def transactions_table(request: pytest.FixtureRequest) -> Table:
     """Parameterized fixture that provides transactions table from different backends."""
     if request.param == "bigquery":
         connection = ibis.bigquery.connect(
