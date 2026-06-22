@@ -11,17 +11,21 @@ import openretailscience.options as opt
 class TestOptions:
     """Test for option handling class."""
 
-    def test_unknown_option_raises_value_error(self):
-        """Test setting/getting/resetting an unknown option raises a ValueError."""
+    @pytest.mark.parametrize(
+        "operation",
+        [
+            lambda o: o.set_option("unknown.option", "some_value"),
+            lambda o: o.get_option("unknown.option"),
+            lambda o: o.reset_option("unknown.option"),
+            lambda o: o.describe_option("unknown.option"),
+        ],
+        ids=["set_option", "get_option", "reset_option", "describe_option"],
+    )
+    def test_unknown_option_raises_value_error(self, operation):
+        """Test that each option accessor raises ValueError for an unknown option."""
         options = opt.Options()
         with pytest.raises(ValueError, match=r"Unknown option: unknown\.option"):
-            options.set_option("unknown.option", "some_value")
-        with pytest.raises(ValueError, match=r"Unknown option: unknown\.option"):
-            options.get_option("unknown.option")
-        with pytest.raises(ValueError, match=r"Unknown option: unknown\.option"):
-            options.reset_option("unknown.option")
-        with pytest.raises(ValueError, match=r"Unknown option: unknown\.option"):
-            options.describe_option("unknown.option")
+            operation(options)
 
     def test_set_option_updates_value(self):
         """Test setting an option updates the option value correctly."""
