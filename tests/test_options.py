@@ -45,12 +45,29 @@ class TestOptions:
             assert key in description
             assert "(current value:" in description
 
-    def test_context_manager_overrides_option(self):
-        """Test that the context manager overrides the option value correctly at the global level."""
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ("column.customer_id", "new_customer_id"),
+            ({"column.customer_id": "new_customer_id"},),
+        ],
+    )
+    def test_context_manager_overrides_option(self, args):
+        """Test that the context manager overrides the option value for both positional and dict call styles."""
         original_value = opt.get_option("column.customer_id")
-        with opt.option_context("column.customer_id", "new_customer_id"):
+        with opt.option_context(*args):
             assert opt.get_option("column.customer_id") == "new_customer_id"
         assert opt.get_option("column.customer_id") == original_value
+
+    def test_context_manager_dict_overrides_multiple_options(self):
+        """Test that a dict argument overrides multiple options and restores them all on exit."""
+        original_customer = opt.get_option("column.customer_id")
+        original_store = opt.get_option("column.store_id")
+        with opt.option_context({"column.customer_id": "shopper_id", "column.store_id": "outlet_id"}):
+            assert opt.get_option("column.customer_id") == "shopper_id"
+            assert opt.get_option("column.store_id") == "outlet_id"
+        assert opt.get_option("column.customer_id") == original_customer
+        assert opt.get_option("column.store_id") == original_store
 
     def test_context_manager_odd_number_of_arguments_raises_value_error(self):
         """Test that the context manager raises a ValueError when an odd number of arguments is passed."""
