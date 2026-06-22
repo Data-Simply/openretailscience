@@ -62,8 +62,8 @@ Choose the granularity by the question you are asking:
   customer, spend per customer, churn) and is cheaper to store and scan.
 
 When in doubt, keep line-item level: every transaction-level metric can be derived from it, but not the reverse.
-Functions such as `SegTransactionStats` and `RevenueTree` aggregate line items up to the level you ask for, so you
-do not need to pre-aggregate.
+Functions such as `SegTransactionStats` and `RevenueTree` aggregate line items for you — to the segment or period
+level their column arguments define — so you do not need to pre-aggregate.
 
 ### Star schemas and denormalized views
 
