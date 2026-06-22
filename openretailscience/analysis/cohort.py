@@ -64,6 +64,12 @@ def _periods_between(start: pd.Series, end: pd.Series, period: str) -> pd.Series
     """
     start = pd.to_datetime(start)
     end = pd.to_datetime(end)
+    # Count in wall-clock terms: a tz-aware interval spanning a DST change is not a whole
+    # number of 24h days, which would round the day/week counts below down by one.
+    if start.dt.tz is not None:
+        start = start.dt.tz_localize(None)
+    if end.dt.tz is not None:
+        end = end.dt.tz_localize(None)
     if period == "day":
         result = (end - start).dt.days
     elif period == "week":
