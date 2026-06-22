@@ -14,14 +14,14 @@ class TestOptions:
     def test_unknown_option_raises_value_error(self):
         """Test setting/getting/resetting an unknown option raises a ValueError."""
         options = opt.Options()
-        with pytest.raises(ValueError, match=r"Unknown option: unknown.option"):
+        with pytest.raises(ValueError, match=r"Unknown option: unknown\.option"):
             options.set_option("unknown.option", "some_value")
-        with pytest.raises(ValueError, match=r"Unknown option: unknown.option"):
-            options.get_option("unknown_option")
-        with pytest.raises(ValueError, match=r"Unknown option: unknown.option"):
-            options.reset_option("unknown_option")
-        with pytest.raises(ValueError, match=r"Unknown option: unknown.option"):
-            options.describe_option("unknown_option")
+        with pytest.raises(ValueError, match=r"Unknown option: unknown\.option"):
+            options.get_option("unknown.option")
+        with pytest.raises(ValueError, match=r"Unknown option: unknown\.option"):
+            options.reset_option("unknown.option")
+        with pytest.raises(ValueError, match=r"Unknown option: unknown\.option"):
+            options.describe_option("unknown.option")
 
     def test_set_option_updates_value(self):
         """Test setting an option updates the option value correctly."""
