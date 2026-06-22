@@ -6,6 +6,4 @@
 # it. Both the PyPI (PYSEC) and GitHub/CVE identifiers are listed per advisory so
 # the ignore matches whichever id OSV-Scanner surfaces.
 #
-# No active suppressions. (OSV-Scanner v2 exits non-zero on ignore entries that
-# match nothing in the current scan, so stale suppressions must be removed once
-# the advisory no longer surfaces.)
+# No active suppressions.
