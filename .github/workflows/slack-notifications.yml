@@ -11,6 +11,7 @@ on:
       - "Tests"
       - "PyPi Package Deploy"
       - "Page Deploy"
+      - "Security Audit"
       - "BigQuery Integration Tests"
       - "PySpark Integration Tests"
       - "Snowflake Integration Tests"
