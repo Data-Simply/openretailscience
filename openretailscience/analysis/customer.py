@@ -75,17 +75,27 @@ _COMPARISONS = {
 _TRANSACTION_NUMBER_COL = "transaction_number"
 
 
-def _distinct_customer_days(df: ibis.Table) -> ibis.Table:
+def _distinct_customer_days(df: ibis.Table, customer_id_col: str, transaction_date_col: str) -> ibis.Table:
     """Project to (customer_id, transaction_day) and dedupe.
 
     The day-level dedup defines what a "purchase day" means for this module — same-day
     transactions collapse to a single purchase day. Both DaysBetweenPurchases and
     TransactionChurn walk the customer history one row per purchase day.
+
+    The column names are passed in (resolved once by the caller) rather than re-read from
+    options here, so this function is pure and cannot drift from the caller's resolution.
+
+    Args:
+        df (ibis.Table): Transaction-level data.
+        customer_id_col (str): Resolved name of the customer id column.
+        transaction_date_col (str): Resolved name of the transaction date column.
+
+    Returns:
+        ibis.Table: One row per (customer, purchase day).
     """
-    cols = ColumnHelper()
     return df.select(
-        df[cols.customer_id],
-        transaction_day=df[cols.transaction_date].truncate("D"),
+        df[customer_id_col],
+        transaction_day=df[transaction_date_col].truncate("D"),
     ).distinct()
 
 
@@ -207,7 +217,7 @@ class DaysBetweenPurchases:
     @staticmethod
     def _calculate(df: ibis.Table) -> ibis.Table:
         cols = ColumnHelper()
-        per_customer_day = _distinct_customer_days(df)
+        per_customer_day = _distinct_customer_days(df, cols.customer_id, cols.transaction_date)
         window = ibis.window(
             group_by=per_customer_day[cols.customer_id],
             order_by=per_customer_day.transaction_day,
@@ -218,10 +228,9 @@ class DaysBetweenPurchases:
                 unit="day",
             ),
         )
-        return (
-            with_gap.filter(with_gap.gap_days.notnull())  # noqa: PD004 (ibis API, not pandas)
-            .group_by(cols.customer_id)
-            .aggregate(avg_days_between_purchases=with_gap.gap_days.mean())
+        filtered = with_gap.filter(with_gap.gap_days.notnull())  # noqa: PD004 (ibis API, not pandas)
+        return filtered.group_by(cols.customer_id).aggregate(
+            avg_days_between_purchases=filtered.gap_days.mean(),
         )
 
     def purchases_percentile(self, percentile: float = 0.5) -> float:
@@ -302,9 +311,9 @@ class TransactionChurn:
         return self.table.execute().set_index(_TRANSACTION_NUMBER_COL).sort_index()
 
     @staticmethod
-    def _calculate(df: ibis.Table, churn_boundary: pd.Timestamp) -> ibis.Table:
+    def _calculate(df: ibis.Table, churn_boundary: datetime.date | pd.Timestamp) -> ibis.Table:
         cols = ColumnHelper()
-        per_customer_day = _distinct_customer_days(df)
+        per_customer_day = _distinct_customer_days(df, cols.customer_id, cols.transaction_date)
         cust_window = ibis.window(
             group_by=per_customer_day[cols.customer_id],
             order_by=per_customer_day.transaction_day,
