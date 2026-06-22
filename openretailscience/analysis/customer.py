@@ -153,13 +153,15 @@ class PurchasesPerCustomer:
 
     def find_purchase_percentile(
         self,
-        number_of_purchases: int,
+        number_of_purchases: float,
         comparison: str = "less_than_equal_to",
     ) -> float:
         """Return the share of customers whose purchase count matches a comparison.
 
         Args:
-            number_of_purchases (int): Threshold to compare against.
+            number_of_purchases (float): Threshold to compare against. Typically an integer count,
+                but fractional values are compared directly against the integer purchase counts
+                (e.g. ``<= 2.5`` is equivalent to ``<= 2``).
             comparison (str): One of ``less_than``, ``less_than_equal_to``,
                 ``equal_to``, ``not_equal_to``, ``greater_than``,
                 ``greater_than_equal_to``. Defaults to ``less_than_equal_to``.
