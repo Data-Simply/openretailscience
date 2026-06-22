@@ -204,6 +204,25 @@ def ensure_positive(value: float, param_name: str) -> None:
         raise ValueError(msg)
 
 
+def ensure_integer(value: int, param_name: str) -> None:
+    """Validate that a parameter is an integer — not a bool or a float.
+
+    Use for parameters that are meaningless at sub-unit granularity (e.g. a whole number of
+    days), where a float would silently produce a fractional result.
+
+    Args:
+        value (int): The value supplied by the caller.
+        param_name (str): The parameter name to surface in error messages.
+
+    Raises:
+        TypeError: If ``value`` is not an int (``bool`` and ``float`` are rejected).
+    """
+    # ``bool`` is an ``int`` subclass; reject it alongside floats so only true integers pass.
+    if isinstance(value, bool) or not isinstance(value, int):
+        msg = f"{param_name} must be an integer. Got {type(value).__name__}."
+        raise TypeError(msg)
+
+
 def ensure_tznaive_datetime(df: ibis.Table, column: str) -> None:
     """Validate that a column is a timezone-naive date or datetime type.
 
