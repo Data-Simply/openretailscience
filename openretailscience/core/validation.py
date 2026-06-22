@@ -161,10 +161,12 @@ def ensure_unit_interval(value: float, param_name: str) -> None:
         param_name (str): The parameter name to surface in error messages.
 
     Raises:
-        TypeError: If ``value`` is not an int or float.
+        TypeError: If ``value`` is not an int or float (``bool`` is rejected).
         ValueError: If ``value`` is outside the inclusive range [0, 1].
     """
-    if not isinstance(value, int | float):
+    # ``bool`` is an ``int`` subclass, so it would otherwise pass as 0.0/1.0 and silently
+    # return the min/max instead of erroring on a misrouted flag.
+    if isinstance(value, bool) or not isinstance(value, int | float):
         msg = f"{param_name} must be a number between 0 and 1. Got {type(value).__name__}."
         raise TypeError(msg)
     if not 0.0 <= value <= 1.0:
@@ -180,10 +182,11 @@ def ensure_positive(value: float, param_name: str) -> None:
         param_name (str): The parameter name to surface in error messages.
 
     Raises:
-        TypeError: If ``value`` is not an int or float.
+        TypeError: If ``value`` is not an int or float (``bool`` is rejected).
         ValueError: If ``value`` is not strictly positive.
     """
-    if not isinstance(value, int | float):
+    # ``bool`` is an ``int`` subclass; reject it so a misrouted flag does not become a 1-day window.
+    if isinstance(value, bool) or not isinstance(value, int | float):
         msg = f"{param_name} must be a number. Got {type(value).__name__}."
         raise TypeError(msg)
     if value <= 0:
