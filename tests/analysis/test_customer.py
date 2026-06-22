@@ -393,6 +393,17 @@ class TestDaysBetweenPurchases:
         dbp = DaysBetweenPurchases(transactions_df)
         assert dbp.purchases_percentile(percentile) == pytest.approx(expected)
 
+    def test_purchases_percentile_returns_nan_on_empty_input(self):
+        """purchases_percentile returns NaN on empty input (parity with PurchasesPerCustomer)."""
+        empty = pd.DataFrame(
+            {
+                "customer_id": pd.Series([], dtype="int64"),
+                "transaction_date": pd.Series([], dtype="datetime64[ns]"),
+            },
+        )
+        dbp = DaysBetweenPurchases(empty)
+        assert math.isnan(dbp.purchases_percentile(0.5))
+
 
 class TestTransactionChurn:
     """Behavioral tests for TransactionChurn."""
