@@ -63,7 +63,10 @@ df = df.rename(columns={
     Scripts where you want to keep your original column names throughout.
 
 Tell OpenRetailScience what your column names are using `option_context()`. This doesn't rename your columns - it
-configures OpenRetailScience's internal settings to look for your column names instead of the defaults:
+configures OpenRetailScience's internal settings to look for your column names instead of the defaults. Options can be
+supplied as alternating name/value pairs (below) or as a single dictionary such as
+`option_context({"column.customer_id": "cust_id"})` - the dict form is handy when overriding a single option, since you
+don't have to track its position in the argument list:
 
 ```python
 from openretailscience.options import option_context
@@ -90,15 +93,6 @@ with option_context(
     gl.plot()
 
 # Configuration automatically resets after the block
-```
-
-You can also pass a single dictionary instead of alternating name/value pairs. This is handy when overriding one
-named option, since you don't have to track its position in a flat argument list:
-
-```python
-with option_context({"column.customer_id": "cust_id"}):
-    # OpenRetailScience uses "cust_id" within this block
-    ...
 ```
 
 ### Option 3: Use a TOML Configuration File (Recommended)
