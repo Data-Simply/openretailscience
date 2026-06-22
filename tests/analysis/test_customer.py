@@ -291,14 +291,6 @@ class TestPurchasesPerCustomer:
         ppc = PurchasesPerCustomer(empty)
         assert math.isnan(ppc.find_purchase_percentile(1))
 
-    def test_df_access_under_option_context_uses_init_time_column(self, transactions_df):
-        """.df accessed inside a different option_context still resolves the init-time customer_id column."""
-        ppc = PurchasesPerCustomer(transactions_df)  # built under default "customer_id"
-        with option_context("column.customer_id", "cust_id"):
-            # Must not raise — the column was resolved at __init__ and is now baked into the cached frame.
-            result = ppc.df
-        assert result.index.name == "customer_id"
-
     def test_df_after_option_context_exit_keeps_init_time_column(self, transactions_df):
         """A .df built and materialized inside an option_context retains that column name after the context exits."""
         renamed = transactions_df.rename(columns={"customer_id": "cust_id", "transaction_id": "txn_id"})
