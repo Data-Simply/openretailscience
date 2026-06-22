@@ -138,6 +138,9 @@ OpenRetailScience reads columns by a fixed set of standard names. The most commo
 | `unit_cost`        | Cost per unit                            |
 | `store_id`         | Store identifier                         |
 
+Not every dataset contains every column — this is the set of names OpenRetailScience *recognises*, and each
+analysis needs only the ones it uses (the sample data, for example, has no `unit_price`).
+
 If your warehouse uses different names, **do not rename every column**. Map your names onto the standard ones once,
 through the options system (a `openretailscience.toml` file, `option_context()`, or `set_option()`). See the
 [Options & configuration guide](options_guide.md) for the three approaches and when to use each.
@@ -260,10 +263,10 @@ function aggregates to.
 | RFMSegmentation           | customer_id, transaction_id, transaction_date, unit_spend | pandas, Ibis | customer |
 | NLRSegmentation           | customer_id, period_col, value_col                        | pandas, Ibis | customer |
 | GainLoss                  | customer_id, value_col                                    | pandas       | customer |
-| CrossShop                 | group_col, value_col, group_1_col, group_2_col            | pandas, Ibis | customer |
+| CrossShop                 | group_col, value_col, group_1_col                         | pandas, Ibis | customer |
 | RevenueTree               | customer_id, transaction_id, unit_spend, period_col       | pandas, Ibis | period   |
 | ProductAssociation        | value_col, group_col                                      | pandas, Ibis | customer |
-| CustomerDecisionHierarchy | customer_id, transaction_id, product_col                  | pandas       | products |
+| CustomerDecisionHierarchy | customer_id, transaction_id, product_col                  | pandas       | product  |
 | CohortAnalysis            | customer_id, transaction_date, aggregation_column         | pandas, Ibis | cohort   |
 | PurchasesPerCustomer      | customer_id, transaction_id                               | pandas, Ibis | customer |
 | DaysBetweenPurchases      | customer_id, transaction_date                             | pandas, Ibis | customer |
@@ -278,6 +281,8 @@ Notes on optional, behaviour-enhancing columns:
 - For `ProductAssociation`, `value_col` is the product identifier whose co-occurrence is measured.
 - `CrossShop` and `ProductAssociation` group by `group_col`, which defaults to `customer_id`; pass
   `group_col` (for example `transaction_id`) to analyse per basket or transaction instead.
+- `CrossShop` compares groups defined by `(group_n_col, group_n_val)` pairs; `group_2_col` and `group_3_col`
+  default to `group_1_col`, so comparing values within one column needs only `group_1_col`.
 
 !!! note "pandas-only analyses"
     Most functions accept either backend, but `GainLoss` and `CustomerDecisionHierarchy` operate on pandas
