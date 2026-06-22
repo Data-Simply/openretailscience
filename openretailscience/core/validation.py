@@ -216,8 +216,8 @@ def ensure_tznaive_datetime(df: ibis.Table, column: str) -> None:
     if col_type.is_timestamp() and col_type.timezone is not None:
         msg = (
             f"Column '{column}' is timezone-aware ({col_type.timezone}). The backend normalizes "
-            f"timezone-aware timestamps to UTC, which can shift day boundaries. Convert to a "
-            f"timezone-naive wall-clock time first, e.g. "
-            f"df['{column}'] = df['{column}'].dt.tz_localize(None)."
+            f"timezone-aware timestamps to UTC, which can shift day boundaries. Provide a "
+            f"timezone-naive wall-clock time instead (for a pandas DataFrame: "
+            f"df['{column}'] = df['{column}'].dt.tz_localize(None))."
         )
         raise ValueError(msg)
