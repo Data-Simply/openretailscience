@@ -767,6 +767,72 @@ cr.df.sort_values(["product_category", "composite_rank"])
 | 3          | Electronics      | 75    | 15        | 5.0                | 3          | 3              | 1                       | 2.33           |
 <!-- markdownlint-enable MD013 -->
 
+### Purchase Path
+
+<div class="clear" markdown>
+
+The Purchase Path module reveals the order in which customers first buy from each product
+category. For every customer it sorts baskets in time and records the basket in which each
+category *first appears*, then groups customers who share the same progression. This turns
+raw transactions into readable journeys such as `womens → kids → mens`.
+
+A position is empty when a trip introduced no new category (the customer only repeated
+categories they had already bought), so the path captures category *discovery* rather than
+every repeat purchase.
+
+**Real-World Applications:**
+
+- **Cross-Sell Sequencing**: Target the category a customer is statistically likely to add next
+- **Onboarding**: Understand which entry category leads to the broadest baskets
+- **Category Management**: Plan adjacencies and promotions around natural progressions
+
+**Reading the Output:**
+
+- `basket_1 … basket_N`: the category (or comma-joined categories) first bought at each step
+- `customer_count`: how many customers followed the exact path
+- `pct_customers`: that count as a share of all analysed customers, so `0.4` means 40% of
+  analysed customers took the path
+
+</div>
+
+Example:
+
+```python
+import pandas as pd
+from openretailscience.analysis.purchase_path import PurchasePath
+
+df = pd.DataFrame({
+    "customer_id": [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5],
+    "transaction_id": [101, 102, 103, 201, 202, 203, 301, 302, 303, 401, 402, 403, 501, 502, 503],
+    "transaction_date": [
+        "2024-01-01", "2024-01-10", "2024-01-20",
+        "2024-01-02", "2024-01-11", "2024-01-21",
+        "2024-01-03", "2024-01-12", "2024-01-22",
+        "2024-01-04", "2024-01-13", "2024-01-23",
+        "2024-01-05", "2024-01-14", "2024-01-24",
+    ],
+    "product_id": range(1, 16),
+    "unit_spend": [50.0] * 15,
+    "category": [
+        "womens", "kids", "mens",
+        "womens", "kids", "kids",
+        "womens", "kids", "mens",
+        "mens", "womens", "kids",
+        "mens", "womens", "womens",
+    ],
+})
+
+pp = PurchasePath(df, category_col="category", min_transactions=3)
+pp.df
+```
+
+| basket_1 | basket_2 | basket_3 | customer_count | pct_customers |
+|:---------|:---------|:---------|---------------:|--------------:|
+| womens   | kids     | mens     |              2 |           0.4 |
+| mens     | womens   |          |              1 |           0.2 |
+| mens     | womens   | kids     |              1 |           0.2 |
+| womens   | kids     |          |              1 |           0.2 |
+
 ## Utils
 
 ### Filter and Label by Periods
