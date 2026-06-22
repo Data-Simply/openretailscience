@@ -15,10 +15,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Free (Developer edition) SQL Server releases since 2019. SQL Server has
-        # no 2020/2021/2023/2024 releases, so these are every applicable version.
+        # Supported free (Developer edition) SQL Server releases. 2019 is omitted: it is
+        # out of mainstream support, and .truncate() compiles to DATETRUNC, which only
+        # exists in SQL Server 2022+ (see CohortAnalysis).
         mssql-image:
-          - mcr.microsoft.com/mssql/server:2019-latest
           - mcr.microsoft.com/mssql/server:2022-latest
           - mcr.microsoft.com/mssql/server:2025-latest
     steps:

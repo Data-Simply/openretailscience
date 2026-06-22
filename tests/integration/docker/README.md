@@ -7,13 +7,12 @@ non-secret values baked into the Compose files and matched by constants in
 `../conftest.py` — there is nothing to configure.
 
 The matching CI workflows (`.github/workflows/sqlserver-integration.yml` and
-`oracle-integration.yml`) run each test suite across a matrix of every free edition
-released since 2019:
+`oracle-integration.yml`) run each test suite across a matrix of supported free editions:
 
 | Engine | Versions | Images |
 | --- | --- | --- |
-| SQL Server (Developer edition) | 2019, 2022, 2025 | `mcr.microsoft.com/mssql/server:<year>-latest` |
-| Oracle (XE / Free) | 18c, 21c, 23ai | `gvenzl/oracle-xe`, `gvenzl/oracle-free` (`-slim-faststart` tags) |
+| SQL Server (Developer edition) | 2022, 2025 | `mcr.microsoft.com/mssql/server:<year>-latest` |
+| Oracle (XE / Free) | 21c, 23ai | `gvenzl/oracle-xe`, `gvenzl/oracle-free` (`-slim-faststart` tags) |
 
 The `transactions_table` fixture in `../conftest.py` requires the container to be
 running, seeds `data/transactions.parquet` once per session, and retries the initial

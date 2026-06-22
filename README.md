@@ -337,8 +337,8 @@ uv run pytest tests/integration/test_cohort_analysis.py -k "snowflake" -v
 #### SQL Server and Oracle Integration Tests
 
 SQL Server and Oracle run against throwaway Docker containers, so they execute the same way locally and in CI.
-CI runs each across a version matrix covering every free edition since 2019 — SQL Server Developer 2019/2022/2025
-and Oracle XE 18c/21c plus 23ai Free.
+CI runs each across a version matrix of supported free editions — SQL Server Developer 2022 and 2025, and
+Oracle XE 21c plus 23ai Free.
 
 These backends have a one-time setup (the SQL Server ODBC driver) and per-version image tags, so their
 instructions live next to the Compose files. See

@@ -15,12 +15,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Free Oracle editions: XE 18c, XE 21c, and 23ai Free (the XE successor).
-        # The gvenzl images are purpose-built for testing; each PDB service name
-        # differs (XEPDB1 for XE, FREEPDB1 for 23ai Free).
+        # Free Oracle editions: XE 21c and 23ai Free (the XE successor). 18c is omitted
+        # (premier support ended 2021). The gvenzl images are purpose-built for testing;
+        # each PDB service name differs (XEPDB1 for XE, FREEPDB1 for 23ai Free).
         include:
-          - oracle-image: gvenzl/oracle-xe:18-slim-faststart
-            oracle-service: XEPDB1
           - oracle-image: gvenzl/oracle-xe:21-slim-faststart
             oracle-service: XEPDB1
           - oracle-image: gvenzl/oracle-free:23-slim-faststart
