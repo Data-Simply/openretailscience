@@ -44,6 +44,42 @@ from openretailscience.core.validation import ensure_data_has_columns, ensure_ib
 from openretailscience.options import ColumnHelper
 
 
+def _periods_between(start: pd.Series, end: pd.Series, period: str) -> pd.Series:
+    """Count whole periods elapsed from ``start`` to ``end`` for each row.
+
+    Computed in pandas rather than with Ibis ``.delta(unit=period)`` because the Oracle
+    backend supports only day-granularity date deltas. Both inputs are already truncated
+    to period boundaries, so the elapsed-period count is exact.
+
+    Args:
+        start (pd.Series): The cohort's first period (a truncated date) for each row.
+        end (pd.Series): The observed period (a truncated date) for each row.
+        period (str): One of "year", "quarter", "month", "week", or "day".
+
+    Returns:
+        pd.Series: Whole periods between ``start`` and ``end`` as int64.
+
+    Raises:
+        ValueError: If ``period`` is not a supported value.
+    """
+    start = pd.to_datetime(start)
+    end = pd.to_datetime(end)
+    if period == "day":
+        result = (end - start).dt.days
+    elif period == "week":
+        result = (end - start).dt.days // 7
+    elif period == "month":
+        result = (end.dt.year - start.dt.year) * 12 + (end.dt.month - start.dt.month)
+    elif period == "quarter":
+        result = (end.dt.year - start.dt.year) * 4 + (end.dt.quarter - start.dt.quarter)
+    elif period == "year":
+        result = end.dt.year - start.dt.year
+    else:
+        error_msg = f"Unsupported period: {period!r}"
+        raise ValueError(error_msg)
+    return result.astype("int64")
+
+
 class CohortAnalysis:
     """Class for performing cohort analysis and visualization."""
 
@@ -157,11 +193,15 @@ class CohortAnalysis:
             .aggregate(period_value=getattr(filtered_table.period_value, agg_func)())
         )
 
-        cohort_table = cohort_table.mutate(
-            period_since=cohort_table.period_shopped.delta(cohort_table.min_period_shopped, unit=period),
+        cohort_df = cohort_table.execute()
+        # period_since is computed in pandas (see _periods_between) rather than via Ibis
+        # .delta(unit=period); the truncate and group-by above still execute in the database.
+        cohort_df["period_since"] = _periods_between(
+            cohort_df["min_period_shopped"],
+            cohort_df["period_shopped"],
+            period,
         )
-
-        cohort_df = cohort_table.execute().drop_duplicates(subset=["min_period_shopped", "period_since"])
+        cohort_df = cohort_df.drop_duplicates(subset=["min_period_shopped", "period_since"])
 
         cohort_analysis_table = cohort_df.pivot(
             index="min_period_shopped",
