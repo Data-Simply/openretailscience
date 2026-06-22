@@ -15,9 +15,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Supported free (Developer edition) SQL Server releases. 2019 is omitted: it is
-        # out of mainstream support, and .truncate() compiles to DATETRUNC, which only
-        # exists in SQL Server 2022+ (see CohortAnalysis).
         mssql-image:
           - mcr.microsoft.com/mssql/server:2022-latest
           - mcr.microsoft.com/mssql/server:2025-latest
