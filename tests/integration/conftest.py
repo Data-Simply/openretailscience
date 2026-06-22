@@ -51,7 +51,12 @@ def _read_transactions() -> pd.DataFrame:
     Returns:
         pd.DataFrame: The transactions fixture data loaded from parquet.
     """
-    return pd.read_parquet(_TRANSACTIONS_PARQUET)
+    df = pd.read_parquet(_TRANSACTIONS_PARQUET)
+    # transaction_time is a bare time-of-day, which Ibis types as `time`. Oracle has no
+    # TIME type (only DATE/TIMESTAMP), so seeding it as `time` fails with ORA-00902. The
+    # column is not exercised by the tests, so store it as a string for portable seeding.
+    df["transaction_time"] = df["transaction_time"].astype(str)
+    return df
 
 
 def _require_container_reachable(host: str, port: int, name: str) -> None:
@@ -74,10 +79,7 @@ def _require_container_reachable(host: str, port: int, name: str) -> None:
         with socket.create_connection((host, port), timeout=_PORT_PROBE_TIMEOUT_SECONDS):
             return
     except OSError as error:
-        error_msg = (
-            f"{name} container not reachable at {host}:{port}; "
-            "start it first (see tests/integration/docker/)"
-        )
+        error_msg = f"{name} container not reachable at {host}:{port}; start it first (see tests/integration/docker/)"
         raise RuntimeError(error_msg) from error
 
 
@@ -114,7 +116,13 @@ def _seed_transactions(connection: BaseBackend) -> Table:
         Table: The seeded transactions table expression.
     """
     df = _read_transactions()
-    connection.create_table(_TRANSACTIONS_TABLE_NAME, df, overwrite=True)
+    # Drop-if-exists rather than create_table(overwrite=True): overwrite issues a
+    # DROP TABLE IF EXISTS, and the IF EXISTS clause was only added to Oracle in 23c, so
+    # it raises ORA-00933 on Oracle XE 18c/21c. A plain drop guarded by list_tables is
+    # portable across every backend and Oracle version.
+    if _TRANSACTIONS_TABLE_NAME in connection.list_tables():
+        connection.drop_table(_TRANSACTIONS_TABLE_NAME)
+    connection.create_table(_TRANSACTIONS_TABLE_NAME, df)
     return connection.table(_TRANSACTIONS_TABLE_NAME)
 
 
