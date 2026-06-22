@@ -12,7 +12,7 @@ The matching CI workflows (`.github/workflows/sqlserver-integration.yml` and
 | Engine | Versions | Images |
 | --- | --- | --- |
 | SQL Server (Developer edition) | 2022, 2025 | `mcr.microsoft.com/mssql/server:<year>-latest` |
-| Oracle (XE / Free) | 21c, 23ai | `gvenzl/oracle-xe`, `gvenzl/oracle-free` (`-slim-faststart` tags) |
+| Oracle (Free) | 23ai | `gvenzl/oracle-free:23-slim-faststart` |
 
 The `transactions_table` fixture in `../conftest.py` requires the container to be
 running, seeds `data/transactions.parquet` once per session, and retries the initial
@@ -58,13 +58,4 @@ MSSQL_IMAGE=mcr.microsoft.com/mssql/server:2019-latest \
 docker compose -f tests/integration/docker/docker-compose.oracle.yml up -d --wait
 uv run pytest tests/integration -k oracle -v
 docker compose -f tests/integration/docker/docker-compose.oracle.yml down -v
-```
-
-XE images use the `XEPDB1` service name instead of `FREEPDB1`, so override the image for
-the container and `ORACLE_SERVICE_NAME` for the tests:
-
-```bash
-ORACLE_IMAGE=gvenzl/oracle-xe:21-slim-faststart \
-  docker compose -f tests/integration/docker/docker-compose.oracle.yml up -d --wait
-ORACLE_SERVICE_NAME=XEPDB1 uv run pytest tests/integration -k oracle -v
 ```
