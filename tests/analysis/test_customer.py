@@ -316,6 +316,18 @@ class TestDaysBetweenPurchases:
         dbp = DaysBetweenPurchases(transactions_df)
         assert_frame_equal(dbp.df, expected_days_between_purchases)
 
+    def test_empty_input_yields_empty_df(self):
+        """An empty input degrades to an empty result with the expected column, not a crash."""
+        empty = pd.DataFrame(
+            {
+                "customer_id": pd.Series([], dtype="int64"),
+                "transaction_date": pd.Series([], dtype="datetime64[ns]"),
+            },
+        )
+        dbp = DaysBetweenPurchases(empty)
+        assert len(dbp.df) == 0
+        assert list(dbp.df.columns) == ["avg_days_between_purchases"]
+
     def test_same_day_transactions_collapse_to_one_purchase_day(self):
         """Multiple transactions on the same day count as a single purchase day."""
         df = pd.DataFrame(
@@ -412,6 +424,19 @@ class TestTransactionChurn:
         """A non-positive churn_period is rejected at construction rather than producing nonsense."""
         with pytest.raises(ValueError, match="churn_period must be positive"):
             TransactionChurn(transactions_df, churn_period=churn_period)
+
+    def test_empty_input_yields_zero_customers_and_empty_df(self):
+        """An empty input reports zero customers and an empty churn table rather than crashing."""
+        empty = pd.DataFrame(
+            {
+                "customer_id": pd.Series([], dtype="int64"),
+                "transaction_date": pd.Series([], dtype="datetime64[ns]"),
+            },
+        )
+        tc = TransactionChurn(empty, churn_period=30)
+        assert tc.n_unique_customers == 0
+        assert len(tc.df) == 0
+        assert list(tc.df.columns) == ["retained", "churned", "churned_pct"]
 
 
 class TestInputValidation:
