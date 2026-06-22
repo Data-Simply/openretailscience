@@ -28,7 +28,6 @@ _MSSQL_HOST = "localhost"
 _MSSQL_PORT = 1433
 _MSSQL_USER = "sa"
 _MSSQL_PASSWORD = "orsTest!Passw0rd"  # noqa: S105 - local throwaway container credential
-_MSSQL_DATABASE = "openretailscience"
 _MSSQL_ODBC_DRIVER = "ODBC Driver 18 for SQL Server"
 
 _ORACLE_HOST = "localhost"
@@ -125,14 +124,14 @@ def _mssql_transactions_table() -> Table:
 
     Requires the SQL Server container (see tests/integration/docker/) to be running; an
     unreachable container fails loudly rather than skipping, so a container that failed
-    to start is never silently passed over. Creates the target database if it does not
-    already exist, then loads the sample data into it.
+    to start is never silently passed over. Seeds into the built-in ``master`` database
+    so no separate database has to be created in the throwaway container.
 
     Returns:
         Table: The transactions table on the SQL Server backend.
     """
     _require_container_reachable(_MSSQL_HOST, _MSSQL_PORT, "SQL Server")
-    admin = _connect_with_retry(
+    connection = _connect_with_retry(
         lambda: ibis.mssql.connect(
             host=_MSSQL_HOST,
             port=_MSSQL_PORT,
@@ -141,23 +140,7 @@ def _mssql_transactions_table() -> Table:
             database="master",
             driver=_MSSQL_ODBC_DRIVER,
             TrustServerCertificate="yes",
-            autocommit=True,
         ),
-    )
-    try:
-        if _MSSQL_DATABASE not in admin.list_catalogs():
-            admin.create_catalog(_MSSQL_DATABASE)
-    finally:
-        admin.disconnect()
-
-    connection = ibis.mssql.connect(
-        host=_MSSQL_HOST,
-        port=_MSSQL_PORT,
-        user=_MSSQL_USER,
-        password=_MSSQL_PASSWORD,
-        database=_MSSQL_DATABASE,
-        driver=_MSSQL_ODBC_DRIVER,
-        TrustServerCertificate="yes",
     )
     return _seed_transactions(connection)
 
