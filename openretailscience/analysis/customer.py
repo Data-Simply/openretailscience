@@ -207,7 +207,7 @@ class DaysBetweenPurchases:
         ensure_data_has_columns(df, [cols.customer_id, cols.transaction_date])
         ensure_tznaive_datetime(df, cols.transaction_date)
         self._customer_id_col = cols.customer_id
-        self.table = self._calculate(df)
+        self.table = self._calculate(df, cols.customer_id, cols.transaction_date)
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
@@ -215,11 +215,10 @@ class DaysBetweenPurchases:
         return self.table.execute().set_index(self._customer_id_col).sort_index()
 
     @staticmethod
-    def _calculate(df: ibis.Table) -> ibis.Table:
-        cols = ColumnHelper()
-        per_customer_day = _distinct_customer_days(df, cols.customer_id, cols.transaction_date)
+    def _calculate(df: ibis.Table, customer_id_col: str, transaction_date_col: str) -> ibis.Table:
+        per_customer_day = _distinct_customer_days(df, customer_id_col, transaction_date_col)
         window = ibis.window(
-            group_by=per_customer_day[cols.customer_id],
+            group_by=per_customer_day[customer_id_col],
             order_by=per_customer_day.transaction_day,
         )
         with_gap = per_customer_day.mutate(
@@ -229,7 +228,7 @@ class DaysBetweenPurchases:
             ),
         )
         filtered = with_gap.filter(with_gap.gap_days.notnull())  # noqa: PD004 (ibis API, not pandas)
-        return filtered.group_by(cols.customer_id).aggregate(
+        return filtered.group_by(customer_id_col).aggregate(
             avg_days_between_purchases=filtered.gap_days.mean(),
         )
 
@@ -303,7 +302,7 @@ class TransactionChurn:
         ).execute()
         self.n_unique_customers = int(stats["n_unique_customers"].iloc[0])
         churn_boundary = stats["max_day"].iloc[0] - datetime.timedelta(days=churn_period)
-        self.table = self._calculate(df, churn_boundary)
+        self.table = self._calculate(df, cols.customer_id, cols.transaction_date, churn_boundary)
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
@@ -311,11 +310,15 @@ class TransactionChurn:
         return self.table.execute().set_index(_TRANSACTION_NUMBER_COL).sort_index()
 
     @staticmethod
-    def _calculate(df: ibis.Table, churn_boundary: datetime.date | pd.Timestamp) -> ibis.Table:
-        cols = ColumnHelper()
-        per_customer_day = _distinct_customer_days(df, cols.customer_id, cols.transaction_date)
+    def _calculate(
+        df: ibis.Table,
+        customer_id_col: str,
+        transaction_date_col: str,
+        churn_boundary: datetime.date | pd.Timestamp,
+    ) -> ibis.Table:
+        per_customer_day = _distinct_customer_days(df, customer_id_col, transaction_date_col)
         cust_window = ibis.window(
-            group_by=per_customer_day[cols.customer_id],
+            group_by=per_customer_day[customer_id_col],
             order_by=per_customer_day.transaction_day,
         )
 

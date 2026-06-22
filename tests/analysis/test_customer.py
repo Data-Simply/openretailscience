@@ -296,6 +296,17 @@ class TestPurchasesPerCustomer:
         ppc = PurchasesPerCustomer(empty)
         assert math.isnan(ppc.find_purchase_percentile(1))
 
+    def test_purchases_percentile_returns_nan_on_empty_input(self):
+        """purchases_percentile returns NaN on empty input, consistent with find_purchase_percentile."""
+        empty = pd.DataFrame(
+            {
+                "customer_id": pd.Series([], dtype="int64"),
+                "transaction_id": pd.Series([], dtype="int64"),
+            },
+        )
+        ppc = PurchasesPerCustomer(empty)
+        assert math.isnan(ppc.purchases_percentile(0.5))
+
     def test_df_after_option_context_exit_keeps_init_time_column(self, transactions_df):
         """A .df built and materialized inside an option_context retains that column name after the context exits."""
         renamed = transactions_df.rename(columns={"customer_id": "cust_id", "transaction_id": "txn_id"})
