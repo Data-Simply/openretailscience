@@ -51,6 +51,7 @@ import ibis
 from openretailscience.core.validation import (
     ensure_data_has_columns,
     ensure_ibis_table,
+    ensure_number,
     ensure_positive,
     ensure_tznaive_datetime,
     ensure_unit_interval,
@@ -169,9 +170,10 @@ class PurchasesPerCustomer:
                 are no customers.
 
         Raises:
-            TypeError: If ``comparison`` is not a string.
+            TypeError: If ``number_of_purchases`` is not a number, or ``comparison`` is not a string.
             ValueError: If ``comparison`` is not a recognized operator name.
         """
+        ensure_number(number_of_purchases, "number_of_purchases")
         op = _COMPARISONS[ensure_value_choice(comparison, _COMPARISONS, "comparison")]
         counts = self.df["purchase_count"]
         # mean of the boolean mask is the matching share; on an empty frame it is NaN.
@@ -216,6 +218,17 @@ class DaysBetweenPurchases:
 
     @staticmethod
     def _calculate(df: ibis.Table, customer_id_col: str, transaction_date_col: str) -> ibis.Table:
+        """Compute each customer's mean gap (in days) between consecutive purchase days.
+
+        Args:
+            df (ibis.Table): Transaction-level data.
+            customer_id_col (str): Resolved name of the customer id column.
+            transaction_date_col (str): Resolved name of the transaction date column.
+
+        Returns:
+            ibis.Table: One row per customer with ``avg_days_between_purchases``;
+                single-purchase-day customers are excluded.
+        """
         per_customer_day = _distinct_customer_days(df, customer_id_col, transaction_date_col)
         window = ibis.window(
             group_by=per_customer_day[customer_id_col],
@@ -318,6 +331,20 @@ class TransactionChurn:
         transaction_date_col: str,
         churn_boundary: datetime.date | pd.Timestamp,
     ) -> ibis.Table:
+        """Compute retained/churned counts and the churn rate per transaction number.
+
+        Args:
+            df (ibis.Table): Transaction-level data.
+            customer_id_col (str): Resolved name of the customer id column.
+            transaction_date_col (str): Resolved name of the transaction date column.
+            churn_boundary (datetime.date | pd.Timestamp): Transactions on or after this day
+                are outside the churn window. Pre-computed in ``__init__`` from the latest
+                purchase day so this method stays a pure function of its arguments.
+
+        Returns:
+            ibis.Table: One row per ``transaction_number`` with ``retained``, ``churned``,
+                and ``churned_pct``.
+        """
         per_customer_day = _distinct_customer_days(df, customer_id_col, transaction_date_col)
         cust_window = ibis.window(
             group_by=per_customer_day[customer_id_col],

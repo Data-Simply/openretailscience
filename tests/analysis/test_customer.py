@@ -285,6 +285,12 @@ class TestPurchasesPerCustomer:
         with pytest.raises(ValueError, match="comparison must be one of"):
             ppc.find_purchase_percentile(1, "foo")
 
+    def test_find_purchase_percentile_rejects_non_numeric_threshold(self, transactions_df):
+        """A non-numeric number_of_purchases raises a clear TypeError, not a cryptic comparison error."""
+        ppc = PurchasesPerCustomer(transactions_df)
+        with pytest.raises(TypeError, match="number_of_purchases must be a number"):
+            ppc.find_purchase_percentile("3")
+
     def test_find_purchase_percentile_returns_nan_on_empty_input(self):
         """An empty input yields NaN rather than ZeroDivisionError (matches purchases_percentile)."""
         empty = pd.DataFrame(
