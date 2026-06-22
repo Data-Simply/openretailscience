@@ -258,9 +258,11 @@ class CrossShop:
         temp_value_col = "temp_value_col"
         df = df.mutate(**{temp_value_col: df[value_col]})
 
-        group_1 = (df[group_1_col] == group_1_val).cast("int32").name("group_1")
-        group_2 = (df[group_2_col] == group_2_val).cast("int32").name("group_2")
-        group_3 = (df[group_3_col] == group_3_val).cast("int32").name("group_3") if group_3_col else None
+        # ifelse (not casting the boolean directly) keeps this portable to engines with no
+        # boolean type (SQL Server, Oracle < 23c); the cast preserves the int32 dtype.
+        group_1 = (df[group_1_col] == group_1_val).ifelse(1, 0).cast("int32").name("group_1")
+        group_2 = (df[group_2_col] == group_2_val).ifelse(1, 0).cast("int32").name("group_2")
+        group_3 = (df[group_3_col] == group_3_val).ifelse(1, 0).cast("int32").name("group_3") if group_3_col else None
 
         group_cols = ["group_1", "group_2"]
         select_cols = [df[group_col], group_1, group_2]
@@ -268,7 +270,7 @@ class CrossShop:
             group_cols.append("group_3")
             select_cols.append(group_3)
 
-        cs_df = df.select([*select_cols, df[temp_value_col]]).order_by(group_col)
+        cs_df = df.select([*select_cols, df[temp_value_col]])
         cs_df = (
             cs_df.group_by(group_col)
             .aggregate(
