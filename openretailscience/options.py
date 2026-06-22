@@ -5,14 +5,14 @@ of data display and processing. The module also includes a context manager for
 temporarily changing options.
 
 Example:
-    >>> set_option('display.max_rows', 100)
-    >>> print(get_option('display.max_rows'))
-    100
-    >>> with option_context('display.max_rows', 10):
-    ...     print(get_option('display.max_rows'))
-    10
-    >>> print(get_option('display.max_rows'))
-    100
+    >>> set_option('column.customer_id', 'cust_id')
+    >>> print(get_option('column.customer_id'))
+    cust_id
+    >>> with option_context('column.customer_id', 'shopper_id'):
+    ...     print(get_option('column.customer_id'))
+    shopper_id
+    >>> print(get_option('column.customer_id'))
+    cust_id
 
 """
 
@@ -530,10 +530,10 @@ def option_context(*args: OptionTypes) -> Generator[None, None, None]:
         ValueError: If an odd number of arguments is supplied (positional form).
 
     Example:
-        >>> with option_context('display.max_rows', 10, 'display.max_columns', 5):
+        >>> with option_context('column.customer_id', 'cust_id', 'column.store_id', 'outlet_id'):
         ...     # Do something with modified options
         ...     pass
-        >>> with option_context({'display.max_rows': 10, 'display.max_columns': 5}):
+        >>> with option_context({'column.customer_id': 'cust_id', 'column.store_id': 'outlet_id'}):
         ...     # Equivalent dict form
         ...     pass
         >>> # Options are restored to their previous values here
