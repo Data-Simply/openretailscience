@@ -515,31 +515,41 @@ def option_context(*args: OptionTypes) -> Generator[None, None, None]:
     """Context manager to temporarily set options.
 
     Temporarily set options and restore them to their previous values after the
-    context exits. The arguments should be supplied as alternating option names
-    and values.
+    context exits. Options may be supplied either as alternating option names and
+    values, or as a single mapping of option names to values. The mapping form is
+    convenient when overriding a single named option without tracking its position
+    in a flat argument list.
 
     Args:
-        *args: An even number of arguments, alternating between option names (str)
-               and their corresponding values.
+        *args: Either an even number of arguments alternating between option names
+               (str) and their corresponding values, or a single dict mapping
+               option names to values.
 
     Yields:
         None
 
     Raises:
-        ValueError: If an odd number of arguments is supplied.
+        ValueError: If an odd number of arguments is supplied (positional form).
 
     Example:
         >>> with option_context('display.max_rows', 10, 'display.max_columns', 5):
         ...     # Do something with modified options
         ...     pass
+        >>> with option_context({'display.max_rows': 10, 'display.max_columns': 5}):
+        ...     # Equivalent dict form
+        ...     pass
         >>> # Options are restored to their previous values here
     """
-    if len(args) % 2 != 0:
-        raise ValueError("The context manager requires an even number of arguments")
+    if len(args) == 1 and isinstance(args[0], dict):
+        items = list(args[0].items())
+    else:
+        if len(args) % 2 != 0:
+            raise ValueError("The context manager requires an even number of arguments")
+        items = list(zip(args[::2], args[1::2], strict=True))
 
     old_options: dict[str, OptionTypes] = {}
     try:
-        for pat, val in zip(args[::2], args[1::2], strict=True):
+        for pat, val in items:
             old_options[pat] = get_option(pat)
             set_option(pat, val)
         yield

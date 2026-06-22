@@ -92,6 +92,15 @@ with option_context(
 # Configuration automatically resets after the block
 ```
 
+You can also pass a single dictionary instead of alternating name/value pairs. This is handy when overriding one
+named option, since you don't have to track its position in a flat argument list:
+
+```python
+with option_context({"column.customer_id": "cust_id"}):
+    # OpenRetailScience uses "cust_id" within this block
+    ...
+```
+
 ### Option 3: Use a TOML Configuration File (Recommended)
 
 !!! tip "Recommended Approach"
