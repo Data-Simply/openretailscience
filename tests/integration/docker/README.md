@@ -15,9 +15,11 @@ released since 2019:
 | SQL Server (Developer edition) | 2019, 2022, 2025 | `mcr.microsoft.com/mssql/server:<year>-latest` |
 | Oracle (XE / Free) | 18c, 21c, 23ai | `gvenzl/oracle-xe`, `gvenzl/oracle-free` (`-slim-faststart` tags) |
 
-The `transactions_table` fixture in `../conftest.py` skips each backend unless its
-container is reachable (a quick port probe), seeds `data/transactions.parquet` once per
-session, and retries the initial connection while the container finishes starting.
+The `transactions_table` fixture in `../conftest.py` requires the container to be
+running, seeds `data/transactions.parquet` once per session, and retries the initial
+connection while the container finishes starting. If the container is unreachable the
+tests fail rather than skip, so a container that failed to start is never silently
+passed over.
 
 ## Prerequisites
 
