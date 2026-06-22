@@ -6,7 +6,7 @@ import pandas as pd
 import pandas.testing as pdt
 import pytest
 
-from openretailscience.analysis.cohort import CohortAnalysis
+from openretailscience.analysis.cohort import CohortAnalysis, _periods_between
 from openretailscience.options import option_context
 
 
@@ -186,3 +186,42 @@ class TestCohortAnalysis:
             result = cohort.df
             assert isinstance(result, pd.DataFrame), "Should return DataFrame with custom columns"
             assert not result.empty, "Should produce results with custom column names"
+
+
+class TestPeriodsBetween:
+    """Tests for _periods_between, which derives the cohort period_since column."""
+
+    @pytest.mark.parametrize(
+        ("period", "start", "end", "expected"),
+        [
+            ("day", "2023-03-01", "2023-03-08", 7),
+            ("week", "2023-01-02", "2023-02-06", 5),  # Mondays, five weeks apart
+            ("month", "2023-01-01", "2023-04-01", 3),
+            ("month", "2022-11-01", "2023-02-01", 3),  # crosses the year boundary
+            ("quarter", "2023-01-01", "2023-10-01", 3),
+            ("quarter", "2022-10-01", "2023-04-01", 2),  # crosses the year boundary
+            ("year", "2021-01-01", "2023-01-01", 2),
+            ("month", "2023-06-01", "2023-06-01", 0),  # same period -> the cohort's own period 0
+        ],
+    )
+    def test_counts_whole_periods_between_aligned_dates(self, period, start, end, expected):
+        """Each period unit returns the count of whole periods elapsed, including across years."""
+        result = _periods_between(pd.Series([pd.Timestamp(start)]), pd.Series([pd.Timestamp(end)]), period)
+        assert result.tolist() == [expected]
+        assert result.dtype == "int64"
+
+    def test_operates_elementwise_over_a_column(self):
+        """The helper computes period_since for every row of the cohort table at once."""
+        starts = pd.Series([pd.Timestamp("2023-01-01"), pd.Timestamp("2023-01-01"), pd.Timestamp("2023-02-01")])
+        ends = pd.Series([pd.Timestamp("2023-01-01"), pd.Timestamp("2023-03-01"), pd.Timestamp("2023-05-01")])
+        result = _periods_between(starts, ends, "month")
+        assert result.tolist() == [0, 2, 3]
+
+    def test_unsupported_period_raises(self):
+        """An unrecognized period unit raises rather than returning a wrong count."""
+        with pytest.raises(ValueError, match="Unsupported period"):
+            _periods_between(
+                pd.Series([pd.Timestamp("2023-01-01")]),
+                pd.Series([pd.Timestamp("2023-02-01")]),
+                "fortnight",
+            )
