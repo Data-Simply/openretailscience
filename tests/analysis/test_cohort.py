@@ -210,6 +210,23 @@ class TestPeriodsBetween:
         assert result.tolist() == [expected]
         assert result.dtype == "int64"
 
+    @pytest.mark.parametrize(
+        ("period", "start", "end", "expected"),
+        [
+            ("day", "2023-03-11", "2023-03-13", 2),  # straddles the spring-forward DST change
+            ("week", "2023-03-06", "2023-03-20", 2),  # two calendar weeks across the DST change
+        ],
+    )
+    def test_counts_wall_clock_periods_for_tz_aware_inputs(self, period, start, end, expected):
+        """tz-aware day/week intervals spanning a DST change count whole wall-clock periods."""
+        tz = "America/New_York"
+        result = _periods_between(
+            pd.Series([pd.Timestamp(start, tz=tz)]),
+            pd.Series([pd.Timestamp(end, tz=tz)]),
+            period,
+        )
+        assert result.tolist() == [expected]
+
     def test_operates_elementwise_over_a_column(self):
         """The helper computes period_since for every row of the cohort table at once."""
         starts = pd.Series([pd.Timestamp("2023-01-01"), pd.Timestamp("2023-01-01"), pd.Timestamp("2023-02-01")])
