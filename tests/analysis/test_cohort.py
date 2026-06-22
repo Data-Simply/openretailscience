@@ -68,6 +68,40 @@ class TestCohortAnalysis:
         result = cohort.df
         pdt.assert_frame_equal(result, expected_results_df)
 
+    def test_weekly_cohort_keeps_monday_anchored_rows(self):
+        """Weekly cohorts truncate to Monday, so gap-filling must step weekly from that Monday.
+
+        A Sunday-anchored range (freq="W") matches none of the Monday week-starts, which would
+        reindex every real row away and zero the whole table.
+        """
+        transactions_df = pd.DataFrame(
+            {
+                "transaction_id": [0, 1, 2],
+                "customer_id": [1, 1, 2],
+                "unit_spend": [10.0, 12.0, 8.0],
+                "transaction_date": [
+                    datetime.date(2023, 1, 2),  # Monday
+                    datetime.date(2023, 1, 9),  # Monday
+                    datetime.date(2023, 1, 9),  # Monday
+                ],
+            },
+        )
+        result = CohortAnalysis(
+            df=transactions_df,
+            aggregation_column="customer_id",
+            agg_func="nunique",
+            period="week",
+        ).df
+
+        expected_df = pd.DataFrame(
+            {0: [1.0, 1.0], 1: [1.0, 0.0]},
+            index=pd.date_range("2023-01-02", periods=2, freq="7D"),
+        )
+        expected_df.index.name = "min_period_shopped"
+        expected_df.columns.name = "period_since"
+
+        pdt.assert_frame_equal(result, expected_df)
+
     def test_missing_columns(self):
         """Test if missing columns raise an error."""
         df = pd.DataFrame({"customer_id": [1, 2, 3], "unit_spend": [10, 20, 30]})

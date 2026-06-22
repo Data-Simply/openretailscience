@@ -151,7 +151,9 @@ class CohortAnalysis:
         min_period = cohort_analysis_table.index.min()
         max_period = cohort_analysis_table.index.max()
 
-        period_lookup = {"year": "YS", "quarter": "QS", "month": "MS", "week": "W", "day": "D"}
+        # Week steps by 7 days from the (truncated) min period rather than freq="W", which
+        # anchors on Sunday and would miss the Monday week-starts that truncate("week") yields.
+        period_lookup = {"year": "YS", "quarter": "QS", "month": "MS", "week": "7D", "day": "D"}
         full_range = pd.date_range(start=min_period, end=max_period, freq=period_lookup[period])
         cohort_analysis_table = cohort_analysis_table.reindex(full_range, fill_value=0)
         if cohort_analysis_table.shape[1] > 0:
