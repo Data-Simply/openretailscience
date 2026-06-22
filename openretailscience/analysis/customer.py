@@ -143,7 +143,8 @@ class PurchasesPerCustomer:
             percentile (float): Percentile in [0, 1]. Defaults to 0.5 (median).
 
         Returns:
-            float: The purchase count at that percentile, using linear interpolation.
+            float: The purchase count at that percentile, using linear interpolation,
+                or NaN if there are no customers.
 
         Raises:
             TypeError: If ``percentile`` is not a number.
@@ -255,7 +256,8 @@ class DaysBetweenPurchases:
             percentile (float): Percentile in [0, 1]. Defaults to 0.5 (median).
 
         Returns:
-            float: The average gap at that percentile, using linear interpolation.
+            float: The average gap at that percentile, using linear interpolation,
+                or NaN if there are no customers.
 
         Raises:
             TypeError: If ``percentile`` is not a number.
