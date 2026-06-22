@@ -361,17 +361,17 @@ in another user's schema, pass that schema as the `database` argument: `con.tabl
 
 On Oracle releases before 23c, `con.table("transactions")` can fail with `ORA-00923: FROM keyword not found where
 expected`: Ibis introspects the table's schema with a query that only compiles on 23c and later. Reference the table
-with `con.sql()` and pass the schema explicitly instead, which skips introspection:
+with `con.sql()` instead, selecting the columns you need and giving each its Ibis type. The explicit schema skips
+introspection, so list one entry for every column the query selects:
 
 ```python
 transactions = con.sql(
-    "SELECT * FROM transactions",
+    "SELECT transaction_id, transaction_date, customer_id, unit_spend FROM transactions",
     schema={
         "transaction_id": "int64",
         "transaction_date": "date",
         "customer_id": "int64",
         "unit_spend": "float64",
-        # ...one entry per column you select
     },
 )
 ```
