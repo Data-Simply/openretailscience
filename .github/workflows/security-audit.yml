@@ -12,8 +12,10 @@ name: Security Audit
 #
 # On pull requests the scan runs only when dependencies or this workflow change,
 # and is advisory (results still post to code scanning); pushes to main (same
-# path filter) refresh the default-branch code-scanning state, and scheduled
-# runs, manual dispatches, and release calls are hard gates.
+# path filter) refresh the default-branch code-scanning state, and manual
+# dispatches and release calls are hard gates. Detection of newly-disclosed CVEs
+# against already-pinned dependencies (with no repo change) is left to Dependabot
+# alerts and security updates, so no scheduled scan is needed here.
 
 on:
   pull_request:
@@ -30,8 +32,6 @@ on:
       - "pyproject.toml"
       - "osv-scanner.toml"
       - ".github/workflows/security-audit.yml"
-  schedule:
-    - cron: "0 6 * * 1" # Mondays 06:00 UTC
   workflow_dispatch:
   workflow_call:
 
