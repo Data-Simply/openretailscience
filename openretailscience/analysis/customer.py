@@ -248,6 +248,12 @@ class TransactionChurn:
     transaction and occurred strictly before ``max(transaction_date) -
     churn_period`` days.
 
+    Unlike PurchasesPerCustomer and DaysBetweenPurchases — whose queries stay lazy
+    until ``.df`` is accessed — construction eagerly runs one aggregate query against
+    the backend to read the distinct customer count and the latest purchase day (which
+    anchors the churn boundary). Apply any row filtering before constructing this class
+    when working with very large remote tables.
+
     Attributes:
         table (ibis.Table): Per-``transaction_number`` ``retained``,
             ``churned``, and ``churned_pct`` columns.

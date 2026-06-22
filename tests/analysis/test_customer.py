@@ -2,6 +2,7 @@
 
 import functools
 import math
+from unittest import mock
 
 import ibis
 import pandas as pd
@@ -226,13 +227,17 @@ class TestSharedConstructorContract:
 
     @pytest.mark.parametrize("make", [MAKE_PURCHASES, MAKE_DAYS], ids=["purchases", "days_between"])
     def test_purchases_percentile_reuses_materialized_df(self, transactions_df, make):
-        """purchases_percentile computes from the cached .df, so repeated calls don't re-query the backend."""
+        """Repeated purchases_percentile calls share a single backend execution (the cached .df)."""
         obj = make(transactions_df)
-        assert "df" not in obj.__dict__  # nothing materialized yet
-        obj.purchases_percentile(0.5)
-        # cached_property stores the materialized frame under "df"; its presence proves the
-        # percentile was read from the shared materialization rather than a fresh execute().
-        assert "df" in obj.__dict__
+        # Wrap the backend's execute (an external dependency) so the real query still runs but
+        # is counted. A per-call re-query would push the count above one.
+        table_cls = type(obj.table)
+        real_execute = table_cls.execute
+        with mock.patch.object(table_cls, "execute", autospec=True, side_effect=real_execute) as execute_spy:
+            obj.purchases_percentile(0.25)
+            obj.purchases_percentile(0.5)
+            obj.purchases_percentile(0.75)
+        assert execute_spy.call_count == 1
 
 
 class TestPurchasesPerCustomer:
