@@ -148,17 +148,34 @@ class TestSharedConstructorContract:
     @pytest.mark.parametrize(
         ("make", "missing_col"),
         [
+            (MAKE_PURCHASES, "customer_id"),
             (MAKE_PURCHASES, "transaction_id"),
+            (MAKE_DAYS, "customer_id"),
             (MAKE_DAYS, "transaction_date"),
+            (MAKE_CHURN, "customer_id"),
             (MAKE_CHURN, "transaction_date"),
         ],
-        ids=["purchases", "days_between", "churn"],
+        ids=[
+            "purchases-customer_id",
+            "purchases-transaction_id",
+            "days_between-customer_id",
+            "days_between-transaction_date",
+            "churn-customer_id",
+            "churn-transaction_date",
+        ],
     )
     def test_missing_required_columns_raises(self, make, missing_col):
-        """Dropping a required column raises with the missing column listed."""
-        df = pd.DataFrame({"customer_id": [1], "unit_spend": [1.0]})
+        """Dropping any required column raises ValueError naming that column."""
+        full = pd.DataFrame(
+            {
+                "customer_id": [1],
+                "transaction_id": [10],
+                "transaction_date": pd.to_datetime(["2024-01-01"]),
+                "unit_spend": [1.0],
+            },
+        )
         with pytest.raises(ValueError, match=missing_col):
-            make(df)
+            make(full.drop(columns=[missing_col]))
 
     @pytest.mark.parametrize(
         "make", [MAKE_PURCHASES, MAKE_DAYS, MAKE_CHURN], ids=["purchases", "days_between", "churn"]
