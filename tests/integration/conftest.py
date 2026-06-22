@@ -54,23 +54,31 @@ def _read_transactions() -> pd.DataFrame:
     return pd.read_parquet(_TRANSACTIONS_PARQUET)
 
 
-def _skip_unless_container_running(host: str, port: int, name: str) -> None:
-    """Skip the test unless a container is accepting connections on host:port.
+def _require_container_reachable(host: str, port: int, name: str) -> None:
+    """Fail loudly if the backend container is not listening on host:port.
 
-    This keeps the default ``pytest tests/integration`` run fast: the backend is
-    skipped instantly when its container is not up, rather than waiting on connection
-    timeouts.
+    This is a fast pre-flight check so a missing or failed-to-start container surfaces
+    as an immediate, clear error rather than skipping (which would hide the problem) or
+    burning the whole connection-retry budget. It deliberately does not call
+    ``pytest.skip``: these tests are only selected when the backend is meant to run.
 
     Args:
         host: Host the container is expected to listen on.
         port: Port the container is expected to listen on.
-        name: Human-readable backend name used in the skip message.
+        name: Human-readable backend name used in the error message.
+
+    Raises:
+        RuntimeError: If nothing is accepting connections on host:port.
     """
     try:
         with socket.create_connection((host, port), timeout=_PORT_PROBE_TIMEOUT_SECONDS):
             return
-    except OSError:
-        pytest.skip(f"{name} container not reachable at {host}:{port}; start it with docker compose first")
+    except OSError as error:
+        error_msg = (
+            f"{name} container not reachable at {host}:{port}; "
+            "start it first (see tests/integration/docker/)"
+        )
+        raise RuntimeError(error_msg) from error
 
 
 def _connect_with_retry(connect: Callable[[], BaseBackend]) -> BaseBackend:
@@ -114,14 +122,15 @@ def _seed_transactions(connection: BaseBackend) -> Table:
 def _mssql_transactions_table() -> Table:
     """Seed transactions into a containerized SQL Server backend once per session.
 
-    Skipped unless the SQL Server container is running. Creates the target database if
-    it does not already exist, then loads the sample data into it.
+    Requires the SQL Server container (see tests/integration/docker/) to be running; an
+    unreachable container fails loudly rather than skipping, so a container that failed
+    to start is never silently passed over. Creates the target database if it does not
+    already exist, then loads the sample data into it.
 
     Returns:
         Table: The transactions table on the SQL Server backend.
     """
-    _skip_unless_container_running(_MSSQL_HOST, _MSSQL_PORT, "SQL Server")
-
+    _require_container_reachable(_MSSQL_HOST, _MSSQL_PORT, "SQL Server")
     admin = _connect_with_retry(
         lambda: ibis.mssql.connect(
             host=_MSSQL_HOST,
@@ -154,15 +163,16 @@ def _mssql_transactions_table() -> Table:
 def _oracle_transactions_table() -> Table:
     """Seed transactions into a containerized Oracle backend once per session.
 
-    Skipped unless the Oracle container is running. Connects in python-oracledb thin
-    mode, which requires no Oracle client libraries. The PDB service name defaults to
-    23ai Free's ``FREEPDB1`` and is overridden to ``XEPDB1`` for the XE matrix entries.
+    Requires the Oracle container (see tests/integration/docker/) to be running; an
+    unreachable container fails loudly rather than skipping, so a container that failed
+    to start is never silently passed over. Connects in python-oracledb thin mode,
+    which requires no Oracle client libraries. The PDB service name defaults to 23ai
+    Free's ``FREEPDB1`` and is overridden to ``XEPDB1`` for the XE matrix entries.
 
     Returns:
         Table: The transactions table on the Oracle backend.
     """
-    _skip_unless_container_running(_ORACLE_HOST, _ORACLE_PORT, "Oracle")
-
+    _require_container_reachable(_ORACLE_HOST, _ORACLE_PORT, "Oracle")
     connection = _connect_with_retry(
         lambda: ibis.oracle.connect(
             host=_ORACLE_HOST,
