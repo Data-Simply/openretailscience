@@ -448,7 +448,19 @@ class TestInputValidation:
         with pytest.raises(TypeError, match="must be a number"):
             obj.purchases_percentile(True)
 
+    @pytest.mark.parametrize("make", [MAKE_PURCHASES, MAKE_DAYS], ids=["purchases", "days_between"])
+    def test_percentile_rejects_non_numeric(self, transactions_df, make):
+        """A non-numeric percentile (e.g. a string) is rejected with the same clear error."""
+        obj = make(transactions_df)
+        with pytest.raises(TypeError, match="must be a number"):
+            obj.purchases_percentile("high")
+
     def test_churn_period_rejects_bool(self, transactions_df):
         """A bool churn_period is rejected, not silently treated as a 1-day window."""
         with pytest.raises(TypeError, match="must be a number"):
             TransactionChurn(transactions_df, churn_period=True)
+
+    def test_churn_period_rejects_non_numeric(self, transactions_df):
+        """A non-numeric churn_period (e.g. a string) is rejected with the same clear error."""
+        with pytest.raises(TypeError, match="must be a number"):
+            TransactionChurn(transactions_df, churn_period="high")
