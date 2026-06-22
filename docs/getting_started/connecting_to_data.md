@@ -359,6 +359,23 @@ transactions = con.table("transactions")
 Identify the database by its `service_name`, its `sid`, or a full `dsn`. Supply only one of these. If your tables live
 in another user's schema, pass that schema as the `database` argument: `con.table("transactions", database="SALES")`.
 
+On Oracle releases before 23c, `con.table("transactions")` can fail with `ORA-00923: FROM keyword not found where
+expected`: Ibis introspects the table's schema with a query that only compiles on 23c and later. Reference the table
+with `con.sql()` and pass the schema explicitly instead, which skips introspection:
+
+```python
+transactions = con.sql(
+    "SELECT * FROM transactions",
+    schema={
+        "transaction_id": "int64",
+        "transaction_date": "date",
+        "customer_id": "int64",
+        "unit_spend": "float64",
+        # ...one entry per column you select
+    },
+)
+```
+
 ## Filter before you analyze
 
 Filtering your data before analysis is the expected workflow, not an optimization you add later. Most business
