@@ -301,6 +301,8 @@ class TransactionChurn:
             max_day=df[cols.transaction_date].truncate("D").max(),
         ).execute()
         self.n_unique_customers = int(stats["n_unique_customers"].iloc[0])
+        # Empty input: max_day is NaT, so churn_boundary is NaT — harmless, because _calculate
+        # then operates on zero rows and returns an empty churn table (see the empty-input test).
         churn_boundary = stats["max_day"].iloc[0] - datetime.timedelta(days=churn_period)
         self.table = self._calculate(df, cols.customer_id, cols.transaction_date, churn_boundary)
 
