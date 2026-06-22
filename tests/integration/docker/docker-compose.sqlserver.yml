@@ -1,18 +1,18 @@
 # SQL Server backend for integration tests.
 #
-# The image tag selects the version under test; the matrix in
-# .github/workflows/sqlserver-integration.yml overrides MSSQL_IMAGE to cover every
-# free (Developer edition) release since 2019. Defaults make `docker compose up`
-# work with no extra configuration for local runs.
+# Credentials are fixed throwaway values that match the constants in ../conftest.py.
+# Only the image tag is overridable: the matrix in
+# .github/workflows/sqlserver-integration.yml sets MSSQL_IMAGE to cover every free
+# (Developer edition) release since 2019. `docker compose up` works with no config.
 services:
   sqlserver:
     image: ${MSSQL_IMAGE:-mcr.microsoft.com/mssql/server:2022-latest}
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-orsTest!Passw0rd}
+      MSSQL_SA_PASSWORD: "orsTest!Passw0rd"
       MSSQL_PID: Developer
     ports:
-      - "${MSSQL_PORT:-1433}:1433"
+      - "1433:1433"
     healthcheck:
       # The Ubuntu-based image ships bash; /dev/tcp confirms the listener is up.
       # conftest retries the login while the engine finishes initializing.

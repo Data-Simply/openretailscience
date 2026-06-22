@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import socket
 import time
 from typing import TYPE_CHECKING
 
@@ -18,11 +19,28 @@ if TYPE_CHECKING:
 
 _TRANSACTIONS_PARQUET = "data/transactions.parquet"
 _TRANSACTIONS_TABLE_NAME = "transactions"
-_DEFAULT_MSSQL_ODBC_DRIVER = "ODBC Driver 18 for SQL Server"
-_DEFAULT_MSSQL_PORT = 1433
-_DEFAULT_ORACLE_PORT = 1521
+
+# Connection details for the local throwaway containers defined in
+# tests/integration/docker/. These are fixed, non-secret values that must match the
+# corresponding docker-compose files; they are intentionally hardcoded rather than
+# configured via environment variables. The only per-version knob is the Oracle PDB
+# service name (XEPDB1 for XE, FREEPDB1 for 23ai Free), which the CI matrix overrides.
+_MSSQL_HOST = "localhost"
+_MSSQL_PORT = 1433
+_MSSQL_USER = "sa"
+_MSSQL_PASSWORD = "orsTest!Passw0rd"  # noqa: S105 - local throwaway container credential
+_MSSQL_DATABASE = "openretailscience"
+_MSSQL_ODBC_DRIVER = "ODBC Driver 18 for SQL Server"
+
+_ORACLE_HOST = "localhost"
+_ORACLE_PORT = 1521
+_ORACLE_USER = "ors"
+_ORACLE_PASSWORD = "orsTestApp1"  # noqa: S105 - local throwaway container credential
+_DEFAULT_ORACLE_SERVICE_NAME = "FREEPDB1"
+
 # Containers accept TCP connections before the engine is ready to authenticate,
 # so connection attempts are retried for a short window while the database starts.
+_PORT_PROBE_TIMEOUT_SECONDS = 1.0
 _CONNECT_MAX_ATTEMPTS = 30
 _CONNECT_RETRY_SECONDS = 2.0
 
@@ -34,6 +52,25 @@ def _read_transactions() -> pd.DataFrame:
         pd.DataFrame: The transactions fixture data loaded from parquet.
     """
     return pd.read_parquet(_TRANSACTIONS_PARQUET)
+
+
+def _skip_unless_container_running(host: str, port: int, name: str) -> None:
+    """Skip the test unless a container is accepting connections on host:port.
+
+    This keeps the default ``pytest tests/integration`` run fast: the backend is
+    skipped instantly when its container is not up, rather than waiting on connection
+    timeouts.
+
+    Args:
+        host: Host the container is expected to listen on.
+        port: Port the container is expected to listen on.
+        name: Human-readable backend name used in the skip message.
+    """
+    try:
+        with socket.create_connection((host, port), timeout=_PORT_PROBE_TIMEOUT_SECONDS):
+            return
+    except OSError:
+        pytest.skip(f"{name} container not reachable at {host}:{port}; start it with docker compose first")
 
 
 def _connect_with_retry(connect: Callable[[], BaseBackend]) -> BaseBackend:
@@ -77,46 +114,37 @@ def _seed_transactions(connection: BaseBackend) -> Table:
 def _mssql_transactions_table() -> Table:
     """Seed transactions into a containerized SQL Server backend once per session.
 
-    The fixture is skipped unless ``MSSQL_HOST`` is set, so the default local and
-    cloud-backend test runs are unaffected. It creates the target database if it does
-    not already exist, then loads the sample data into it.
+    Skipped unless the SQL Server container is running. Creates the target database if
+    it does not already exist, then loads the sample data into it.
 
     Returns:
         Table: The transactions table on the SQL Server backend.
     """
-    host = os.environ.get("MSSQL_HOST")
-    if host is None:
-        pytest.skip("SQL Server integration backend is not configured (set MSSQL_HOST)")
-
-    port = int(os.environ.get("MSSQL_PORT", str(_DEFAULT_MSSQL_PORT)))
-    user = os.environ["MSSQL_USER"]
-    password = os.environ["MSSQL_PASSWORD"]
-    database = os.environ["MSSQL_DATABASE"]
-    driver = os.environ.get("MSSQL_ODBC_DRIVER", _DEFAULT_MSSQL_ODBC_DRIVER)
+    _skip_unless_container_running(_MSSQL_HOST, _MSSQL_PORT, "SQL Server")
 
     admin = _connect_with_retry(
         lambda: ibis.mssql.connect(
-            host=host,
-            port=port,
-            user=user,
-            password=password,
+            host=_MSSQL_HOST,
+            port=_MSSQL_PORT,
+            user=_MSSQL_USER,
+            password=_MSSQL_PASSWORD,
             database="master",
-            driver=driver,
+            driver=_MSSQL_ODBC_DRIVER,
             TrustServerCertificate="yes",
             autocommit=True,
         ),
     )
-    if database not in admin.list_catalogs():
-        admin.create_catalog(database)
+    if _MSSQL_DATABASE not in admin.list_catalogs():
+        admin.create_catalog(_MSSQL_DATABASE)
     admin.disconnect()
 
     connection = ibis.mssql.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-        database=database,
-        driver=driver,
+        host=_MSSQL_HOST,
+        port=_MSSQL_PORT,
+        user=_MSSQL_USER,
+        password=_MSSQL_PASSWORD,
+        database=_MSSQL_DATABASE,
+        driver=_MSSQL_ODBC_DRIVER,
         TrustServerCertificate="yes",
     )
     return _seed_transactions(connection)
@@ -126,24 +154,22 @@ def _mssql_transactions_table() -> Table:
 def _oracle_transactions_table() -> Table:
     """Seed transactions into a containerized Oracle backend once per session.
 
-    The fixture is skipped unless ``ORACLE_HOST`` is set, so the default local and
-    cloud-backend test runs are unaffected. It connects in python-oracledb thin mode,
-    which requires no Oracle client libraries.
+    Skipped unless the Oracle container is running. Connects in python-oracledb thin
+    mode, which requires no Oracle client libraries. The PDB service name defaults to
+    23ai Free's ``FREEPDB1`` and is overridden to ``XEPDB1`` for the XE matrix entries.
 
     Returns:
         Table: The transactions table on the Oracle backend.
     """
-    host = os.environ.get("ORACLE_HOST")
-    if host is None:
-        pytest.skip("Oracle integration backend is not configured (set ORACLE_HOST)")
+    _skip_unless_container_running(_ORACLE_HOST, _ORACLE_PORT, "Oracle")
 
     connection = _connect_with_retry(
         lambda: ibis.oracle.connect(
-            host=host,
-            port=int(os.environ.get("ORACLE_PORT", str(_DEFAULT_ORACLE_PORT))),
-            user=os.environ["ORACLE_USER"],
-            password=os.environ["ORACLE_PASSWORD"],
-            service_name=os.environ["ORACLE_SERVICE_NAME"],
+            host=_ORACLE_HOST,
+            port=_ORACLE_PORT,
+            user=_ORACLE_USER,
+            password=_ORACLE_PASSWORD,
+            service_name=os.environ.get("ORACLE_SERVICE_NAME", _DEFAULT_ORACLE_SERVICE_NAME),
         ),
     )
     return _seed_transactions(connection)

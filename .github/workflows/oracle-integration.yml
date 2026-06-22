@@ -25,14 +25,6 @@ jobs:
             oracle-service: XEPDB1
           - oracle-image: gvenzl/oracle-free:23-slim-faststart
             oracle-service: FREEPDB1
-    env:
-      ORACLE_IMAGE: ${{ matrix.oracle-image }}
-      ORACLE_HOST: localhost
-      ORACLE_PORT: "1521"
-      ORACLE_USER: ors
-      ORACLE_PASSWORD: orsTestApp1
-      ORACLE_SYS_PASSWORD: orsTestSys1
-      ORACLE_SERVICE_NAME: ${{ matrix.oracle-service }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -53,10 +45,14 @@ jobs:
           uv sync --locked
 
       - name: Start Oracle (${{ matrix.oracle-image }})
+        env:
+          ORACLE_IMAGE: ${{ matrix.oracle-image }}
         run: |
           docker compose -f tests/integration/docker/docker-compose.oracle.yml up -d --wait --wait-timeout 600
 
       - name: Run Integration Tests
+        env:
+          ORACLE_SERVICE_NAME: ${{ matrix.oracle-service }}
         run: |
           uv run pytest tests/integration -k "oracle" -v
 

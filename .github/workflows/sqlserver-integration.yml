@@ -21,14 +21,6 @@ jobs:
           - mcr.microsoft.com/mssql/server:2019-latest
           - mcr.microsoft.com/mssql/server:2022-latest
           - mcr.microsoft.com/mssql/server:2025-latest
-    env:
-      MSSQL_IMAGE: ${{ matrix.mssql-image }}
-      MSSQL_HOST: localhost
-      MSSQL_PORT: "1433"
-      MSSQL_USER: sa
-      MSSQL_PASSWORD: orsTest!Passw0rd
-      MSSQL_DATABASE: openretailscience
-      MSSQL_ODBC_DRIVER: ODBC Driver 18 for SQL Server
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -60,6 +52,8 @@ jobs:
           sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc unixodbc-dev
 
       - name: Start SQL Server (${{ matrix.mssql-image }})
+        env:
+          MSSQL_IMAGE: ${{ matrix.mssql-image }}
         run: |
           docker compose -f tests/integration/docker/docker-compose.sqlserver.yml up -d --wait --wait-timeout 300
 
