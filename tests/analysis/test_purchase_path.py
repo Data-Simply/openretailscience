@@ -1,5 +1,7 @@
 """Tests for the Purchase Path analysis module."""
 
+import sys
+
 import ibis
 import pandas as pd
 import pandas.testing as pdt
@@ -13,317 +15,282 @@ cols = ColumnHelper()
 CATEGORY_COL = "category"
 
 
+def _transactions(rows: list[tuple[int, int, str, str]]) -> pd.DataFrame:
+    """Build a transactions frame from (customer_id, transaction_id, date, category) rows.
+
+    Every row is one single-product, single-category basket worth 50 in spend, which keeps
+    the fixtures focused on the category sequence rather than basket composition.
+    """
+    return pd.DataFrame(
+        {
+            cols.customer_id: [r[0] for r in rows],
+            cols.transaction_id: [r[1] for r in rows],
+            cols.transaction_date: [r[2] for r in rows],
+            cols.product_id: list(range(1, len(rows) + 1)),
+            cols.unit_spend: [50.0] * len(rows),
+            CATEGORY_COL: [r[3] for r in rows],
+        },
+    )
+
+
 class TestPurchasePath:
-    """Tests for the PurchasePath class."""
+    """Tests for the PurchasePath transition model."""
 
     @pytest.fixture
-    def journeys_df(self) -> pd.DataFrame:
-        """Six customers with distinct category-progression journeys.
+    def transitions_df(self) -> pd.DataFrame:
+        """Four customers whose first-category acquisitions diverge after womens.
 
-        Each transaction holds two line items in a single category, so every basket
-        is a single category. Customers 4 and 6 only make two trips, so they fall
-        below the default ``min_transactions=3`` and drop out.
+        - C1: womens -> kids -> mens
+        - C2: womens -> kids
+        - C3: womens -> mens
+        - C4: womens -> kids
 
-        - C1: womens -> kids  -> mens
-        - C2: womens -> kids  -> kids   (basket 3 introduces no new category)
-        - C3: womens -> kids  -> mens
-        - C4: womens -> kids            (two trips only)
-        - C5: mens   -> womens -> kids
-        - C6: mens   -> womens          (two trips only)
+        So of the four customers who move on from womens, three go to kids and one to mens.
         """
-        customer_id = [1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6]
-        transaction_id = [
-            101,
-            101,
-            102,
-            102,
-            103,
-            103,
-            201,
-            201,
-            202,
-            202,
-            203,
-            203,
-            301,
-            301,
-            302,
-            302,
-            303,
-            303,
-            401,
-            401,
-            402,
-            402,
-            501,
-            501,
-            502,
-            502,
-            503,
-            503,
-            601,
-            601,
-            602,
-            602,
-        ]
-        transaction_date = [
-            "2024-01-01",
-            "2024-01-01",
-            "2024-01-10",
-            "2024-01-10",
-            "2024-01-20",
-            "2024-01-20",
-            "2024-01-02",
-            "2024-01-02",
-            "2024-01-11",
-            "2024-01-11",
-            "2024-01-21",
-            "2024-01-21",
-            "2024-01-03",
-            "2024-01-03",
-            "2024-01-12",
-            "2024-01-12",
-            "2024-01-22",
-            "2024-01-22",
-            "2024-01-04",
-            "2024-01-04",
-            "2024-01-13",
-            "2024-01-13",
-            "2024-01-05",
-            "2024-01-05",
-            "2024-01-14",
-            "2024-01-14",
-            "2024-01-23",
-            "2024-01-23",
-            "2024-01-06",
-            "2024-01-06",
-            "2024-01-15",
-            "2024-01-15",
-        ]
-        category = [
-            "womens",
-            "womens",
-            "kids",
-            "kids",
-            "mens",
-            "mens",
-            "womens",
-            "womens",
-            "kids",
-            "kids",
-            "kids",
-            "kids",
-            "womens",
-            "womens",
-            "kids",
-            "kids",
-            "mens",
-            "mens",
-            "womens",
-            "womens",
-            "kids",
-            "kids",
-            "mens",
-            "mens",
-            "womens",
-            "womens",
-            "kids",
-            "kids",
-            "mens",
-            "mens",
-            "womens",
-            "womens",
-        ]
-        return pd.DataFrame(
-            {
-                cols.customer_id: customer_id,
-                cols.transaction_id: transaction_id,
-                cols.transaction_date: transaction_date,
-                cols.product_id: list(range(1, 33)),
-                cols.unit_spend: [50.0] * 32,
-                CATEGORY_COL: category,
-            },
+        return _transactions(
+            [
+                (1, 101, "2024-01-01", "womens"),
+                (1, 102, "2024-01-10", "kids"),
+                (1, 103, "2024-01-20", "mens"),
+                (2, 201, "2024-01-02", "womens"),
+                (2, 202, "2024-01-11", "kids"),
+                (3, 301, "2024-01-03", "womens"),
+                (3, 302, "2024-01-12", "mens"),
+                (4, 401, "2024-01-04", "womens"),
+                (4, 402, "2024-01-13", "kids"),
+            ],
         )
 
-    def test_first_appearance_paths_and_customer_share(self, journeys_df):
-        """Builds first-appearance paths and the share of customers on each one.
+    def test_first_order_transition_probabilities(self, transitions_df):
+        """Aggregates consecutive first-acquisitions into from->to transition probabilities.
 
-        Customers 4 and 6 have only two baskets and are excluded by the default
-        ``min_transactions=3``. The four eligible customers (1, 2, 3, 5) form three
-        distinct paths. ``pct_customers`` is each path's share of those four.
+        Of the four customers who progress past womens, three next acquire kids (0.75) and
+        one next acquires mens (0.25). The single customer who progresses past kids goes to
+        mens (1.0). mens is terminal for everyone, so it never appears as a source.
         """
-        result = PurchasePath(journeys_df, category_col=CATEGORY_COL).df
+        result = PurchasePath(transitions_df, category_col=CATEGORY_COL).df
 
         expected = pd.DataFrame(
             {
-                "basket_1": ["womens", "mens", "womens"],
-                "basket_2": ["kids", "womens", "kids"],
-                "basket_3": ["mens", "kids", ""],
-                "customer_count": [2, 1, 1],
-                "pct_customers": [0.5, 0.25, 0.25],
+                "from_category": ["kids", "womens", "womens"],
+                "to_category": ["mens", "kids", "mens"],
+                "customer_count": [1, 3, 1],
+                "transition_probability": [1.0, 0.75, 0.25],
             },
         )
         pdt.assert_frame_equal(result, expected)
 
-    def test_basket_three_records_only_newly_introduced_categories(self, journeys_df):
-        """Customer 2 repeats kids in basket 3, so its third position is empty, not 'kids'."""
-        result = PurchasePath(journeys_df, category_col=CATEGORY_COL).df
+    def test_simultaneous_categories_do_not_transition_among_themselves(self):
+        """Categories acquired in the same basket flow to the next event, not to each other."""
+        df = _transactions(
+            [
+                (1, 101, "2024-01-01", "womens"),
+                (1, 101, "2024-01-01", "kids"),
+                (1, 102, "2024-01-10", "mens"),
+            ],
+        )
+        # Two line items share transaction 101, so the customer acquires womens and kids
+        # simultaneously, then mens. product_id must stay unique per line item.
+        df[cols.product_id] = [1, 2, 3]
 
-        c2_path = result[(result["basket_1"] == "womens") & (result["basket_3"] == "")]
-        assert len(c2_path) == 1
-        assert c2_path["basket_2"].to_numpy()[0] == "kids"
-        assert c2_path["customer_count"].to_numpy()[0] == 1
+        result = PurchasePath(df, category_col=CATEGORY_COL).df
 
-    def test_min_customers_filters_rare_paths_without_inflating_share(self, journeys_df):
-        """Requiring 2+ customers keeps only the womens->kids->mens path.
+        pairs = set(zip(result["from_category"], result["to_category"], strict=True))
+        assert pairs == {("womens", "mens"), ("kids", "mens")}
+        # No spurious order is imposed between the two simultaneously-acquired categories.
+        assert ("womens", "kids") not in pairs
+        assert ("kids", "womens") not in pairs
 
-        Its share stays 0.5 (2 of 4 eligible customers) rather than rescaling to 1.0,
-        because the denominator is all eligible customers, not the surviving paths.
+    def test_min_customers_filters_rare_transitions_without_inflating_probability(self, transitions_df):
+        """Requiring 2+ customers drops the womens->mens transition but keeps probabilities honest.
+
+        womens->kids stays at 0.75 (3 of the 4 customers who left womens), not rescaled to 1.0,
+        because the denominator is all customers who progressed past womens.
         """
-        result = PurchasePath(journeys_df, category_col=CATEGORY_COL, min_customers=2).df
+        result = PurchasePath(transitions_df, category_col=CATEGORY_COL, min_customers=2).df
 
         expected = pd.DataFrame(
             {
-                "basket_1": ["womens"],
-                "basket_2": ["kids"],
-                "basket_3": ["mens"],
-                "customer_count": [2],
-                "pct_customers": [0.5],
+                "from_category": ["womens"],
+                "to_category": ["kids"],
+                "customer_count": [3],
+                "transition_probability": [0.75],
             },
         )
         pdt.assert_frame_equal(result, expected)
 
-    def test_max_depth_truncates_later_baskets(self, journeys_df):
-        """With max_depth=2 only the first two trips count, so mens never appears.
+    def test_max_depth_truncates_later_acquisitions(self, transitions_df):
+        """Capping depth at 2 removes the kids->mens transition from customer 1's third basket."""
+        result = PurchasePath(transitions_df, category_col=CATEGORY_COL, max_depth=2).df
 
-        Capping depth at 2 means basket 3 (where mens first appears for C1/C3) is
-        dropped, collapsing all four eligible customers onto womens->kids and
-        mens->womens. C5's kids (trip 3) is also dropped.
-        """
-        result = PurchasePath(journeys_df, category_col=CATEGORY_COL, max_depth=2, min_transactions=2).df
+        pairs = set(zip(result["from_category"], result["to_category"], strict=True))
+        assert ("kids", "mens") not in pairs
+        assert ("womens", "kids") in pairs
+        assert ("womens", "mens") in pairs
 
-        # No basket_3 column at all, and the two surviving 2-step paths cover all 6 customers:
-        # womens->kids (C1-C4) and mens->womens (C5, C6).
+    def test_exclude_returns_drops_negative_spend_basket(self):
+        """A returns-only basket is removed, so its category never enters a transition."""
+        df = _transactions(
+            [
+                (1, 101, "2024-01-01", "womens"),
+                (1, 102, "2024-01-10", "kids"),
+                (1, 103, "2024-01-20", "mens"),
+            ],
+        )
+        df[cols.unit_spend] = [50.0, -25.0, 90.0]
+
+        result = PurchasePath(df, category_col=CATEGORY_COL).df
+
+        # The kids basket (only a return) is dropped, leaving a single womens -> mens transition.
         expected = pd.DataFrame(
             {
-                "basket_1": ["womens", "mens"],
-                "basket_2": ["kids", "womens"],
-                "customer_count": [4, 2],
-                "pct_customers": [round(4 / 6, 4), round(2 / 6, 4)],
-            },
-        )
-        pdt.assert_frame_equal(result, expected)
-
-    def test_concatenates_categories_first_appearing_in_same_basket(self):
-        """Two categories introduced in one basket concatenate alphabetically."""
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 1, 1, 1, 1, 1],
-                cols.transaction_id: [101, 101, 102, 102, 103, 103],
-                cols.transaction_date: [
-                    "2024-01-01",
-                    "2024-01-01",
-                    "2024-01-10",
-                    "2024-01-10",
-                    "2024-01-20",
-                    "2024-01-20",
-                ],
-                cols.product_id: [1, 2, 3, 4, 5, 6],
-                cols.unit_spend: [50.0] * 6,
-                CATEGORY_COL: ["mens", "womens", "kids", "kids", "shoes", "shoes"],
-            },
-        )
-
-        result = PurchasePath(df, category_col=CATEGORY_COL, min_transactions=1, min_customers=1).df
-
-        assert result["basket_1"].to_numpy()[0] == "mens,womens"
-        assert result["basket_2"].to_numpy()[0] == "kids"
-        assert result["basket_3"].to_numpy()[0] == "shoes"
-
-    def test_exclude_returns_drops_negative_spend_line_items(self):
-        """Returns (negative unit_spend) are excluded by default so their basket vanishes.
-
-        The kids basket has only a returned line item, so excluding it leaves the
-        customer with womens then mens and no kids anywhere in the path.
-        """
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 1, 1],
-                cols.transaction_id: [101, 102, 103],
-                cols.transaction_date: ["2024-01-01", "2024-01-10", "2024-01-20"],
-                cols.product_id: [1, 2, 3],
-                cols.unit_spend: [50.0, -25.0, 90.0],
-                CATEGORY_COL: ["womens", "kids", "mens"],
-            },
-        )
-
-        result = PurchasePath(df, category_col=CATEGORY_COL, min_transactions=1, min_customers=1).df
-
-        expected = pd.DataFrame(
-            {
-                "basket_1": ["womens"],
-                "basket_2": ["mens"],
+                "from_category": ["womens"],
+                "to_category": ["mens"],
                 "customer_count": [1],
-                "pct_customers": [1.0],
+                "transition_probability": [1.0],
             },
         )
         pdt.assert_frame_equal(result, expected)
 
-    def test_keeping_returns_includes_negative_spend_category(self):
-        """With exclude_returns=False the returned category is retained in the path.
+    def test_keeping_returns_retains_negative_spend_category(self):
+        """With exclude_returns=False the returned category stays in the transition sequence.
 
-        The value floor is relaxed below the -25 basket value so that ``min_basket_value``
-        does not independently drop the returns-only basket, isolating ``exclude_returns``.
+        The value floor is relaxed below the -25 basket so that ``min_basket_value`` does not
+        independently drop the returns-only basket, isolating ``exclude_returns``.
         """
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 1, 1],
-                cols.transaction_id: [101, 102, 103],
-                cols.transaction_date: ["2024-01-01", "2024-01-10", "2024-01-20"],
-                cols.product_id: [1, 2, 3],
-                cols.unit_spend: [50.0, -25.0, 90.0],
-                CATEGORY_COL: ["womens", "kids", "mens"],
-            },
+        df = _transactions(
+            [
+                (1, 101, "2024-01-01", "womens"),
+                (1, 102, "2024-01-10", "kids"),
+                (1, 103, "2024-01-20", "mens"),
+            ],
         )
+        df[cols.unit_spend] = [50.0, -25.0, 90.0]
 
         result = PurchasePath(
             df,
             category_col=CATEGORY_COL,
-            min_transactions=1,
-            min_customers=1,
             min_basket_value=-100.0,
             exclude_returns=False,
         ).df
 
-        assert result["basket_1"].to_numpy()[0] == "womens"
-        assert result["basket_2"].to_numpy()[0] == "kids"
-        assert result["basket_3"].to_numpy()[0] == "mens"
+        pairs = set(zip(result["from_category"], result["to_category"], strict=True))
+        assert pairs == {("womens", "kids"), ("kids", "mens")}
 
-    def test_ibis_table_input_matches_dataframe_input(self, journeys_df):
-        """An ibis memtable input yields the same result as the pandas DataFrame."""
-        from_pandas = PurchasePath(journeys_df, category_col=CATEGORY_COL).df
-        from_ibis = PurchasePath(ibis.memtable(journeys_df), category_col=CATEGORY_COL).df
+    def test_no_eligible_customers_returns_empty(self, transitions_df):
+        """When the transaction filter excludes everyone, an empty four-column frame is returned."""
+        result = PurchasePath(transitions_df, category_col=CATEGORY_COL, min_transactions=99).df
+
+        assert len(result) == 0
+        assert list(result.columns) == ["from_category", "to_category", "customer_count", "transition_probability"]
+
+    def test_ibis_table_input_matches_dataframe_input(self, transitions_df):
+        """An ibis memtable input yields the same transitions as the pandas DataFrame."""
+        from_pandas = PurchasePath(transitions_df, category_col=CATEGORY_COL).df
+        from_ibis = PurchasePath(ibis.memtable(transitions_df), category_col=CATEGORY_COL).df
 
         pdt.assert_frame_equal(from_ibis, from_pandas)
 
-    def test_no_eligible_customers_returns_empty_result(self, journeys_df):
-        """When the filters exclude everyone, an empty two-column frame is returned."""
-        result = PurchasePath(journeys_df, category_col=CATEGORY_COL, min_transactions=99).df
+    def test_customers_with_a_single_acquisition_yield_no_transitions(self):
+        """Customers who only ever acquire one category produce an empty transition table."""
+        df = _transactions(
+            [
+                (1, 101, "2024-01-01", "womens"),
+                (1, 102, "2024-01-10", "womens"),
+                (2, 201, "2024-01-02", "kids"),
+                (2, 202, "2024-01-11", "kids"),
+            ],
+        )
+
+        result = PurchasePath(df, category_col=CATEGORY_COL).df
 
         assert len(result) == 0
-        assert list(result.columns) == ["customer_count", "pct_customers"]
+        assert list(result.columns) == ["from_category", "to_category", "customer_count", "transition_probability"]
 
-    def test_all_paths_below_min_customers_returns_empty_result(self, journeys_df):
-        """Eligible customers exist but no path is common enough to survive min_customers."""
-        # The most common path (womens->kids->mens) has only 2 customers, so requiring 3 drops all.
-        result = PurchasePath(journeys_df, category_col=CATEGORY_COL, min_customers=3).df
+    def test_all_transitions_below_min_customers_returns_empty(self, transitions_df):
+        """When no transition is common enough, an empty four-column frame is returned."""
+        result = PurchasePath(transitions_df, category_col=CATEGORY_COL, min_customers=99).df
 
         assert len(result) == 0
-        assert list(result.columns) == ["customer_count", "pct_customers"]
+        assert list(result.columns) == ["from_category", "to_category", "customer_count", "transition_probability"]
 
-    def test_missing_required_column_raises(self, journeys_df):
+    def test_dominant_journeys_traces_most_likely_progression(self, transitions_df):
+        """The greedy walk from the womens entry yields womens -> kids -> mens at 0.75.
+
+        From womens, kids is the likeliest next (0.75); from kids, mens is certain (1.0); mens
+        is terminal. The journey likelihood is the product, 0.75 * 1.0 = 0.75.
+        """
+        result = PurchasePath(transitions_df, category_col=CATEGORY_COL).dominant_journeys()
+
+        expected = pd.DataFrame(
+            {
+                "journey": ["womens -> kids -> mens"],
+                "probability": [0.75],
+            },
+        )
+        pdt.assert_frame_equal(result, expected)
+
+    def test_dominant_journeys_empty_when_no_transitions(self):
+        """Single-acquisition customers produce no journeys (empty two-column frame)."""
+        df = _transactions(
+            [
+                (1, 101, "2024-01-01", "womens"),
+                (1, 102, "2024-01-10", "womens"),
+            ],
+        )
+
+        result = PurchasePath(df, category_col=CATEGORY_COL).dominant_journeys()
+
+        assert len(result) == 0
+        assert list(result.columns) == ["journey", "probability"]
+
+    def test_to_networkx_builds_weighted_directed_graph(self, transitions_df):
+        """to_networkx exposes the transitions as a DiGraph carrying edge weights."""
+        nx = pytest.importorskip("networkx")
+        expected_probability = 0.75
+        expected_count = 3
+
+        graph = PurchasePath(transitions_df, category_col=CATEGORY_COL).to_networkx()
+
+        assert isinstance(graph, nx.DiGraph)
+        assert set(graph.edges) == {("womens", "kids"), ("womens", "mens"), ("kids", "mens")}
+        assert graph["womens"]["kids"]["transition_probability"] == expected_probability
+        assert graph["womens"]["kids"]["customer_count"] == expected_count
+
+    def test_to_networkx_without_networkx_raises_helpful_error(self, transitions_df, monkeypatch):
+        """When networkx is unavailable, to_networkx raises a clear, actionable ImportError."""
+        monkeypatch.setitem(sys.modules, "networkx", None)
+
+        with pytest.raises(ImportError, match="to_networkx requires networkx"):
+            PurchasePath(transitions_df, category_col=CATEGORY_COL).to_networkx()
+
+    def test_dominant_journeys_only_follows_transitions_meeting_min_customers(self):
+        """Journeys ignore entry categories whose onward transitions were filtered out.
+
+        Both customers share the mens -> kids transition (2 customers) but reach mens from
+        different, single-customer entries. With min_customers=2 only mens -> kids survives,
+        and since neither entry category (womens, shoes) has a surviving onward edge, there is
+        no journey to report.
+        """
+        df = _transactions(
+            [
+                (1, 101, "2024-01-01", "womens"),
+                (1, 102, "2024-01-10", "mens"),
+                (1, 103, "2024-01-20", "kids"),
+                (2, 201, "2024-01-02", "shoes"),
+                (2, 202, "2024-01-11", "mens"),
+                (2, 203, "2024-01-21", "kids"),
+            ],
+        )
+
+        result = PurchasePath(df, category_col=CATEGORY_COL, min_customers=2).dominant_journeys()
+
+        assert len(result) == 0
+        assert list(result.columns) == ["journey", "probability"]
+
+    def test_missing_required_column_raises(self, transitions_df):
         """Dropping a required column raises a ValueError naming the missing column."""
-        incomplete = journeys_df.drop(columns=[cols.product_id])
+        incomplete = transitions_df.drop(columns=[cols.product_id])
 
         with pytest.raises(ValueError, match="product_id"):
             PurchasePath(incomplete, category_col=CATEGORY_COL)
@@ -338,7 +305,7 @@ class TestPurchasePath:
             ("min_transactions", 2.5),
         ],
     )
-    def test_invalid_filter_parameters_raise(self, journeys_df, param, value):
+    def test_invalid_filter_parameters_raise(self, transitions_df, param, value):
         """Non-positive or non-integer filter parameters are rejected."""
         with pytest.raises((ValueError, TypeError)):
-            PurchasePath(journeys_df, category_col=CATEGORY_COL, **{param: value})
+            PurchasePath(transitions_df, category_col=CATEGORY_COL, **{param: value})

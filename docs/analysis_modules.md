@@ -771,27 +771,31 @@ cr.df.sort_values(["product_category", "composite_rank"])
 
 <div class="clear" markdown>
 
-The Purchase Path module reveals the order in which customers first buy from each product
-category. For every customer it sorts baskets in time and records the basket in which each
-category *first appears*, then groups customers who share the same progression. This turns
-raw transactions into readable journeys such as `womens → kids → mens`.
+The Purchase Path module answers a practical retail question: given the categories customers
+already buy, which category do they tend to buy next? For every customer it sorts baskets in
+time and records the basket in which each category *first appears*, then aggregates the
+consecutive acquisitions across all customers into first-order category transitions.
 
-A position is empty when a trip introduced no new category (the customer only repeated
-categories they had already bought), so the path captures category *discovery* rather than
-every repeat purchase.
+The result is an aggregate tendency across the customer base ("women's buyers tend to buy
+menswear next"), not a per-customer prediction. Categories bought in the same basket are
+treated as acquired simultaneously — they impose no order on each other and each transitions
+to whatever the customer acquires next — so the analysis behaves sensibly whether baskets are
+category-rich or single-category.
 
 **Real-World Applications:**
 
-- **Cross-Sell Sequencing**: Target the category a customer is statistically likely to add next
-- **Onboarding**: Understand which entry category leads to the broadest baskets
+- **Cross-Sell Sequencing**: Surface the category a customer is statistically likely to add next
+- **Onboarding**: Understand which entry category leads customers to broaden fastest
 - **Category Management**: Plan adjacencies and promotions around natural progressions
 
 **Reading the Output:**
 
-- `basket_1 … basket_N`: the category (or comma-joined categories) first bought at each step
-- `customer_count`: how many customers followed the exact path
-- `pct_customers`: that count as a share of all analysed customers, so `0.4` means 40% of
-  analysed customers took the path
+- `from_category` → `to_category`: a first-order transition between consecutive acquisitions
+- `customer_count`: how many customers made that transition
+- `transition_probability`: of the customers who acquired `from_category` and went on to buy
+  something new next, the share whose next new category was `to_category`. Probabilities for a
+  given `from_category` need not sum to one, because a customer's next basket can introduce
+  several categories at once.
 
 </div>
 
@@ -802,36 +806,55 @@ import pandas as pd
 from openretailscience.analysis.purchase_path import PurchasePath
 
 df = pd.DataFrame({
-    "customer_id": [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5],
-    "transaction_id": [101, 102, 103, 201, 202, 203, 301, 302, 303, 401, 402, 403, 501, 502, 503],
+    "customer_id": [1, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6],
+    "transaction_id": [101, 102, 103, 201, 202, 301, 302, 401, 402, 403, 501, 502, 503, 601, 602],
     "transaction_date": [
         "2024-01-01", "2024-01-10", "2024-01-20",
-        "2024-01-02", "2024-01-11", "2024-01-21",
-        "2024-01-03", "2024-01-12", "2024-01-22",
+        "2024-01-02", "2024-01-11",
+        "2024-01-03", "2024-01-12",
         "2024-01-04", "2024-01-13", "2024-01-23",
         "2024-01-05", "2024-01-14", "2024-01-24",
+        "2024-01-06", "2024-01-15",
     ],
     "product_id": range(1, 16),
     "unit_spend": [50.0] * 15,
     "category": [
         "womens", "kids", "mens",
-        "womens", "kids", "kids",
+        "womens", "kids",
+        "womens", "mens",
         "womens", "kids", "mens",
         "mens", "womens", "kids",
-        "mens", "womens", "womens",
+        "mens", "womens",
     ],
 })
 
-pp = PurchasePath(df, category_col="category", min_transactions=3)
+pp = PurchasePath(df, category_col="category")
 pp.df
 ```
 
-| basket_1 | basket_2 | basket_3 | customer_count | pct_customers |
-|:---------|:---------|:---------|---------------:|--------------:|
-| womens   | kids     | mens     |              2 |           0.4 |
-| mens     | womens   |          |              1 |           0.2 |
-| mens     | womens   | kids     |              1 |           0.2 |
-| womens   | kids     |          |              1 |           0.2 |
+| from_category | to_category | customer_count | transition_probability |
+|:--------------|:------------|---------------:|-----------------------:|
+| kids          | mens        |              2 |                    1.0 |
+| mens          | womens      |              2 |                    1.0 |
+| womens        | kids        |              4 |                    0.8 |
+| womens        | mens        |              1 |                    0.2 |
+
+The transition table is the edge list of a directed graph. `dominant_journeys()` walks it
+greedily from each entry category to surface the most-likely end-to-end progressions, where
+`probability` is the product of the transitions taken:
+
+```python
+pp.dominant_journeys()
+```
+
+| journey                | probability |
+|:-----------------------|------------:|
+| mens -> womens -> kids |         0.8 |
+| womens -> kids -> mens |         0.8 |
+
+For richer graph analysis (centrality, path-finding, drawing), `to_networkx()` returns the
+transitions as a `networkx.DiGraph` with `transition_probability` and `customer_count` edge
+attributes (requires the optional `networkx` package).
 
 ## Utils
 
