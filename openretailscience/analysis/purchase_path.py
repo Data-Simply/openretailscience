@@ -59,6 +59,28 @@ _MIN_JOURNEY_LENGTH = 2
 _JOURNEY_SEPARATOR = " -> "
 
 
+def _empty_transitions() -> pd.DataFrame:
+    """Empty transition table carrying the same column dtypes as a populated result."""
+    return pd.DataFrame(
+        {
+            "from_category": pd.Series(dtype="object"),
+            "to_category": pd.Series(dtype="object"),
+            "customer_count": pd.Series(dtype="int64"),
+            "transition_probability": pd.Series(dtype="float64"),
+        },
+    )
+
+
+def _empty_journeys() -> pd.DataFrame:
+    """Empty journeys table carrying the same column dtypes as a populated result."""
+    return pd.DataFrame(
+        {
+            "journey": pd.Series(dtype="object"),
+            "probability": pd.Series(dtype="float64"),
+        },
+    )
+
+
 class PurchasePath:
     """Models the order in which customers first buy from each product category.
 
@@ -137,6 +159,7 @@ class PurchasePath:
         )
         self._category_col = category_col
         self._min_customers = min_customers
+        self._customer_id = cols.customer_id
 
     @staticmethod
     def _calc_first_appearances(
@@ -199,7 +222,12 @@ class PurchasePath:
             .select([cols.customer_id, cols.transaction_id, "basket_number"])
         )
 
-        line_items = table.join(analysis_baskets, [cols.customer_id, cols.transaction_id])
+        # Uncategorised line items (null category) still count toward basket size and value
+        # above, but they cannot anchor a category transition, so drop them here rather than
+        # let them form a phantom "missing" category node.
+        line_items = table.join(analysis_baskets, [cols.customer_id, cols.transaction_id]).filter(
+            _[category_col].notnull(),  # noqa: PD004 (ibis API, not pandas)
+        )
         first_appearances = line_items.group_by([cols.customer_id, category_col]).aggregate(
             first_basket=_.basket_number.min(),
         )
@@ -222,9 +250,9 @@ class PurchasePath:
         """
         first_df = self._first_appearance_df
         if len(first_df) == 0:
-            return pd.DataFrame(columns=_TRANSITION_COLUMNS)
+            return _empty_transitions()
 
-        cid = ColumnHelper().customer_id
+        cid = self._customer_id
 
         # Collapse to one row per (customer, acquisition event), holding the categories that
         # first appeared together in that basket, then pair each event with the customer's next.
@@ -237,7 +265,7 @@ class PurchasePath:
         events["to_categories"] = events.groupby(cid)["from_categories"].shift(-1)
         events = events.dropna(subset=["to_categories"])
         if len(events) == 0:
-            return pd.DataFrame(columns=_TRANSITION_COLUMNS)
+            return _empty_transitions()
 
         pairs = (
             events[[cid, "from_categories", "to_categories"]]
@@ -245,32 +273,37 @@ class PurchasePath:
             .explode("to_categories")
             .rename(columns={"from_categories": "from_category", "to_categories": "to_category"})
         )
-        pairs["from_category"] = pairs["from_category"].astype(str)
-        pairs["to_category"] = pairs["to_category"].astype(str)
 
-        # Denominator: customers who progressed past each source category (before support filtering).
+        # Denominator: customers who progressed past each source category (before support
+        # filtering). A customer can reach several targets from one source, so distinct
+        # customers (nunique) is required here; each (from, to) pair is unique per customer,
+        # so a plain row count (size) is correct and cheaper below.
         source_customers = pairs.groupby("from_category")[cid].nunique()
 
-        transitions = pairs.groupby(["from_category", "to_category"])[cid].nunique().reset_index(name="customer_count")
-        transitions = transitions[transitions["customer_count"] >= self._min_customers]
-        if len(transitions) == 0:
-            return pd.DataFrame(columns=_TRANSITION_COLUMNS)
-
+        transitions = pairs.groupby(["from_category", "to_category"]).size().reset_index(name="customer_count")
         transitions["transition_probability"] = (
             transitions["customer_count"] / transitions["from_category"].map(source_customers)
         ).round(_ROUND_DECIMALS)
+        transitions = transitions[transitions["customer_count"] >= self._min_customers]
+        if len(transitions) == 0:
+            return _empty_transitions()
+
         return transitions.sort_values(
             ["from_category", "transition_probability", "to_category"],
             ascending=[True, False, True],
-        ).reset_index(drop=True)[list(_TRANSITION_COLUMNS)]
+        ).reset_index(drop=True)[_TRANSITION_COLUMNS]
 
     @functools.cached_property
-    def _entry_categories(self) -> list[str]:
-        """Categories customers acquire in their very first qualifying basket, sorted."""
+    def _entry_categories(self) -> list:
+        """Categories customers acquire in their very first qualifying basket, sorted.
+
+        The category values keep their native dtype (e.g. integer category codes), so the
+        returned list matches the ``from_category`` keys used by :meth:`dominant_journeys`.
+        """
         first_df = self._first_appearance_df
-        cid = ColumnHelper().customer_id
+        cid = self._customer_id
         first_events = first_df[first_df["first_basket"] == first_df.groupby(cid)["first_basket"].transform("min")]
-        return sorted(first_events[self._category_col].astype(str).unique())
+        return sorted(first_events[self._category_col].unique())
 
     def dominant_journeys(self, max_length: int = 10) -> pd.DataFrame:
         """Trace the single most-likely onward journey from each entry category.
@@ -295,7 +328,7 @@ class PurchasePath:
 
         edges = self.df
         if len(edges) == 0:
-            return pd.DataFrame(columns=_JOURNEY_COLUMNS)
+            return _empty_journeys()
 
         best = edges.sort_values(
             ["from_category", "transition_probability", "to_category"],
@@ -314,12 +347,11 @@ class PurchasePath:
                 current = next_category[current]
                 path.append(current)
             if len(path) >= _MIN_JOURNEY_LENGTH:
-                journeys.append(
-                    {"journey": _JOURNEY_SEPARATOR.join(path), "probability": round(probability, _ROUND_DECIMALS)},
-                )
+                journey = _JOURNEY_SEPARATOR.join(str(category) for category in path)
+                journeys.append({"journey": journey, "probability": round(probability, _ROUND_DECIMALS)})
 
         if len(journeys) == 0:
-            return pd.DataFrame(columns=_JOURNEY_COLUMNS)
+            return _empty_journeys()
         return (
             pd.DataFrame(journeys)
             .sort_values(["probability", "journey"], ascending=[False, True])

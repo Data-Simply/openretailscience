@@ -288,6 +288,71 @@ class TestPurchasePath:
         assert len(result) == 0
         assert list(result.columns) == ["journey", "probability"]
 
+    def test_integer_category_codes_keep_their_dtype(self):
+        """Integer category codes stay integers in the output rather than being stringified."""
+        womens, kids, mens = 100, 200, 300
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [1, 1, 1, 2, 2],
+                cols.transaction_id: [101, 102, 103, 201, 202],
+                cols.transaction_date: ["2024-01-01", "2024-01-10", "2024-01-20", "2024-01-02", "2024-01-11"],
+                cols.product_id: [1, 2, 3, 4, 5],
+                cols.unit_spend: [50.0] * 5,
+                CATEGORY_COL: [womens, kids, mens, womens, kids],
+            },
+        )
+
+        pp = PurchasePath(df, category_col=CATEGORY_COL, min_customers=1)
+        result = pp.df
+
+        assert pd.api.types.is_integer_dtype(result["from_category"])
+        assert pd.api.types.is_integer_dtype(result["to_category"])
+        expected = pd.DataFrame(
+            {
+                "from_category": [womens, kids],
+                "to_category": [kids, mens],
+                "customer_count": [2, 1],
+                "transition_probability": [1.0, 1.0],
+            },
+        )
+        pdt.assert_frame_equal(result, expected)
+        # Journey strings still render the integer codes as text.
+        assert pp.dominant_journeys()["journey"].to_numpy()[0] == "100 -> 200 -> 300"
+
+    def test_null_categories_are_excluded_from_transitions(self):
+        """An uncategorised (null) line item does not create a phantom category node."""
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [1, 1, 1, 1],
+                cols.transaction_id: [101, 102, 102, 103],
+                cols.transaction_date: ["2024-01-01", "2024-01-10", "2024-01-10", "2024-01-20"],
+                cols.product_id: [1, 2, 3, 4],
+                cols.unit_spend: [50.0, 50.0, 50.0, 50.0],
+                CATEGORY_COL: ["womens", "kids", None, "mens"],
+            },
+        )
+
+        result = PurchasePath(df, category_col=CATEGORY_COL, min_transactions=1, min_customers=1).df
+
+        expected = pd.DataFrame(
+            {
+                "from_category": ["kids", "womens"],
+                "to_category": ["mens", "kids"],
+                "customer_count": [1, 1],
+                "transition_probability": [1.0, 1.0],
+            },
+        )
+        pdt.assert_frame_equal(result, expected)
+
+    def test_empty_result_keeps_typed_metric_columns(self, transitions_df):
+        """Empty transition/journey results keep int/float metric dtypes for clean concatenation."""
+        empty_transitions = PurchasePath(transitions_df, category_col=CATEGORY_COL, min_customers=99).df
+        empty_journeys = PurchasePath(transitions_df, category_col=CATEGORY_COL, min_customers=99).dominant_journeys()
+
+        assert empty_transitions["customer_count"].dtype == "int64"
+        assert empty_transitions["transition_probability"].dtype == "float64"
+        assert empty_journeys["probability"].dtype == "float64"
+
     def test_missing_required_column_raises(self, transitions_df):
         """Dropping a required column raises a ValueError naming the missing column."""
         incomplete = transitions_df.drop(columns=[cols.product_id])
