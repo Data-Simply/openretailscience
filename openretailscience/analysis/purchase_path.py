@@ -50,25 +50,11 @@ from openretailscience.options import ColumnHelper
 if TYPE_CHECKING:
     import networkx as nx
 
-# transition_probability is a share in [0, 1]; four places preserves two-decimal percentage precision.
-_ROUND_DECIMALS = 4
 _TRANSITION_COLUMNS = ["from_category", "to_category", "customer_count", "transition_probability"]
 _JOURNEY_COLUMNS = ["journey", "probability"]
 # A journey needs at least one transition (two categories) to be worth reporting.
 _MIN_JOURNEY_LENGTH = 2
 _JOURNEY_SEPARATOR = " -> "
-
-
-def _empty_transitions() -> pd.DataFrame:
-    """Empty transition table carrying the same column dtypes as a populated result."""
-    return pd.DataFrame(
-        {
-            "from_category": pd.Series(dtype="object"),
-            "to_category": pd.Series(dtype="object"),
-            "customer_count": pd.Series(dtype="int64"),
-            "transition_probability": pd.Series(dtype="float64"),
-        },
-    )
 
 
 def _empty_journeys() -> pd.DataFrame:
@@ -93,7 +79,7 @@ class PurchasePath:
     def __init__(
         self,
         df: pd.DataFrame | ibis.Table,
-        category_col: str = "category",
+        category_col: str,
         min_transactions: int = 2,
         min_basket_size: int = 1,
         min_basket_value: float = 0.0,
@@ -106,7 +92,8 @@ class PurchasePath:
         Args:
             df (pd.DataFrame | ibis.Table): Transaction line items containing the customer,
                 transaction, date, product, spend and category columns.
-            category_col (str): Name of the product category column. Defaults to ``"category"``.
+            category_col (str): Name of the product category column. Required, as the category
+                column name is dataset-specific.
             min_transactions (int): Minimum number of qualifying baskets a customer must have
                 to be included. Counted before ``max_depth`` truncation. Defaults to 2 (the
                 minimum needed to observe a transition).
@@ -147,8 +134,14 @@ class PurchasePath:
         ]
         ensure_data_has_columns(df, required_cols)
 
-        self._first_appearance_df = self._calc_first_appearances(
-            df=df,
+        self._category_col = category_col
+        self._min_customers = min_customers
+        self._customer_id = cols.customer_id
+        # Kept as an unexecuted Ibis expression so the (customer, category) intermediate — which
+        # can be in the billions of rows — is never pulled into pandas; only the small final
+        # transition table (bounded by the number of category pairs) is executed in :attr:`df`.
+        self._first_appearances = self._build_first_appearances(
+            table=ensure_ibis_table(df),
             cols=cols,
             category_col=category_col,
             min_transactions=min_transactions,
@@ -157,13 +150,10 @@ class PurchasePath:
             max_depth=max_depth,
             exclude_returns=exclude_returns,
         )
-        self._category_col = category_col
-        self._min_customers = min_customers
-        self._customer_id = cols.customer_id
 
     @staticmethod
-    def _calc_first_appearances(
-        df: pd.DataFrame | ibis.Table,
+    def _build_first_appearances(
+        table: ibis.Table,
         cols: ColumnHelper,
         category_col: str,
         min_transactions: int,
@@ -171,14 +161,15 @@ class PurchasePath:
         min_basket_value: float,
         max_depth: int,
         exclude_returns: bool,
-    ) -> pd.DataFrame:
-        """Return, per eligible customer and category, the basket position of first appearance.
+    ) -> ibis.Table:
+        """Build the (customer, category, first_basket) Ibis expression of first appearances.
 
-        The heavy filtering, sequencing and joining run in Ibis; the executed frame has one
-        row per (customer, category) with the 1-based ``first_basket`` it first appeared in.
+        Returns an unexecuted Ibis table with one row per (customer, category) holding the
+        1-based ``first_basket`` in which that category first appeared, for customers and
+        baskets that pass the filters.
 
         Args:
-            df (pd.DataFrame | ibis.Table): Transaction line items.
+            table (ibis.Table): Transaction line items.
             cols (ColumnHelper): Resolved column names.
             category_col (str): Product category column name.
             min_transactions (int): Minimum qualifying baskets per customer (pre-truncation).
@@ -188,9 +179,8 @@ class PurchasePath:
             exclude_returns (bool): Whether to drop non-positive spend line items first.
 
         Returns:
-            pd.DataFrame: Columns ``[customer_id, category_col, first_basket]``.
+            ibis.Table: Columns ``[customer_id, category_col, first_basket]``.
         """
-        table = ensure_ibis_table(df)
         if exclude_returns:
             table = table.filter(table[cols.unit_spend] > 0)
 
@@ -228,10 +218,9 @@ class PurchasePath:
         line_items = table.join(analysis_baskets, [cols.customer_id, cols.transaction_id]).filter(
             _[category_col].notnull(),  # noqa: PD004 (ibis API, not pandas)
         )
-        first_appearances = line_items.group_by([cols.customer_id, category_col]).aggregate(
+        return line_items.group_by([cols.customer_id, category_col]).aggregate(
             first_basket=_.basket_number.min(),
         )
-        return first_appearances.execute()
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
@@ -243,55 +232,47 @@ class PurchasePath:
         ``to_category`` next. Probabilities for a given ``from_category`` need not sum to one
         because a customer's next basket can introduce several categories at once.
 
+        The aggregation runs entirely in Ibis; only this small result (bounded by the number of
+        category pairs) is executed into pandas.
+
         Returns:
             pd.DataFrame: Columns ``["from_category", "to_category", "customer_count",
             "transition_probability"]``, sorted by source then descending probability. Empty
             (same columns) when no transition meets the criteria.
         """
-        first_df = self._first_appearance_df
-        if len(first_df) == 0:
-            return _empty_transitions()
-
+        fa = self._first_appearances
         cid = self._customer_id
+        order_window = ibis.window(group_by=cid, order_by="first_basket")
 
-        # Collapse to one row per (customer, acquisition event), holding the categories that
-        # first appeared together in that basket, then pair each event with the customer's next.
-        events = (
-            first_df.sort_values([cid, "first_basket"])
-            .groupby([cid, "first_basket"])[self._category_col]
-            .agg(list)
-            .reset_index(name="from_categories")
-        )
-        events["to_categories"] = events.groupby(cid)["from_categories"].shift(-1)
-        events = events.dropna(subset=["to_categories"])
-        if len(events) == 0:
-            return _empty_transitions()
+        # Distinct acquisition events per customer, each linked to the customer's next event.
+        events = fa.select(cid, "first_basket").distinct()
+        events = events.mutate(next_basket=events["first_basket"].lead(1).over(order_window))
 
-        pairs = (
-            events[[cid, "from_categories", "to_categories"]]
-            .explode("from_categories")
-            .explode("to_categories")
-            .rename(columns={"from_categories": "from_category", "to_categories": "to_category"})
+        # Pair every category in an event (from) with every category in the next event (to).
+        from_side = fa.rename(from_category=self._category_col).join(events, [cid, "first_basket"])
+        to_side = fa.select(cid, to_category=fa[self._category_col], to_basket=fa["first_basket"])
+        pairs = from_side.join(
+            to_side,
+            [from_side[cid] == to_side[cid], from_side["next_basket"] == to_side["to_basket"]],
+        ).select(
+            from_category=from_side["from_category"],
+            to_category=to_side["to_category"],
+            customer_key=from_side[cid],
         )
 
-        # Denominator: customers who progressed past each source category (before support
-        # filtering). A customer can reach several targets from one source, so distinct
-        # customers (nunique) is required here; each (from, to) pair is unique per customer,
-        # so a plain row count (size) is correct and cheaper below.
-        source_customers = pairs.groupby("from_category")[cid].nunique()
+        # Each (from, to) pair is unique per customer, so a row count gives the customer count.
+        # A source category reaches several targets, so its denominator needs distinct customers.
+        transitions = pairs.group_by(["from_category", "to_category"]).aggregate(customer_count=pairs.count())
+        source = pairs.group_by("from_category").aggregate(source_customers=pairs["customer_key"].nunique())
 
-        transitions = pairs.groupby(["from_category", "to_category"]).size().reset_index(name="customer_count")
-        transitions["transition_probability"] = (
-            transitions["customer_count"] / transitions["from_category"].map(source_customers)
-        ).round(_ROUND_DECIMALS)
-        transitions = transitions[transitions["customer_count"] >= self._min_customers]
-        if len(transitions) == 0:
-            return _empty_transitions()
-
-        return transitions.sort_values(
-            ["from_category", "transition_probability", "to_category"],
-            ascending=[True, False, True],
-        ).reset_index(drop=True)[_TRANSITION_COLUMNS]
+        result = (
+            transitions.join(source, "from_category")
+            .mutate(transition_probability=transitions["customer_count"] / source["source_customers"])
+            .filter(transitions["customer_count"] >= self._min_customers)
+            .order_by(["from_category", ibis.desc("transition_probability"), "to_category"])
+            .select(_TRANSITION_COLUMNS)
+        )
+        return result.execute()
 
     @functools.cached_property
     def _entry_categories(self) -> list:
@@ -300,10 +281,11 @@ class PurchasePath:
         The category values keep their native dtype (e.g. integer category codes), so the
         returned list matches the ``from_category`` keys used by :meth:`dominant_journeys`.
         """
-        first_df = self._first_appearance_df
+        fa = self._first_appearances
         cid = self._customer_id
-        first_events = first_df[first_df["first_basket"] == first_df.groupby(cid)["first_basket"].transform("min")]
-        return sorted(first_events[self._category_col].unique())
+        with_min = fa.mutate(first_event=fa["first_basket"].min().over(ibis.window(group_by=cid)))
+        entries = with_min.filter(with_min["first_basket"] == with_min["first_event"]).select(self._category_col)
+        return sorted(entries.distinct().execute()[self._category_col])
 
     def dominant_journeys(self, max_length: int = 10) -> pd.DataFrame:
         """Trace the single most-likely onward journey from each entry category.
@@ -348,7 +330,7 @@ class PurchasePath:
                 path.append(current)
             if len(path) >= _MIN_JOURNEY_LENGTH:
                 journey = _JOURNEY_SEPARATOR.join(str(category) for category in path)
-                journeys.append({"journey": journey, "probability": round(probability, _ROUND_DECIMALS)})
+                journeys.append({"journey": journey, "probability": probability})
 
         if len(journeys) == 0:
             return _empty_journeys()
