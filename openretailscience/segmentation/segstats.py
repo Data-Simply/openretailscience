@@ -67,7 +67,7 @@ __all__ = ["SegTransactionStats", "cube", "rollup"]
 MAX_CUBE_DIMENSIONS_WITHOUT_WARNING = 6
 
 # Backends whose dialect supports GROUP BY GROUPING SETS + GROUPING(); these use the single-scan native path.
-NATIVE_GROUPING_SETS_BACKENDS = frozenset(
+_NATIVE_GROUPING_SETS_BACKENDS = frozenset(
     {"duckdb", "mssql", "oracle", "snowflake", "bigquery", "pyspark", "databricks"},
 )
 
@@ -846,7 +846,7 @@ class SegTransactionStats:
         """Execute all grouping sets in a single backend-native ``GROUP BY GROUPING SETS`` pass.
 
         Equivalent in output to :meth:`_execute_grouping_sets`, but scans the source once instead of
-        once per grouping set. Only valid for backends in :data:`NATIVE_GROUPING_SETS_BACKENDS` whose
+        once per grouping set. Only valid for backends in :data:`_NATIVE_GROUPING_SETS_BACKENDS` whose
         data lives in a real table (not an in-memory table); the caller is responsible for that gate.
 
         Args:
@@ -873,6 +873,7 @@ class SegTransactionStats:
 
         # Rewrite ibis's own compiled AST directly (no SQL-string round trip; reuses ibis's per-backend dialect).
         tree = compiler.to_sqlglot(base.unbind())
+        # to_sqlglot returns a list of statements on some backends (e.g. BigQuery scalar UDFs); the SELECT is last.
         tree = tree[-1] if isinstance(tree, list) else tree
         native_sql = _rewrite_to_grouping_sets(tree, grouping_sets, segment_col, flag_names).sql(
             dialect=compiler.dialect,
@@ -1081,7 +1082,7 @@ class SegTransactionStats:
         # Single-scan native GROUP BY GROUPING SETS on supported real-table backends; else union fallback.
         use_native = (
             get_option("optimization.use_native_sql")
-            and data.get_backend().name in NATIVE_GROUPING_SETS_BACKENDS
+            and data.get_backend().name in _NATIVE_GROUPING_SETS_BACKENDS
             and len(data.op().find(ops.InMemoryTable)) == 0
         )
         execute = (
