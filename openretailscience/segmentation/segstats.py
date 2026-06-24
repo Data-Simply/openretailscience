@@ -1074,9 +1074,10 @@ class SegTransactionStats:
             grouping_sets,
         )
 
-        # Single-scan native GROUP BY GROUPING SETS on supported real-table backends; else union fallback.
+        # Native GROUPING SETS only pays off by fusing 2+ sets into one scan; a single set has no benefit.
         use_native = (
             get_option("optimization.use_native_sql")
+            and len(grouping_sets_list) > 1
             and data.get_backend().name in _NATIVE_GROUPING_SETS_BACKENDS
             and len(data.op().find(ops.InMemoryTable)) == 0
         )

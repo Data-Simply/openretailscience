@@ -2079,3 +2079,13 @@ class TestNativeGroupingSets:
         """Ordinal GROUP BY keys resolve to their SELECT column (alias stripped); named keys pass through."""
         selects = [exp.column("region").as_("region"), exp.column("store").as_("store")]
         assert _resolve_group_key(key, selects).sql() == expected_sql
+
+    def test_native_path_skipped_for_single_grouping_set(self):
+        """A lone grouping set is one scan regardless, so the native rewrite is skipped for a plain aggregation."""
+        table = ibis.duckdb.connect().create_table("transactions", _native_sample_df())
+        with option_context("optimization.use_native_sql", True):
+            sql = ibis.to_sql(
+                SegTransactionStats(table, _NATIVE_SEGMENTS, grouping_sets=[tuple(_NATIVE_SEGMENTS)]).table,
+            ).upper()
+        assert "GROUPING SETS" not in sql
+        assert "UNION" not in sql
