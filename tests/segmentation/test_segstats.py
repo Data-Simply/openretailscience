@@ -2042,6 +2042,15 @@ class TestNativeGroupingSets:
                 _NATIVE_SEGMENTS,
                 {"grouping_sets": "cube", "extra_aggs": {"unique_stores": (cols.store_id, "nunique")}},
             ),
+            (
+                _native_sample_df(),
+                _NATIVE_SEGMENTS,
+                {
+                    "grouping_sets": "rollup",
+                    "unknown_customer_value": -1,
+                    "extra_aggs": {"unique_stores": (cols.store_id, "nunique")},
+                },
+            ),
             # A segment column literally named like the internal GROUPING() flag must not break the rewrite.
             (
                 _native_sample_df().rename(columns={"region": "grouping_flag_0"}),
@@ -2049,7 +2058,16 @@ class TestNativeGroupingSets:
                 {"grouping_sets": "rollup"},
             ),
         ],
-        ids=["rollup", "cube", "total", "custom", "unknown_customer", "extra_aggs", "flag_name_collision"],
+        ids=[
+            "rollup",
+            "cube",
+            "total",
+            "custom",
+            "unknown_customer",
+            "extra_aggs",
+            "unknown_with_extra_aggs",
+            "flag_name_collision",
+        ],
     )
     def test_native_output_matches_union_fallback(self, df, segments, kwargs):
         """The native single-scan output is identical to the portable union fallback across configurations."""
