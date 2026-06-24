@@ -6,9 +6,10 @@ import ibis
 import numpy as np
 import pandas as pd
 import pytest
+from sqlglot import exp
 
 from openretailscience.options import ColumnHelper, get_option, option_context
-from openretailscience.segmentation.segstats import SegTransactionStats, cube, rollup
+from openretailscience.segmentation.segstats import SegTransactionStats, _resolve_group_key, cube, rollup
 
 cols = ColumnHelper()
 
@@ -259,15 +260,6 @@ class TestSegTransactionStats:
         result_df = seg_stats.df.sort_values(["segment_name", "region"]).reset_index(drop=True)
         expected_output = expected_output.sort_values(["segment_name", "region"]).reset_index(drop=True)
 
-        # Check that both segment columns are in the result
-        assert "segment_name" in result_df.columns
-        assert "region" in result_df.columns
-
-        # Check number of rows - the implementation only returns actual combinations that exist in data
-        # plus the Total row, not all possible combinations
-        assert len(result_df) == len(expected_output)
-
-        # Use pandas testing to compare the dataframes
         pd.testing.assert_frame_equal(result_df[expected_output.columns], expected_output)
 
     def test_rollup_disabled(self):
@@ -348,37 +340,36 @@ class TestSegTransactionStats:
                 cols.transaction_id: [101, 102, 103, 104, 105, 106],
                 "category": ["Clothing", "Clothing", "Clothing", "Footwear", "Footwear", "Footwear"],
                 "subcategory": ["Jeans", "Jeans", "Shirts", "Sneakers", "Boots", "Boots"],
-                "product_id": [10, 20, 30, 40, 50, 60],
+                cols.product_id: [10, 20, 30, 40, 50, 60],
             },
         )
 
         # Create SegTransactionStats with a list of different value types
         seg_stats = SegTransactionStats(
             df,
-            segment_col=["category", "subcategory", "product_id"],
+            segment_col=["category", "subcategory", cols.product_id],
             calc_rollup=True,
             rollup_value=["ALL", "Subtotal", 0],  # String, String, Integer
         )
 
         result_df = seg_stats.df
 
-        # Verify that each column uses the correct rollup value type
-        assert "category" in result_df.columns
-        assert "subcategory" in result_df.columns
-        assert "product_id" in result_df.columns
-
         # Test constants
         expected_level1_rollups = 2  # level-1 rollup rows (category only)
 
         # Check for level-1 rollup rows (category only)
         level1_rollups = result_df[
-            (result_df["subcategory"] == "Subtotal") & (result_df["product_id"] == 0) & (result_df["category"] != "ALL")
+            (result_df["subcategory"] == "Subtotal")
+            & (result_df[cols.product_id] == 0)
+            & (result_df["category"] != "ALL")
         ]
         assert len(level1_rollups) == expected_level1_rollups
 
         # Verify grand total row uses the specified values
         grand_total = result_df[
-            (result_df["category"] == "ALL") & (result_df["subcategory"] == "Subtotal") & (result_df["product_id"] == 0)
+            (result_df["category"] == "ALL")
+            & (result_df["subcategory"] == "Subtotal")
+            & (result_df[cols.product_id] == 0)
         ]
         assert len(grand_total) == 1
 
@@ -421,8 +412,8 @@ class TestSegTransactionStats:
                 cols.unit_spend: [100.0, 150.0, 200.0, 250.0, 300.0, 350.0],
                 cols.transaction_id: [101, 102, 103, 104, 105, 106],
                 "segment_name": ["Premium", "Premium", "Standard", "Standard", "Premium", "Premium"],
-                "store_id": [1, 2, 1, 3, 2, 4],
-                "product_id": [10, 20, 10, 30, 20, 40],
+                cols.store_id: [1, 2, 1, 3, 2, 4],
+                cols.product_id: [10, 20, 10, 30, 20, 40],
             },
         )
 
@@ -430,32 +421,27 @@ class TestSegTransactionStats:
         seg_stats = SegTransactionStats(
             df,
             "segment_name",
-            extra_aggs={"distinct_stores": ("store_id", "nunique")},
+            extra_aggs={"distinct_stores": (cols.store_id, "nunique")},
         )
-
-        # Verify the extra column exists and has correct values
-        assert "distinct_stores" in seg_stats.df.columns
 
         # Sort by segment_name to ensure consistent order
         result_df = seg_stats.df.sort_values("segment_name").reset_index(drop=True)
 
-        assert result_df.loc[0, "distinct_stores"] == segment_a_store_count  # Segment A
-        assert result_df.loc[1, "distinct_stores"] == segment_b_store_count  # Segment B
-        assert result_df.loc[2, "distinct_stores"] == total_store_count  # Total
+        assert result_df["distinct_stores"].to_list() == [
+            segment_a_store_count,
+            segment_b_store_count,
+            total_store_count,
+        ]
 
         # Test with multiple extra aggregations
         seg_stats_multi = SegTransactionStats(
             df,
             "segment_name",
             extra_aggs={
-                "distinct_stores": ("store_id", "nunique"),
-                "distinct_products": ("product_id", "nunique"),
+                "distinct_stores": (cols.store_id, "nunique"),
+                "distinct_products": (cols.product_id, "nunique"),
             },
         )
-
-        # Verify both extra columns exist
-        assert "distinct_stores" in seg_stats_multi.df.columns
-        assert "distinct_products" in seg_stats_multi.df.columns
 
         # Sort by segment_name to ensure consistent order
         result_df_multi = seg_stats_multi.df.sort_values("segment_name").reset_index(drop=True)
@@ -518,14 +504,24 @@ class TestSegTransactionStats:
         )
 
         with option_context(*[item for pair in custom_columns.items() for item in pair]):
-            seg_stats = SegTransactionStats(custom_df, segment_col="segment_name")
-            result = seg_stats.df
-            assert isinstance(result, pd.DataFrame)
-            assert not result.empty
+            result = SegTransactionStats(custom_df, segment_col="segment_name").df
 
-            expected_columns = [cols.agg.customer_id, cols.agg.transaction_id, cols.agg.unit_spend, cols.agg.unit_qty]
-            for col in expected_columns:
-                assert col in seg_stats.df.columns, f"Expected column {col} missing from output"
+        expected_output = pd.DataFrame(
+            {
+                "segment_name": ["Premium", "Standard", "Total"],
+                cols.agg.unit_spend: [250.0, 450.0, 700.0],
+                cols.agg.transaction_id: [2, 2, 4],
+                cols.agg.customer_id: [1, 1, 2],
+                cols.agg.unit_qty: [5, 9, 14],
+                cols.calc.spend_per_cust: [250.0, 450.0, 350.0],
+                cols.calc.spend_per_trans: [125.0, 225.0, 175.0],
+                cols.calc.trans_per_cust: [2.0, 2.0, 2.0],
+                cols.calc.price_per_unit: [50.0, 50.0, 50.0],
+                cols.calc.units_per_trans: [2.5, 4.5, 3.5],
+            },
+        )
+        result = result.sort_values("segment_name").reset_index(drop=True)
+        pd.testing.assert_frame_equal(result[expected_output.columns], expected_output)
 
     def test_complete_rollup_hierarchy_two_columns(self):
         """Expect prefix and suffix rollups plus grand total when calc_rollup and calc_total are True.
@@ -952,161 +948,107 @@ class TestUnknownCustomerTracking:
                 cols.unit_spend: [100.0, 150.0, 200.0, 250.0],
                 cols.transaction_id: [101, 102, 103, 104],
                 "segment_name": ["Premium", "Premium", "Standard", "Standard"],
-                "store_id": [1, 2, 1, 3],
+                cols.store_id: [1, 2, 1, 3],
             },
         )
+
+        stores_agg = get_option("column.agg.store_id")
+        stores_unknown = ColumnHelper.join_options("column.agg.store_id", "column.suffix.unknown_customer")
+        stores_total = ColumnHelper.join_options("column.agg.store_id", "column.suffix.total")
 
         seg_stats = SegTransactionStats(
             df,
             "segment_name",
             unknown_customer_value=-1,
-            extra_aggs={"stores": ("store_id", "nunique")},
+            extra_aggs={stores_agg: (cols.store_id, "nunique")},
         )
         result_df = seg_stats.df.sort_values("segment_name").reset_index(drop=True)
 
-        # Check that extra agg has three variants
-        assert "stores" in result_df.columns
-        assert "stores_unknown" in result_df.columns
-        assert "stores_total" in result_df.columns
-
-        # Verify values for segment A
+        # Verify the three extra-agg variants for segment A
         expected_identified_stores = 1  # Segment A identified: store 1
         expected_unknown_stores = 1  # Segment A unknown: store 2
         expected_total_stores = 2  # Segment A total: stores 1, 2
-        assert result_df.loc[0, "stores"] == expected_identified_stores
-        assert result_df.loc[0, "stores_unknown"] == expected_unknown_stores
-        assert result_df.loc[0, "stores_total"] == expected_total_stores
+        assert result_df.loc[0, stores_agg] == expected_identified_stores
+        assert result_df.loc[0, stores_unknown] == expected_unknown_stores
+        assert result_df.loc[0, stores_total] == expected_total_stores
 
 
 class TestGenerateGroupingSets:
     """Test the _generate_grouping_sets helper method."""
 
-    def test_no_rollup_no_total(self):
-        """Test with calc_rollup=False and calc_total=False returns only base grouping."""
+    @pytest.mark.parametrize(
+        ("segment_col", "calc_total", "calc_rollup", "expected"),
+        [
+            (["region", "store", "product"], False, False, [("region", "store", "product")]),
+            (["region", "store", "product"], True, False, [("region", "store", "product"), ()]),
+            (
+                ["region", "store", "product"],
+                False,
+                True,
+                [("region", "store", "product"), ("region",), ("region", "store")],
+            ),
+            (
+                ["region", "store", "product"],
+                True,
+                True,
+                [
+                    ("region", "store", "product"),
+                    ("region",),
+                    ("region", "store"),
+                    ("store", "product"),
+                    ("product",),
+                    (),
+                ],
+            ),
+            (["region", "store"], True, True, [("region", "store"), ("region",), ("store",), ()]),
+            (["region"], False, False, [("region",)]),
+            (["region"], True, True, [("region",), ()]),
+            (
+                ["region", "store", "category", "product"],
+                True,
+                True,
+                [
+                    ("region", "store", "category", "product"),
+                    ("region",),
+                    ("region", "store"),
+                    ("region", "store", "category"),
+                    ("store", "category", "product"),
+                    ("category", "product"),
+                    ("product",),
+                    (),
+                ],
+            ),
+            (
+                ["region", "store", "category", "product"],
+                False,
+                True,
+                [
+                    ("region", "store", "category", "product"),
+                    ("region",),
+                    ("region", "store"),
+                    ("region", "store", "category"),
+                ],
+            ),
+        ],
+        ids=[
+            "no_rollup_no_total",
+            "no_rollup_with_total",
+            "rollup_without_total",
+            "rollup_with_total",
+            "two_columns_rollup_with_total",
+            "single_column_no_rollup_no_total",
+            "single_column_with_total",
+            "four_columns_rollup_with_total",
+            "four_columns_rollup_without_total",
+        ],
+    )
+    def test_generate_grouping_sets_legacy(self, segment_col, calc_total, calc_rollup, expected):
+        """_generate_grouping_sets returns the expected sets across legacy calc_total/calc_rollup combinations."""
         result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "store", "product"],
-            calc_total=False,
-            calc_rollup=False,
+            segment_col=segment_col,
+            calc_total=calc_total,
+            calc_rollup=calc_rollup,
         )
-        expected = [("region", "store", "product")]
-        assert result == expected
-
-    def test_no_rollup_with_total(self):
-        """Test with calc_rollup=False and calc_total=True returns base grouping and grand total."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "store", "product"],
-            calc_total=True,
-            calc_rollup=False,
-        )
-        expected = [
-            ("region", "store", "product"),
-            (),  # grand total
-        ]
-        assert result == expected
-
-    def test_rollup_without_total(self):
-        """Test with calc_rollup=True and calc_total=False returns prefix rollups only."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "store", "product"],
-            calc_total=False,
-            calc_rollup=True,
-        )
-        expected = [
-            ("region", "store", "product"),
-            ("region",),
-            ("region", "store"),
-        ]
-        assert result == expected
-
-    def test_rollup_with_total(self):
-        """Test with calc_rollup=True and calc_total=True returns prefix and suffix rollups plus grand total."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "store", "product"],
-            calc_total=True,
-            calc_rollup=True,
-        )
-        expected = [
-            ("region", "store", "product"),
-            ("region",),
-            ("region", "store"),
-            ("store", "product"),
-            ("product",),
-            (),  # grand total
-        ]
-        assert result == expected
-
-    def test_two_columns_rollup_with_total(self):
-        """Test with two segment columns generates correct prefix and suffix rollups."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "store"],
-            calc_total=True,
-            calc_rollup=True,
-        )
-        expected = [
-            ("region", "store"),
-            ("region",),
-            ("store",),
-            (),
-        ]
-        assert result == expected
-
-    def test_single_column_no_rollup_no_total(self):
-        """Test with single segment column and no rollup or total returns only base grouping."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region"],
-            calc_total=False,
-            calc_rollup=False,
-        )
-        expected = [
-            ("region",),
-        ]
-        assert result == expected
-
-    def test_single_column_with_total(self):
-        """Test with single segment column and calc_total=True returns base grouping and grand total."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region"],
-            calc_total=True,
-            calc_rollup=True,
-        )
-        expected = [
-            ("region",),
-            (),
-        ]
-        assert result == expected
-
-    def test_four_columns_rollup_with_total(self):
-        """Test with four segment columns verifies pattern holds for larger hierarchies."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "store", "category", "product"],
-            calc_total=True,
-            calc_rollup=True,
-        )
-        expected = [
-            ("region", "store", "category", "product"),  # base
-            ("region",),  # prefix rollup
-            ("region", "store"),  # prefix rollup
-            ("region", "store", "category"),  # prefix rollup
-            ("store", "category", "product"),  # suffix rollup
-            ("category", "product"),  # suffix rollup
-            ("product",),  # suffix rollup
-            (),  # grand total
-        ]
-        assert result == expected
-
-    def test_four_columns_rollup_without_total(self):
-        """Test with four segment columns and calc_total=False returns prefix rollups only."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "store", "category", "product"],
-            calc_total=False,
-            calc_rollup=True,
-        )
-        expected = [
-            ("region", "store", "category", "product"),  # base
-            ("region",),  # prefix rollup
-            ("region", "store"),  # prefix rollup
-            ("region", "store", "category"),  # prefix rollup
-        ]
         assert result == expected
 
     def test_total_mode_generates_full_detail_plus_grand_total(self):
@@ -1234,9 +1176,8 @@ class TestGroupingSetsRollupMode:
                 calc_rollup=None,
             )
 
-    def test_legacy_mode_validation_passes(self):
-        """Test that validation passes in legacy mode (grouping_sets=None) regardless of calc_total/calc_rollup."""
-        # Should warn when relying on implicit calc_total=True default
+    def test_legacy_mode_warns_on_implicit_default(self):
+        """A FutureWarning is raised in legacy mode when relying on the implicit calc_total default."""
         with pytest.warns(FutureWarning, match="calc_total parameter is deprecated"):
             SegTransactionStats._validate_grouping_sets_params(
                 grouping_sets=None,
@@ -1244,53 +1185,18 @@ class TestGroupingSetsRollupMode:
                 calc_rollup=None,
             )
 
-        # Should not warn with explicit values in legacy mode
+    @pytest.mark.parametrize(
+        ("calc_total", "calc_rollup"),
+        [(False, True), (True, None), (False, None), (None, True), (None, False)],
+    )
+    def test_legacy_mode_no_warning_with_explicit_flags(self, calc_total, calc_rollup):
+        """No deprecation warning when calc_total or calc_rollup is set explicitly."""
         with warnings.catch_warnings():
-            warnings.simplefilter("error")  # Turn warnings into errors to ensure no warning
+            warnings.simplefilter("error")  # turn any warning into an error
             SegTransactionStats._validate_grouping_sets_params(
                 grouping_sets=None,
-                calc_total=False,
-                calc_rollup=True,
-            )
-
-    def test_legacy_mode_no_warning_when_calc_total_explicit(self):
-        """Test no deprecation warning when calc_total is explicitly set."""
-        # No warning when calc_total=True explicitly
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=None,
-                calc_total=True,
-                calc_rollup=None,
-            )
-
-        # No warning when calc_total=False explicitly
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=None,
-                calc_total=False,
-                calc_rollup=None,
-            )
-
-    def test_legacy_mode_no_warning_when_calc_rollup_explicit(self):
-        """Test no deprecation warning when calc_rollup is explicitly set."""
-        # No warning when calc_rollup=True explicitly
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=None,
-                calc_total=None,
-                calc_rollup=True,
-            )
-
-        # No warning when calc_rollup=False explicitly
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=None,
-                calc_total=None,
-                calc_rollup=False,
+                calc_total=calc_total,
+                calc_rollup=calc_rollup,
             )
 
     def test_rollup_mode_integration(self):
@@ -1497,42 +1403,28 @@ class TestGroupingSetsRollupMode:
 class TestGroupingSetsCustomMode:
     """Test custom grouping sets functionality."""
 
-    def test_generate_custom_grouping_sets_basic(self):
-        """Test custom grouping sets with basic input."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "product"],
-            grouping_sets=[
-                ("region", "product"),
-                ("product",),
-                (),
-            ],
-        )
-        # Verify content (order not guaranteed due to set deduplication)
-        assert set(result) == {("region", "product"), ("product",), ()}
-
-    def test_generate_custom_grouping_sets_deduplicates(self):
-        """Test custom grouping sets removes duplicate grouping sets."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "product"],
-            grouping_sets=[
-                ("region", "product"),
-                ("product",),
-                ("region", "product"),  # duplicate
-                (),
-                (),  # duplicate
-            ],
-        )
-        # Verify deduplication (order not guaranteed)
-        assert set(result) == {("region", "product"), ("product",), ()}
-
-    def test_generate_custom_grouping_sets_single(self):
-        """Test custom grouping sets with single grouping set."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region"],
-            grouping_sets=[("region",)],
-        )
-        expected = [("region",)]
-        assert result == expected
+    @pytest.mark.parametrize(
+        ("segment_col", "grouping_sets", "expected"),
+        [
+            (
+                ["region", "product"],
+                [("region", "product"), ("product",), ()],
+                {("region", "product"), ("product",), ()},
+            ),
+            (
+                ["region", "product"],
+                [("region", "product"), ("product",), ("region", "product"), (), ()],  # two duplicates
+                {("region", "product"), ("product",), ()},
+            ),
+            (["region"], [("region",)], {("region",)}),
+        ],
+        ids=["basic", "deduplicates", "single"],
+    )
+    def test_generate_custom_grouping_sets(self, segment_col, grouping_sets, expected):
+        """Custom grouping sets return the expected sets, deduplicated (order not guaranteed)."""
+        result = SegTransactionStats._generate_grouping_sets(segment_col=segment_col, grouping_sets=grouping_sets)
+        assert set(result) == expected
+        assert len(result) == len(expected)  # no duplicates remain
 
     def test_custom_grouping_sets_invalid_column(self):
         """Test custom grouping sets raises error for invalid column name."""
@@ -1554,38 +1446,20 @@ class TestGroupingSetsCustomMode:
                 ],
             )
 
-    def test_custom_grouping_sets_rejects_strings(self):
-        """Test custom grouping sets raises error when element is a string."""
-        with pytest.raises(
-            TypeError,
-            match="Each element must be a tuple",
-        ):
+    @pytest.mark.parametrize(
+        "grouping_sets",
+        [
+            ["region"],  # string instead of tuple
+            [("region",), 123],  # integer instead of tuple
+            [("region",), None],  # None instead of tuple
+        ],
+        ids=["string", "integer", "none"],
+    )
+    def test_custom_grouping_sets_rejects_non_tuple_elements(self, grouping_sets):
+        """Custom grouping sets raise TypeError when any element is not a tuple."""
+        with pytest.raises(TypeError, match="Each element must be a tuple"):
             SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=["region"],  # Wrong: string instead of tuple
-                calc_total=None,
-                calc_rollup=None,
-            )
-
-    def test_custom_grouping_sets_rejects_invalid_types(self):
-        """Test custom grouping sets raises error for invalid element types."""
-        # Test with integer
-        with pytest.raises(
-            TypeError,
-            match="Each element must be a tuple",
-        ):
-            SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=[("region",), 123],  # Wrong: integer instead of tuple
-                calc_total=None,
-                calc_rollup=None,
-            )
-
-        # Test with None
-        with pytest.raises(
-            TypeError,
-            match="Each element must be a tuple",
-        ):
-            SegTransactionStats._validate_grouping_sets_params(
-                grouping_sets=[("region",), None],  # Wrong: None instead of tuple
+                grouping_sets=grouping_sets,
                 calc_total=None,
                 calc_rollup=None,
             )
@@ -1654,7 +1528,6 @@ class TestComposableGroupingSets:
     def test_cube_function_returns_list(self):
         """Test cube() helper returns list of tuples for all combinations."""
         result = cube("region", "store")
-        assert isinstance(result, list)
         expected_grouping_sets = {
             ("region", "store"),  # Full detail
             ("region",),  # Region totals
@@ -1673,7 +1546,6 @@ class TestComposableGroupingSets:
     def test_rollup_function_returns_list(self):
         """Test rollup() helper returns list of tuples for hierarchical levels."""
         result = rollup("year", "quarter", "month")
-        assert isinstance(result, list)
         # ROLLUP(year, quarter, month) should generate hierarchical levels from right to left
         assert result == [
             ("year", "quarter", "month"),  # Full detail
@@ -1783,25 +1655,20 @@ class TestComposableGroupingSets:
                 grouping_sets=[([], "product")],  # Empty list in tuple - invalid
             )
 
-    def test_cube_empty_error(self):
-        """Test cube() raises error when called with no columns."""
-        with pytest.raises(ValueError, match="cube\\(\\) requires at least one column"):
-            cube()
-
-    def test_rollup_empty_error(self):
-        """Test rollup() raises error when called with no columns."""
-        with pytest.raises(ValueError, match="rollup\\(\\) requires at least one column"):
-            rollup()
-
-    def test_cube_non_string_column_error(self):
-        """Test cube() raises TypeError when passed non-string columns."""
-        with pytest.raises(TypeError, match="All column names must be strings"):
-            cube("region", 123, "store")
-
-    def test_rollup_non_string_column_error(self):
-        """Test rollup() raises TypeError when passed non-string columns."""
-        with pytest.raises(TypeError, match="All column names must be strings"):
-            rollup("year", "quarter", 456)
+    @pytest.mark.parametrize(
+        ("func", "columns", "exc", "match"),
+        [
+            (cube, (), ValueError, r"cube\(\) requires at least one column"),
+            (rollup, (), ValueError, r"rollup\(\) requires at least one column"),
+            (cube, ("region", 123, "store"), TypeError, "All column names must be strings"),
+            (rollup, ("year", "quarter", 456), TypeError, "All column names must be strings"),
+        ],
+        ids=["cube_empty", "rollup_empty", "cube_non_string", "rollup_non_string"],
+    )
+    def test_grouping_helper_input_validation(self, func, columns, exc, match):
+        """cube()/rollup() validate inputs: no columns -> ValueError, non-string column -> TypeError."""
+        with pytest.raises(exc, match=match):
+            func(*columns)
 
     def test_flatten_item_invalid_type_error(self):
         """Test _flatten_item() raises TypeError for invalid types in specification tuple."""
@@ -1972,7 +1839,7 @@ class TestDivisionByZeroHandling:
                 cols.customer_id: [-1, -1, -1, -1],  # All unknown customers
                 cols.unit_spend: [100.0, 200.0, 150.0, 250.0],
                 cols.transaction_id: [101, 102, 103, 104],
-                "store_id": ["S1", "S1", "S2", "S2"],
+                cols.store_id: ["S1", "S1", "S2", "S2"],
                 "week": ["W1", "W2", "W1", "W2"],
                 cols.unit_qty: [10, 20, 15, 25],
             },
@@ -1982,7 +1849,7 @@ class TestDivisionByZeroHandling:
         # This is the exact scenario that caused the production error
         result = SegTransactionStats(
             df,
-            segment_col=["store_id", "week"],
+            segment_col=[cols.store_id, "week"],
             grouping_sets="rollup",
             unknown_customer_value=-1,
         ).df
@@ -1996,7 +1863,7 @@ class TestDivisionByZeroHandling:
             ("S2", "Total"),  # per-store rollup
             ("Total", "Total"),  # grand total
         }
-        assert set(zip(result["store_id"], result["week"], strict=True)) == expected_segments
+        assert set(zip(result[cols.store_id], result["week"], strict=True)) == expected_segments
 
         # Verify that spend_per_cust is NaN when customer_id count is 0
         # (all customers are unknown, so identified customer count is 0)
@@ -2049,7 +1916,7 @@ class TestDivisionByZeroHandling:
                 cols.customer_id: [-1, -1, -1, -1, -1, -1],
                 cols.unit_spend: [100.0, 200.0, 150.0, 250.0, 300.0, 350.0],
                 cols.transaction_id: [101, 102, 103, 104, 105, 106],
-                "store_id": ["S1", "S1", "S2", "S2", "S3", "S3"],
+                cols.store_id: ["S1", "S1", "S2", "S2", "S3", "S3"],
                 "week": ["W1", "W2", "W1", "W2", "W1", "W2"],
                 cols.unit_qty: [10, 20, 15, 25, 30, 35],
             },
@@ -2058,7 +1925,7 @@ class TestDivisionByZeroHandling:
         # This exact combination caused the production error
         result = SegTransactionStats(
             df,
-            segment_col=["store_id", "week"],
+            segment_col=[cols.store_id, "week"],
             grouping_sets="rollup",
             unknown_customer_value=-1,
         ).df
@@ -2121,3 +1988,94 @@ class TestDivisionByZeroHandling:
         assert walkin_segment[cols.calc.spend_per_trans_unknown].iloc[0] == pytest.approx(
             expected_walkin_spend_per_trans_unknown,
         )
+
+
+_NATIVE_SEGMENTS = ["region", "category"]
+
+
+def _native_sample_df():
+    """Realistic multi-segment retail data (incl. unknown -1 customers) for native grouping-sets tests."""
+    return pd.DataFrame(
+        {
+            cols.customer_id: [1, 2, 3, 4, -1, 6, 7, -1] * 4,
+            cols.transaction_id: list(range(32)),
+            cols.unit_spend: [10.0, 20.5, 30.0, 40.25, 15.0, 25.0, 35.5, 45.0] * 4,
+            cols.unit_qty: [1, 2, 3, 4, 1, 2, 3, 4] * 4,
+            cols.store_id: [1, 2, 3, 4] * 8,
+            "region": ["North", "South"] * 16,
+            "category": ["Dairy", "Bakery", "Produce", "Meat"] * 8,
+        },
+    )
+
+
+class TestNativeGroupingSets:
+    """Tests for the backend-native GROUP BY GROUPING SETS path and its fallback gating."""
+
+    @pytest.mark.parametrize(
+        ("native_opt", "use_memtable", "expect_grouping_sets"),
+        [
+            (True, False, True),  # real table + option on -> native single scan
+            (False, False, False),  # real table + option off -> union fallback
+            (True, True, False),  # in-memory table is gated out -> union fallback
+        ],
+    )
+    def test_native_path_selection(self, native_opt, use_memtable, expect_grouping_sets):
+        """The native path is used only for a real table with the option on; otherwise union fallback."""
+        df = _native_sample_df()
+        data = df if use_memtable else ibis.duckdb.connect().create_table("transactions", df)
+        with option_context("optimization.use_native_sql", native_opt):
+            sql = ibis.to_sql(SegTransactionStats(data, _NATIVE_SEGMENTS, grouping_sets="rollup").table).upper()
+        assert ("GROUPING SETS" in sql) == expect_grouping_sets
+        # The fallback unions one aggregation per grouping set; the native path does not.
+        assert ("UNION" in sql) != expect_grouping_sets
+
+    @pytest.mark.parametrize(
+        ("df", "segments", "kwargs"),
+        [
+            (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": "rollup"}),
+            (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": "cube"}),
+            (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": "total"}),
+            (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": [("region", "category"), ("region",), ()]}),
+            (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": "rollup", "unknown_customer_value": -1}),
+            (
+                _native_sample_df(),
+                _NATIVE_SEGMENTS,
+                {"grouping_sets": "cube", "extra_aggs": {"unique_stores": (cols.store_id, "nunique")}},
+            ),
+            # A segment column literally named like the internal GROUPING() flag must not break the rewrite.
+            (
+                _native_sample_df().rename(columns={"region": "grouping_flag_0"}),
+                ["grouping_flag_0", "category"],
+                {"grouping_sets": "rollup"},
+            ),
+        ],
+        ids=["rollup", "cube", "total", "custom", "unknown_customer", "extra_aggs", "flag_name_collision"],
+    )
+    def test_native_output_matches_union_fallback(self, df, segments, kwargs):
+        """The native single-scan output is identical to the portable union fallback across configurations."""
+        table = ibis.duckdb.connect().create_table("transactions", df)
+        with option_context("optimization.use_native_sql", True):
+            native_stats = SegTransactionStats(table, segments, **kwargs)
+            native = native_stats.df
+        # Guard against a vacuous pass: confirm the native path actually engaged. Without this, a regression
+        # that silently routed the "native" run through the fallback would compare the fallback to itself.
+        assert "GROUPING SETS" in ibis.to_sql(native_stats.table).upper()
+        with option_context("optimization.use_native_sql", False):
+            fallback = SegTransactionStats(table, segments, **kwargs).df
+        native = native.sort_values(segments).reset_index(drop=True)
+        fallback = fallback.sort_values(segments).reset_index(drop=True)
+        pd.testing.assert_frame_equal(native, fallback)
+
+    @pytest.mark.parametrize(
+        ("key", "expected_sql"),
+        [
+            (exp.Literal.number(1), "region"),  # positional ordinal -> 1st SELECT column (duckdb/snowflake/bigquery)
+            (exp.Literal.number(2), "store"),  # positional ordinal -> 2nd SELECT column
+            (exp.column("store"), "store"),  # named key -> returned unchanged (the mssql/oracle path)
+        ],
+        ids=["ordinal_first", "ordinal_second", "named"],
+    )
+    def test_resolve_group_key_handles_positional_and_named(self, key, expected_sql):
+        """Ordinal GROUP BY keys resolve to their SELECT column (alias stripped); named keys pass through."""
+        selects = [exp.column("region").as_("region"), exp.column("store").as_("store")]
+        assert _resolve_group_key(key, selects).sql() == expected_sql
