@@ -88,8 +88,8 @@ def _resolve_group_key(key: exp.Expression, selects: list[exp.Expression]) -> ex
         selects (list[exp.Expression]): The query's SELECT-list expressions.
 
     Returns:
-        exp.Expression: The resolved column expression, as a copy (the SELECT-list alias is
-            stripped when resolving a positional ordinal; a named key is returned as-is).
+        exp.Expression: A copy of the resolved column expression. A positional ordinal maps to its
+            SELECT-list column (alias stripped); a named key is used unchanged.
     """
     if isinstance(key, exp.Literal) and key.is_int:
         col = selects[int(key.name) - 1]
