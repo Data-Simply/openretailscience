@@ -102,21 +102,18 @@ def _rewrite_to_grouping_sets(
     grouping_sets: list[tuple[str, ...]],
     segment_col: list[str],
     flag_names: list[str],
-) -> exp.Select:
-    """Rewrite an ibis-compiled aggregation AST into ``GROUP BY GROUPING SETS`` with ``GROUPING()`` flags.
+) -> None:
+    """Rewrite an ibis-compiled aggregation AST in place into ``GROUP BY GROUPING SETS`` with ``GROUPING()`` flags.
 
     Operates on the sqlglot AST ibis produced (so aggregate expressions, quoting, and dialect quirks
     are already correct); swaps the grouping clause and appends one ``GROUPING(col)`` flag column per
-    segment column, used downstream to apply rollup labels. Mutates ``tree`` in place.
+    segment column, used downstream to apply rollup labels.
 
     Args:
-        tree (exp.Select): The base aggregation SELECT, grouped by all of ``segment_col``.
+        tree (exp.Select): The base aggregation SELECT, grouped by all of ``segment_col``. Mutated in place.
         grouping_sets (list[tuple[str, ...]]): The grouping sets to emit (tuples of column names).
         segment_col (list[str]): All segment columns, in the order they appear in the GROUP BY.
         flag_names (list[str]): Output names for the per-segment GROUPING() flag columns.
-
-    Returns:
-        exp.Select: The rewritten SELECT (the same, mutated, ``tree``).
     """
     resolved = [_resolve_group_key(k, tree.selects) for k in tree.args["group"].expressions]
     key_by_name = dict(zip(segment_col, resolved, strict=True))
@@ -126,7 +123,6 @@ def _rewrite_to_grouping_sets(
 
     tuples = [exp.Tuple(expressions=[key_by_name[col].copy() for col in gs]) for gs in grouping_sets]
     tree.set("group", exp.Group(expressions=[exp.GroupingSets(expressions=tuples)]))
-    return tree
 
 
 def cube(*columns: str) -> list[tuple[str, ...]]:
@@ -875,9 +871,8 @@ class SegTransactionStats:
         tree = compiler.to_sqlglot(base.unbind())
         # to_sqlglot returns a list of statements on some backends (e.g. BigQuery scalar UDFs); the SELECT is last.
         tree = tree[-1] if isinstance(tree, list) else tree
-        native_sql = _rewrite_to_grouping_sets(tree, grouping_sets, segment_col, flag_names).sql(
-            dialect=compiler.dialect,
-        )
+        _rewrite_to_grouping_sets(tree, grouping_sets, segment_col, flag_names)
+        native_sql = tree.sql(dialect=compiler.dialect)
 
         # Pass the known schema so con.sql skips inference (it mis-types float aggregates on e.g. Oracle).
         out_schema = ibis.schema({**base.schema(), **dict.fromkeys(flag_names, "int32")})
