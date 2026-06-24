@@ -44,6 +44,11 @@ period_2           = "p2"
 total              = "total"
 unknown_customer   = "unknown"
 
+# Performance / Query Optimization
+[optimization]
+# Use backend-native SQL features for faster queries where supported (portable fallback otherwise).
+use_native_sql = true
+
 # Plot Color Options
 [plot.color]
 # Multi-color rotation (27 colors): 9 curated hues x 3 shades.

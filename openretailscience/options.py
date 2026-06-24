@@ -75,6 +75,8 @@ class Options:
             "column.suffix.period_2": "p2",
             "column.suffix.unknown_customer": "unknown",
             "column.suffix.total": "total",
+            # Performance / query optimization
+            "optimization.use_native_sql": True,
             # Color palettes
             # 27-color rotation: 9 curated hues at 3 shades. First 5 hues are max-separated on the
             # hue wheel (~70 degrees apart) for 3-5 series. Order: primaries (500), lights (200),
@@ -202,6 +204,12 @@ class Options:
             ),
             "column.suffix.unknown_customer": "The suffix to use for unknown customer columns.",
             "column.suffix.total": "The suffix to use for total columns.",
+            # Performance / query optimization
+            "optimization.use_native_sql": (
+                "Whether to use backend-native SQL features for faster queries where supported. "
+                "When False, or on backends without support, the portable fallback path is used. "
+                "Results are identical either way."
+            ),
             # Color options
             "plot.color.multi_color_palette": (
                 "Multi-color palette for plots with many series (default: 27 Tailwind colors, "

@@ -51,7 +51,10 @@ from itertools import chain, combinations
 from typing import Any, Literal
 
 import ibis
+import ibis.expr.operations as ops
 import pandas as pd
+from ibis.backends.sql import compilers as sql_compilers
+from sqlglot import exp
 
 from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import ColumnHelper, get_option
@@ -62,6 +65,68 @@ __all__ = ["SegTransactionStats", "cube", "rollup"]
 # CUBE generates 2^n grouping sets, so 6 dimensions = 64 sets (reasonable), but 7+ dimensions
 # = 128+ sets (potentially expensive). This threshold balances flexibility with performance awareness.
 MAX_CUBE_DIMENSIONS_WITHOUT_WARNING = 6
+
+# Backends whose dialect supports GROUP BY GROUPING SETS + GROUPING(); these use the single-scan native path.
+NATIVE_GROUPING_SETS_BACKENDS = frozenset(
+    {"duckdb", "mssql", "oracle", "snowflake", "bigquery", "pyspark", "databricks"},
+)
+
+# Prefix for the transient GROUPING() flag columns; letter-led so every dialect (incl. Oracle) accepts it.
+_GROUPING_FLAG_PREFIX = "grouping_flag_"
+
+
+def _resolve_group_key(key: exp.Expression, selects: list[exp.Expression]) -> exp.Expression:
+    """Resolve a GROUP BY key to a concrete column expression.
+
+    Some ibis backends emit positional group keys (``GROUP BY 1, 2`` on DuckDB/Snowflake/BigQuery/
+    Databricks); others emit the named columns (SQL Server/Oracle, which reject positional group-by).
+    ``GROUPING()`` and ``GROUPING SETS`` need real column expressions, so a positional ordinal is
+    mapped back to its SELECT-list column and a named key is returned unchanged.
+
+    Args:
+        key (exp.Expression): A single GROUP BY key expression (a positional ordinal or a column).
+        selects (list[exp.Expression]): The query's SELECT-list expressions.
+
+    Returns:
+        exp.Expression: The resolved column expression, as a copy (the SELECT-list alias is
+            stripped when resolving a positional ordinal; a named key is returned as-is).
+    """
+    if isinstance(key, exp.Literal) and key.is_int:
+        col = selects[int(key.name) - 1]
+        return (col.this if isinstance(col, exp.Alias) else col).copy()
+    return key.copy()
+
+
+def _rewrite_to_grouping_sets(
+    tree: exp.Select,
+    grouping_sets: list[tuple[str, ...]],
+    segment_col: list[str],
+    flag_names: list[str],
+) -> exp.Select:
+    """Rewrite an ibis-compiled aggregation AST into ``GROUP BY GROUPING SETS`` with ``GROUPING()`` flags.
+
+    Operates on the sqlglot AST ibis produced (so aggregate expressions, quoting, and dialect quirks
+    are already correct); swaps the grouping clause and appends one ``GROUPING(col)`` flag column per
+    segment column, used downstream to apply rollup labels. Mutates ``tree`` in place.
+
+    Args:
+        tree (exp.Select): The base aggregation SELECT, grouped by all of ``segment_col``.
+        grouping_sets (list[tuple[str, ...]]): The grouping sets to emit (tuples of column names).
+        segment_col (list[str]): All segment columns, in the order they appear in the GROUP BY.
+        flag_names (list[str]): Output names for the per-segment GROUPING() flag columns.
+
+    Returns:
+        exp.Select: The rewritten SELECT (the same, mutated, ``tree``).
+    """
+    resolved = [_resolve_group_key(k, tree.selects) for k in tree.args["group"].expressions]
+    key_by_name = dict(zip(segment_col, resolved, strict=True))
+
+    for col, flag in zip(segment_col, flag_names, strict=True):
+        tree.select(exp.func("GROUPING", key_by_name[col].copy()).as_(flag, quoted=True), copy=False)
+
+    tuples = [exp.Tuple(expressions=[key_by_name[col].copy() for col in gs]) for gs in grouping_sets]
+    tree.set("group", exp.Group(expressions=[exp.GroupingSets(expressions=tuples)]))
+    return tree
 
 
 def cube(*columns: str) -> list[tuple[str, ...]]:
@@ -771,6 +836,63 @@ class SegTransactionStats:
         return results[0].union(*results[1:]) if len(results) > 1 else results[0]
 
     @staticmethod
+    def _execute_grouping_sets_native(
+        data: ibis.Table,
+        grouping_sets: list[tuple[str, ...]],
+        segment_col: list[str],
+        rollup_value: list[Any],
+        aggs: dict[str, Any],
+    ) -> ibis.Table:
+        """Execute all grouping sets in a single backend-native ``GROUP BY GROUPING SETS`` pass.
+
+        Equivalent in output to :meth:`_execute_grouping_sets`, but scans the source once instead of
+        once per grouping set. Only valid for backends in :data:`NATIVE_GROUPING_SETS_BACKENDS` whose
+        data lives in a real table (not an in-memory table); the caller is responsible for that gate.
+
+        Args:
+            data (ibis.Table): The data table to aggregate.
+            grouping_sets (list[tuple[str, ...]]): Grouping set tuples; ``()`` means grand total.
+            segment_col (list[str]): All segment columns.
+            rollup_value (list[Any]): Rollup label per segment column.
+            aggs (dict[str, Any]): Aggregation specifications.
+
+        Returns:
+            ibis.Table: Aggregated table with rollup labels applied. Same rows and columns as the
+                union path; column order is normalized later by the ``.df`` property.
+        """
+        backend = data.get_backend()
+        compiler = getattr(sql_compilers, backend.name).compiler
+
+        base = data.group_by(segment_col).aggregate(**aggs)
+
+        # Lengthen the flag prefix until it can't collide with a real output column (else schema merge breaks).
+        prefix = _GROUPING_FLAG_PREFIX
+        while any(f"{prefix}{i}" in base.columns for i in range(len(segment_col))):
+            prefix = f"_{prefix}"
+        flag_names = [f"{prefix}{i}" for i in range(len(segment_col))]
+
+        # Rewrite ibis's own compiled AST directly (no SQL-string round trip; reuses ibis's per-backend dialect).
+        tree = compiler.to_sqlglot(base.unbind())
+        tree = tree[-1] if isinstance(tree, list) else tree
+        native_sql = _rewrite_to_grouping_sets(tree, grouping_sets, segment_col, flag_names).sql(
+            dialect=compiler.dialect,
+        )
+
+        # Pass the known schema so con.sql skips inference (it mis-types float aggregates on e.g. Oracle).
+        out_schema = ibis.schema({**base.schema(), **dict.fromkeys(flag_names, "int32")})
+        gs_table = backend.sql(native_sql, schema=out_schema)
+
+        # Rolled-up columns come back NULL; GROUPING(col) == 1 marks them, so replace with rollup_value.
+        typed_values = SegTransactionStats._create_typed_literals(data, segment_col, rollup_value)
+        labelled = gs_table.mutate(
+            **{
+                col: ibis.ifelse(gs_table[flag] == 1, typed_values[col], gs_table[col])
+                for col, flag in zip(segment_col, flag_names, strict=True)
+            },
+        )
+        return labelled.drop(*flag_names)
+
+    @staticmethod
     def _create_unknown_flag(
         data: ibis.Table,
         unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn,
@@ -956,8 +1078,18 @@ class SegTransactionStats:
             grouping_sets,
         )
 
-        # Execute all grouping sets uniformly - no special cases
-        final_metrics = SegTransactionStats._execute_grouping_sets(
+        # Single-scan native GROUP BY GROUPING SETS on supported real-table backends; else union fallback.
+        use_native = (
+            get_option("optimization.use_native_sql")
+            and data.get_backend().name in NATIVE_GROUPING_SETS_BACKENDS
+            and len(data.op().find(ops.InMemoryTable)) == 0
+        )
+        execute = (
+            SegTransactionStats._execute_grouping_sets_native
+            if use_native
+            else SegTransactionStats._execute_grouping_sets
+        )
+        final_metrics = execute(
             data,
             grouping_sets_list,
             segment_col,

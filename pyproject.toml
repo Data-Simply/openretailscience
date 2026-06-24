@@ -17,6 +17,7 @@ dependencies = [
     "pyarrow>=18.0.0,<25",
     "scikit-learn>=1.4.2,<2",
     "scipy>=1.14.1,<2",
+    "sqlglot>=25.18,<31",
     "textalloc>=1.2.1",
     "toml>=0.10.2,<0.11",
     "tqdm>=4.66.1,<5",

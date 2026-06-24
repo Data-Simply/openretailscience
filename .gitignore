@@ -142,3 +142,8 @@ cython_debug/
 
 .claude-review
 .claude/scheduled_tasks.lock
+
+# Local Spark artifacts (created by pyspark integration tests)
+spark-warehouse/
+metastore_db/
+derby.log
