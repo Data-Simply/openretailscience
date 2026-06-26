@@ -7,14 +7,19 @@ pandas DataFrame or an [Ibis](https://ibis-project.org/) table, and each analysi
 standard names. There is no bespoke data model to learn and no objects to populate first: prepare one
 analysis-ready table, and every function works from it.
 
+These expectations are not arbitrary. They were shaped by working with dozens of retailers' transactional data and
+follow the patterns that are standard across the industry — star-schema warehouses, transaction- and line-item-level
+sales tables, and single-column keys. Adopting them is what lets the same OpenRetailScience analysis run unchanged
+across very different retailers.
+
 This guide explains the shape that table should have — the granularity it can be at, which columns each analysis
 requires, how identifiers must be structured, and the data-quality assumptions baked into the package — so you can
 prepare your data correctly on the first attempt.
 
 !!! info "Where this fits"
-    This guide is about the *shape* of your data. For opening a pandas or Ibis connection to each backend, see
-    [Connecting to your data](connecting_to_data.md); for mapping your own column names onto the standard ones, see
-    the [Options & configuration guide](options_guide.md).
+    This guide covers the *shape* of your data — the granularity and columns each analysis needs. For connecting to
+    a backend or mapping your own column names, see [Connecting to your data](connecting_to_data.md) and the
+    [Options & configuration guide](options_guide.md).
 
 ## Core data format
 
@@ -164,8 +169,6 @@ Columns fall into three roles:
 - **You-named** — columns you point a function at by name through a constructor parameter, such as `segment_col`,
   `period_col`, or `value_col`. These are always required, but you choose which column fills the role.
 
-The [function requirements matrix](#function-requirements-matrix) below lists the exact columns each analysis needs.
-
 ## ID column handling
 
 ### Single-column identifiers only
@@ -236,7 +239,7 @@ you want. Decide on null handling deliberately:
 - Filter or impute nulls in `customer_id`, `transaction_date`, and any `segment_col` before analysis.
 - A null in a measure column (`unit_spend`) propagates through sums; clean these at the source.
 
-### Validation checklist
+## Putting it together
 
 Before running an analysis, confirm your table:
 
@@ -248,57 +251,7 @@ Before running an analysis, confirm your table:
 - [ ] Has nulls in key and grouping columns handled deliberately.
 - [ ] Is filtered to the scope of your question (see [Connecting to your data](connecting_to_data.md)).
 
-## Function requirements matrix
-
-The columns below are the standard names each analysis reads. Names shown as `segment_col`, `period_col`,
-`value_col`, `group_*_col`, `product_col`, `aggregation_column`, and `rank_cols` are roles you fill by naming a
-column through a constructor parameter. "Backends" lists the input types accepted; "Level" is the granularity the
-function aggregates to.
-
-| Function                  | Required columns                                          | Backends     | Level    |
-| ------------------------- | --------------------------------------------------------- | ------------ | -------- |
-| SegTransactionStats       | unit_spend, transaction_id, segment_col                   | pandas, Ibis | segment  |
-| HMLSegmentation           | customer_id, value_col                                    | pandas, Ibis | customer |
-| ThresholdSegmentation     | customer_id, value_col                                    | pandas, Ibis | customer |
-| RFMSegmentation           | customer_id, transaction_id, transaction_date, unit_spend | pandas, Ibis | customer |
-| NLRSegmentation           | customer_id, period_col, value_col                        | pandas, Ibis | customer |
-| GainLoss                  | customer_id, value_col                                    | pandas       | customer |
-| CrossShop                 | group_col, value_col, group_1_col                         | pandas, Ibis | customer |
-| RevenueTree               | customer_id, transaction_id, unit_spend, period_col       | pandas, Ibis | period   |
-| ProductAssociation        | value_col, group_col                                      | pandas, Ibis | customer |
-| CustomerDecisionHierarchy | customer_id, transaction_id, product_col                  | pandas       | product  |
-| CohortAnalysis            | customer_id, transaction_date, aggregation_column         | pandas, Ibis | cohort   |
-| PurchasesPerCustomer      | customer_id, transaction_id                               | pandas, Ibis | customer |
-| DaysBetweenPurchases      | customer_id, transaction_date                             | pandas, Ibis | customer |
-| TransactionChurn          | customer_id, transaction_date                             | pandas, Ibis | customer |
-| CompositeRank             | rank_cols                                                 | pandas, Ibis | row      |
-
-Notes on optional, behaviour-enhancing columns:
-
-- `SegTransactionStats` adds per-customer metrics when `customer_id` is present, and price-per-unit and
-  units-per-transaction metrics when `unit_quantity` is present.
-- `RevenueTree` decomposes spend into price and quantity drivers when `unit_quantity` is present.
-- For `ProductAssociation`, `value_col` is the product identifier whose co-occurrence is measured.
-- `CrossShop` and `ProductAssociation` group by `group_col`, which defaults to `customer_id`; pass
-  `group_col` (for example `transaction_id`) to analyse per basket or transaction instead.
-- `CrossShop` compares groups defined by `(group_n_col, group_n_val)` pairs; `group_2_col` and `group_3_col`
-  default to `group_1_col`, so comparing values within one column needs only `group_1_col`.
-
-!!! note "pandas-only analyses"
-    Most functions accept either backend, but `GainLoss` and `CustomerDecisionHierarchy` operate on pandas
-    DataFrames only. Pass an in-memory pandas table to those two; if your data lives in a warehouse, filter it down
-    with Ibis first and call `.execute()` to materialize a DataFrame.
-
-## Getting started with your data
-
-The workflow is the same for every backend and every analysis:
-
-1. **Build an analysis view** — join the dimensions you need onto your fact table to get one flat table.
-2. **Map column names** if they differ from the standard ones (see [Options & configuration](options_guide.md)).
-3. **Filter to your question's scope** — a date range, and often a category or set of stores.
-4. **Run the analysis** on the filtered table.
-
-A complete example against the sample data:
+With the table prepared, a complete analysis against the sample data is just connect, filter, run:
 
 ```python
 import ibis
@@ -312,15 +265,6 @@ q1 = transactions.filter(transactions.transaction_date.between("2023-01-01", "20
 stats = SegTransactionStats(data=q1, segment_col="category_0_name", grouping_sets="total")
 print(stats.df)
 ```
-
-### Troubleshooting
-
-- **`missing required columns`** — the analysis cannot find a standard column name. Map your name onto it via the
-  options system, or add the column to your analysis view.
-- **`must be a date or datetime type`** — a date column arrived as a string. Cast it to a temporal type before
-  analysis.
-- **`timezone-aware` error** — strip the timezone as shown under [Types](#types) above.
-- **A row labelled with a null group** — clean nulls in the grouping column before analysis.
 
 ## Related documentation
 
