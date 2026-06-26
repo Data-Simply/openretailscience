@@ -238,6 +238,8 @@ you want. Decide on null handling deliberately:
 
 - Filter or impute nulls in `customer_id`, `transaction_date`, and any `segment_col` before analysis.
 - A null in a measure column (`unit_spend`) propagates through sums; clean these at the source.
+- A negative `unit_spend` row is a return or refund — valid data, but decide deliberately whether to include or
+  exclude returns, since most spend metrics assume positive transactions.
 
 ## Putting it together
 
