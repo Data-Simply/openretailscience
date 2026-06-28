@@ -5,9 +5,20 @@ import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from openretailscience.analysis.gain_loss import GainLoss
 from openretailscience.options import option_context
+
+# Period totals are sums of non-negative unit spend grouped per customer, so they live in [0, inf).
+# Bound the upper end to keep generated examples in a regime where float rounding stays negligible.
+spend_total = st.floats(min_value=0.0, max_value=1e6, allow_nan=False, allow_infinity=False)
+
+# Index positions of the three "increase" and three "decrease" buckets in the process_customer_group
+# return tuple: (new, lost, increased_focus, decreased_focus, switch_from_comparison, switch_to_comparison).
+INCREASE_BUCKET_INDICES = (0, 2, 4)  # new, increased_focus, switch_from_comparison
+DECREASE_BUCKET_INDICES = (1, 3, 5)  # lost, decreased_focus, switch_to_comparison
 
 
 @pytest.fixture(autouse=True)
@@ -85,6 +96,57 @@ def test_process_customer_group(
         comparison_diff=comparison_diff,
     )
     assert result == expected
+
+
+class TestProcessCustomerGroupProperties:
+    """Property-based tests for the gain/loss attribution invariants of process_customer_group.
+
+    process_customer_group splits a single customer's change in focus-group spend into six mutually
+    exclusive buckets. The buckets exist purely to *attribute* that change, so two invariants must hold
+    for every possible pair of periods, regardless of which branch of the logic runs:
+
+    1. Conservation — the six buckets sum exactly to the focus-group change (focus_p2 - focus_p1). No
+       spend is invented or lost in the attribution.
+    2. Sign discipline — increase buckets are never negative and decrease buckets are never positive,
+       matching the green/red split the plot relies on.
+    """
+
+    @given(
+        focus_p1=spend_total,
+        comparison_p1=spend_total,
+        focus_p2=spend_total,
+        comparison_p2=spend_total,
+    )
+    def test_buckets_conserve_focus_change(self, focus_p1, comparison_p1, focus_p2, comparison_p2):
+        """The six attribution buckets sum to the total focus-group change for any pair of periods."""
+        result = GainLoss.process_customer_group(
+            focus_p1=focus_p1,
+            comparison_p1=comparison_p1,
+            focus_p2=focus_p2,
+            comparison_p2=comparison_p2,
+            focus_diff=focus_p2 - focus_p1,
+            comparison_diff=comparison_p2 - comparison_p1,
+        )
+        assert sum(result) == pytest.approx(focus_p2 - focus_p1, abs=1e-6)
+
+    @given(
+        focus_p1=spend_total,
+        comparison_p1=spend_total,
+        focus_p2=spend_total,
+        comparison_p2=spend_total,
+    )
+    def test_increase_and_decrease_buckets_keep_their_sign(self, focus_p1, comparison_p1, focus_p2, comparison_p2):
+        """Increase buckets are always >= 0 and decrease buckets are always <= 0."""
+        result = GainLoss.process_customer_group(
+            focus_p1=focus_p1,
+            comparison_p1=comparison_p1,
+            focus_p2=focus_p2,
+            comparison_p2=comparison_p2,
+            focus_diff=focus_p2 - focus_p1,
+            comparison_diff=comparison_p2 - comparison_p1,
+        )
+        assert all(result[i] >= 0 for i in INCREASE_BUCKET_INDICES)
+        assert all(result[i] <= 0 for i in DECREASE_BUCKET_INDICES)
 
 
 @pytest.fixture

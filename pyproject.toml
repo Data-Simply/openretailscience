@@ -35,6 +35,7 @@ name  = "Murray Vanwyk"
 [dependency-groups]
 dev = [
     "freezegun>=1.5.1,<2",
+    "hypothesis>=6.100,<7",
     "ibis-framework[bigquery,mssql,oracle,pyspark,snowflake]>=10.0.0,<13",
     "nbstripout>=0.7.1,<0.10",
     "pre-commit>=3.6.2,<5",
