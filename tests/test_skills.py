@@ -374,11 +374,19 @@ class TestDatabricksInstall:
         target = workspace_root / "Users" / "analyst@retail.com" / ".assistant" / "skills" / SKILL_NAMES[0]
         assert target.is_dir()
 
-    def test_global_mode_falls_back_to_shared_when_user_unknown(self, source_dir: Path, workspace_root: Path) -> None:
-        """Global Databricks install falls back to the shared dir when user unknown."""
+    @pytest.mark.parametrize("user_env", [None, ""])
+    def test_global_mode_falls_back_to_shared_when_user_missing_or_blank(
+        self, source_dir: Path, workspace_root: Path, monkeypatch: pytest.MonkeyPatch, user_env: str | None
+    ) -> None:
+        """Global Databricks install falls back to the shared dir when the user is unset or blank."""
+        if user_env is not None:
+            monkeypatch.setenv("DATABRICKS_USER", user_env)
+
         install_skills(global_mode=True, yes=True)
 
         assert (workspace_root / ".assistant" / "skills" / SKILL_NAMES[0]).is_dir()
+        # A blank user must not produce a malformed ``/Workspace/Users//...`` path.
+        assert not (workspace_root / "Users").exists()
 
 
 class TestConfirmation:
@@ -531,6 +539,15 @@ class TestSkillCopyMatches:
         """Two directories with the same files and bytes match."""
         source = _make_bare_skill(tmp_path / "src", "s")
         target = _make_bare_skill(tmp_path / "dst", "s")
+        assert _skill_copy_matches(source, target) is True
+
+    def test_true_for_identical_multi_file_trees(self, tmp_path: Path) -> None:
+        """A match iterates every file (including a nested references dir) and returns True."""
+        source = _make_bare_skill(tmp_path / "src", "s")
+        target = _make_bare_skill(tmp_path / "dst", "s")
+        for root in (source, target):
+            (root / "references").mkdir()
+            (root / "references" / "guide.md").write_text("shared body", encoding="utf-8")
         assert _skill_copy_matches(source, target) is True
 
     def test_false_when_target_is_not_a_directory(self, tmp_path: Path) -> None:
