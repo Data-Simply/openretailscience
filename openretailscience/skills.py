@@ -108,19 +108,16 @@ def _find_project_root(start: Path | None = None) -> Path:
     start_dir = (start or Path.cwd()).resolve()
     home = Path.home().resolve()
 
+    git_root: Path | None = None
     for parent in [start_dir, *start_dir.parents]:
         if parent == home:
             break
         if (parent / AGENTS_DIR_NAME).is_dir() or (parent / CLAUDE_DIR_NAME).is_dir():
             return parent
+        if git_root is None and (parent / ".git").exists():
+            git_root = parent
 
-    for parent in [start_dir, *start_dir.parents]:
-        if parent == home:
-            break
-        if (parent / ".git").exists():
-            return parent
-
-    return start_dir
+    return git_root if git_root is not None else start_dir
 
 
 def _skills_dir(base: Path, harness_dir: str) -> Path:
