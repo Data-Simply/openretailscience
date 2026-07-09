@@ -271,7 +271,8 @@ def _skill_copy_matches(source_path: Path, target_path: Path) -> bool:
         source_file = source_path / rel
         if source_file.is_dir():
             continue
-        if (target_path / rel).read_bytes() != source_file.read_bytes():
+        target_file = target_path / rel
+        if not target_file.is_file() or target_file.read_bytes() != source_file.read_bytes():
             return False
     return True
 
@@ -325,8 +326,13 @@ def _prepare_target(source_path: Path, target_path: Path, bundled_names: set[str
         target_path.unlink()  # os.unlink semantics: remove the link, not its target
         return "install"
 
-    # Owned real directory (a previous copy install).
-    if use_copy and _skill_copy_matches(source_path, target_path):
+    # Owned real directory. Only copy mode ever replaces one (refreshing a prior
+    # copy install). In symlink mode a real directory is never something this
+    # installer created, so it may be user-authored content that merely shares a
+    # bundled skill's name — skip it rather than deleting it.
+    if not use_copy:
+        return "skip"
+    if _skill_copy_matches(source_path, target_path):
         return "up_to_date"
     shutil.rmtree(target_path)
     return "install"

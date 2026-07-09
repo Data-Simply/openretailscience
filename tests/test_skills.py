@@ -26,11 +26,12 @@ FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---", re.DOTALL)
 SHIPPED_SKILL_NAME = "using-openretailscience"
 # Fenced code blocks, and openretailscience import statements inside them.
 CODE_FENCE_RE = re.compile(r"```[a-zA-Z]*\n(.*?)```", re.DOTALL)
-IMPORT_RE = re.compile(r"^(?:from|import)\s+openretailscience[\w. ,]*(?:import[\w. ,]+)?$", re.MULTILINE)
+IMPORT_RE = re.compile(r"^[ \t]*(?:from|import)\s+openretailscience[\w. ,]*(?:import[\w. ,]+)?$", re.MULTILINE)
 # Markdown references to sibling skill files, e.g. `references/plotting.md`.
 REFERENCE_RE = re.compile(r"references/[\w./-]+\.md")
 MIN_REFERENCE_FILES = 3
 MIN_IMPORT_EXAMPLES = 20
+MIN_DESCRIPTION_LENGTH = 50
 
 
 def _import_error(statement: str) -> str | None:
@@ -108,9 +109,14 @@ def fake_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def project_dir(tmp_path: Path, fake_home: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A project working directory (cwd) with no agent markers yet."""
+    """A project working directory (cwd) with no agent markers yet.
+
+    The ``.git`` marker anchors ``_find_project_root`` here deterministically, so
+    the upward root search cannot escape the tmp sandbox into a real repository.
+    """
     project = tmp_path / "retail-project"
     project.mkdir()
+    (project / ".git").mkdir()
     monkeypatch.chdir(project)
     return project
 
@@ -177,6 +183,22 @@ class TestProjectInstall:
         assert not conflict.is_symlink()
         assert len(result.skipped) == 1
         # The non-conflicting skill still installs.
+        assert (target_dir / SKILL_NAMES[1]).is_symlink()
+
+    def test_existing_real_skill_dir_is_never_deleted(self, source_dir: Path, project_dir: Path) -> None:
+        """A user's own real skill dir (same name, with SKILL.md) is skipped, not clobbered."""
+        target_dir = project_dir / ".agents" / "skills"
+        user_skill = target_dir / SKILL_NAMES[0]
+        user_skill.mkdir(parents=True)
+        (user_skill / "SKILL.md").write_text("my own skill", encoding="utf-8")
+
+        result = install_skills(yes=True)
+
+        assert user_skill.is_dir()
+        assert not user_skill.is_symlink()
+        assert (user_skill / "SKILL.md").read_text(encoding="utf-8") == "my own skill"
+        assert str(user_skill.relative_to(project_dir)) in result.skipped
+        # The non-conflicting skill still installs as a symlink.
         assert (target_dir / SKILL_NAMES[1]).is_symlink()
 
 
@@ -348,9 +370,12 @@ class TestBundledSkill:
         assert name_match is not None
         assert name_match.group(1) == "using-openretailscience"
 
-        description_match = re.search(r"^description:\s*(\S.*)", block, re.MULTILINE)
-        assert description_match is not None
-        assert len(description_match.group(1).strip()) > 0
+        assert "description:" in block
+        # The description is a YAML folded scalar (``>-``) with its body on the
+        # following wrapped lines; assert that body is substantive, not just the
+        # ``>-`` indicator.
+        description_body = block.split("description:", 1)[1].replace(">-", " ").strip()
+        assert len(description_body) >= MIN_DESCRIPTION_LENGTH
 
     def test_result_is_skill_install_result(self, source_dir: Path, project_dir: Path) -> None:
         """install_skills returns a SkillInstallResult."""
