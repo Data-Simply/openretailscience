@@ -15,6 +15,7 @@ nav:
       - Data Structures: getting_started/data_structures.md
       - Options & Configuration: getting_started/options_guide.md
       - Plot Styling Guide: getting_started/styling_guide.ipynb
+      - Agent Skills: getting_started/agent_skills.md
   - Analysis Modules:
       - analysis_modules.md
   - Experimental:

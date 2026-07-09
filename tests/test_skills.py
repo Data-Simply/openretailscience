@@ -23,6 +23,38 @@ if TYPE_CHECKING:
 # Two realistic bundled-skill names plus a junk dir with no SKILL.md.
 SKILL_NAMES = ("retail-metrics", "using-openretailscience")
 FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---", re.DOTALL)
+SHIPPED_SKILL_NAME = "using-openretailscience"
+# Fenced code blocks, and openretailscience import statements inside them.
+CODE_FENCE_RE = re.compile(r"```[a-zA-Z]*\n(.*?)```", re.DOTALL)
+IMPORT_RE = re.compile(r"^(?:from|import)\s+openretailscience[\w. ,]*(?:import[\w. ,]+)?$", re.MULTILINE)
+# Markdown references to sibling skill files, e.g. `references/plotting.md`.
+REFERENCE_RE = re.compile(r"references/[\w./-]+\.md")
+MIN_REFERENCE_FILES = 3
+MIN_IMPORT_EXAMPLES = 20
+
+
+def _import_error(statement: str) -> str | None:
+    """Return an error message if an import statement fails to resolve, else None."""
+    try:
+        exec(statement, {})  # noqa: S102 - trusted first-party skill content
+    except ImportError as exc:
+        return f"{statement!r} ({exc})"
+    return None
+
+
+def _shipped_skill_markdown() -> list[Path]:
+    """Return SKILL.md and every reference markdown file of the shipped skill."""
+    skill_root = _get_source_skills_dir() / SHIPPED_SKILL_NAME
+    return [skill_root / "SKILL.md", *sorted(skill_root.glob("references/*.md"))]
+
+
+def _skill_import_statements() -> list[str]:
+    """Extract every openretailscience import line from the shipped skill's code fences."""
+    statements: list[str] = []
+    for md_file in _shipped_skill_markdown():
+        for block in CODE_FENCE_RE.findall(md_file.read_text(encoding="utf-8")):
+            statements.extend(match.strip() for match in IMPORT_RE.findall(block))
+    return statements
 
 
 def _raise_oserror(*_args: object, **_kwargs: object) -> None:
@@ -324,3 +356,26 @@ class TestBundledSkill:
         """install_skills returns a SkillInstallResult."""
         result = install_skills(yes=True)
         assert isinstance(result, SkillInstallResult)
+
+    def test_referenced_files_exist(self) -> None:
+        """Every references/*.md path the shipped skill points at exists on disk."""
+        skill_root = _get_source_skills_dir() / SHIPPED_SKILL_NAME
+        referenced: set[str] = set()
+        for md_file in _shipped_skill_markdown():
+            referenced.update(REFERENCE_RE.findall(md_file.read_text(encoding="utf-8")))
+
+        assert len(referenced) >= MIN_REFERENCE_FILES, "SKILL.md should link to its reference files"
+        for rel in sorted(referenced):
+            assert (skill_root / rel).is_file(), f"skill references a missing file: {rel}"
+
+    def test_import_examples_resolve_against_the_package(self) -> None:
+        """Every openretailscience import the skill teaches still resolves.
+
+        This is the content-drift guard: renaming or removing a module or public
+        symbol the skill documents breaks its import example and fails here,
+        forcing the skill to be updated alongside the API change.
+        """
+        statements = _skill_import_statements()
+        assert len(statements) >= MIN_IMPORT_EXAMPLES, "skill should teach many concrete imports"
+        failures = [msg for statement in statements if (msg := _import_error(statement)) is not None]
+        assert not failures, "skill imports no longer resolve:\n" + "\n".join(failures)
