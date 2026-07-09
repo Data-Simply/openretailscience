@@ -414,6 +414,18 @@ class TestConfirmation:
         assert len(result.installed) == 0
         assert not (project_dir / ".agents" / "skills" / SKILL_NAMES[0]).exists()
 
+    @pytest.mark.parametrize("answer", ["", "y", "yes", "Y", "YES"])
+    def test_accepting_prompt_installs_skills(
+        self, source_dir: Path, project_dir: Path, monkeypatch: pytest.MonkeyPatch, answer: str
+    ) -> None:
+        """Accepting the prompt (blank, y, or yes, case-insensitive) proceeds with the install."""
+        monkeypatch.setattr("builtins.input", lambda *_a, **_k: answer)
+
+        result = install_skills(yes=False)
+
+        assert len(result.installed) == len(SKILL_NAMES)
+        assert (project_dir / ".agents" / "skills" / SKILL_NAMES[0]).is_symlink()
+
 
 class TestBundledSkill:
     """Tests validating the real skill shipped inside the package."""

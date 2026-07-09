@@ -70,6 +70,12 @@ Because this is a copy rather than a link, it does **not** update itself when yo
 upgrade the package. Re-run `install_skills()` after upgrading OpenRetailScience
 (a cluster init script is the easiest way to keep it current).
 
+!!! warning "Managed directory"
+    The workspace `.assistant/skills/` directory is treated as installer-managed:
+    a folder there whose name matches a bundled skill is refreshed on every run.
+    If you hand-author your own skill under that directory, give it a different
+    name so `install_skills()` does not overwrite it.
+
 ## Keeping the skill current
 
 | Environment | Install method | Updates on `pip install -U`? |

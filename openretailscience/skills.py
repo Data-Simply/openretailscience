@@ -30,6 +30,10 @@ import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Literal
 
 SKILL_MARKER_FILENAME = "SKILL.md"
 AGENTS_DIR_NAME = ".agents"
@@ -299,7 +303,9 @@ def _is_owned_target(target_path: Path, bundled_names: set[str]) -> bool:
     return target_path.is_dir() and (target_path / SKILL_MARKER_FILENAME).is_file()
 
 
-def _prepare_target(source_path: Path, target_path: Path, bundled_names: set[str], *, use_copy: bool) -> str:
+def _prepare_target(
+    source_path: Path, target_path: Path, bundled_names: set[str], *, use_copy: bool
+) -> Literal["install", "up_to_date", "skip"]:
     """Clear or evaluate an existing target before installing.
 
     Symlink and copy mode treat an existing owned *real directory* asymmetrically.
