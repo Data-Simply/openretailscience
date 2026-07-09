@@ -11,7 +11,6 @@ import pytest
 
 from openretailscience import skills
 from openretailscience.skills import (
-    SkillInstallResult,
     _discover_skills,
     _find_project_root,
     _get_source_skills_dir,
@@ -83,6 +82,11 @@ def _raise_value_error(*_args: object, **_kwargs: object) -> str:
     """Stand-in for os.path.relpath that reports incompatible paths."""
     msg = "paths are on different drives"
     raise ValueError(msg)
+
+
+def _raise_not_implemented(*_args: object, **_kwargs: object) -> None:
+    """Stand-in for os.symlink on a platform without symlink support."""
+    raise NotImplementedError
 
 
 def _make_bare_skill(root: Path, name: str, body: bytes = b"guidance") -> Path:
@@ -249,11 +253,12 @@ class TestProjectInstall:
 class TestCopyFallback:
     """Tests for the copy fallback when symlinks are unsupported."""
 
-    def test_copies_directory_when_symlink_raises(
-        self, source_dir: Path, project_dir: Path, monkeypatch: pytest.MonkeyPatch
+    @pytest.mark.parametrize("raiser", [_raise_oserror, _raise_not_implemented])
+    def test_copies_directory_when_symlink_unsupported(
+        self, source_dir: Path, project_dir: Path, monkeypatch: pytest.MonkeyPatch, raiser: object
     ) -> None:
-        """When os.symlink fails, the skill is copied as a real directory."""
-        monkeypatch.setattr(os, "symlink", _raise_oserror)
+        """When os.symlink raises OSError or NotImplementedError, the skill is copied instead."""
+        monkeypatch.setattr(os, "symlink", raiser)
 
         install_skills(yes=True)
 
@@ -437,11 +442,6 @@ class TestBundledSkill:
         description_body = block.split("description:", 1)[1].replace(">-", " ").strip()
         assert len(description_body) >= MIN_DESCRIPTION_LENGTH
 
-    def test_result_is_skill_install_result(self, source_dir: Path, project_dir: Path) -> None:
-        """install_skills returns a SkillInstallResult."""
-        result = install_skills(yes=True)
-        assert isinstance(result, SkillInstallResult)
-
     def test_referenced_files_exist(self) -> None:
         """Every references/*.md path the shipped skill points at exists on disk."""
         skill_root = _get_source_skills_dir() / SHIPPED_SKILL_NAME
@@ -576,15 +576,16 @@ class TestIsOwnedTarget:
 class TestRelativeSymlinkTarget:
     """Unit tests for _relative_symlink_target."""
 
+    @pytest.mark.parametrize("raiser", [_raise_value_error, _raise_oserror])
     def test_falls_back_to_absolute_source_on_relpath_error(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raiser: object
     ) -> None:
-        """When a relative path cannot be computed, the absolute real source path is used."""
+        """A ValueError (cross-drive) or OSError while computing the relative path falls back."""
         source = tmp_path / "src"
         source.mkdir()
         (tmp_path / "dst").mkdir()
         target = tmp_path / "dst" / "link"
-        monkeypatch.setattr(skills.os.path, "relpath", _raise_value_error)
+        monkeypatch.setattr(skills.os.path, "relpath", raiser)
 
         assert _relative_symlink_target(source, target) == os.path.realpath(source)
 
