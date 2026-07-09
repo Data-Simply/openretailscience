@@ -4,20 +4,18 @@
 
 OpenRetailScience analyses run on a single, flat table of retail transactions. You bring that table as either a
 pandas DataFrame or an [Ibis](https://ibis-project.org/) table, and each analysis reads the columns it needs by their
-standard names. There is no bespoke data model to learn and no objects to populate first: prepare one
-analysis-ready table, and every function works from it.
+standard names.
 
-These expectations are not arbitrary. They were shaped by working with dozens of retailers' transactional data and
-follow the patterns that are standard across the industry — star-schema warehouses, transaction- and line-item-level
-sales tables, and single-column keys. Adopting them is what lets the same OpenRetailScience analysis run unchanged
-across very different retailers.
+They were shaped by working with dozens of retailers' transactional data and follow the patterns that are standard
+across the industry: star-schema warehouses, transaction- and line-item-level sales tables, and single-column keys.
+Adopting them is what lets the same OpenRetailScience analysis run unchanged across very different retailers.
 
-This guide explains the shape that table should have — the granularity it can be at, which columns each analysis
-requires, how identifiers must be structured, and the data-quality assumptions baked into the package — so you can
-prepare your data correctly on the first attempt.
+This guide explains the shape that table should have: the granularity it can be at, which columns each analysis
+requires, how identifiers must be structured, and the data-quality assumptions baked into the package. With those
+settled, you can prepare your data correctly on the first attempt.
 
 !!! info "Where this fits"
-    This guide covers the *shape* of your data — the granularity and columns each analysis needs. For connecting to
+    This guide covers the *shape* of your data: the granularity and columns each analysis needs. For connecting to
     a backend or mapping your own column names, see [Connecting to your data](connecting_to_data.md) and the
     [Options & configuration guide](options_guide.md).
 
@@ -28,9 +26,9 @@ prepare your data correctly on the first attempt.
 OpenRetailScience expects a single denormalized table where each row is one observation of a sale. That table can be
 at either of two granularities, and most functions accept both because they aggregate internally:
 
-- **Line-item level** — one row per product within each transaction. A basket of three products is three rows that
+- **Line-item level**: one row per product within each transaction. A basket of three products is three rows that
   share a `transaction_id`. This is the richest form and the only one that supports product-level analyses.
-- **Transaction level** — one row per transaction (basket). Product detail has already been summed away, so
+- **Transaction level**: one row per transaction (basket). Product detail has already been summed away, so
   `unit_spend` is the basket total and there is no per-product breakdown.
 
 The sample dataset shipped at `data/transactions.parquet` is **line-item level**. Its schema is the canonical
@@ -61,14 +59,14 @@ ibis.Schema {
 
 Choose the granularity by the question you are asking:
 
-- Use **line-item level** whenever product, brand, or category matters — product association, customer decision
+- Use **line-item level** whenever product, brand, or category matters: product association, customer decision
   hierarchies, and any segmentation or revenue analysis sliced by category or brand all need it.
 - **Transaction level** is sufficient for purely basket- or customer-shaped questions (how many baskets per
   customer, spend per customer, churn) and is cheaper to store and scan.
 
 When in doubt, keep line-item level: every transaction-level metric can be derived from it, but not the reverse.
-Functions such as `SegTransactionStats` and `RevenueTree` aggregate line items for you — to the segment or period
-level their column arguments define — so you do not need to pre-aggregate.
+Functions such as `SegTransactionStats` and `RevenueTree` aggregate line items for you (to the segment or period
+level their column arguments define), so you do not need to pre-aggregate.
 
 ### Star schemas and denormalized views
 
@@ -77,7 +75,7 @@ referencing dimension tables for products, stores, customers, and dates. That is
 OpenRetailScience does not ask you to change it.
 
 What the package works on is a **denormalized analysis view** built by joining the dimensions you need onto the fact
-table. You create that view once — in SQL, in Ibis, or in pandas — and pass it to the analysis:
+table. You create that view once (in SQL, in Ibis, or in pandas) and pass it to the analysis:
 
 ```sql
 -- Create an analysis-ready view from a star schema
@@ -121,7 +119,7 @@ analysis_view = (
 )
 ```
 
-The `.select(...)` keeps the view lightweight — pull only the dimension attributes the analysis needs. A view
+The `.select(...)` keeps the view lightweight: pull only the dimension attributes the analysis needs. A view
 dragging every column from every dimension is slower to scan and no more useful.
 
 ## Column requirements
@@ -143,7 +141,7 @@ OpenRetailScience reads columns by a fixed set of standard names. The most commo
 | `unit_cost`        | Cost per unit                            |
 | `store_id`         | Store identifier                         |
 
-Not every dataset contains every column — this is the set of names OpenRetailScience *recognises*, and each
+Not every dataset contains every column. This is the set of names OpenRetailScience *recognises*, and each
 analysis needs only the ones it uses (the sample data, for example, has no `unit_price`).
 
 If your warehouse uses different names, **do not rename every column**. Map your names onto the standard ones once,
@@ -152,7 +150,7 @@ through the options system (a `openretailscience.toml` file, `option_context()`,
 
 ### Required vs optional columns
 
-No single set of columns is required for *every* analysis — each function validates only what it uses, and raises a
+No single set of columns is required for *every* analysis. Each function validates only what it uses and raises a
 clear error naming any column it cannot find:
 
 ```python
@@ -161,12 +159,12 @@ ValueError: Input data is missing required columns: ['customer_id'].
 
 Columns fall into three roles:
 
-- **Required** — the function fails without them (for example, `RFMSegmentation` needs `transaction_date` to compute
+- **Required**: the function fails without them (for example, `RFMSegmentation` needs `transaction_date` to compute
   recency).
-- **Optional, behaviour-enhancing** — used if present, skipped if absent. `SegTransactionStats` adds
+- **Optional, behaviour-enhancing**: used if present, skipped if absent. `SegTransactionStats` adds
   per-customer metrics only when `customer_id` is present, and unit-price and units-per-transaction metrics only
   when `unit_quantity` is present.
-- **You-named** — columns you point a function at by name through a constructor parameter, such as `segment_col`,
+- **You-named**: columns you point a function at by name through a constructor parameter, such as `segment_col`,
   `period_col`, or `value_col`. These are always required, but you choose which column fills the role.
 
 ## ID column handling
@@ -174,14 +172,14 @@ Columns fall into three roles:
 ### Single-column identifiers only
 
 !!! warning "No compound keys"
-    Every identifier OpenRetailScience reads — `customer_id`, `transaction_id`, `product_id`, `store_id` — must be a
+    Every identifier OpenRetailScience reads (`customer_id`, `transaction_id`, `product_id`, `store_id`) must be a
     **single column**. The package has no concept of a multi-column key. If your source system identifies an entity
     by a combination of columns (for example `region_id` + `customer_number`), combine them into one column before
     analysis.
 
 ### Creating composite IDs
 
-Build the single identifier upstream — in your warehouse query or in the Ibis/pandas step that prepares the view.
+Build the single identifier upstream, in your warehouse query or in the Ibis/pandas step that prepares the view.
 String concatenation with a separator is the robust default because it cannot collide:
 
 ```sql
@@ -216,7 +214,7 @@ string concatenation unless you have measured a need for integer keys.
 
 ## Data quality
 
-OpenRetailScience does not silently clean your data — it assumes the analysis view is already correct. A few
+OpenRetailScience does not silently clean your data. It assumes the analysis view is already correct. A few
 expectations are worth checking before you run an analysis.
 
 ### Types
@@ -233,12 +231,12 @@ expectations are worth checking before you run an analysis.
 
 ### Nulls
 
-A null in a grouping or identifier column becomes its own group rather than being dropped, which usually is not what
+A null in a grouping or identifier column becomes its own group rather than being dropped, which sometimes is not what
 you want. Decide on null handling deliberately:
 
 - Filter or impute nulls in `customer_id`, `transaction_date`, and any `segment_col` before analysis.
 - A null in a measure column (`unit_spend`) propagates through sums; clean these at the source.
-- A negative `unit_spend` row is a return or refund — valid data, but decide deliberately whether to include or
+- A negative `unit_spend` row is a return or refund. It is valid data, but decide deliberately whether to include or
   exclude returns, since most spend metrics assume positive transactions.
 
 ## Putting it together
@@ -270,7 +268,7 @@ print(stats.df)
 
 ## Related documentation
 
-- [Connecting to your data](connecting_to_data.md) — backends, connections, and filtering at the source.
-- [Options & configuration](options_guide.md) — mapping your column names onto the standard ones.
-- [SegTransactionStats API reference](../api/segmentation/segstats.md) — the function used in the examples above.
-- [Analysis modules](../analysis_modules.md) — an overview of every analysis the package provides.
+- [Connecting to your data](connecting_to_data.md): backends, connections, and filtering at the source.
+- [Options & configuration](options_guide.md): mapping your column names onto the standard ones.
+- [SegTransactionStats API reference](../api/segmentation/segstats.md): the function used in the examples above.
+- [Analysis modules](../analysis_modules.md): an overview of every analysis the package provides.
