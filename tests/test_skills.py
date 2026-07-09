@@ -13,7 +13,11 @@ from openretailscience import skills
 from openretailscience.skills import (
     SkillInstallResult,
     _discover_skills,
+    _find_project_root,
     _get_source_skills_dir,
+    _is_owned_target,
+    _relative_symlink_target,
+    _skill_copy_matches,
     install_skills,
 )
 
@@ -73,6 +77,20 @@ def _fail_if_called(*_args: object, **_kwargs: object) -> str:
     """Stand-in for input() that fails if the prompt is ever shown."""
     msg = "input() must not be called when yes=True"
     raise AssertionError(msg)
+
+
+def _raise_value_error(*_args: object, **_kwargs: object) -> str:
+    """Stand-in for os.path.relpath that reports incompatible paths."""
+    msg = "paths are on different drives"
+    raise ValueError(msg)
+
+
+def _make_bare_skill(root: Path, name: str, body: bytes = b"guidance") -> Path:
+    """Create a skill dir with a SKILL.md of the given bytes; return the dir."""
+    skill_dir = root / name
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_bytes(body)
+    return skill_dir
 
 
 def _write_skill(skills_dir: Path, name: str) -> None:
@@ -185,7 +203,7 @@ class TestProjectInstall:
         # The non-conflicting skill still installs.
         assert (target_dir / SKILL_NAMES[1]).is_symlink()
 
-    def test_existing_real_skill_dir_is_never_deleted(self, source_dir: Path, project_dir: Path) -> None:
+    def test_existing_real_skill_dir_is_skipped_in_symlink_mode(self, source_dir: Path, project_dir: Path) -> None:
         """A user's own real skill dir (same name, with SKILL.md) is skipped, not clobbered."""
         target_dir = project_dir / ".agents" / "skills"
         user_skill = target_dir / SKILL_NAMES[0]
@@ -200,6 +218,32 @@ class TestProjectInstall:
         assert str(user_skill.relative_to(project_dir)) in result.skipped
         # The non-conflicting skill still installs as a symlink.
         assert (target_dir / SKILL_NAMES[1]).is_symlink()
+
+    def test_stale_symlink_is_repointed_to_source(self, source_dir: Path, project_dir: Path) -> None:
+        """An owned symlink pointing at the wrong source is unlinked and reinstalled."""
+        target_dir = project_dir / ".agents" / "skills"
+        target_dir.mkdir(parents=True)
+        stale_source = project_dir / "old-source"
+        stale_source.mkdir()
+        link = target_dir / SKILL_NAMES[0]
+        link.symlink_to(stale_source, target_is_directory=True)
+
+        result = install_skills(yes=True)
+
+        assert link.is_symlink()
+        assert link.resolve() == (source_dir / SKILL_NAMES[0]).resolve()
+        assert str(link.relative_to(project_dir)) in result.installed
+
+    def test_skipped_skill_leaves_no_empty_directory(self, source_dir: Path, project_dir: Path) -> None:
+        """A skill skipped for a conflict does not create its own empty target dir."""
+        target_dir = project_dir / ".agents" / "skills"
+        target_dir.mkdir(parents=True)
+        (target_dir / SKILL_NAMES[0]).write_text("user data", encoding="utf-8")
+
+        install_skills(yes=True)
+
+        # The conflicting target stays a file; no empty directory replaces it.
+        assert (target_dir / SKILL_NAMES[0]).is_file()
 
 
 class TestCopyFallback:
@@ -286,6 +330,22 @@ class TestDatabricksInstall:
         target = workspace_root / ".assistant" / "skills" / SKILL_NAMES[0] / "SKILL.md"
         assert "Updated." in target.read_text(encoding="utf-8")
         assert len(result.installed) == 1
+
+    def test_existing_workspace_skill_dir_is_replaced(self, source_dir: Path, workspace_root: Path) -> None:
+        """In copy mode the managed Genie skills dir is refreshed, replacing an owned same-name dir.
+
+        This is the documented asymmetry with symlink mode: the workspace
+        ``.assistant/skills`` directory is installer-managed, so a same-named
+        directory there is treated as a prior copy and overwritten on re-run.
+        """
+        existing = workspace_root / ".assistant" / "skills" / SKILL_NAMES[0]
+        existing.mkdir(parents=True)
+        (existing / "SKILL.md").write_text("stale copy", encoding="utf-8")
+
+        install_skills(yes=True)
+
+        assert existing.is_dir()
+        assert (existing / "SKILL.md").read_bytes() == (source_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes()
 
     def test_copy_is_independent_of_source(self, source_dir: Path, workspace_root: Path) -> None:
         """The copied skill survives the ephemeral package being wiped on restart."""
@@ -404,3 +464,147 @@ class TestBundledSkill:
         assert len(statements) >= MIN_IMPORT_EXAMPLES, "skill should teach many concrete imports"
         failures = [msg for statement in statements if (msg := _import_error(statement)) is not None]
         assert not failures, "skill imports no longer resolve:\n" + "\n".join(failures)
+
+
+class TestFindProjectRoot:
+    """Unit tests for _find_project_root."""
+
+    def test_returns_git_root_from_subdirectory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A .git ancestor is used as the project root."""
+        (tmp_path / "home").mkdir()
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        repo = tmp_path / "repo"
+        (repo / ".git").mkdir(parents=True)
+        sub = repo / "pkg"
+        sub.mkdir()
+
+        assert _find_project_root(sub) == repo
+
+    def test_agents_ancestor_wins_over_git_walk(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An existing .agents dir on an ancestor is preferred as the root."""
+        (tmp_path / "home").mkdir()
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        root = tmp_path / "proj"
+        (root / ".agents").mkdir(parents=True)
+        sub = root / "nested"
+        sub.mkdir()
+
+        assert _find_project_root(sub) == root
+
+    def test_falls_back_to_start_dir_without_markers(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With no .agents/.claude/.git found, the start dir itself is returned."""
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        start = tmp_path / "loose"
+        start.mkdir()
+
+        assert _find_project_root(start) == start
+
+    def test_never_crosses_into_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A marker at the home directory is ignored; the search stops at that boundary."""
+        home = tmp_path / "home"
+        (home / ".git").mkdir(parents=True)  # marker at home must not be selected
+        monkeypatch.setenv("HOME", str(home))
+        sub = home / "project"
+        sub.mkdir()
+
+        assert _find_project_root(sub) == sub
+
+
+class TestSkillCopyMatches:
+    """Unit tests for _skill_copy_matches."""
+
+    def test_true_for_identical_trees(self, tmp_path: Path) -> None:
+        """Two directories with the same files and bytes match."""
+        source = _make_bare_skill(tmp_path / "src", "s")
+        target = _make_bare_skill(tmp_path / "dst", "s")
+        assert _skill_copy_matches(source, target) is True
+
+    def test_false_when_target_is_not_a_directory(self, tmp_path: Path) -> None:
+        """A non-directory target never matches."""
+        source = _make_bare_skill(tmp_path / "src", "s")
+        target = tmp_path / "a-file"
+        target.write_text("x", encoding="utf-8")
+        assert _skill_copy_matches(source, target) is False
+
+    def test_false_when_file_sets_differ(self, tmp_path: Path) -> None:
+        """Different relative file sets do not match."""
+        source = _make_bare_skill(tmp_path / "src", "s")
+        (source / "extra.md").write_text("more", encoding="utf-8")
+        target = _make_bare_skill(tmp_path / "dst", "s")
+        assert _skill_copy_matches(source, target) is False
+
+    def test_false_when_bytes_differ(self, tmp_path: Path) -> None:
+        """Same file names but different bytes do not match."""
+        source = _make_bare_skill(tmp_path / "src", "s", body=b"one")
+        target = _make_bare_skill(tmp_path / "dst", "s", body=b"two")
+        assert _skill_copy_matches(source, target) is False
+
+    def test_false_on_file_versus_directory_mismatch(self, tmp_path: Path) -> None:
+        """A path that is a file in source but a directory in target returns False, not raises."""
+        source = _make_bare_skill(tmp_path / "src", "s")
+        (source / "refs").write_text("a file", encoding="utf-8")
+        target = _make_bare_skill(tmp_path / "dst", "s")
+        (target / "refs").mkdir()
+        assert _skill_copy_matches(source, target) is False
+
+
+class TestIsOwnedTarget:
+    """Unit tests for _is_owned_target."""
+
+    def test_false_for_unbundled_name(self, tmp_path: Path) -> None:
+        """A directory whose name is not a bundled skill is never owned."""
+        other = _make_bare_skill(tmp_path, "other-skill")
+        assert _is_owned_target(other, {"using-openretailscience"}) is False
+
+    def test_true_for_symlink_with_bundled_name(self, tmp_path: Path) -> None:
+        """A symlink named after a bundled skill is owned."""
+        real = tmp_path / "real"
+        real.mkdir()
+        link = tmp_path / "using-openretailscience"
+        link.symlink_to(real, target_is_directory=True)
+        assert _is_owned_target(link, {"using-openretailscience"}) is True
+
+    def test_false_for_real_dir_without_marker(self, tmp_path: Path) -> None:
+        """A real directory with a bundled name but no SKILL.md is not owned."""
+        directory = tmp_path / "using-openretailscience"
+        directory.mkdir()
+        assert _is_owned_target(directory, {"using-openretailscience"}) is False
+
+
+class TestRelativeSymlinkTarget:
+    """Unit tests for _relative_symlink_target."""
+
+    def test_falls_back_to_absolute_source_on_relpath_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When a relative path cannot be computed, the absolute real source path is used."""
+        source = tmp_path / "src"
+        source.mkdir()
+        (tmp_path / "dst").mkdir()
+        target = tmp_path / "dst" / "link"
+        monkeypatch.setattr(skills.os.path, "relpath", _raise_value_error)
+
+        assert _relative_symlink_target(source, target) == os.path.realpath(source)
+
+
+class TestInstallSkillsErrors:
+    """Error paths for install_skills when the bundled source is missing or empty."""
+
+    def test_missing_source_dir_raises(self, tmp_path: Path, fake_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A missing bundled skills directory raises FileNotFoundError."""
+        missing = tmp_path / "nope" / ".agents" / "skills"
+        monkeypatch.setattr(skills, "_get_source_skills_dir", lambda: missing)
+
+        with pytest.raises(FileNotFoundError, match="Bundled skills directory"):
+            install_skills(yes=True)
+
+    def test_empty_source_dir_raises(self, tmp_path: Path, fake_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A bundled skills directory with no valid skills raises FileNotFoundError."""
+        empty = tmp_path / "src" / ".agents" / "skills"
+        empty.mkdir(parents=True)
+        monkeypatch.setattr(skills, "_get_source_skills_dir", lambda: empty)
+
+        with pytest.raises(FileNotFoundError, match="No installable skills"):
+            install_skills(yes=True)

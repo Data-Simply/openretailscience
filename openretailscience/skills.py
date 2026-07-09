@@ -278,11 +278,15 @@ def _skill_copy_matches(source_path: Path, target_path: Path) -> bool:
 
 
 def _is_owned_target(target_path: Path, bundled_names: set[str]) -> bool:
-    """Return whether the installer may safely replace ``target_path``.
+    """Return whether the installer may replace ``target_path``.
 
     A target is owned when it is a symlink whose name matches a bundled skill, or
     a real directory named after a bundled skill that itself contains a
     ``SKILL.md`` (a prior copy install). Anything else is user content.
+
+    Ownership only permits replacement; whether an owned *real directory* is
+    actually replaced depends on the install method (see :func:`_prepare_target`):
+    symlink mode always leaves real directories in place, copy mode refreshes them.
 
     Args:
         target_path (Path): The candidate target.
@@ -301,6 +305,14 @@ def _is_owned_target(target_path: Path, bundled_names: set[str]) -> bool:
 def _prepare_target(source_path: Path, target_path: Path, bundled_names: set[str], *, use_copy: bool) -> str:
     """Clear or evaluate an existing target before installing.
 
+    Symlink and copy mode treat an existing owned *real directory* asymmetrically.
+    In symlink mode (project/global installs) a real directory is never something
+    this installer created, so it is skipped to protect possibly user-authored
+    content of the same name. In copy mode (Databricks) the target lives in the
+    installer-managed Genie skills directory, so an owned real directory is treated
+    as a prior copy and refreshed (``shutil.rmtree`` then re-copy) — a user's own
+    same-named skill placed there would be overwritten on re-run.
+
     Args:
         source_path (Path): The bundled skill directory.
         target_path (Path): Where the skill will be installed.
@@ -317,12 +329,10 @@ def _prepare_target(source_path: Path, target_path: Path, bundled_names: set[str
         return "skip"
 
     if target_path.is_symlink():
-        if not use_copy:
-            try:
-                if target_path.resolve() == source_path.resolve():
-                    return "up_to_date"
-            except OSError:
-                pass
+        # ``resolve()`` is non-strict, so a broken owned symlink resolves to a
+        # non-existent path (never equal to the source) and is replaced below.
+        if not use_copy and target_path.resolve() == source_path.resolve():
+            return "up_to_date"
         target_path.unlink()  # os.unlink semantics: remove the link, not its target
         return "install"
 
@@ -375,7 +385,6 @@ def _install_one(
     source_path = source_dir / skill_name
     target_path = target_dir / skill_name
     label = _display_label(target_path)
-    target_dir.mkdir(parents=True, exist_ok=True)
 
     disposition = _prepare_target(source_path, target_path, bundled_names, use_copy=use_copy)
     if disposition == "up_to_date":
@@ -385,6 +394,9 @@ def _install_one(
         result.skipped.append(label)
         return
 
+    # Only create the target directory once we know we are actually installing,
+    # so a skipped skill never leaves an empty directory behind.
+    target_dir.mkdir(parents=True, exist_ok=True)
     if use_copy or not _try_symlink(source_path, target_path):
         shutil.copytree(source_path, target_path)
     result.installed.append(label)
