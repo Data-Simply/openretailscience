@@ -58,6 +58,13 @@ examples = [ "jupyterlab>=4.2.5,<5", "tqdm>=4.66.1,<5" ]
 build-backend = "hatchling.build"
 requires      = [ "hatchling" ]
 
+# Ship the bundled agent skills (a dot-directory) in both the wheel and sdist.
+# ``artifacts`` overrides any future VCS/.gitignore exclusion of ``.agents`` so
+# the skills installed by ``openretailscience.skills.install_skills`` can never
+# silently drop out of a release.
+[tool.hatch.build]
+artifacts = [ "openretailscience/.agents/**" ]
+
 [tool.uv]
 default-groups   = [ "dev", "docs", "examples" ]
 required-version = ">=0.10.0,<0.12.0"
