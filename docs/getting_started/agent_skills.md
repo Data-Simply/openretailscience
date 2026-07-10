@@ -39,7 +39,10 @@ install_skills(global_mode=True)       # install for all your projects
 ```
 
 The operation is **idempotent**: re-running it re-uses existing links and never
-overwrites unrelated files you already have in those directories.
+overwrites unrelated files or real directories you already have in those
+directories. It does repoint a **symlink** that shares the bundled skill's name
+(`using-openretailscience`), treating such a link as its own so it can refresh
+one left by an earlier install.
 
 !!! note "Symlinks are environment-specific"
     Project-mode links point into the Python environment that installed the
