@@ -24,6 +24,17 @@ Apply this lens to every change:
 When in doubt about whether a piece of complexity is earning its keep, leave it out. Adding it back when a real
 second use case demands it is cheap; removing an abstraction once code depends on its shape is not.
 
+## Agent Skill Maintenance
+
+The package ships an AI-agent-facing skill at `openretailscience/.agents/skills/using-openretailscience/`
+(`SKILL.md`, `references/*.md`, `scripts/example_*.py`). These files are read directly by AI agents as API
+documentation, not by humans running a tutorial. Whenever a change touches public API surface (a renamed/added/
+removed parameter, a changed default, a new recommended utility function, a deprecated pattern), check whether
+`SKILL.md`, the `references/` docs, or the affected `example_*.py` scripts need updating to match. A stale example
+silently teaches an agent a broken or outdated pattern. `tests/test_skills.py::TestExampleScripts` only catches
+outright breakage (a script that raises); it does not catch an example that still runs but no longer reflects
+current best practice.
+
 ## Build & Test Commands
 
 - Install dependencies: `uv sync`

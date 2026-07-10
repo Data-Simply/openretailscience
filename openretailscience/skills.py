@@ -5,12 +5,12 @@ with YAML frontmatter) under ``openretailscience/.agents/skills/`` and links the
 into the directories that AI coding agents read from, so upgrading the package
 propagates updated skills automatically.
 
-The public entry point is :func:`install_skills`. There is no CLI:
+The public entry point is :func:`install_skills`:
 
     from openretailscience.skills import install_skills
     install_skills()
 
-Linking behaviour, modeled on Streamlit's ``streamlit skills`` command:
+Linking behaviour:
 
 * On POSIX (and Windows with symlink support) skills are **symlinked** into the
   target directories, so a ``pip install -U`` of the package updates them in
@@ -137,57 +137,23 @@ def _skills_dir(base: Path, harness_dir: str) -> Path:
     return base / harness_dir / SKILLS_SUBDIR
 
 
-def _get_project_target_dirs(project_root: Path) -> list[Path]:
-    """Return project-mode target directories.
+def _get_target_dirs(base: Path) -> list[Path]:
+    """Return the ``.agents/skills`` (and ``.claude/skills``) targets under ``base``.
 
-    Always targets ``<root>/.agents/skills``; adds ``<root>/.claude/skills`` when
+    Always targets ``<base>/.agents/skills``; adds ``<base>/.claude/skills`` when
     Claude Code is detected (a ``~/.claude`` directory exists).
 
     Args:
-        project_root (Path): The resolved project root.
+        base (Path): The resolved project root (project mode) or home directory
+            (global mode).
 
     Returns:
         list[Path]: Target skill directories.
     """
-    targets = [_skills_dir(project_root, AGENTS_DIR_NAME)]
+    targets = [_skills_dir(base, AGENTS_DIR_NAME)]
     if (Path.home() / CLAUDE_DIR_NAME).is_dir():
-        targets.append(_skills_dir(project_root, CLAUDE_DIR_NAME))
+        targets.append(_skills_dir(base, CLAUDE_DIR_NAME))
     return targets
-
-
-def _get_global_target_dirs() -> list[Path]:
-    """Return global-mode target directories under the home directory.
-
-    Always targets ``~/.agents/skills``; adds ``~/.claude/skills`` when Claude
-    Code is detected.
-
-    Returns:
-        list[Path]: Target skill directories.
-    """
-    home = Path.home()
-    targets = [_skills_dir(home, AGENTS_DIR_NAME)]
-    if (home / CLAUDE_DIR_NAME).is_dir():
-        targets.append(_skills_dir(home, CLAUDE_DIR_NAME))
-    return targets
-
-
-def _is_databricks() -> bool:
-    """Return whether the current process runs on Databricks compute.
-
-    Returns:
-        bool: True when the Databricks runtime environment variable is set.
-    """
-    return _DATABRICKS_RUNTIME_ENV in os.environ
-
-
-def _databricks_user() -> str | None:
-    """Best-effort lookup of the current Databricks workspace user.
-
-    Returns:
-        str | None: The user identifier, or None when it cannot be determined.
-    """
-    value = os.environ.get(_DATABRICKS_USER_ENV)
-    return value if value is not None and len(value) > 0 else None
 
 
 def _get_databricks_target_dirs(*, global_mode: bool) -> list[Path]:
@@ -204,7 +170,7 @@ def _get_databricks_target_dirs(*, global_mode: bool) -> list[Path]:
         list[Path]: The single Genie skills directory to copy into.
     """
     if global_mode:
-        user = _databricks_user()
+        user = os.environ.get(_DATABRICKS_USER_ENV) or None  # blank env var counts as unknown
         if user is not None:
             base = _DATABRICKS_WORKSPACE_ROOT / DATABRICKS_USERS_DIR / user
             return [_skills_dir(base, DATABRICKS_ASSISTANT_DIR)]
@@ -351,21 +317,6 @@ def _prepare_target(
     return "install"
 
 
-def _display_label(target_path: Path) -> str:
-    """Return a concise label for ``target_path`` relative to the cwd.
-
-    Args:
-        target_path (Path): The installed target path.
-
-    Returns:
-        str: A cwd-relative path when possible, else the absolute path.
-    """
-    try:
-        return str(target_path.relative_to(Path.cwd()))
-    except ValueError:
-        return str(target_path)
-
-
 def _install_one(
     skill_name: str,
     source_dir: Path,
@@ -387,7 +338,10 @@ def _install_one(
     """
     source_path = source_dir / skill_name
     target_path = target_dir / skill_name
-    label = _display_label(target_path)
+    try:
+        label = str(target_path.relative_to(Path.cwd()))
+    except ValueError:
+        label = str(target_path)
 
     disposition = _prepare_target(source_path, target_path, bundled_names, use_copy=use_copy)
     if disposition == "up_to_date":
@@ -405,48 +359,6 @@ def _install_one(
     result.installed.append(label)
 
 
-def _print_plan(source_dir: Path, skills: list[str], target_dirs: list[Path], *, use_copy: bool) -> None:
-    """Print the installation plan for interactive confirmation.
-
-    Args:
-        source_dir (Path): Bundled skills source directory.
-        skills (list[str]): Skills to install.
-        target_dirs (list[Path]): Destination directories.
-        use_copy (bool): Whether skills will be copied rather than symlinked.
-    """
-    method = "Copying" if use_copy else "Linking"
-    print(f"{method} {len(skills)} skill(s) from {source_dir}:")  # noqa: T201
-    for skill in skills:
-        print(f"  - {skill}")  # noqa: T201
-    print("Into:")  # noqa: T201
-    for target_dir in target_dirs:
-        print(f"  - {target_dir}")  # noqa: T201
-
-
-def _confirm(source_dir: Path, skills: list[str], target_dirs: list[Path], *, use_copy: bool) -> bool:
-    """Show the plan and prompt for confirmation.
-
-    Args:
-        source_dir (Path): Bundled skills source directory.
-        skills (list[str]): Skills to install.
-        target_dirs (list[Path]): Destination directories.
-        use_copy (bool): Whether skills will be copied rather than symlinked.
-
-    Returns:
-        bool: True when the user accepts installation.
-
-    Raises:
-        RuntimeError: When run non-interactively (stdin is closed).
-    """
-    _print_plan(source_dir, skills, target_dirs, use_copy=use_copy)
-    try:
-        answer = input("Proceed with installation? [Y/n] ").strip().lower()
-    except EOFError:
-        msg = "Non-interactive session detected. Pass yes=True to install_skills() to skip confirmation."
-        raise RuntimeError(msg) from None
-    return answer in {"", "y", "yes"}
-
-
 def _print_result(result: SkillInstallResult) -> None:
     """Print a summary of the installation outcome.
 
@@ -462,7 +374,7 @@ def _print_result(result: SkillInstallResult) -> None:
             print(f"{label}: {path}")  # noqa: T201
 
 
-def install_skills(global_mode: bool = False, yes: bool = False) -> SkillInstallResult:
+def install_skills(global_mode: bool = False) -> SkillInstallResult:
     """Install the package's bundled agent skills.
 
     In project mode (default) skills are linked into the current project's
@@ -474,15 +386,13 @@ def install_skills(global_mode: bool = False, yes: bool = False) -> SkillInstall
     Args:
         global_mode (bool): Install to user-level home directories instead of the
             current project. Defaults to False.
-        yes (bool): Skip the interactive confirmation prompt. Defaults to False.
 
     Returns:
         SkillInstallResult: The skills that were installed, already up to date,
-        or skipped. Empty when the user declines the confirmation.
+        or skipped.
 
     Raises:
         FileNotFoundError: When the bundled skills directory is missing or empty.
-        RuntimeError: When confirmation is required but stdin is non-interactive.
     """
     source_dir = _get_source_skills_dir()
     if not source_dir.is_dir():
@@ -494,19 +404,15 @@ def install_skills(global_mode: bool = False, yes: bool = False) -> SkillInstall
         msg = "No installable skills found in the openretailscience package."
         raise FileNotFoundError(msg)
 
-    if _is_databricks():
+    if _DATABRICKS_RUNTIME_ENV in os.environ:
         target_dirs = _get_databricks_target_dirs(global_mode=global_mode)
         use_copy = True
     elif global_mode:
-        target_dirs = _get_global_target_dirs()
+        target_dirs = _get_target_dirs(Path.home())
         use_copy = False
     else:
-        target_dirs = _get_project_target_dirs(_find_project_root())
+        target_dirs = _get_target_dirs(_find_project_root())
         use_copy = False
-
-    if not yes and not _confirm(source_dir, skills, target_dirs, use_copy=use_copy):
-        print("Installation cancelled.")  # noqa: T201
-        return SkillInstallResult()
 
     result = SkillInstallResult()
     bundled_names = set(skills)

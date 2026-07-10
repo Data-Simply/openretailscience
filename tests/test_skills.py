@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import os
 import re
+import runpy
 import shutil
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
 
 from openretailscience import skills
+from openretailscience.options import get_option, list_options, set_option
 from openretailscience.skills import (
     _discover_skills,
     _find_project_root,
@@ -21,6 +24,7 @@ from openretailscience.skills import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 # Two realistic bundled-skill names plus a junk dir with no SKILL.md.
@@ -33,8 +37,14 @@ IMPORT_RE = re.compile(r"^[ \t]*(?:from|import)\s+openretailscience[\w. ,]*(?:im
 # Markdown references to sibling skill files, e.g. `references/plotting.md`.
 REFERENCE_RE = re.compile(r"references/[\w./-]+\.md")
 MIN_REFERENCE_FILES = 3
+# Lower-bound sanity check: the skill teaches far more, so this floor only guards
+# against the import-extraction pipeline silently matching nothing.
 MIN_IMPORT_EXAMPLES = 20
 MIN_DESCRIPTION_LENGTH = 50
+# Floor on the number of bundled example scripts. An empty or truncated glob would
+# make the parametrized drift guard collect zero cases and pass silently; this
+# floor makes that fail loudly instead.
+MIN_EXAMPLE_SCRIPTS = 30
 
 
 def _import_error(statement: str) -> str | None:
@@ -65,17 +75,6 @@ def _raise_oserror(*_args: object, **_kwargs: object) -> None:
     """Stand-in for os.symlink that reports symlinks are unsupported."""
     msg = "symlinks not supported"
     raise OSError(msg)
-
-
-def _raise_eof(*_args: object, **_kwargs: object) -> str:
-    """Stand-in for input() in a non-interactive session."""
-    raise EOFError
-
-
-def _fail_if_called(*_args: object, **_kwargs: object) -> str:
-    """Stand-in for input() that fails if the prompt is ever shown."""
-    msg = "input() must not be called when yes=True"
-    raise AssertionError(msg)
 
 
 def _raise_value_error(*_args: object, **_kwargs: object) -> str:
@@ -160,7 +159,7 @@ class TestProjectInstall:
 
     def test_creates_symlinks_resolving_to_source(self, source_dir: Path, project_dir: Path) -> None:
         """Project install symlinks each skill into .agents/skills back to the source."""
-        result = install_skills(yes=True)
+        result = install_skills()
 
         target_dir = project_dir / ".agents" / "skills"
         for name in SKILL_NAMES:
@@ -177,15 +176,15 @@ class TestProjectInstall:
         if claude_present:
             (fake_home / ".claude").mkdir()
 
-        install_skills(yes=True)
+        install_skills()
 
         claude_skill = project_dir / ".claude" / "skills" / SKILL_NAMES[0]
         assert claude_skill.is_symlink() is claude_present
 
     def test_rerun_is_idempotent(self, source_dir: Path, project_dir: Path) -> None:
         """Re-running reports all skills up to date and installs nothing new."""
-        install_skills(yes=True)
-        result = install_skills(yes=True)
+        install_skills()
+        result = install_skills()
 
         assert len(result.installed) == 0
         assert len(result.up_to_date) == len(SKILL_NAMES)
@@ -199,7 +198,7 @@ class TestProjectInstall:
         conflict = target_dir / SKILL_NAMES[0]
         conflict.write_text("user data", encoding="utf-8")
 
-        result = install_skills(yes=True)
+        result = install_skills()
 
         assert conflict.read_text(encoding="utf-8") == "user data"
         assert not conflict.is_symlink()
@@ -214,7 +213,7 @@ class TestProjectInstall:
         user_skill.mkdir(parents=True)
         (user_skill / "SKILL.md").write_text("my own skill", encoding="utf-8")
 
-        result = install_skills(yes=True)
+        result = install_skills()
 
         assert user_skill.is_dir()
         assert not user_skill.is_symlink()
@@ -232,7 +231,7 @@ class TestProjectInstall:
         link = target_dir / SKILL_NAMES[0]
         link.symlink_to(stale_source, target_is_directory=True)
 
-        result = install_skills(yes=True)
+        result = install_skills()
 
         assert link.is_symlink()
         assert link.resolve() == (source_dir / SKILL_NAMES[0]).resolve()
@@ -244,7 +243,7 @@ class TestProjectInstall:
         target_dir.mkdir(parents=True)
         (target_dir / SKILL_NAMES[0]).write_text("user data", encoding="utf-8")
 
-        install_skills(yes=True)
+        install_skills()
 
         # The conflicting target stays a file; no empty directory replaces it.
         assert (target_dir / SKILL_NAMES[0]).is_file()
@@ -260,7 +259,7 @@ class TestCopyFallback:
         """When os.symlink raises OSError or NotImplementedError, the skill is copied instead."""
         monkeypatch.setattr(os, "symlink", raiser)
 
-        install_skills(yes=True)
+        install_skills()
 
         for name in SKILL_NAMES:
             target = project_dir / ".agents" / "skills" / name
@@ -274,7 +273,7 @@ class TestGlobalInstall:
 
     def test_targets_home_agents_dir(self, source_dir: Path, fake_home: Path) -> None:
         """Global install symlinks skills into ~/.agents/skills."""
-        result = install_skills(global_mode=True, yes=True)
+        result = install_skills(global_mode=True)
 
         for name in SKILL_NAMES:
             link = fake_home / ".agents" / "skills" / name
@@ -286,7 +285,7 @@ class TestGlobalInstall:
         """Global install also targets ~/.claude/skills when Claude Code is present."""
         (fake_home / ".claude").mkdir()
 
-        install_skills(global_mode=True, yes=True)
+        install_skills(global_mode=True)
 
         assert (fake_home / ".claude" / "skills" / SKILL_NAMES[0]).is_symlink()
 
@@ -306,7 +305,7 @@ class TestDatabricksInstall:
 
     def test_project_mode_copies_to_shared_assistant_dir(self, source_dir: Path, workspace_root: Path) -> None:
         """On Databricks, project install copies (not links) into .assistant/skills."""
-        install_skills(yes=True)
+        install_skills()
 
         for name in SKILL_NAMES:
             target = workspace_root / ".assistant" / "skills" / name
@@ -316,21 +315,21 @@ class TestDatabricksInstall:
 
     def test_rerun_reports_up_to_date_when_copy_matches(self, source_dir: Path, workspace_root: Path) -> None:
         """Re-running on Databricks with unchanged skills reports them up to date."""
-        install_skills(yes=True)
-        result = install_skills(yes=True)
+        install_skills()
+        result = install_skills()
 
         assert len(result.installed) == 0
         assert len(result.up_to_date) == len(SKILL_NAMES)
 
     def test_rerun_refreshes_copy_when_source_changed(self, source_dir: Path, workspace_root: Path) -> None:
         """A changed bundled skill is re-copied over the stale Databricks copy."""
-        install_skills(yes=True)
+        install_skills()
         (source_dir / SKILL_NAMES[0] / "SKILL.md").write_text(
             f"---\nname: {SKILL_NAMES[0]}\ndescription: Updated.\n---\n\n# updated\n",
             encoding="utf-8",
         )
 
-        result = install_skills(yes=True)
+        result = install_skills()
 
         target = workspace_root / ".assistant" / "skills" / SKILL_NAMES[0] / "SKILL.md"
         assert "Updated." in target.read_text(encoding="utf-8")
@@ -347,14 +346,31 @@ class TestDatabricksInstall:
         existing.mkdir(parents=True)
         (existing / "SKILL.md").write_text("stale copy", encoding="utf-8")
 
-        install_skills(yes=True)
+        install_skills()
 
         assert existing.is_dir()
         assert (existing / "SKILL.md").read_bytes() == (source_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes()
 
+    def test_existing_symlink_is_replaced_with_real_copy(self, source_dir: Path, workspace_root: Path) -> None:
+        """In copy mode an owned symlink at the target is unlinked and replaced by a real copy.
+
+        A prior symlink-mode install (or a hand-made link) can leave a symlink at
+        a Databricks target. Copy mode must not keep it: it unlinks the symlink
+        and copies the skill so the result survives the package being wiped.
+        """
+        target = workspace_root / ".assistant" / "skills" / SKILL_NAMES[0]
+        target.parent.mkdir(parents=True)
+        target.symlink_to(source_dir / SKILL_NAMES[0])
+
+        install_skills()
+
+        assert target.is_dir()
+        assert not target.is_symlink()
+        assert (target / "SKILL.md").read_bytes() == (source_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes()
+
     def test_copy_is_independent_of_source(self, source_dir: Path, workspace_root: Path) -> None:
         """The copied skill survives the ephemeral package being wiped on restart."""
-        install_skills(yes=True)
+        install_skills()
         expected = (source_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes()
 
         # Simulate the ephemeral package being wiped on cluster restart.
@@ -369,7 +385,7 @@ class TestDatabricksInstall:
         """Global Databricks install targets the per-user workspace dir when known."""
         monkeypatch.setenv("DATABRICKS_USER", "analyst@retail.com")
 
-        install_skills(global_mode=True, yes=True)
+        install_skills(global_mode=True)
 
         target = workspace_root / "Users" / "analyst@retail.com" / ".assistant" / "skills" / SKILL_NAMES[0]
         assert target.is_dir()
@@ -382,57 +398,11 @@ class TestDatabricksInstall:
         if user_env is not None:
             monkeypatch.setenv("DATABRICKS_USER", user_env)
 
-        install_skills(global_mode=True, yes=True)
+        install_skills(global_mode=True)
 
         assert (workspace_root / ".assistant" / "skills" / SKILL_NAMES[0]).is_dir()
         # A blank user must not produce a malformed ``/Workspace/Users//...`` path.
         assert not (workspace_root / "Users").exists()
-
-
-class TestConfirmation:
-    """Tests for the confirmation prompt behavior."""
-
-    def test_yes_true_does_not_prompt(
-        self, source_dir: Path, project_dir: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """yes=True installs without ever calling input()."""
-        monkeypatch.setattr("builtins.input", _fail_if_called)
-
-        result = install_skills(yes=True)
-
-        assert len(result.installed) == len(SKILL_NAMES)
-
-    def test_non_interactive_without_yes_raises(
-        self, source_dir: Path, project_dir: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """A non-interactive session without yes=True raises a clear error."""
-        monkeypatch.setattr("builtins.input", _raise_eof)
-
-        with pytest.raises(RuntimeError, match="yes=True"):
-            install_skills(yes=False)
-
-    def test_declining_prompt_installs_nothing(
-        self, source_dir: Path, project_dir: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Answering no at the prompt installs nothing."""
-        monkeypatch.setattr("builtins.input", lambda *_a, **_k: "n")
-
-        result = install_skills(yes=False)
-
-        assert len(result.installed) == 0
-        assert not (project_dir / ".agents" / "skills" / SKILL_NAMES[0]).exists()
-
-    @pytest.mark.parametrize("answer", ["", "y", "yes", "Y", "YES"])
-    def test_accepting_prompt_installs_skills(
-        self, source_dir: Path, project_dir: Path, monkeypatch: pytest.MonkeyPatch, answer: str
-    ) -> None:
-        """Accepting the prompt (blank, y, or yes, case-insensitive) proceeds with the install."""
-        monkeypatch.setattr("builtins.input", lambda *_a, **_k: answer)
-
-        result = install_skills(yes=False)
-
-        assert len(result.installed) == len(SKILL_NAMES)
-        assert (project_dir / ".agents" / "skills" / SKILL_NAMES[0]).is_symlink()
 
 
 class TestBundledSkill:
@@ -489,10 +459,8 @@ class TestBundledSkill:
 class TestFindProjectRoot:
     """Unit tests for _find_project_root."""
 
-    def test_returns_git_root_from_subdirectory(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_returns_git_root_from_subdirectory(self, tmp_path: Path, fake_home: Path) -> None:
         """A .git ancestor is used as the project root."""
-        (tmp_path / "home").mkdir()
-        monkeypatch.setenv("HOME", str(tmp_path / "home"))
         repo = tmp_path / "repo"
         (repo / ".git").mkdir(parents=True)
         sub = repo / "pkg"
@@ -500,10 +468,8 @@ class TestFindProjectRoot:
 
         assert _find_project_root(sub) == repo
 
-    def test_agents_ancestor_wins_over_git_walk(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_agents_ancestor_wins_over_git_walk(self, tmp_path: Path, fake_home: Path) -> None:
         """An existing .agents dir on an ancestor is preferred as the root."""
-        (tmp_path / "home").mkdir()
-        monkeypatch.setenv("HOME", str(tmp_path / "home"))
         root = tmp_path / "proj"
         (root / ".agents").mkdir(parents=True)
         sub = root / "nested"
@@ -511,22 +477,17 @@ class TestFindProjectRoot:
 
         assert _find_project_root(sub) == root
 
-    def test_falls_back_to_start_dir_without_markers(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_falls_back_to_start_dir_without_markers(self, tmp_path: Path, fake_home: Path) -> None:
         """With no .agents/.claude/.git found, the start dir itself is returned."""
-        home = tmp_path / "home"
-        home.mkdir()
-        monkeypatch.setenv("HOME", str(home))
         start = tmp_path / "loose"
         start.mkdir()
 
         assert _find_project_root(start) == start
 
-    def test_never_crosses_into_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_never_crosses_into_home(self, fake_home: Path) -> None:
         """A marker at the home directory is ignored; the search stops at that boundary."""
-        home = tmp_path / "home"
-        (home / ".git").mkdir(parents=True)  # marker at home must not be selected
-        monkeypatch.setenv("HOME", str(home))
-        sub = home / "project"
+        (fake_home / ".git").mkdir()  # marker at home must not be selected
+        sub = fake_home / "project"
         sub.mkdir()
 
         assert _find_project_root(sub) == sub
@@ -628,7 +589,7 @@ class TestInstallSkillsErrors:
         monkeypatch.setattr(skills, "_get_source_skills_dir", lambda: missing)
 
         with pytest.raises(FileNotFoundError, match="Bundled skills directory"):
-            install_skills(yes=True)
+            install_skills()
 
     def test_empty_source_dir_raises(self, tmp_path: Path, fake_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """A bundled skills directory with no valid skills raises FileNotFoundError."""
@@ -637,4 +598,66 @@ class TestInstallSkillsErrors:
         monkeypatch.setattr(skills, "_get_source_skills_dir", lambda: empty)
 
         with pytest.raises(FileNotFoundError, match="No installable skills"):
-            install_skills(yes=True)
+            install_skills()
+
+
+def _example_scripts() -> list[Path]:
+    """Return every runnable example script bundled with the shipped skill."""
+    scripts_dir = _get_source_skills_dir() / SHIPPED_SKILL_NAME / "scripts"
+    return sorted(scripts_dir.glob("example_*.py"))
+
+
+def test_example_scripts_are_discovered() -> None:
+    """The drift guard must actually find the shipped scripts.
+
+    An empty glob makes the parametrized ``test_example_script_runs`` collect zero
+    cases and pass silently, disabling the guard; pin a floor so truncation fails.
+    """
+    assert len(_example_scripts()) >= MIN_EXAMPLE_SCRIPTS
+
+
+class TestExampleScripts:
+    """Every bundled example script must run against the installed package.
+
+    This is the drift guard: if a public API a script demonstrates is renamed or
+    removed, that script fails here instead of silently teaching an agent a broken
+    pattern. Execution is required because the failures the scripts can hide
+    (missing DataFrame columns, removed functions, changed signatures) only
+    surface at runtime, not at import or lint time.
+
+    Scripts run in-process with runpy so the heavy openretailscience / matplotlib
+    imports load once and are reused across every script, instead of paying a cold
+    interpreter start per script.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _script_sandbox(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+        """Sandbox each in-process script run.
+
+        All scripts share one interpreter, so snapshot and restore the global
+        options and clear matplotlib figures around every run: one script must not
+        leak configuration into, or observe stray figures from, another. Restoring
+        the prior option values (rather than resetting to library defaults) keeps
+        the class from clobbering any project/session configuration. Plots render
+        headless and any generated PNGs land in a temp directory, not the repo.
+        """
+        saved_options = {option: get_option(option) for option in list_options()}
+        monkeypatch.setenv("MPLBACKEND", "Agg")
+        monkeypatch.chdir(tmp_path)
+        matplotlib = sys.modules.get("matplotlib")
+        if matplotlib is not None:
+            matplotlib.use("Agg", force=True)
+        pyplot = sys.modules.get("matplotlib.pyplot")
+        if pyplot is not None:
+            pyplot.close("all")
+        yield
+        pyplot = sys.modules.get("matplotlib.pyplot")
+        if pyplot is not None:
+            pyplot.close("all")
+        for option, value in saved_options.items():
+            set_option(option, value)
+
+    @pytest.mark.parametrize("script", _example_scripts(), ids=lambda p: p.name)
+    def test_example_script_runs(self, script: Path) -> None:
+        """The example script runs end-to-end against the installed package."""
+        runpy.run_path(str(script), run_name="__main__")
