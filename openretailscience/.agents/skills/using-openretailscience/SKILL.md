@@ -59,6 +59,16 @@ and examples — do not guess signatures:
   `openretailscience.toml` file, connecting to each Ibis backend, and the
   `constants.COLORS` palette.
 
+## Runnable examples
+
+Every capability has a complete, copy-pasteable script at
+`scripts/example_<name>.py`, such as `scripts/example_cohort_analysis.py`,
+`scripts/example_waterfall.py`, or `scripts/example_rfm_segmentation.py`. List the
+`scripts/` directory to find the one matching your task, then adapt it to the
+user's data. Each script runs end-to-end against the installed package and is
+executed in the package's test suite, so it stays correct as the API evolves.
+Prefer reading the relevant script over assembling calls from signatures alone.
+
 ## Picking an analysis
 
 | Task | Import |

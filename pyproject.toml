@@ -74,6 +74,11 @@ line-length    = 120
 show-fixes     = true
 src            = [ "openretailscience", "tests" ]
 target-version = "py310"
+# Bundled agent-skill example scripts are demo-style, not package source, and
+# are validated by execution in tests. force-exclude makes the pre-commit
+# hook (which passes explicit filenames) skip them too.
+extend-exclude = [ "openretailscience/.agents" ]
+force-exclude  = true
 
 [tool.ruff.lint]
 ignore = [ "COM812", "EM101", "ISC001", "PD010", "PD901", "PT011", "PTH123", "SLF001", "TRY003" ]
