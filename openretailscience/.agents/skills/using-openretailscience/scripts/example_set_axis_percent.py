@@ -65,4 +65,4 @@ df = pd.DataFrame({
     "value": [0.1, 0.2, 0.3, 0.4, 0.5],
 })
 ax = line.plot(df=df, value_col="value", x_col="period", title="Custom Formatting (No % Symbol)")
-set_axis_percent(ax.yaxis, symbol=None)  # Remove % symbol
+set_axis_percent(ax.yaxis, symbol=None)

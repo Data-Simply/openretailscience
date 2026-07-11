@@ -1,12 +1,4 @@
-"""Example script demonstrating OpenRetailScience options configuration.
-
-This script shows the three main approaches to handling column name mismatches:
-1. TOML configuration file (recommended for projects)
-2. option_context() for temporary overrides
-3. Column renaming (simple but modifies data)
-
-Also demonstrates utility functions for inspecting and managing options.
-"""
+"""OpenRetailScience options: handling column-name mismatches (TOML file, option_context, renaming) plus option-inspection utilities."""
 
 import numpy as np
 import pandas as pd

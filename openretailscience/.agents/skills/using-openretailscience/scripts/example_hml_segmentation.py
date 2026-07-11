@@ -1,22 +1,16 @@
-"""Example script demonstrating HML (Heavy-Medium-Light) segmentation.
-
-This script shows various ways to use HMLSegmentation from openretailscience to classify
-customers into value tiers based on the Pareto principle (80/20 rule).
-"""
+"""HML (Heavy-Medium-Light) segmentation: classify customers into value tiers by the Pareto principle."""
 
 import numpy as np
 import pandas as pd
 
 from openretailscience.segmentation.hml import HMLSegmentation
 
-# Set random seed for reproducibility
 rng = np.random.default_rng(42)
 
-# Create sample transaction data with realistic customer value distribution
 num_customers = 50
 num_transactions_per_customer = rng.integers(1, 11, size=num_customers)
 customer_ids = np.repeat(np.arange(1, num_customers + 1), num_transactions_per_customer)
-# Pareto distribution: most customers spend little, few spend a lot (minimum spend of $10)
+# Pareto: most spend little, few spend a lot; +10 sets a $10 spend floor
 unit_spends = (rng.pareto(2.0, size=customer_ids.size) * 50 + 10).round(2)
 
 transactions = pd.DataFrame({
@@ -24,7 +18,7 @@ transactions = pd.DataFrame({
     "unit_spend": unit_spends,
 })
 
-# Add some zero-spend customers (inactive/churned)
+# Zero-spend (inactive) customers
 zero_customers = pd.DataFrame({
     "customer_id": [num_customers + 1, num_customers + 2, num_customers + 3],
     "unit_spend": [0.0, 0.0, 0.0],
@@ -56,8 +50,7 @@ results_exclude = seg_exclude.df
 # Example 4: Add Segments Back to Transaction Data
 seg = HMLSegmentation(df=transactions, zero_value_customers="include_with_light")
 
-# Merge segment labels back onto transactions on customer_id.
-# seg.df is indexed by customer_id with a segment_name column.
+# seg.df is indexed by customer_id; merge its segment_name back on
 transactions_with_segments = transactions.merge(
     seg.df["segment_name"],
     left_on="customer_id",

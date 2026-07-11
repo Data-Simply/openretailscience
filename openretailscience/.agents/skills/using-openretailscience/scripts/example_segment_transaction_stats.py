@@ -6,10 +6,8 @@ import pandas as pd
 from openretailscience.segmentation.hml import HMLSegmentation
 from openretailscience.segmentation.segstats import SegTransactionStats
 
-# Set random seed for reproducibility
 rng = np.random.default_rng(42)
 
-# Create sample transaction data
 num_transactions = 500
 transactions = pd.DataFrame({
     "customer_id": rng.integers(1, 51, size=num_transactions),
@@ -22,7 +20,7 @@ transactions = pd.DataFrame({
 })
 
 # Example 1: Basic HML Segment Statistics
-# Create HML segments (seg.df is indexed by customer_id with a segment_name column)
+# seg.df is indexed by customer_id with a segment_name column
 seg = HMLSegmentation(df=transactions)
 df_with_segments = transactions.merge(
     seg.df["segment_name"],
@@ -76,7 +74,7 @@ transactions_with_unknown = transactions.copy()
 unknown_mask = rng.random(len(transactions_with_unknown)) < 0.2  # 20% unknown
 transactions_with_unknown.loc[unknown_mask, "customer_id"] = -1
 
-# Re-segment on the data that includes unknown customers, then merge labels back
+# Re-segment on the unknown-inclusive data, then merge labels back
 seg_unknown = HMLSegmentation(df=transactions_with_unknown)
 df_with_segments_unknown = transactions_with_unknown.merge(
     seg_unknown.df["segment_name"],

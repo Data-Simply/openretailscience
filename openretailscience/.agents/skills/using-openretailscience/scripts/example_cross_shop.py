@@ -7,7 +7,7 @@ from openretailscience.analysis.cross_shop import CrossShop
 
 rng = np.random.default_rng(42)
 
-# Generate sample data: some customers shop both categories
+# Sample data: customers can shop multiple categories
 n_customers = 150
 customer_ids = np.arange(1, n_customers + 1)
 branches = [

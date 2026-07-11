@@ -4,15 +4,14 @@ import numpy as np
 import pandas as pd
 from openretailscience.plots import cohort
 
-# Create sample cohort data (typically from CohortAnalysis)
-# Rows = cohort start periods, Columns = periods since start
+# Cohort data (typically from CohortAnalysis): rows = cohort start periods, cols = periods since start
 rng = np.random.default_rng(42)
 
 cohort_periods = ["2023-01", "2023-02", "2023-03", "2023-04", "2023-05", "2023-06"]
 periods = list(range(6))  # 0 to 5 months since start
 
-# Create retention cohort data (percentages)
-base_retention = 0.75 - np.arange(len(cohort_periods)) * 0.02  # Slight degradation for later cohorts
+# Retention data as 0-1 proportions
+base_retention = 0.75 - np.arange(len(cohort_periods)) * 0.02  # slight degradation for later cohorts
 cohort_data = {
     cohort_label: np.cumprod(np.concatenate(([1.0], base_retention[i] * rng.uniform(0.85, 0.95, size=5))))
     for i, cohort_label in enumerate(cohort_periods)

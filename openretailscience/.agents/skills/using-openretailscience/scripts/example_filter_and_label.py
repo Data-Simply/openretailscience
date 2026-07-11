@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from openretailscience.utils.filter_and_label import filter_and_label_by_condition
 
-# Create sample transaction data
 rng = np.random.default_rng(42)
 n_transactions = 1000
 

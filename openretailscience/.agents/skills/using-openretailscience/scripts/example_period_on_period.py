@@ -4,11 +4,9 @@ import numpy as np
 import pandas as pd
 from openretailscience.plots import period_on_period
 
-# Create sample time series data (3 years of daily sales)
 rng = np.random.default_rng(42)
 date_range = pd.date_range("2022-01-01", "2024-12-31", freq="D")
 
-# Simulate sales with seasonal pattern and an upward trend
 days = np.arange(len(date_range))
 seasonal = 100 + 30 * np.sin(2 * np.pi * days / 365)  # Annual seasonality
 trend = days * 0.05  # Slight upward trend

@@ -1,14 +1,9 @@
-"""Example script demonstrating price architecture plot usage.
-
-This script shows how to create price distribution bubble charts
-for competitive analysis.
-"""
+"""Price architecture bubble charts for competitive price analysis."""
 
 import numpy as np
 import pandas as pd
 from openretailscience.plots import price
 
-# Create sample product pricing data
 rng = np.random.default_rng(42)
 
 # Retailer A: Low price positioning
@@ -60,7 +55,7 @@ price.plot(
     df=df,
     value_col="unit_price",
     group_col="retailer",
-    bins=[0, 2, 4, 6, 8, 10],  # Custom price tiers
+    bins=[0, 2, 4, 6, 8, 10],
     title="Retailer Price Architecture by Tier",
     x_label="Retailer",
     y_label="Price Tier ($)",

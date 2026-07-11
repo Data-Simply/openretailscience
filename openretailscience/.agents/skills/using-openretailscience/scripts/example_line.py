@@ -19,8 +19,7 @@ line.plot(
     source_text="Source: OpenRetailScience - 2024",
 )
 
-# Example 2: Series input - the index becomes the x-axis and the values become the y-axis;
-# value_col, x_col, and group_col must all be None
+# Example 2: Series input (index -> x, values -> y; value_col, x_col, group_col must all be None)
 revenue_series = pd.Series(
     data=[10000, 12000, 15000, 17000, 20000],
     index=[-2, -1, 0, 1, 2],
@@ -35,8 +34,7 @@ line.plot(
     source_text="Source: OpenRetailScience - 2024",
 )
 
-# Example 3: Grouped lines from long-format data - each unique value in group_col becomes
-# its own line; data is pivoted internally
+# Example 3: Grouped lines from long-format data (each group_col value becomes a line; pivoted internally)
 grouped_df = pd.DataFrame({
     "week": [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4],
     "product_category": ["Electronics"] * 4 + ["Clothing"] * 4 + ["Home"] * 4,
@@ -54,5 +52,5 @@ line.plot(
     legend_title="Category",
     source_text="Source: OpenRetailScience - 2024",
     move_legend_outside=True,
-    fill_na_value=0,  # Optional: fill missing values after pivot
+    fill_na_value=0,  # fill missing values after pivot
 )

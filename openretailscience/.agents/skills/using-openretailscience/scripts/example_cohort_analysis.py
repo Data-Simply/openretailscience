@@ -7,7 +7,6 @@ from openretailscience.analysis.cohort import CohortAnalysis
 
 rng = np.random.default_rng(42)
 
-# Generate sample cohort data
 dates = pd.date_range("2023-01-01", "2024-01-01", freq="D")
 n_customers = 200
 customer_ids = np.arange(1, n_customers + 1)
@@ -22,8 +21,7 @@ first_purchase_df = pd.DataFrame(
     }
 )
 
-# Additional purchases: repeat each customer's first-purchase date by their
-# additional-purchase count, then offset each repeat by a random 1-90 day gap.
+# Additional purchases: offset each customer's first-purchase date by a random 1-90 day gap.
 repeat_customer_ids = np.repeat(customer_ids, n_additional)
 repeat_first_purchases = np.repeat(first_purchases, n_additional)
 next_purchases = repeat_first_purchases + pd.to_timedelta(rng.integers(1, 90, size=repeat_customer_ids.size), unit="D")

@@ -1,14 +1,9 @@
-"""Example script demonstrating time plot usage.
-
-This script shows how to create timeline plots with automatic
-period aggregation for transactional data.
-"""
+"""Example script demonstrating time plots with automatic period aggregation for transactional data."""
 
 import numpy as np
 import pandas as pd
 from openretailscience.plots import time
 
-# Create sample transaction data
 rng = np.random.default_rng(42)
 date_range = pd.date_range("2023-01-01", "2023-12-31", freq="D")
 categories = ["Electronics", "Clothing", "Food"]
@@ -69,7 +64,6 @@ time.plot(
 )
 
 # Example 6: Yearly summary
-# Add another year of data
 date_range_2024 = pd.date_range("2024-01-01", "2024-12-31", freq="D")
 df_2024 = pd.MultiIndex.from_product(
     [date_range_2024, categories],

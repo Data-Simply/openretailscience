@@ -5,7 +5,6 @@ import pandas as pd
 
 from openretailscience.analysis.revenue_tree import RevenueTree
 
-# Generate reproducible sample data
 rng = np.random.default_rng(42)
 
 
@@ -14,7 +13,6 @@ def generate_sample_data():
     n_customers_p1 = 100
     n_customers_p2 = 120
 
-    # Period 1 transactions
     p1_customers = rng.choice(range(1, n_customers_p1 + 1), size=200, replace=True)
     p1_data = {
         "customer_id": p1_customers,
@@ -24,7 +22,7 @@ def generate_sample_data():
         "period": ["2023-Q1"] * 200,
     }
 
-    # Period 2 transactions (more customers, slightly higher spend)
+    # Period 2: more customers, slightly higher spend
     p2_customers = rng.choice(range(1, n_customers_p2 + 1), size=250, replace=True)
     p2_data = {
         "customer_id": p2_customers,
@@ -34,7 +32,6 @@ def generate_sample_data():
         "period": ["2023-Q2"] * 250,
     }
 
-    # Combine periods
     df = pd.concat([pd.DataFrame(p1_data), pd.DataFrame(p2_data)], ignore_index=True)
     return df
 

@@ -1,8 +1,4 @@
-"""Example script demonstrating Venn/Euler diagram usage.
-
-This script shows how to create Venn and Euler diagrams for
-set overlap visualization.
-"""
+"""Example script demonstrating Venn and Euler diagrams for set overlap visualization."""
 
 import pandas as pd
 from openretailscience.plots import venn

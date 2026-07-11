@@ -13,7 +13,7 @@ summer_periods = find_overlapping_periods(
     return_str=False
 )
 
-# Example 3: Single year range (edge case) - returns [] when start and end fall in the same year
+# Example 3: Single year range (edge case): returns [] when start and end are in the same year
 single_year = find_overlapping_periods("2024-01-01", "2024-12-31", return_str=True)
 
 # Example 4: Named period dictionary for analysis

@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from openretailscience.plots import scatter
 
-# Create sample data
 rng = np.random.default_rng(42)
 categories = ["Electronics", "Clothing", "Home", "Sports", "Books"]
 months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]

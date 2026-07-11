@@ -1,22 +1,10 @@
-"""Examples of connecting openretailscience to different data sources via Ibis.
-
-openretailscience runs on top of Ibis, so analyses execute as SQL
-inside your database instead of being pulled into memory. Every analysis/segmentation/plot module
-accepts either a pandas DataFrame or an Ibis table expression.
-
-This script demonstrates the connection patterns for the supported backends plus the canonical
-connect -> filter -> analyze workflow. The database backends (BigQuery, Snowflake, Databricks,
-PySpark, SQL Server, Fabric, Oracle) require live credentials and the matching
-`ibis-framework[<backend>]` extra, so those examples are written as self-contained functions you
-can copy and call rather than run directly. The DuckDB and pandas examples run locally against
-generated sample data.
-"""
+"""Connecting openretailscience to data via Ibis: analyses run as SQL in your database, and every module accepts a pandas DataFrame or an Ibis table. DuckDB/pandas examples run locally; credentialed-backend examples are copy-and-call functions."""
 
 import ibis
 import numpy as np
 import pandas as pd
 
-# Sample data (a small in-memory transactions table for the runnable examples)
+# Sample data for the runnable examples
 rng = np.random.default_rng(42)
 n_rows = 1_000
 sample_transactions = pd.DataFrame(
@@ -146,13 +134,12 @@ def example_connect_filter_analyze():
     con = ibis.duckdb.connect()
     transactions = con.create_table("transactions", sample_transactions)
 
-    # Filter to the scope of the question -- this runs in the database (lazy).
+    # Filter runs in the database (lazy)
     q1_electronics = transactions.filter(
         transactions.transaction_date.between("2023-01-01", "2023-03-31")
         & (transactions.category_0_name == "Electronics")
     )
 
-    # Hand the Ibis table straight to an openretailscience module.
     from openretailscience.segmentation.segstats import SegTransactionStats
 
     stats = SegTransactionStats(
@@ -177,5 +164,4 @@ if __name__ == "__main__":
     example_duckdb_in_memory()
     example_connect_filter_analyze()
     example_pandas_path()
-    # The remaining functions require live database credentials and the matching
-    # ibis-framework[<backend>] extra; call them in your own environment.
+    # Remaining functions need live credentials and the matching ibis-framework[<backend>] extra.

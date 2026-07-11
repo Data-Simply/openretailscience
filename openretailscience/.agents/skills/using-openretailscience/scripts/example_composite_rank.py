@@ -7,7 +7,6 @@ from openretailscience.analysis.composite_rank import CompositeRank
 
 rng = np.random.default_rng(42)
 
-# Generate sample product data
 n_products = 50
 product_ids = np.arange(1, n_products + 1)
 df = pd.DataFrame({

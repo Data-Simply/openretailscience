@@ -1,9 +1,4 @@
-"""Example script demonstrating tree diagram usage.
-
-This script shows how to create hierarchical tree diagrams for
-period-over-period comparisons using the matplotlib-based TreeGrid
-renderer from openretailscience.
-"""
+"""Example script demonstrating hierarchical tree diagrams for period-over-period comparisons via TreeGrid."""
 
 from openretailscience.plots.tree_diagram import DetailedTreeNode, SimpleTreeNode, TreeGrid
 

@@ -5,15 +5,11 @@ import pandas as pd
 
 from openretailscience.segmentation.rfm import RFMSegmentation
 
-# Set random seed for reproducibility
 rng = np.random.default_rng(42)
 
-# Create sample transaction data with realistic patterns: 100 customers with varying
-# purchase counts, recency, and spend.
 num_customers = 100
 num_transactions_per_customer = rng.integers(1, 21, size=num_customers)
 
-# Vary recency - some customers bought recently, others long ago
 days_since_last = rng.integers(1, 365, size=num_customers)
 last_purchase_dates = np.datetime64("2024-07-01") - days_since_last.astype("timedelta64[D]")
 
@@ -63,7 +59,6 @@ rfm_custom = RFMSegmentation(
 results_custom = rfm_custom.df
 
 # Example 4: Filter to Focus on High-Value Customers
-# Only analyze customers with at least $500 total spend
 rfm_filtered = RFMSegmentation(
     df=transactions,
     current_date="2024-07-01",
@@ -72,7 +67,6 @@ rfm_filtered = RFMSegmentation(
 results_filtered = rfm_filtered.df
 
 # Example 5: Filter to Repeat Customers Only
-# Only analyze customers with at least 5 transactions
 rfm_repeat = RFMSegmentation(
     df=transactions,
     current_date="2024-07-01",
@@ -81,7 +75,6 @@ rfm_repeat = RFMSegmentation(
 results_repeat = rfm_repeat.df
 
 # Example 6: Combined Filters with Custom Bins
-# Focus on mid-tier customers: 3-10 transactions, $200-$2000 spend
 rfm_midtier = RFMSegmentation(
     df=transactions,
     current_date="2024-07-01",
@@ -89,7 +82,7 @@ rfm_midtier = RFMSegmentation(
     max_frequency=10,
     min_monetary=200.0,
     max_monetary=2000.0,
-    r_segments=3,  # Just 3 recency bins
+    r_segments=3,
     f_segments=3,
     m_segments=3
 )

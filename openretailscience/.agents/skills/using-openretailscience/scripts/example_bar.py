@@ -3,7 +3,6 @@
 import pandas as pd
 from openretailscience.plots import bar
 
-# Create sample data
 df = pd.DataFrame({
     "product": ["Product A", "Product B", "Product C", "Product D", "Product E"],
     "q1_sales": [25000, 18000, 32000, 15000, 28000],

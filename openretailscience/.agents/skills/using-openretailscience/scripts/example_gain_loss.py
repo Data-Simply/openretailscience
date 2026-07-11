@@ -5,7 +5,6 @@ import pandas as pd
 
 from openretailscience.analysis.gain_loss import GainLoss
 
-# Generate reproducible sample data
 rng = np.random.default_rng(42)
 
 
@@ -26,7 +25,6 @@ df = pd.concat(
     ignore_index=True,
 )
 
-# Create boolean indexes
 p1_index = df["period"] == "P1"
 p2_index = df["period"] == "P2"
 brand_a_index = df["brand"] == "Brand A"
@@ -81,7 +79,6 @@ gl_regional = GainLoss(
 )
 
 # Example 3: Customer Count Analysis
-# Count customers instead of summing spend
 gl_count = GainLoss(
     df=df,
     p1_index=p1_index,
@@ -95,10 +92,8 @@ gl_count = GainLoss(
 )
 
 # Example 4: Customer-Level Details
-# Access customer-level data
 customer_details = gl.gain_loss_df
 
-# Identify different customer segments
 new_customers = customer_details[customer_details["new"] > 0]
 lost_customers = customer_details[customer_details["lost"] < 0]
 switchers_to_a = customer_details[customer_details["switch_from_comparison"] > 0]

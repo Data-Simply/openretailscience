@@ -36,7 +36,7 @@ format_shorthand(50)  # "50"
 format_shorthand(999)  # just under 1K, stays "999"
 format_shorthand(999.5, decimals=0)  # rounds up to "1K"
 
-# Example 7: Apply shorthand formatting to a plot's axis with set_axis_shorthand
+# Example 7: Apply shorthand formatting to a plot axis
 df = pd.DataFrame({
     "month": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
     "sales": [1200000, 1500000, 1800000, 2100000, 2400000, 2700000],

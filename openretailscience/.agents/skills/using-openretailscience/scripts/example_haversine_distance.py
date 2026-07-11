@@ -6,13 +6,11 @@ import pandas as pd
 
 from openretailscience.analysis.haversine import haversine_distance
 
-# Generate reproducible sample data
 rng = np.random.default_rng(42)
 
 
 # Example 1: Basic distance calculation
-# City centers (lat, lon); assign each customer a random city, then add a random offset
-# (roughly within 50km).
+# City centers (lat, lon); each customer = a city plus a random ~50km offset
 n = 10
 cities = {
     "New York": (40.7128, -74.0060),
@@ -40,14 +38,12 @@ stores = pd.DataFrame([
     {"store_id": 5, "name": "Chicago Loop", "latitude": 41.8781, "longitude": -87.6298},
 ])
 
-# Convert to Ibis tables
 customers_table = ibis.memtable(customers)
 stores_table = ibis.memtable(stores)
 
-# Cross join to get all customer-store combinations
+# All customer-store combinations
 customer_stores = customers_table.cross_join(stores_table)
 
-# Calculate distances in kilometers
 customer_stores = customer_stores.mutate(
     distance_km=haversine_distance(
         lat_col=customer_stores.latitude,
