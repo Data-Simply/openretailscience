@@ -11,8 +11,11 @@ from openretailscience.plots import time, period_on_period, broken_timeline, pri
 
 Most `plot()` functions share these chrome keywords: `title`, `eyebrow`,
 `subtitle`, `source_text`, `x_label`, `y_label`, `ax`, `legend_title`,
-`move_legend_outside`. Pass `ax=` to draw onto an existing axes. Only the
-distinctive arguments are listed below — see each function's docstring for the rest.
+`move_legend_outside`. Pass `ax=` to draw onto one axes you manage. The chrome
+(title/eyebrow/subtitle/source) is figure-level (`fig.text` plus
+`fig.subplots_adjust`), so it does not compose with a `plt.subplots` grid: give
+each chart its own figure rather than tiling several into one. Only the
+distinctive arguments are listed below; see each function's docstring for the rest.
 
 ## Charts
 
