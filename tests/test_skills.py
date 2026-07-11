@@ -267,6 +267,25 @@ class TestCopyFallback:
             assert not target.is_symlink()
             assert (target / "SKILL.md").read_bytes() == (source_dir / name / "SKILL.md").read_bytes()
 
+    def test_rerun_after_copy_fallback_reports_up_to_date(
+        self, source_dir: Path, project_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Re-running after a copy fallback reports the skills up to date, not skipped.
+
+        When symlinks stay unsupported, the first install copies a real directory
+        into the symlink-mode target; a second run must recognize that copy as its
+        own (byte-identical to the source) and report it up to date instead of
+        skipping it as a name conflict.
+        """
+        monkeypatch.setattr(os, "symlink", _raise_oserror)
+
+        install_skills()
+        result = install_skills()
+
+        assert len(result.up_to_date) == len(SKILL_NAMES)
+        assert len(result.skipped) == 0
+        assert len(result.installed) == 0
+
 
 class TestGlobalInstall:
     """Tests for global-mode installation into home directories."""
@@ -592,12 +611,12 @@ class TestInstallSkillsErrors:
             install_skills()
 
     def test_empty_source_dir_raises(self, tmp_path: Path, fake_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A bundled skills directory with no valid skills raises FileNotFoundError."""
+        """A bundled skills directory that exists but holds no valid skills raises RuntimeError."""
         empty = tmp_path / "src" / ".agents" / "skills"
         empty.mkdir(parents=True)
         monkeypatch.setattr(skills, "_get_source_skills_dir", lambda: empty)
 
-        with pytest.raises(FileNotFoundError, match="No installable skills"):
+        with pytest.raises(RuntimeError, match="No installable skills"):
             install_skills()
 
 

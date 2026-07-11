@@ -274,13 +274,11 @@ def _prepare_target(
 ) -> Literal["install", "up_to_date", "skip"]:
     """Clear or evaluate an existing target before installing.
 
-    Symlink and copy mode treat an existing owned *real directory* asymmetrically.
-    In symlink mode (project/global installs) a real directory is never something
-    this installer created, so it is skipped to protect possibly user-authored
-    content of the same name. In copy mode (Databricks) the target lives in the
-    installer-managed Genie skills directory, so an owned real directory is treated
-    as a prior copy and refreshed (``shutil.rmtree`` then re-copy) — a user's own
-    same-named skill placed there would be overwritten on re-run.
+    An existing owned *real directory* that byte-matches the source is a prior
+    install (a copy-fallback run in symlink mode, or a Databricks copy) and is
+    reported up to date. Otherwise copy mode (Databricks) refreshes it
+    (``shutil.rmtree`` then re-copy), while symlink mode skips it to protect
+    possibly user-authored content that merely shares a bundled skill's name.
 
     Args:
         source_path (Path): The bundled skill directory.
@@ -305,14 +303,15 @@ def _prepare_target(
         target_path.unlink()  # os.unlink semantics: remove the link, not its target
         return "install"
 
-    # Owned real directory. Only copy mode ever replaces one (refreshing a prior
-    # copy install). In symlink mode a real directory is never something this
-    # installer created, so it may be user-authored content that merely shares a
-    # bundled skill's name — skip it rather than deleting it.
-    if not use_copy:
-        return "skip"
+    # Owned real directory. A byte-identical tree is a current install (a prior
+    # copy-fallback run, or a Databricks copy), so report it up to date. Otherwise
+    # copy mode refreshes it, while symlink mode skips it: a non-matching real
+    # directory may be user-authored content that merely shares a bundled skill's
+    # name, so it must not be deleted.
     if _skill_copy_matches(source_path, target_path):
         return "up_to_date"
+    if not use_copy:
+        return "skip"
     shutil.rmtree(target_path)
     return "install"
 
@@ -392,7 +391,9 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
         or skipped.
 
     Raises:
-        FileNotFoundError: When the bundled skills directory is missing or empty.
+        FileNotFoundError: When the bundled skills directory is missing.
+        RuntimeError: When the bundled skills directory contains no installable
+            skills.
     """
     source_dir = _get_source_skills_dir()
     if not source_dir.is_dir():
@@ -402,7 +403,7 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
     skills = _discover_skills(source_dir)
     if len(skills) == 0:
         msg = "No installable skills found in the openretailscience package."
-        raise FileNotFoundError(msg)
+        raise RuntimeError(msg)
 
     if _DATABRICKS_RUNTIME_ENV in os.environ:
         target_dirs = _get_databricks_target_dirs(global_mode=global_mode)
