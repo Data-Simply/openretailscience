@@ -1,14 +1,9 @@
-"""Example script demonstrating broken timeline plot usage.
-
-This script shows how to create broken timeline plots for
-visualizing data availability and gaps over time.
-"""
+"""Example script demonstrating broken timeline plots for data availability and gaps over time."""
 
 import numpy as np
 import pandas as pd
 from openretailscience.plots import broken_timeline
 
-# Create sample data with intentional gaps
 rng = np.random.default_rng(42)
 date_range = pd.date_range("2024-01-01", "2024-03-31", freq="D")
 categories = ["Electronics", "Clothing", "Food", "Home"]
@@ -18,7 +13,7 @@ df = pd.MultiIndex.from_product(
     names=["transaction_date", "category"],
 ).to_frame(index=False)
 df["sales"] = rng.integers(100, 5000, size=len(df))
-# Create gaps randomly (30% chance of no data)
+# Drop ~30% of rows to create gaps
 df = df[rng.random(len(df)) > 0.3].reset_index(drop=True)
 
 # Example 1: Daily timeline
@@ -65,7 +60,6 @@ store_df = pd.MultiIndex.from_product(
     names=["transaction_date", "store"],
 ).to_frame(index=False)
 store_df["transactions"] = rng.integers(10, 100, size=len(store_df))
-# Different gap patterns per store
 store_df = store_df[rng.random(len(store_df)) > 0.25].reset_index(drop=True)
 
 broken_timeline.plot(

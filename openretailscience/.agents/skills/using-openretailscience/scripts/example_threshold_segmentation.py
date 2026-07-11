@@ -1,18 +1,12 @@
-"""Example script demonstrating Threshold Segmentation for flexible custom classification.
-
-This script shows how to use ThresholdSegmentation from openretailscience to create
-custom percentile-based segments with user-defined thresholds and names.
-"""
+"""Threshold segmentation: custom percentile-based segments with user-defined thresholds and names."""
 
 import numpy as np
 import pandas as pd
 
 from openretailscience.segmentation.threshold import ThresholdSegmentation
 
-# Set random seed for reproducibility
 rng = np.random.default_rng(42)
 
-# Create sample transaction data: 60 customers with varying spend
 num_customers = 60
 num_transactions_per_customer = rng.integers(1, 8, size=num_customers)
 customer_ids = np.repeat(np.arange(1, num_customers + 1), num_transactions_per_customer)
@@ -23,7 +17,6 @@ transactions = pd.DataFrame({
     "unit_spend": unit_spends,
 })
 
-# Add zero-spend customers
 zero_customers = pd.DataFrame({"customer_id": [61, 62, 63], "unit_spend": [0.0, 0.0, 0.0]})
 transactions = pd.concat([transactions, zero_customers], ignore_index=True)
 
@@ -94,8 +87,7 @@ seg = ThresholdSegmentation(
     segments=["Low", "Medium", "High"]
 )
 
-# Merge segment labels back onto transactions on customer_id.
-# seg.df is indexed by customer_id with a segment_name column.
+# seg.df is indexed by customer_id; merge its segment_name back on
 transactions_with_segments = transactions.merge(
     seg.df["segment_name"],
     left_on="customer_id",

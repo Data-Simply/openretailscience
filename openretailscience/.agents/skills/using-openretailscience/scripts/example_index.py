@@ -1,14 +1,9 @@
-"""Example script demonstrating index plot usage.
-
-This script shows how to create index plots for comparing
-categories against a baseline value (typically 100).
-"""
+"""Example script demonstrating index plots comparing categories against a baseline (typically 100)."""
 
 import numpy as np
 import pandas as pd
 from openretailscience.plots import index
 
-# Create sample data - sales by region and category
 rng = np.random.default_rng(42)
 regions = ["North", "South", "East", "West"]
 categories = ["Electronics", "Clothing", "Food", "Home"]

@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from openretailscience.plots import histogram
 
-# Create sample data - customer purchase revenue
 rng = np.random.default_rng(42)
 df = pd.DataFrame({
     "first_purchase_revenue": np.concatenate([
@@ -65,8 +64,7 @@ histogram.plot(
     bins=30,
 )
 
-# Example 5: Series plotting
-# A pre-aggregated/standalone pandas Series can be passed directly with value_col=None.
+# Example 5: Series plotting (pass a Series directly with value_col=None)
 revenue_series = df["first_purchase_revenue"]
 revenue_series.name = "First Purchase Revenue"
 

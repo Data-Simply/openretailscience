@@ -5,7 +5,6 @@ import pandas as pd
 
 from openretailscience.analysis.customer_decision_hierarchy import CustomerDecisionHierarchy
 
-# Generate reproducible sample data
 rng = np.random.default_rng(42)
 
 
@@ -42,7 +41,6 @@ secondary_col = np.repeat(secondary_category, n_transactions)
 use_primary = rng.random(customer_id_col.size) < 0.7
 category_col = np.where(use_primary, primary_col, secondary_col)
 
-# Pick a product from that category
 product_col = np.empty(customer_id_col.size, dtype=object)
 for category, items in beverages.items():
     mask = category_col == category
@@ -58,8 +56,7 @@ cdh.plot(title="Beverage Product Substitutability Hierarchy", orientation="top",
 cdh.plot(title="Product Hierarchy", orientation="left", x_label="Distance", y_label="Beverages")
 
 # Example 4: Yogurt Analysis - Flavors vs Types
-# Each customer prefers 1-2 of the 3 types (switching flavors freely within them), and
-# sometimes buys a second preferred type in the same transaction.
+# Each customer prefers 1-2 of the 3 types and sometimes buys a second preferred type in the same transaction.
 yogurt_flavors = ["Strawberry", "Vanilla", "Blueberry", "Peach"]
 yogurt_types = np.array(["Regular", "Greek", "Kids"])
 
@@ -68,8 +65,7 @@ n_txn = rng.integers(4, 10, size=n_yogurt_customers)
 yogurt_customer_id_col = np.repeat(np.arange(1, n_yogurt_customers + 1), n_txn)
 yogurt_transaction_id_col = np.arange(1, yogurt_customer_id_col.size + 1)
 
-# Rank the 3 types randomly per customer and keep the top 2 as that customer's preferred
-# slots; num_preferred decides whether only slot 0 is ever used (1 preferred type) or both.
+# Rank types randomly per customer, keep top 2 as preferred slots; num_preferred (1 or 2) sets how many are used.
 num_preferred = rng.integers(1, 3, size=n_yogurt_customers)
 preferred_slots = yogurt_types[np.argsort(rng.random((n_yogurt_customers, yogurt_types.size)), axis=1)[:, :2]]
 
@@ -101,14 +97,12 @@ cdh_yogurt = CustomerDecisionHierarchy(
 )
 
 # Example 5: Comparing With and Without Transaction Exclusion
-# Uses yogurt_df, not beverage_df: yogurt_df has multi-item transactions (Example 4's
-# extra_mask rows), so this parameter actually changes the result here. Every beverage_df
-# transaction has exactly one product, so the flag would be a no-op on that data.
+# Uses yogurt_df, not beverage_df: only yogurt_df has multi-item transactions, so
+# exclude_same_transaction_products actually changes the result here (no-op on single-item beverage_df).
 cdh_no_exclusion = CustomerDecisionHierarchy(
     df=yogurt_df, product_col="product", exclude_same_transaction_products=False, random_state=42
 )
 
 # Example 6: Access Distance Matrix for Custom Analysis
-# Access the distance matrix directly
 distance_matrix = cdh.distances
 products = cdh.pairs_df["product"].cat.categories

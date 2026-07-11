@@ -13,8 +13,7 @@ n_customers = 200
 n_dates = len(dates)
 n_purchases = rng.integers(1, 15, size=n_customers)
 
-# Sample n_purchases[i] distinct dates per customer without replacement: rank each
-# customer's dates by a random key, then keep the top n_purchases[i] ranks per row.
+# Distinct dates per customer without replacement: rank dates by a random key, keep the top n_purchases per row.
 date_ranks = np.argsort(rng.random((n_customers, n_dates)), axis=1)
 keep_mask = np.arange(n_dates) < n_purchases[:, None]
 customer_idx, _ = np.nonzero(keep_mask)

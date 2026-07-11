@@ -6,7 +6,6 @@ import pandas as pd
 from datetime import datetime
 from openretailscience.utils.date import filter_and_label_by_periods
 
-# Create sample transaction data spanning 2 years
 rng = np.random.default_rng(42)
 n_transactions = 2000
 

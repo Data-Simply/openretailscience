@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from openretailscience.utils.label import label_by_condition
 
-# Create sample transaction data
 rng = np.random.default_rng(42)
 n_transactions = 2000
 
@@ -46,8 +45,7 @@ promo_behavior = label_by_condition(
 )
 promo_result = promo_behavior.execute()
 
-# Example 8: Comprehensive customer profile - combining multiple labels
-# Get multiple labels
+# Example 8: Comprehensive customer profile (combining multiple labels)
 promo_labels = label_by_condition(
     table,
     condition=table["is_promo"] == True,  # noqa: E712
@@ -64,7 +62,6 @@ channel_labels = label_by_condition(
     labeling_strategy="binary"
 )
 
-# Join them together for comprehensive profile
 customer_profile = (
     promo_labels
     .join(channel_labels, "customer_id")

@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from openretailscience.plots import area
 
-# Create sample data
 rng = np.random.default_rng(42)
 months = pd.date_range("2023-01-01", periods=12, freq="ME")
 df = pd.DataFrame({

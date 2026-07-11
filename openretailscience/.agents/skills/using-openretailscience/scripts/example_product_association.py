@@ -5,13 +5,11 @@ import pandas as pd
 
 from openretailscience.analysis.product_association import ProductAssociation
 
-# Generate reproducible sample data
 rng = np.random.default_rng(42)
 
 
 # Example 1: Basic Market Basket Analysis
-# Products co-occur through a shared category, giving the association metrics below something
-# real to detect (independently random products would show uplift ~1.0 everywhere).
+# Products co-occur within a shared category so the metrics have real signal (random products give uplift ~1.0).
 n_transactions = 500
 categories = {
     "breakfast": (["Milk", "Bread", "Butter", "Eggs"], 0.3),
@@ -32,7 +30,6 @@ df = pd.concat(category_frames, ignore_index=True).drop_duplicates(ignore_index=
 df["customer_id"] = rng.integers(1, 200, size=len(df))
 pa = ProductAssociation(df=df, value_col="product", group_col="transaction_id")
 
-# Show top associations by uplift
 top_assoc = pa.df.nlargest(10, "uplift")
 
 # Example 2: Filtered Analysis - Strong Associations Only
@@ -64,7 +61,6 @@ pa_customer = ProductAssociation(
 )
 
 # Example 5: Deep Dive - Specific Product Pair
-# Analyze all associations
 pa_all = ProductAssociation(df=df, value_col="product", group_col="transaction_id")
 
 # Find a specific pair regardless of column order
