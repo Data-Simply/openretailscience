@@ -10,7 +10,9 @@ through options, so one analysis runs on any schema.
 from openretailscience.options import get_option, set_option, option_context, reset_option
 ```
 
-- `set_option(key, value)` / `get_option(key)` — read/write one dotted option.
+- `set_option(key, value)` / `get_option(key)` — read/write one dotted option. Only override
+  options that actually differ from your schema — setting e.g. `column.customer_id` to
+  `"customer_id"` (its own default, see below) is a no-op.
 - `option_context(...)` — temporary override in a `with` block; accepts a dict
   **or** alternating name/value pairs, and restores prior values on exit.
 - `reset_option(key)`, plus `list_options()` and `describe_option(key)` for discovery.
