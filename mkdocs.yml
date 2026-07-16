@@ -20,6 +20,7 @@ nav:
       - analysis_modules.md
   - Experimental:
       - Metrics: experimental/metrics.md
+      - Customer Lifetime Value: experimental/clv.md
   - Plot Gallery:
       - Overview: gallery/index.md
       - Area Plot: gallery/plots/area.ipynb
@@ -84,6 +85,7 @@ nav:
       - Experimental:
           - Metrics:
               - Distribution: api/experimental/metrics/distribution.md
+          - CLV: api/experimental/clv.md
       - Utils:
           - Date Utils: api/utils/date.md
           - Filter & Label Utils: api/utils/filter_and_label.md

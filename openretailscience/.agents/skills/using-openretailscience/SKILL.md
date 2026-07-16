@@ -6,7 +6,8 @@ description: >-
   or transaction data and mentions any openretailscience analysis (RFM / HML /
   NLR / threshold segmentation, cross-shop Venn overlap, gain-loss switching,
   cohort retention, product association / market-basket, revenue-tree KPI
-  decomposition, customer decision hierarchy, composite rank, haversine), any of
+  decomposition, customer decision hierarchy, composite rank, haversine,
+  customer-lifetime-value / Pareto-NBD / BTYD model-input prep), any of
   its plots (bar, line, area, scatter, histogram, waterfall, venn, heatmap,
   cohort, time, period-on-period, broken-timeline, price, index) or trendlines,
   its options/ColumnHelper configuration system, or connecting analyses to a
@@ -53,6 +54,9 @@ and examples — do not guess signatures:
 
 - **`references/analysis.md`** — every analysis and segmentation class, the
   `utils` labelling/date helpers, and the experimental metrics.
+- **`references/clv.md`** — `experimental.clv.CLVStats`, which prepares the
+  per-customer BTYD summary (frequency / recency / T / monetary_value) for the
+  pymc-marketing Pareto/NBD and Gamma-Gamma models.
 - **`references/plotting.md`** — every `plots.*` function, **trendlines**
   (`add_trend_line`), and the styling / color / font helpers.
 - **`references/configuration.md`** — the options system, `ColumnHelper`, the
@@ -82,6 +86,7 @@ Prefer reading the relevant script over assembling calls from signatures alone.
 | KPI decomposition tree (spend = customers × visits × ...) | `analysis.revenue_tree.RevenueTree` |
 | Substitutable-product dendrogram | `analysis.customer_decision_hierarchy.CustomerDecisionHierarchy` |
 | Per-customer purchase / recency / churn metrics | `analysis.customer` (Purchases/Days/Churn classes) |
+| BTYD summary (frequency/recency/T/monetary) for pymc-marketing CLV models | `experimental.clv.CLVStats` |
 | Rank items by several weighted metrics | `analysis.composite_rank.CompositeRank` |
 | Great-circle customer-to-store distance | `analysis.haversine.haversine_distance` |
 
