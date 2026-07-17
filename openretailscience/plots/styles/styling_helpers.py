@@ -9,13 +9,15 @@ from typing import TYPE_CHECKING, Literal
 
 from matplotlib.layout_engine import LayoutEngine
 from matplotlib.patches import Rectangle
-from matplotlib.ticker import AutoLocator, FixedFormatter, FixedLocator, MaxNLocator
+from matplotlib.ticker import AutoLocator, FixedFormatter, FixedLocator, Formatter, MaxNLocator
 
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.font_utils import get_font_properties
 from openretailscience.plots.styles.graph_utils import draw_end_of_line_labels
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from matplotlib.axes import Axes
     from matplotlib.backend_bases import RendererBase
     from matplotlib.figure import Figure
@@ -24,8 +26,56 @@ if TYPE_CHECKING:
 GridAxis = Literal["both", "x", "y", "none"]
 
 
+class _ZeroBlankingFormatter(Formatter):
+    """Wrap an axis's major formatter, rendering the value ``0`` as an empty label.
+
+    Dropping the zero label by *value* on every draw — rather than by hiding the
+    tick artist at zero's index — is what fixes the leak: matplotlib reuses tick
+    artists by index, so an index-pinned flag would blank whatever value later
+    lands on that index. All other calls delegate to the base formatter, so its
+    numeric formatting and offset text (e.g. ``ScalarFormatter``'s ``1e6``) are
+    preserved; a caller who sets their own formatter replaces the wrapper, which
+    stops the zero-drop. Any other attribute is delegated to the base as well
+    (see ``__getattr__``), so a caller's ``Axes.ticklabel_format`` still reaches
+    the real ``ScalarFormatter`` underneath instead of raising.
+    """
+
+    def __init__(self, base: Formatter) -> None:
+        """Store the wrapped ``base`` formatter to delegate to."""
+        super().__init__()
+        self._base = base
+
+    def __call__(self, x: float, pos: int | None = None) -> str:
+        """Return the base label for ``x``, or ``""`` when ``x`` is exactly ``0``."""
+        return "" if x == 0 else self._base(x, pos)
+
+    def set_locs(self, locs: Sequence[float]) -> None:
+        """Forward the tick locations so the base formatter can compute its offset and scale."""
+        self._base.set_locs(locs)
+
+    def get_offset(self) -> str:
+        """Return the base formatter's offset text (e.g. ``ScalarFormatter``'s ``1e6``)."""
+        return self._base.get_offset()
+
+    def __getattr__(self, name: str) -> object:
+        """Delegate any non-overridden attribute to the base formatter.
+
+        Keeps the wrapper a transparent stand-in for what it wraps: callers that
+        configure the axis via ``Axes.ticklabel_format`` — which calls
+        ``ScalarFormatter``-only setters (``set_scientific``, ``set_powerlimits``,
+        ``set_useOffset`` …) on the major formatter — reach the real formatter
+        instead of hitting ``AttributeError``. The return is whatever attribute
+        the base exposes, so ``object`` is the only honest annotation here.
+        """
+        # __getattr__ only fires for names missing on the wrapper; guard ``_base``
+        # itself so a half-built instance raises cleanly instead of recursing.
+        if name == "_base":
+            raise AttributeError(name)
+        return getattr(self._base, name)
+
+
 def _hide_zero_value_ticks(ax: Axes) -> None:
-    """Hide tick labels at value 0 on numeric axes (Economist editorial convention).
+    """Blank the ``0`` tick label on numeric axes (Economist editorial convention).
 
     The ``0`` tick sits in the bottom-left corner where the x and y spines meet,
     crowding the orthogonal axis's first tick label. The spine itself implies
@@ -34,18 +84,18 @@ def _hide_zero_value_ticks(ax: Axes) -> None:
     Only acts on numeric continuous axes (``MaxNLocator`` / ``AutoLocator``);
     categorical axes (``FixedLocator``) and date axes (``AutoDateLocator``) are
     untouched, since their position-0 tick is a category index, not a data zero.
+
+    The blank is applied via a formatter wrapper (see ``_ZeroBlankingFormatter``)
+    so it is keyed to the tick value, not to a reused tick artist.
     """
     for axis in (ax.xaxis, ax.yaxis):
         if not isinstance(axis.get_major_locator(), MaxNLocator | AutoLocator):
             continue
-        # get_major_ticks() returns one Tick per locator position, so the
-        # lengths match deterministically. get_majorticklabels() filters by
-        # visibility and changes length once this function has already hidden
-        # a label or under tick_params(labeltop=True)/labelright=True.
-        for tick, loc in zip(axis.get_major_ticks(), axis.get_majorticklocs(), strict=True):
-            if loc == 0:
-                tick.label1.set_visible(False)
-                tick.label2.set_visible(False)
+        formatter = axis.get_major_formatter()
+        # Idempotent: don't nest the wrapper on a repeated styling pass.
+        if isinstance(formatter, _ZeroBlankingFormatter):
+            continue
+        axis.set_major_formatter(_ZeroBlankingFormatter(formatter))
 
 
 # Chrome layout constants. Vertical spacings are in absolute inches so the
