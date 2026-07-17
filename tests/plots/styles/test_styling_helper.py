@@ -8,6 +8,7 @@ from matplotlib.ticker import FixedFormatter
 from openretailscience.options import get_option, option_context
 from openretailscience.plots.styles.styling_helpers import (
     _auto_rotate_categorical_x_ticks,
+    _ZeroBlankingFormatter,
     apply_base_styling,
     apply_label,
     apply_legend,
@@ -65,49 +66,116 @@ class TestStylingHelpers:
         for label in tick_labels:
             assert label.get_fontsize() == get_option("plot.font.tick_size")
 
-    def test_apply_ticks_is_idempotent_when_zero_label_was_hidden(self, fig_ax):
-        """Re-applying ticks after the zero label was hidden must not raise.
+    @staticmethod
+    def _blank_tick_locs(axis) -> set[float]:
+        """Return the major-tick locations whose label renders blank after a draw.
 
-        The first call hides the zero tick's label, which makes
-        get_majorticklabels() one shorter than get_majorticklocs() (it filters
-        invisible labels). A second apply_ticks call would then crash on
-        strict-zip if the helper still paired locs against labels.
+        A tick counts as blank when its label artist is hidden or its rendered
+        text is empty, so the check catches a dropped label regardless of the
+        mechanism. Requires the figure to have been drawn so the label artists
+        carry their live text.
         """
-        _, ax = fig_ax
+        blank = set()
+        for tick, loc in zip(axis.get_major_ticks(), axis.get_majorticklocs(), strict=True):
+            if not tick.label1.get_visible() or tick.label1.get_text() == "":
+                blank.add(float(loc))
+        return blank
+
+    def test_apply_ticks_blanks_only_the_zero_label(self, fig_ax):
+        """On a numeric axis, apply_ticks renders the data-0 label blank and keeps every other."""
+        fig, ax = fig_ax
+        ax.plot([-2, -1, 0, 1, 2], [1, 2, 0, 2, 1])
+
+        apply_ticks(ax)
+        fig.canvas.draw()
+
+        for axis in (ax.xaxis, ax.yaxis):
+            assert self._blank_tick_locs(axis) == {0.0}
+
+    def test_zero_blank_tracks_value_after_caller_changes_ticks(self, fig_ax):
+        """Zero-blanking follows the value, not a tick index, when the caller re-ticks (issue #530).
+
+        The old implementation hid the zero label by flipping a persistent
+        visibility flag on the tick artist at zero's index. matplotlib reuses
+        those artists by index, so a later ``set_yticks`` left the flag on
+        whatever non-zero value moved into that index, silently blanking a real
+        label. Deriving the blank from the value keeps it on 0 only.
+        """
+        fig, ax = fig_ax
+        # Symmetric limits put 0 at index 1 of the default numeric ticks
+        # ([-80, 0, 80, 160, 240, 320]), reproducing the leak-prone layout.
+        ax.plot([0, 1, 2, 3], [-80, 100, 200, 320])
+        ax.set_ylim(-80, 320)
+        apply_ticks(ax)
+
+        ax.set_ylim(0, 320)
+        ax.set_yticks([0, 80, 160, 240])
+        fig.canvas.draw()
+
+        assert self._blank_tick_locs(ax.yaxis) == {0.0}
+
+    def test_apply_ticks_is_idempotent_for_zero_blanking(self, fig_ax):
+        """Re-applying ticks keeps a single zero-blanking wrapper and still blanks only 0.
+
+        Iterative replotting (Jupyter, parametrized tests) runs the styling path
+        repeatedly; the formatter wrapper must not stack on itself each time.
+        """
+        fig, ax = fig_ax
         ax.plot([-2, -1, 0, 1, 2], [1, 2, 0, 2, 1])
 
         apply_ticks(ax)
         apply_ticks(ax)
+        fig.canvas.draw()
 
         for axis in (ax.xaxis, ax.yaxis):
-            ticks = axis.get_major_ticks()
-            locs = axis.get_majorticklocs()
-            zero_ticks = [tick for tick, loc in zip(ticks, locs, strict=True) if loc == 0]
-            assert len(zero_ticks) == 1
-            for tick in zero_ticks:
-                assert not tick.label1.get_visible()
+            formatter = axis.get_major_formatter()
+            assert isinstance(formatter, _ZeroBlankingFormatter)
+            # A second wrap would nest the wrapper inside itself.
+            assert not isinstance(formatter._base, _ZeroBlankingFormatter)
+            assert self._blank_tick_locs(axis) == {0.0}
 
-    def test_apply_ticks_handles_labeltop_on_numeric_axis(self, fig_ax):
-        """tick_params(labeltop=True) doubles get_majorticklabels() length.
+    def test_apply_ticks_blanks_zero_on_both_label_rows(self, fig_ax):
+        """With labeltop enabled, the value-0 label is blank on both the bottom and top rows.
 
-        With both label1 and label2 visible on a numeric MaxNLocator/AutoLocator
-        axis, get_majorticklabels() returns 2N entries while get_majorticklocs()
-        returns N. apply_ticks must still complete without raising, and both
-        the bottom and top label artists at zero must be hidden.
+        Both label rows draw from the same major formatter, so blanking by value
+        drops the zero label wherever it is rendered while non-zero ticks keep
+        their labels on both rows.
         """
-        _, ax = fig_ax
+        fig, ax = fig_ax
         ax.plot([-2, -1, 0, 1, 2], [1, 2, 0, 2, 1])
         ax.tick_params(labeltop=True, labelbottom=True)
 
         apply_ticks(ax)
+        fig.canvas.draw()
 
         ticks = ax.xaxis.get_major_ticks()
         locs = ax.xaxis.get_majorticklocs()
         zero_ticks = [tick for tick, loc in zip(ticks, locs, strict=True) if loc == 0]
+        nonzero_ticks = [tick for tick, loc in zip(ticks, locs, strict=True) if loc != 0]
         assert len(zero_ticks) == 1
-        for tick in zero_ticks:
-            assert not tick.label1.get_visible()
-            assert not tick.label2.get_visible()
+        assert zero_ticks[0].label1.get_text() == ""
+        assert zero_ticks[0].label2.get_text() == ""
+        assert all(tick.label1.get_text() != "" for tick in nonzero_ticks)
+        assert all(tick.label2.get_text() != "" for tick in nonzero_ticks)
+
+    def test_zero_blanking_formatter_delegates_and_blanks_zero(self, fig_ax):
+        """_ZeroBlankingFormatter blanks value 0 and delegates formatting and offset to its base.
+
+        The offset delegation matters for large-magnitude axes: ScalarFormatter
+        renders a shared ``1e6``-style offset that a naive wrapper would drop.
+        """
+        fig, ax = fig_ax
+        ax.plot([0, 1, 2], [0, 1_500_000, 3_000_000])
+        fig.canvas.draw()
+        base = ax.yaxis.get_major_formatter()
+        base.set_locs(list(ax.yaxis.get_majorticklocs()))
+
+        formatter = _ZeroBlankingFormatter(base)
+
+        assert base.get_offset() != ""  # sanity: the base carries an offset to delegate
+        assert formatter.get_offset() == base.get_offset()
+        assert formatter(0) == ""
+        assert formatter(1_500_000) == base(1_500_000)
 
     @pytest.mark.parametrize(
         ("outside", "expected_title"),
