@@ -191,6 +191,17 @@ class TestStylingHelpers:
 
         assert self._blank_tick_locs(ax.yaxis) == {0.0}
 
+    def test_zero_blanking_formatter_getattr_raises_when_base_missing(self):
+        """Attribute access on a half-built wrapper raises AttributeError, not RecursionError.
+
+        The ``__getattr__`` ``_base`` guard matters when the wrapper is materialised
+        without ``__init__`` (e.g. a copy/unpickle of a figure): resolving any missing
+        attribute would otherwise recurse forever trying to read ``_base``.
+        """
+        formatter = _ZeroBlankingFormatter.__new__(_ZeroBlankingFormatter)
+        with pytest.raises(AttributeError):
+            _ = formatter.set_scientific
+
     @pytest.mark.parametrize(
         ("outside", "expected_title"),
         [

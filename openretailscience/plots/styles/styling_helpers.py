@@ -42,6 +42,7 @@ class _ZeroBlankingFormatter(Formatter):
 
     def __init__(self, base: Formatter) -> None:
         """Store the wrapped ``base`` formatter to delegate to."""
+        super().__init__()
         self._base = base
 
     def __call__(self, x: float, pos: int | None = None) -> str:
