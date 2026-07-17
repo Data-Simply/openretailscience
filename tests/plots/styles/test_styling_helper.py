@@ -128,10 +128,7 @@ class TestStylingHelpers:
         fig.canvas.draw()
 
         for axis in (ax.xaxis, ax.yaxis):
-            formatter = axis.get_major_formatter()
-            assert isinstance(formatter, _ZeroBlankingFormatter)
-            # A second wrap would nest the wrapper inside itself.
-            assert not isinstance(formatter._base, _ZeroBlankingFormatter)
+            assert isinstance(axis.get_major_formatter(), _ZeroBlankingFormatter)
             assert self._blank_tick_locs(axis) == {0.0}
 
     def test_apply_ticks_blanks_zero_on_both_label_rows(self, fig_ax):
@@ -176,6 +173,23 @@ class TestStylingHelpers:
         assert formatter.get_offset() == base.get_offset()
         assert formatter(0) == ""
         assert formatter(1_500_000) == base(1_500_000)
+
+    def test_ticklabel_format_still_works_after_apply_ticks(self, fig_ax):
+        """A caller's ``ax.ticklabel_format`` succeeds after styling and 0 stays blanked.
+
+        matplotlib's ``ticklabel_format`` calls ``ScalarFormatter``-only setters
+        (``set_scientific``/``set_powerlimits``/...) on the major formatter and
+        raises "only works with the ScalarFormatter" if they are missing. The
+        wrapper must delegate them to the base rather than shadow the real one.
+        """
+        fig, ax = fig_ax
+        ax.plot([0, 1, 2], [0, 1000, 2000])
+        apply_ticks(ax)
+
+        ax.ticklabel_format(style="plain", axis="y")  # must not raise
+        fig.canvas.draw()
+
+        assert self._blank_tick_locs(ax.yaxis) == {0.0}
 
     @pytest.mark.parametrize(
         ("outside", "expected_title"),

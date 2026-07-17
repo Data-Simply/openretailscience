@@ -29,53 +29,48 @@ GridAxis = Literal["both", "x", "y", "none"]
 class _ZeroBlankingFormatter(Formatter):
     """Wrap an axis's major formatter, rendering the value ``0`` as an empty label.
 
-    The zero label is dropped by the *value* the formatter is asked to render,
-    not by a persistent visibility flag on a tick artist. matplotlib consults
-    the major formatter on every draw against the live tick value, so the blank
-    tracks the real ``0`` even after a caller changes the tick positions or
-    limits, and can never leak onto whichever value later occupies a reused tick
-    artist. Every other call delegates to the wrapped formatter, so its numeric
-    formatting and shared offset text (e.g. ``ScalarFormatter``'s ``1e6``) are
-    preserved. A caller who installs their own formatter replaces the wrapper,
-    which cleanly turns the zero-drop off — they have taken over the axis.
+    Dropping the zero label by *value* on every draw — rather than by hiding the
+    tick artist at zero's index — is what fixes the leak: matplotlib reuses tick
+    artists by index, so an index-pinned flag would blank whatever value later
+    lands on that index. All other calls delegate to the base formatter, so its
+    numeric formatting and offset text (e.g. ``ScalarFormatter``'s ``1e6``) are
+    preserved; a caller who sets their own formatter replaces the wrapper, which
+    stops the zero-drop. Any other attribute is delegated to the base as well
+    (see ``__getattr__``), so a caller's ``Axes.ticklabel_format`` still reaches
+    the real ``ScalarFormatter`` underneath instead of raising.
     """
 
     def __init__(self, base: Formatter) -> None:
-        """Store the wrapped formatter.
-
-        Args:
-            base (Formatter): The axis's existing major formatter to delegate to.
-        """
+        """Store the wrapped ``base`` formatter to delegate to."""
         self._base = base
 
     def __call__(self, x: float, pos: int | None = None) -> str:
-        """Format ``x``, returning an empty string at ``x == 0``.
-
-        Args:
-            x (float): The tick value to format.
-            pos (int | None): The tick position index, forwarded to the base formatter.
-
-        Returns:
-            str: The base formatter's label, or ``""`` when ``x`` is exactly ``0``.
-        """
+        """Return the base label for ``x``, or ``""`` when ``x`` is exactly ``0``."""
         return "" if x == 0 else self._base(x, pos)
 
     def set_locs(self, locs: Sequence[float]) -> None:
-        """Forward the tick locations so the base formatter can compute its offset/scale.
-
-        Args:
-            locs (Sequence[float]): The major tick locations for the current draw.
-        """
+        """Forward the tick locations so the base formatter can compute its offset and scale."""
         self._base.set_locs(locs)
 
     def get_offset(self) -> str:
-        """Return the base formatter's offset text (e.g. ``ScalarFormatter``'s ``1e6``).
-
-        Returns:
-            str: The offset string rendered alongside the axis, or ``""`` if the
-                base formatter has none.
-        """
+        """Return the base formatter's offset text (e.g. ``ScalarFormatter``'s ``1e6``)."""
         return self._base.get_offset()
+
+    def __getattr__(self, name: str) -> object:
+        """Delegate any non-overridden attribute to the base formatter.
+
+        Keeps the wrapper a transparent stand-in for what it wraps: callers that
+        configure the axis via ``Axes.ticklabel_format`` — which calls
+        ``ScalarFormatter``-only setters (``set_scientific``, ``set_powerlimits``,
+        ``set_useOffset`` …) on the major formatter — reach the real formatter
+        instead of hitting ``AttributeError``. The return is whatever attribute
+        the base exposes, so ``object`` is the only honest annotation here.
+        """
+        # __getattr__ only fires for names missing on the wrapper; guard ``_base``
+        # itself so a half-built instance raises cleanly instead of recursing.
+        if name == "_base":
+            raise AttributeError(name)
+        return getattr(self._base, name)
 
 
 def _hide_zero_value_ticks(ax: Axes) -> None:
@@ -89,16 +84,14 @@ def _hide_zero_value_ticks(ax: Axes) -> None:
     categorical axes (``FixedLocator``) and date axes (``AutoDateLocator``) are
     untouched, since their position-0 tick is a category index, not a data zero.
 
-    The blank is applied by wrapping the axis's major formatter (see
-    ``_ZeroBlankingFormatter``) rather than hiding a tick artist, so it is
-    re-derived from the tick value on every draw and cannot leak onto another
-    value when the caller later changes ticks or limits.
+    The blank is applied via a formatter wrapper (see ``_ZeroBlankingFormatter``)
+    so it is keyed to the tick value, not to a reused tick artist.
     """
     for axis in (ax.xaxis, ax.yaxis):
         if not isinstance(axis.get_major_locator(), MaxNLocator | AutoLocator):
             continue
         formatter = axis.get_major_formatter()
-        # Idempotent: a repeated styling pass must not nest the wrapper in itself.
+        # Idempotent: don't nest the wrapper on a repeated styling pass.
         if isinstance(formatter, _ZeroBlankingFormatter):
             continue
         axis.set_major_formatter(_ZeroBlankingFormatter(formatter))
