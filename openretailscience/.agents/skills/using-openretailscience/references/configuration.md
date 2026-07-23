@@ -105,6 +105,24 @@ Filter with Ibis before handing off, e.g.
 The sample dataset `data/transactions.parquet` (127,180 rows, 2023) uses the
 default column names, so no configuration is needed to try things out.
 
+**Caching (experimental).** `experimental.cache.cache(expr)` mirrors Ibis's native
+`Table.cache()`: it returns a handle usable directly as a table, as a context manager, or
+released with `.release()` (and released automatically on garbage collection). It exists
+because Ibis's native `expr.cache()` raises on the `ibis.pyspark` backend under Spark
+Connect (Databricks Runtime 13+) — its `DataFrame.is_cached` assertion is not satisfied
+synchronously. `cache()` transparently swaps in a temp-view workaround there and delegates
+to native `.cache()` on every other backend. Turn it off globally with
+`set_option("caching.enabled", False)` (or per call with `enabled=False`), in which case it
+returns the expression unchanged behind the same interface.
+
+```python
+from openretailscience.experimental.cache import cache
+
+daily = transactions.group_by("store_id").aggregate(spend=transactions.unit_spend.sum())
+with cache(daily) as cached_daily:
+    ...  # cached_daily is an Ibis table; the cache is released when the block exits
+```
+
 ## Colors constant
 
 `openretailscience.constants.COLORS[hue][shade]` is the full Tailwind palette

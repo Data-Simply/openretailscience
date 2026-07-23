@@ -49,6 +49,11 @@ unknown_customer   = "unknown"
 # Use backend-native SQL features for faster queries where supported (portable fallback otherwise).
 use_native_sql = true
 
+# Caching (experimental)
+[caching]
+# Whether the experimental cache() helper materializes results (portable no-op passthrough when false).
+enabled = true
+
 # Plot Color Options
 [plot.color]
 # Multi-color rotation (27 colors): 9 curated hues x 3 shades.

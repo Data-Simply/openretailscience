@@ -82,6 +82,7 @@ nav:
               - Graph Utils: api/plots/styles/graph_utils.md
               - Styling Helpers: api/plots/styles/styling_helpers.md
       - Experimental:
+          - Cache: api/experimental/cache.md
           - Metrics:
               - Distribution: api/experimental/metrics/distribution.md
       - Utils:
