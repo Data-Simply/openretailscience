@@ -8,6 +8,8 @@ run without Spark.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import ibis
 import ibis.expr.types as ir
 import pandas as pd
@@ -17,6 +19,9 @@ from pandas.testing import assert_frame_equal
 from openretailscience.experimental import cache as cache_module
 from openretailscience.experimental.cache import DatabricksCachedTable, cache
 from openretailscience.options import ColumnHelper, option_context
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 cols = ColumnHelper()
 
@@ -43,24 +48,39 @@ def spend_by_store() -> ir.Table:
     )
 
 
+def _cache_option_disabled(expr: ir.Table) -> ir.CachedTable:
+    """Cache ``expr`` with the global caching.enabled option turned off.
+
+    Args:
+        expr (ir.Table): The expression to cache.
+
+    Returns:
+        ir.CachedTable: The cache handle produced while caching is globally disabled.
+    """
+    with option_context("caching.enabled", False):
+        return cache(expr)
+
+
 class TestCacheDispatch:
     """cache() returns the right handle for each situation, always with correct data."""
 
-    def test_disabled_returns_unchanged_passthrough(self, spend_by_store: ir.Table):
-        """With caching off, cache() returns the expression's data unchanged and release() is a no-op."""
-        cached = cache(spend_by_store, enabled=False)
+    @pytest.mark.parametrize(
+        "make_cached",
+        [lambda expr: cache(expr, enabled=False), _cache_option_disabled],
+        ids=["enabled-arg-false", "option-disabled"],
+    )
+    def test_disabled_returns_unchanged_passthrough(
+        self,
+        spend_by_store: ir.Table,
+        make_cached: Callable[[ir.Table], ir.CachedTable],
+    ):
+        """Disabling caching (per call or via the option) returns the data unchanged; release is a no-op."""
+        cached = make_cached(spend_by_store)
         assert isinstance(cached, cache_module._PassthroughCachedTable)
         assert_frame_equal(cached.execute(), spend_by_store.execute())
 
         cached.release()
         # Passthrough materialized nothing, so the expression is still queryable after release.
-        assert_frame_equal(cached.execute(), spend_by_store.execute())
-
-    def test_disabled_via_option(self, spend_by_store: ir.Table):
-        """The caching.enabled option gates cache() the same way the per-call flag does."""
-        with option_context("caching.enabled", False):
-            cached = cache(spend_by_store)
-        assert isinstance(cached, cache_module._PassthroughCachedTable)
         assert_frame_equal(cached.execute(), spend_by_store.execute())
 
     def test_enabled_delegates_to_native_cache(self, spend_by_store: ir.Table):
@@ -79,10 +99,11 @@ class TestCacheDispatch:
         with pytest.raises(TypeError, match="expr must be an Ibis table"):
             cache(bad_expr)
 
-    def test_rejects_non_bool_enabled(self, spend_by_store: ir.Table):
+    @pytest.mark.parametrize("bad_enabled", ["yes", 1, 1.0])
+    def test_rejects_non_bool_enabled(self, spend_by_store: ir.Table, bad_enabled: object):
         """A non-bool enabled override raises TypeError."""
-        with pytest.raises(TypeError, match=r"enabled must be a bool or None.*Got str"):
-            cache(spend_by_store, enabled="yes")
+        with pytest.raises(TypeError, match="enabled must be a bool or None"):
+            cache(spend_by_store, enabled=bad_enabled)
 
 
 class _ConnectSession:

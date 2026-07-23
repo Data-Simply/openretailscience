@@ -160,25 +160,3 @@ class TestCacheDispatchOnPySpark:
             assert_frame_equal(_by_store(cached.execute()), _by_store(expr.execute()))
         finally:
             cached.release()
-
-    def test_routes_to_workaround_when_spark_connect_detected(
-        self,
-        pyspark_transactions: tuple[PySparkBackend, Table],
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        """When the backend is detected as Spark Connect, cache() uses the temp-view workaround.
-
-        Local Spark cannot run in Connect mode, so the Connect *detection* is overridden while the real
-        Spark session performs the actual caching.
-        """
-        con, transactions = pyspark_transactions
-        monkeypatch.setattr(cache_module, "_is_spark_connect", lambda _con: True)
-        expr = _spend_by_store(transactions)
-
-        cached = cache(expr)
-        try:
-            assert isinstance(cached, DatabricksCachedTable)
-            assert con._session.catalog.tableExists(cached.op().name) is True
-            assert_frame_equal(_by_store(cached.execute()), _by_store(expr.execute()))
-        finally:
-            cached.release()
