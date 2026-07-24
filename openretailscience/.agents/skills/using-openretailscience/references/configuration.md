@@ -112,7 +112,7 @@ because Ibis's native `expr.cache()` raises on the `ibis.pyspark` backend under 
 Connect (Databricks Runtime 13+) — its `DataFrame.is_cached` assertion is not satisfied
 synchronously. `cache()` transparently swaps in a temp-view workaround there and delegates
 to native `.cache()` on every other backend. Turn it off globally with
-`set_option("caching.enabled", False)` (or per call with `enabled=False`), in which case it
+`set_option("optimization.use_caching", False)` (or per call with `enabled=False`), in which case it
 returns the expression unchanged behind the same interface.
 
 ```python

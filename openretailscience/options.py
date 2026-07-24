@@ -77,8 +77,7 @@ class Options:
             "column.suffix.total": "total",
             # Performance / query optimization
             "optimization.use_native_sql": True,
-            # Experimental caching
-            "caching.enabled": True,
+            "optimization.use_caching": True,
             # Color palettes
             # 27-color rotation: 9 curated hues at 3 shades. First 5 hues are max-separated on the
             # hue wheel (~70 degrees apart) for 3-5 series. Order: primaries (500), lights (200),
@@ -212,8 +211,7 @@ class Options:
                 "When False, or on backends without support, the portable fallback path is used. "
                 "Results are identical either way."
             ),
-            # Experimental caching
-            "caching.enabled": (
+            "optimization.use_caching": (
                 "Whether the experimental openretailscience.experimental.cache.cache helper materializes "
                 "results. When False, cache() returns the expression unchanged so callers incur no caching "
                 "overhead. Results are identical either way."

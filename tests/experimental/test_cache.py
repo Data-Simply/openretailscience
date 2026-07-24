@@ -49,7 +49,7 @@ def spend_by_store() -> ir.Table:
 
 
 def _cache_option_disabled(expr: ir.Table) -> ir.CachedTable:
-    """Cache ``expr`` with the global caching.enabled option turned off.
+    """Cache ``expr`` with the global optimization.use_caching option turned off.
 
     Args:
         expr (ir.Table): The expression to cache.
@@ -57,7 +57,7 @@ def _cache_option_disabled(expr: ir.Table) -> ir.CachedTable:
     Returns:
         ir.CachedTable: The cache handle produced while caching is globally disabled.
     """
-    with option_context("caching.enabled", False):
+    with option_context("optimization.use_caching", False):
         return cache(expr)
 
 

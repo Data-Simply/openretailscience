@@ -8,7 +8,7 @@ Why this exists: Ibis's native ``Table.cache()`` raises on the PySpark backend u
 (Databricks Runtime 13 and later) because its ``DataFrame.is_cached`` assertion is not satisfied
 synchronously. :func:`cache` transparently substitutes a temporary-view-based implementation there and
 delegates to the native ``.cache()`` on every other backend (including classic PySpark, where the native
-path works). Caching can be turned off globally via the ``caching.enabled`` option or per call via
+path works). Caching can be turned off globally via the ``optimization.use_caching`` option or per call via
 ``enabled=False``, in which case :func:`cache` returns the expression unchanged behind the same interface,
 so call sites never have to branch.
 
@@ -123,13 +123,13 @@ def cache(expr: ir.Table, *, enabled: bool | None = None) -> ir.CachedTable:
     Mirrors Ibis's native ``Table.cache()``: the returned handle is usable directly as a table, as a
     context manager, or released explicitly with ``.release()``. On Spark Connect (Databricks) it uses a
     temporary-view workaround for Ibis's broken native cache; on every other backend it delegates to the
-    native ``.cache()``. When caching is disabled -- globally via the ``caching.enabled`` option or per call
-    via ``enabled=False`` -- the expression is returned unchanged behind the same interface.
+    native ``.cache()``. When caching is disabled -- globally via the ``optimization.use_caching`` option or
+    per call via ``enabled=False`` -- the expression is returned unchanged behind the same interface.
 
     Args:
         expr (ir.Table): The Ibis table expression to cache. Must be bound to a backend.
-        enabled (bool | None, optional): Per-call override of the ``caching.enabled`` option. Defaults to
-            ``None``, which reads the option.
+        enabled (bool | None, optional): Per-call override of the ``optimization.use_caching`` option.
+            Defaults to ``None``, which reads the option.
 
     Returns:
         ir.CachedTable: A cache handle. Call ``.release()`` or use it as a context manager to free it.
@@ -140,7 +140,7 @@ def cache(expr: ir.Table, *, enabled: bool | None = None) -> ir.CachedTable:
     if not isinstance(expr, ibis.Table):
         msg = f"expr must be an Ibis table. Got {type(expr).__name__}."
         raise TypeError(msg)
-    resolved_enabled = get_option("caching.enabled") if enabled is None else enabled
+    resolved_enabled = get_option("optimization.use_caching") if enabled is None else enabled
     if not isinstance(resolved_enabled, bool):
         msg = f"enabled must be a bool or None. Got {type(resolved_enabled).__name__}."
         raise TypeError(msg)

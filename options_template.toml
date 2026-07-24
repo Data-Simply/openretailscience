@@ -48,11 +48,8 @@ unknown_customer   = "unknown"
 [optimization]
 # Use backend-native SQL features for faster queries where supported (portable fallback otherwise).
 use_native_sql = true
-
-# Caching (experimental)
-[caching]
 # Whether the experimental cache() helper materializes results (portable no-op passthrough when false).
-enabled = true
+use_caching = true
 
 # Plot Color Options
 [plot.color]
