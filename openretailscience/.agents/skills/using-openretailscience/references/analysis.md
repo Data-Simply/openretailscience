@@ -104,5 +104,5 @@ Flagged experimental — APIs may change. `experimental.metrics.base.ratio_metri
 and the distribution metrics `experimental.metrics.distribution.acv.Acv` /
 `experimental.metrics.distribution.pct_of_stores.PctOfStores`. Also
 `experimental.cache.cache(expr)` — a generic caching helper mirroring Ibis's `Table.cache()`
-that transparently works around the broken native cache on Spark Connect (Databricks); see
-`references/configuration.md`.
+that transparently works around the broken native cache on Spark Connect (Databricks). Toggle it
+with the `optimization.use_caching` option or per call via `enabled=False`.
