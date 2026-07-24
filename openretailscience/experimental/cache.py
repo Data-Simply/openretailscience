@@ -18,8 +18,8 @@ so call sites never have to branch.
 
 from __future__ import annotations
 
+import sys
 import weakref
-from contextlib import suppress
 from typing import TYPE_CHECKING
 
 import ibis
@@ -45,16 +45,39 @@ _SPARK_CONNECT_MODULE_PREFIX = "pyspark.sql.connect"
 
 
 def _release_view(con: BaseBackend, name: str) -> None:
-    """Uncache a Spark relation and drop its temporary view. Best-effort and safe to call repeatedly.
+    """Uncache a Spark relation and drop its temporary view, if it still exists.
+
+    Idempotent: a no-op when the view is already gone, so it is safe to call from both an explicit
+    :meth:`DatabricksCachedTable.release` and the garbage-collection finalizer. Presence is checked
+    up front instead of catching a broad exception, so a real failure (e.g. a live session refusing
+    the drop) surfaces rather than being silently swallowed.
 
     Args:
         con (BaseBackend): The Ibis PySpark backend connection holding the view.
         name (str): The temporary view name to uncache and drop.
     """
-    with suppress(Exception):
-        con._session.catalog.uncacheTable(name)
-    with suppress(Exception):
-        con._session.catalog.dropTempView(name)
+    catalog = con._session.catalog
+    if not catalog.tableExists(name):
+        return
+    catalog.uncacheTable(name)
+    catalog.dropTempView(name)
+
+
+def _release_view_on_gc(con: BaseBackend, name: str) -> None:
+    """Garbage-collection finalizer for a cached view: release it unless the interpreter is exiting.
+
+    A handle collected mid-session releases its view normally. During interpreter shutdown the Spark
+    session is torn down along with all its temporary views, so there is nothing left to release (and
+    the session may already be unusable); the release is skipped rather than acting on a dying
+    session. Outside shutdown, any real failure from :func:`_release_view` is left to surface.
+
+    Args:
+        con (BaseBackend): The Ibis PySpark backend connection holding the view.
+        name (str): The temporary view name to uncache and drop.
+    """
+    if sys.is_finalizing():
+        return
+    _release_view(con, name)
 
 
 class DatabricksCachedTable(ir.CachedTable):
@@ -113,7 +136,7 @@ def _cache_on_spark_connect(con: BaseBackend, expr: ir.Table) -> DatabricksCache
     cached = DatabricksCachedTable(con.table(name).op())
     # Safety net: drop the view when the handle is garbage-collected, so a forgotten cache does not leak.
     # The view name is unique per call, so this finalizer can only ever drop its own relation.
-    weakref.finalize(cached, _release_view, con, name)
+    weakref.finalize(cached, _release_view_on_gc, con, name)
     return cached
 
 
