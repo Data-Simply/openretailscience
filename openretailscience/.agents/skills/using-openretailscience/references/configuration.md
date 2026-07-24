@@ -46,6 +46,7 @@ methods, the last write wins.
   `percent_difference`→"pct_diff", `contribution`→"contrib", `total`→"total".
 - `plot.color.*`, `plot.font.*`, `plot.style.*`, `plot.spacing.*` — chart styling.
 - `optimization.use_native_sql` — engine optimization toggle.
+- `optimization.use_caching` — toggle for the experimental `cache()` helper.
 
 ### ColumnHelper — resolve names in your own code
 

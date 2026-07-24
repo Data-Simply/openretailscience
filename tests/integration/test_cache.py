@@ -1,13 +1,16 @@
-"""Cross-backend integration tests for openretailscience.experimental.cache.
+"""Cross-backend integration test for openretailscience.experimental.cache.
 
-cache() must return correct results on whatever backend an expression is bound to. These run
+cache() must materialize correct results on whatever backend an expression is bound to. This runs
 through the shared ``transactions_table`` fixture, so each backend's integration CI
-(``pytest tests/integration -k <backend>``) exercises them on a live connection.
+(``pytest tests/integration -k <backend>``) exercises it on a live connection.
+
+Backend-agnostic behavior (dispatch, passthrough, context manager, validation, Spark Connect
+detection) is covered by the unit tests; this asserts only what needs a real backend: that the native
+cache path returns the source data unchanged and does not silently fall back to the passthrough.
 
 The Spark Connect (Databricks) workaround that cache() selects only on Databricks Runtime is not
-reachable from a local classic PySpark session (``_is_spark_connect`` is False there, so cache()
-takes the native path). It is validated separately against a live Databricks connection, not with a
-local stand-in.
+reachable from a local classic PySpark session -- cache() takes the native path there -- so it is
+validated separately against a live Databricks connection, not with a local stand-in.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from pandas.testing import assert_frame_equal
 
+from openretailscience.experimental import cache as cache_module
 from openretailscience.experimental.cache import cache
 from openretailscience.options import ColumnHelper
 
@@ -55,27 +59,15 @@ def _by_store(df: pd.DataFrame) -> pd.DataFrame:
 
 
 class TestCache:
-    """cache() on a live backend: correct data on the native path, transparent no-op when disabled."""
+    """cache() materializes correct data on a live backend."""
 
     def test_materializes_source_data(self, transactions_table: Table):
-        """A cached expression returns the same rows as the uncached expression."""
+        """cache() returns the source rows and dispatches to a real cache, not the passthrough."""
         expr = _spend_by_store(transactions_table)
         expected = _by_store(expr.to_pandas())
         cached = cache(expr)
         try:
+            assert not isinstance(cached, cache_module._PassthroughCachedTable)
             assert_frame_equal(_by_store(cached.to_pandas()), expected)
         finally:
             cached.release()
-
-    def test_context_manager_yields_source_data(self, transactions_table: Table):
-        """Used as a context manager, cache() yields the source data and releases on exit."""
-        expr = _spend_by_store(transactions_table)
-        expected = _by_store(expr.to_pandas())
-        with cache(expr) as cached:
-            assert_frame_equal(_by_store(cached.to_pandas()), expected)
-
-    def test_disabled_returns_source_unchanged(self, transactions_table: Table):
-        """With caching disabled, cache() returns the expression's data unchanged."""
-        expr = _spend_by_store(transactions_table)
-        cached = cache(expr, enabled=False)
-        assert_frame_equal(_by_store(cached.to_pandas()), _by_store(expr.to_pandas()))

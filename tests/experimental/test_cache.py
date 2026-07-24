@@ -43,7 +43,7 @@ def spend_by_store() -> ir.Table:
     transactions = con.create_table("transactions", pdf)
     return (
         transactions.group_by(cols.store_id)
-        .aggregate(spend=transactions[cols.unit_spend].sum())
+        .aggregate(**{cols.agg.unit_spend: transactions[cols.unit_spend].sum()})
         .order_by(cols.store_id)
     )
 
@@ -89,6 +89,23 @@ class TestCacheDispatch:
         try:
             assert isinstance(cached, ir.CachedTable)
             assert not isinstance(cached, (cache_module._PassthroughCachedTable, DatabricksCachedTable))
+            assert_frame_equal(cached.execute(), spend_by_store.execute())
+        finally:
+            cached.release()
+
+    def test_context_manager_yields_cached_table(self, spend_by_store: ir.Table):
+        """cache() works as a context manager, yielding a queryable non-passthrough handle in the block."""
+        expected = spend_by_store.execute()
+        with cache(spend_by_store) as cached:
+            assert not isinstance(cached, cache_module._PassthroughCachedTable)
+            assert_frame_equal(cached.execute(), expected)
+
+    def test_enabled_true_overrides_disabled_option(self, spend_by_store: ir.Table):
+        """A per-call enabled=True caches even when the global option disables caching."""
+        with option_context("optimization.use_caching", False):
+            cached = cache(spend_by_store, enabled=True)
+        try:
+            assert not isinstance(cached, cache_module._PassthroughCachedTable)
             assert_frame_equal(cached.execute(), spend_by_store.execute())
         finally:
             cached.release()

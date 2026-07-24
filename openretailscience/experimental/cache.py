@@ -13,12 +13,13 @@ path works). Caching can be turned off globally via the ``optimization.use_cachi
 so call sites never have to branch.
 
 .. warning::
-    This module is experimental and its API may change without notice.
+    This module is experimental and its API may change without notice. Unlike Ibis's native cache, the
+    Spark Connect path does not de-duplicate: caching the same expression twice creates two independent
+    temporary views over a single shared Spark cache entry, so releasing one uncaches the other.
 """
 
 from __future__ import annotations
 
-import sys
 import weakref
 from typing import TYPE_CHECKING
 
@@ -33,7 +34,8 @@ if TYPE_CHECKING:
 
 __all__ = ["DatabricksCachedTable", "cache"]
 
-# Prefix for auto-generated Spark temp-view names, so cached relations are recognizable in the catalog.
+# Base for auto-generated Spark temp-view names (``util.gen_name`` yields e.g. ``ibis_ors_cache_<hash>``),
+# so cached relations are recognizable in the catalog and unique per call.
 _CACHE_NAME_PREFIX = "ors_cache"
 
 # Ibis backend name for the PySpark backend.
@@ -59,25 +61,12 @@ def _release_view(con: BaseBackend, name: str) -> None:
     catalog = con._session.catalog
     if not catalog.tableExists(name):
         return
-    catalog.uncacheTable(name)
-    catalog.dropTempView(name)
-
-
-def _release_view_on_gc(con: BaseBackend, name: str) -> None:
-    """Garbage-collection finalizer for a cached view: release it unless the interpreter is exiting.
-
-    A handle collected mid-session releases its view normally. During interpreter shutdown the Spark
-    session is torn down along with all its temporary views, so there is nothing left to release (and
-    the session may already be unusable); the release is skipped rather than acting on a dying
-    session. Outside shutdown, any real failure from :func:`_release_view` is left to surface.
-
-    Args:
-        con (BaseBackend): The Ibis PySpark backend connection holding the view.
-        name (str): The temporary view name to uncache and drop.
-    """
-    if sys.is_finalizing():
-        return
-    _release_view(con, name)
+    # Drop the view even if the uncache fails, so a transient uncache error cannot leak the view; the
+    # uncache error still surfaces once the drop has run.
+    try:
+        catalog.uncacheTable(name)
+    finally:
+        catalog.dropTempView(name)
 
 
 class DatabricksCachedTable(ir.CachedTable):
@@ -134,9 +123,17 @@ def _cache_on_spark_connect(con: BaseBackend, expr: ir.Table) -> DatabricksCache
     spark_df.cache()
     spark_df.createOrReplaceTempView(name)
     cached = DatabricksCachedTable(con.table(name).op())
-    # Safety net: drop the view when the handle is garbage-collected, so a forgotten cache does not leak.
-    # The view name is unique per call, so this finalizer can only ever drop its own relation.
-    weakref.finalize(cached, _release_view_on_gc, con, name)
+    # Drop the view when the cached relation is garbage-collected, so a forgotten cache does not leak.
+    # The finalizer is attached to the op, not the ``cached`` expression wrapper: Ibis wrappers are
+    # ephemeral, but every expression derived from the cache references the op and keeps it alive, so the
+    # view is released only once nothing uses it -- mirroring how Ibis's native cache finalizes on the
+    # cached op. (Attaching to the wrapper would drop the view the moment ``cached`` is reassigned or
+    # goes out of scope, even while derived expressions still reference it.) The name is unique per call,
+    # so this can only ever drop its own relation. ``atexit=False`` skips release during interpreter
+    # shutdown -- the Spark session is torn down with its temp views then, and weakref.finalize runs its
+    # atexit pass with ``sys.is_finalizing()`` still False, so an in-callback guard would not fire.
+    finalizer = weakref.finalize(cached.op(), _release_view, con, name)
+    finalizer.atexit = False
     return cached
 
 
