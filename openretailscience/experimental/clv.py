@@ -440,6 +440,8 @@ class CLVStats:
         """
         summary = self.df
         gg_ready = summary[summary["frequency"] > 0].reset_index(drop=True)
+        if len(gg_ready) == 0:  # no repeat buyers: nothing to correlate
+            return gg_ready
         # Correlation is only defined when both columns vary; a constant column would divide by a zero
         # standard deviation (NaN, plus a numpy warning), so skip the check in that degenerate case.
         frequency, monetary_value = gg_ready["frequency"], gg_ready["monetary_value"]
