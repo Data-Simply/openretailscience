@@ -12,6 +12,7 @@ from openretailscience.core.validation import (
     ensure_ibis_table,
     ensure_integer,
     ensure_number,
+    ensure_period,
     ensure_positive,
     ensure_tznaive_datetime,
     ensure_unit_interval,
@@ -146,6 +147,50 @@ class TestEnsureValueChoice:
         """Materializing ``choices`` once means a generator's contents appear in the error too."""
         with pytest.raises(ValueError, match=r"\['asc', 'desc'\]"):
             ensure_value_choice("bogus", (c for c in ["asc", "desc"]), "sort_order")
+
+
+class TestEnsurePeriod:
+    """Tests for the ensure_period helper (alias-aware period validation)."""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("d", "day"),
+            ("D", "day"),
+            ("day", "day"),
+            ("DAYS", "day"),
+            ("w", "week"),
+            ("Week", "week"),
+            ("weeks", "week"),
+            ("m", "month"),
+            ("MO", "month"),
+            ("months", "month"),
+        ],
+    )
+    def test_resolves_short_and_long_aliases_case_insensitively(self, value, expected):
+        """Short/long/mixed-case forms all resolve to the canonical period word in choices."""
+        assert ensure_period(value, ("day", "week", "month"), "period") == expected
+
+    def test_returns_the_callers_choice_spelling(self):
+        """The returned value is the caller's own choice spelling, ready for lookup."""
+        assert ensure_period("Q", ("Year", "Quarter", "Month"), "period") == "Quarter"
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "year",  # a recognized period alias, but not among the caller's choices
+            "fortnight",  # not a recognized period at all
+        ],
+    )
+    def test_period_outside_choices_raises(self, value):
+        """A period outside the caller's choices is rejected, whether or not it is a recognized alias."""
+        with pytest.raises(ValueError, match=rf"period must be one of .*'{value}'"):
+            ensure_period(value, ("day", "week"), "period")
+
+    def test_non_string_raises_type_error(self):
+        """A non-string period raises TypeError."""
+        with pytest.raises(TypeError, match="period must be a string"):
+            ensure_period(7, ("day", "week"), "period")
 
 
 class TestEnsureIbisTable:

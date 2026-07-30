@@ -40,7 +40,7 @@ import ibis
 import numpy as np
 import pandas as pd
 
-from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table, ensure_value_choice
+from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table, ensure_period
 from openretailscience.options import ColumnHelper
 
 
@@ -105,7 +105,8 @@ class CohortAnalysis:
             df (pd.DataFrame | ibis.Table): The dataset containing transaction data.
             aggregation_column (str): The column to apply the aggregation function on (e.g., 'unit_spend').
             agg_func (str, optional): Aggregation function (e.g., "nunique", "sum", "mean"). Defaults to "nunique".
-            period (str): Period for cohort analysis (must be "year", "quarter", "month", "week", or "day").
+            period (str): Period for cohort analysis: "year", "quarter", "month", "week", or "day"
+                (case-insensitive; short forms like "m"/"d" accepted).
             percentage (bool): If True, converts cohort values into retention percentages relative to the first period.
 
         Raises:
@@ -115,7 +116,7 @@ class CohortAnalysis:
         """
         cols = ColumnHelper()
 
-        period = ensure_value_choice(period, self.VALID_PERIODS, "period")
+        period = ensure_period(period, self.VALID_PERIODS, "period")
 
         required_cols = [
             cols.customer_id,
@@ -176,7 +177,8 @@ class CohortAnalysis:
             df (pd.DataFrame | ibis.Table): The dataset containing transaction data.
             aggregation_column (str): The column to apply the aggregation function on (e.g., 'unit_spend').
             agg_func (str, optional): Aggregation function (e.g., "nunique", "sum", "mean"). Defaults to "nunique".
-            period (str): Period for cohort analysis (must be "year", "quarter", "month", "week", or "day").
+            period (str): Period for cohort analysis: "year", "quarter", "month", "week", or "day"
+                (case-insensitive; short forms like "m"/"d" accepted).
             percentage (bool): If True, converts cohort values into retention percentages relative to the first period.
 
         Returns:

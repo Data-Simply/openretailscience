@@ -6,12 +6,37 @@ from typing import TYPE_CHECKING
 
 import ibis
 import pandas as pd
+from ibis.expr.types import Scalar
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
 VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
+_EXTRA_AGG_SPEC_LEN = 2  # each extra_aggs value is a (source_col, agg_func) pair
+
+#: Period aliases (case-insensitive, short and long forms) mapped to their canonical word.
+PERIOD_ALIASES: dict[str, str] = {
+    "d": "day",
+    "day": "day",
+    "days": "day",
+    "w": "week",
+    "wk": "week",
+    "week": "week",
+    "weeks": "week",
+    "m": "month",
+    "mo": "month",
+    "month": "month",
+    "months": "month",
+    "q": "quarter",
+    "qtr": "quarter",
+    "quarter": "quarter",
+    "quarters": "quarter",
+    "y": "year",
+    "yr": "year",
+    "year": "year",
+    "years": "year",
+}
 
 
 def ensure_ibis_table(df: pd.DataFrame | ibis.Table, param_name: str = "df") -> ibis.Table:
@@ -153,6 +178,40 @@ def ensure_value_choice(
     raise ValueError(msg)
 
 
+def ensure_period(value: str, choices: Iterable[str], param_name: str = "period") -> str:
+    """Validate a period parameter, accepting case-insensitive aliases and short forms.
+
+    Normalizes ``value`` through :data:`PERIOD_ALIASES` ("d"/"D"/"day"/"days" all resolve to "day"),
+    then matches the canonical word against ``choices`` (the caller's allowed periods). Use this for
+    any period/date-unit parameter so callers can pass any casing or abbreviation.
+
+    Args:
+        value (str): The period supplied by the caller (any alias or casing).
+        choices (Iterable[str]): The canonical period words this function allows, e.g. ``("day", "week")``.
+        param_name (str): The parameter name to surface in error messages. Defaults to ``"period"``.
+
+    Returns:
+        str: The entry from ``choices`` matching ``value`` (the caller's own spelling).
+
+    Raises:
+        TypeError: If ``value`` is not a string.
+        ValueError: If ``value`` does not resolve to one of ``choices``.
+    """
+    if not isinstance(value, str):
+        msg = f"{param_name} must be a string. Got {type(value).__name__}."
+        raise TypeError(msg)
+
+    canonical = PERIOD_ALIASES.get(value.strip().lower())
+    choices_list = list(choices)
+    if canonical is not None:
+        for choice in choices_list:
+            if choice.lower() == canonical:
+                return choice
+
+    msg = f"{param_name} must be one of {choices_list} (aliases like 'd'/'day' accepted). Got '{value}'."
+    raise ValueError(msg)
+
+
 def ensure_number(value: float, param_name: str) -> None:
     """Validate that a parameter is a real number — an int or float, but not a bool.
 
@@ -221,6 +280,44 @@ def ensure_integer(value: int, param_name: str) -> None:
     if isinstance(value, bool) or not isinstance(value, int):
         msg = f"{param_name} must be an integer. Got {type(value).__name__}."
         raise TypeError(msg)
+
+
+def ensure_valid_extra_aggs(data: ibis.Table, extra_aggs: dict[str, tuple[str, str]] | None) -> None:
+    """Validate an ``extra_aggs`` mapping of ``{output_col: (source_col, agg_func)}``.
+
+    Each entry names a source column that must exist in ``data`` and an Ibis aggregation
+    function (e.g. ``"sum"``, ``"nunique"``, ``"max"``) that must be available on that
+    column.
+
+    Args:
+        data (ibis.Table): The table the aggregations will run against.
+        extra_aggs (dict[str, tuple[str, str]] | None): The aggregation spec to validate.
+            ``None`` is a no-op.
+
+    Raises:
+        ValueError: If a spec value is not a ``(source_col, agg_func)`` tuple, if a source
+            column is absent from ``data``, or if ``agg_func`` is not a no-argument aggregation
+            that reduces that column to a scalar.
+    """
+    if extra_aggs is None:
+        return
+    for output_col, spec in extra_aggs.items():
+        if not (isinstance(spec, tuple) and len(spec) == _EXTRA_AGG_SPEC_LEN):
+            msg = f"extra_aggs['{output_col}'] must be a (source_col, agg_func) tuple, got {spec!r}"
+            raise ValueError(msg)
+        col, func = spec
+        if col not in data.columns:
+            msg = f"Column '{col}' specified in extra_aggs does not exist in the data"
+            raise ValueError(msg)
+        # A bare hasattr(func) passes for non-aggregations (e.g. "cast", "isnull") that build fine
+        # but crash later; require func to build a scalar reduction on the column.
+        try:
+            aggregation = getattr(data[col], func)()
+        except (AttributeError, TypeError):
+            aggregation = None
+        if not isinstance(aggregation, Scalar):
+            msg = f"Aggregation function '{func}' not available for column '{col}'"
+            raise ValueError(msg)  # noqa: TRY004 -- bad aggregation name is a value error, not a type error
 
 
 def ensure_tznaive_datetime(df: ibis.Table, column: str) -> None:
