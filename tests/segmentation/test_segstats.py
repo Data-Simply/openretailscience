@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 from sqlglot import exp
 
+from openretailscience.core.validation import ensure_valid_extra_aggs
 from openretailscience.options import ColumnHelper, get_option, option_context
 from openretailscience.segmentation.segstats import SegTransactionStats, _resolve_group_key, cube, rollup
 
@@ -452,8 +453,12 @@ class TestSegTransactionStats:
             total_product_count,
         ]
 
-    def test_extra_aggs_with_invalid_column(self):
-        """Test that an error is raised when an invalid column is specified in extra_aggs."""
+    def test_extra_aggs_invalid_spec_rejected_by_constructor(self):
+        """The constructor routes extra_aggs through ensure_valid_extra_aggs.
+
+        Exhaustive spec/column/function cases live in
+        TestGroupingSetsRollupMode.test_validate_extra_aggs_rejects_invalid_spec; this only pins the wiring.
+        """
         df = pd.DataFrame(
             {
                 cols.customer_id: [1, 2, 3],
@@ -463,26 +468,8 @@ class TestSegTransactionStats:
             },
         )
 
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(ValueError, match="does not exist in the data"):
             SegTransactionStats(df, "segment_name", extra_aggs={"invalid_agg": ("nonexistent_column", "nunique")})
-
-        assert "does not exist in the data" in str(excinfo.value)
-
-    def test_extra_aggs_with_invalid_function(self):
-        """Test that an error is raised when an invalid function is specified in extra_aggs."""
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 2, 3],
-                cols.unit_spend: [100.0, 200.0, 300.0],
-                cols.transaction_id: [101, 102, 103],
-                "segment_name": ["Premium", "Standard", "Premium"],
-            },
-        )
-
-        with pytest.raises(ValueError) as excinfo:
-            SegTransactionStats(df, "segment_name", extra_aggs={"invalid_agg": (cols.customer_id, "invalid_function")})
-
-        assert "not available for column" in str(excinfo.value)
 
     def test_with_custom_column_names(self):
         """Test SegTransactionStats with custom column names."""
@@ -742,6 +729,7 @@ class TestUnknownCustomerTracking:
         [
             (-1, [1, 2, -1, 3]),  # int value
             ("UNKNOWN", ["C1", "C2", "UNKNOWN", "C3"]),  # string value
+            (ibis.literal(-1), [1, 2, -1, 3]),  # ibis literal expression
         ],
     )
     def test_unknown_customer_input_types(self, unknown_value, customer_ids):
@@ -756,40 +744,6 @@ class TestUnknownCustomerTracking:
         )
 
         seg_stats = SegTransactionStats(df, "segment_name", unknown_customer_value=unknown_value)
-        result_df = seg_stats.df.sort_values("segment_name").reset_index(drop=True)
-
-        expected_output = pd.DataFrame(
-            {
-                "segment_name": ["Premium", "Standard", "Total"],
-                cols.agg.unit_spend: [300.0, 300.0, 600.0],
-                cols.agg.transaction_id: [2, 1, 3],
-                cols.agg.customer_id: [2, 1, 3],
-                cols.calc.spend_per_cust: [150.0, 300.0, 200.0],
-                cols.calc.spend_per_trans: [150.0, 300.0, 200.0],
-                cols.calc.trans_per_cust: [1.0, 1.0, 1.0],
-                cols.agg.unit_spend_unknown: [150.0, 0.0, 150.0],
-                cols.agg.transaction_id_unknown: [1, 0, 1],
-                cols.calc.spend_per_trans_unknown: [150.0, np.nan, 150.0],
-                cols.agg.unit_spend_total: [450.0, 300.0, 750.0],
-                cols.agg.transaction_id_total: [3, 1, 4],
-                cols.calc.spend_per_trans_total: [150.0, 300.0, 187.5],
-            },
-        )
-
-        pd.testing.assert_frame_equal(result_df, expected_output)
-
-    def test_unknown_customer_with_ibis_literal(self):
-        """Test unknown customer tracking with ibis literal."""
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 2, -1, 3],
-                cols.unit_spend: [100.0, 200.0, 150.0, 300.0],
-                cols.transaction_id: [101, 102, 103, 104],
-                "segment_name": ["Premium", "Premium", "Premium", "Standard"],
-            },
-        )
-
-        seg_stats = SegTransactionStats(df, "segment_name", unknown_customer_value=ibis.literal(-1))
         result_df = seg_stats.df.sort_values("segment_name").reset_index(drop=True)
 
         expected_output = pd.DataFrame(
@@ -1247,75 +1201,50 @@ class TestGroupingSetsRollupMode:
         # Compare using pandas assert_frame_equal
         pd.testing.assert_frame_equal(result_subset, expected_sorted)
 
-    def test_validate_extra_aggs_invalid_column(self):
-        """Test that _validate_extra_aggs raises ValueError for invalid column name."""
-        data = pd.DataFrame({"region": ["North", "South"], cols.unit_spend: [100, 200]})
-        table = ibis.memtable(data)
-        extra_aggs = {"total_sales": ("invalid_column", "sum")}
+    @pytest.mark.parametrize(
+        ("extra_aggs", "match"),
+        [
+            ({"total_sales": ("invalid_column", "sum")}, "Column 'invalid_column' specified in extra_aggs"),
+            ({"total_sales": (cols.unit_spend, "invalid_func")}, "Aggregation function 'invalid_func' not available"),
+            # "isnull" is a real ibis method but a column->column op, not a scalar reduction: it passes the
+            # old hasattr check yet must be rejected by the (source_col, agg_func) -> Scalar validation.
+            ({"total_sales": (cols.unit_spend, "isnull")}, "Aggregation function 'isnull' not available"),
+            # A spec that is not a 2-tuple is rejected before the column/function checks.
+            ({"total_sales": (cols.unit_spend,)}, r"must be a \(source_col, agg_func\) tuple"),
+        ],
+    )
+    def test_validate_extra_aggs_rejects_invalid_spec(self, extra_aggs, match):
+        """extra_aggs validation raises ValueError for a bad spec shape, unknown column, or non-reduction func."""
+        table = ibis.memtable(pd.DataFrame({"region": ["North", "South"], cols.unit_spend: [100, 200]}))
+        with pytest.raises(ValueError, match=match):
+            ensure_valid_extra_aggs(table, extra_aggs)
 
-        with pytest.raises(ValueError, match="Column 'invalid_column' specified in extra_aggs does not exist"):
-            SegTransactionStats._validate_extra_aggs(table, extra_aggs)
-
-    def test_validate_extra_aggs_invalid_function(self):
-        """Test that _validate_extra_aggs raises ValueError for invalid aggregation function."""
-        data = pd.DataFrame({"region": ["North", "South"], cols.unit_spend: [100, 200]})
-        table = ibis.memtable(data)
-        extra_aggs = {"total_sales": (cols.unit_spend, "invalid_func")}
-
-        with pytest.raises(ValueError, match="Aggregation function 'invalid_func' not available"):
-            SegTransactionStats._validate_extra_aggs(table, extra_aggs)
-
-    def test_generate_grouping_sets_cube_two_columns(self):
-        """Test CUBE mode generates all 2^n combinations for two columns."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "store"],
-            grouping_sets="cube",
-        )
-        expected = [
-            ("region", "store"),  # full detail
-            ("region",),  # region only
-            ("store",),  # store only
-            (),  # grand total
-        ]
-        expected_count_two_columns = 4  # 2^2 = 4
-        # Convert to sets for order-independent comparison
+    @pytest.mark.parametrize(
+        ("segment_col", "expected"),
+        [
+            (["region"], [("region",), ()]),  # 2^1 = 2
+            (["region", "store"], [("region", "store"), ("region",), ("store",), ()]),  # 2^2 = 4
+            (
+                ["region", "store", "product"],  # 2^3 = 8
+                [
+                    ("region", "store", "product"),
+                    ("region", "store"),
+                    ("region", "product"),
+                    ("region",),
+                    ("store", "product"),
+                    ("store",),
+                    ("product",),
+                    (),
+                ],
+            ),
+        ],
+        ids=["single-column", "two-columns", "three-columns"],
+    )
+    def test_generate_grouping_sets_cube_emits_all_subsets(self, segment_col, expected):
+        """CUBE mode generates all 2^n subsets of the segment columns."""
+        result = SegTransactionStats._generate_grouping_sets(segment_col=segment_col, grouping_sets="cube")
         assert set(result) == set(expected)
-        assert len(result) == expected_count_two_columns
-
-    def test_generate_grouping_sets_cube_three_columns(self):
-        """Test CUBE mode generates all 2^n combinations for three columns."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region", "store", "product"],
-            grouping_sets="cube",
-        )
-        expected = [
-            ("region", "store", "product"),  # full detail
-            ("region", "store"),  # region + store
-            ("region", "product"),  # region + product
-            ("region",),  # region only
-            ("store", "product"),  # store + product
-            ("store",),  # store only
-            ("product",),  # product only
-            (),  # grand total
-        ]
-        expected_count_three_columns = 8  # 2^3 = 8
-        # Convert to sets for order-independent comparison
-        assert set(result) == set(expected)
-        assert len(result) == expected_count_three_columns
-
-    def test_generate_grouping_sets_cube_single_column(self):
-        """Test CUBE mode with single segment column."""
-        result = SegTransactionStats._generate_grouping_sets(
-            segment_col=["region"],
-            grouping_sets="cube",
-        )
-        expected = [
-            ("region",),  # detail
-            (),  # grand total
-        ]
-        expected_count_single_column = 2  # 2^1 = 2
-        assert set(result) == set(expected)
-        assert len(result) == expected_count_single_column
+        assert len(result) == len(expected)  # all subsets distinct, so count == 2^n
 
     def test_cube_mode_integration(self):
         """Test CUBE mode produces correct aggregations across all dimension combinations."""

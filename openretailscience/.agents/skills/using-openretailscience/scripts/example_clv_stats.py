@@ -26,31 +26,55 @@ first_day_per_txn = np.repeat(first_day, purchases_per_customer)
 days_after_first = (rng.random(customer_id.size) * 330).astype(int)
 day_offset = np.minimum(first_day_per_txn + days_after_first, last_day_offset)
 
+# A customer-constant acquisition channel (one value per customer, repeated across their rows) and a
+# per-transaction store. The channel is a candidate one-hot covariate; the store is aggregated per
+# customer into customer_attributes below.
+channels = np.array(["email", "paid_search", "organic", None], dtype=object)
+signup_channel = np.repeat(rng.choice(channels, size=n_customers), purchases_per_customer)
+
+# Each customer has a typical basket size; per-transaction spend varies mildly around it and is
+# independent of how often they shop (Gamma-Gamma assumes spend and frequency are uncorrelated).
+basket_size = rng.uniform(5, 250, size=n_customers)
+unit_spend = (np.repeat(basket_size, purchases_per_customer) * rng.uniform(0.8, 1.2, size=customer_id.size)).round(2)
+
 transactions = pd.DataFrame({
     "customer_id": customer_id,
     "transaction_date": pd.to_datetime(epoch + day_offset.astype("timedelta64[D]")),
-    "unit_spend": rng.uniform(5, 250, size=customer_id.size).round(2),
+    "unit_spend": unit_spend,
+    "store_id": rng.integers(1, 6, size=customer_id.size),
+    "signup_channel": signup_channel,
 })
 
-# Weekly summary: recency and T are in weeks; monetary_value is the mean spend across each
-# customer's repeat purchases (NaN for one-time buyers). Columns: customer_id, frequency,
-# recency, T, monetary_value.
-summary = CLVStats(transactions, period="week").df
+# Weekly BTYD summary: one row per customer (customer_id, frequency, recency, T, monetary_value).
+clv = CLVStats(transactions, period="week")
 
-# Pin the observation window to an explicit "as of" date rather than the default (the latest
-# transaction date). A wrong horizon unit later is a common silent bug, so keep the model's
-# time unit (here, weeks) fixed and known.
+# observation_period_end pins the window instead of defaulting to the latest transaction date.
 summary_asof = CLVStats(transactions, period="week", observation_period_end="2023-12-31").df
 
-# The repeat-buyer subset is what the Gamma-Gamma model is fit on.
-repeat_buyers = summary[summary["frequency"] > 0]
+# repeat_buyers (frequency > 0) is the GammaGammaModel input.
+repeat_buyers = clv.repeat_buyers
 
-# Feed these straight to pymc-marketing (install it separately; not imported here):
-#
-#     from pymc_marketing.clv import ParetoNBDModel, GammaGammaModel
-#
-#     pareto = ParetoNBDModel(data=summary)      # uses frequency, recency, T
-#     pareto.fit()
-#
-#     gamma_gamma = GammaGammaModel(data=repeat_buyers)   # uses frequency, monetary_value
-#     gamma_gamma.fit()
+# pymc_time_unit ("W" here) is the time_unit for expected_customer_lifetime_value; its default "D"
+# silently misreads a weekly/monthly horizon.
+time_unit = clv.pymc_time_unit
+
+# customer_attributes (one row per customer) is left-joined onto the summary; one_hot_col encodes one
+# of its columns into 0/1 ParetoNBDModel covariates. Build it with any per-customer aggregation.
+customer_attributes = (
+    transactions.groupby("customer_id")
+    .agg(stores_shopped=("store_id", "nunique"), signup_channel=("signup_channel", "first"))
+    .reset_index()
+)
+clv_covariates = CLVStats(
+    transactions,
+    period="week",
+    customer_attributes=customer_attributes,
+    one_hot_col="signup_channel",
+)
+summary_covariates = clv_covariates.df
+# covariate_cols = the attached columns (one-hot dummies + stores_shopped) to pass as covariates.
+covariate_cols = clv_covariates.covariate_cols
+
+# Feed to pymc-marketing (install separately): summary_covariates -> ParetoNBDModel, repeat_buyers ->
+# GammaGammaModel (pass time_unit for finite-horizon CLV), summary_covariates + covariate_cols ->
+# ParetoNBDModel covariates.

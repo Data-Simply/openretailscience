@@ -113,19 +113,22 @@ class TestCohortAnalysis:
 
     def test_invalid_period(self, transactions_df):
         """Test if an invalid period raises an error."""
-        with pytest.raises(ValueError, match=r"period must be one of .*'m'"):
+        with pytest.raises(ValueError, match=r"period must be one of .*'fortnight'"):
             CohortAnalysis(
                 df=transactions_df,
                 aggregation_column="unit_spend",
-                period="m",
+                period="fortnight",
             )
 
-    @pytest.mark.parametrize("period", ["MONTH", "Month", "MoNtH"])
-    def test_period_case_insensitive_matches_lowercase(self, transactions_df, period):
-        """Mixed-case period values produce identical output to the lowercase form."""
-        lower = CohortAnalysis(df=transactions_df, aggregation_column="unit_spend", period=period.lower()).df
-        upper = CohortAnalysis(df=transactions_df, aggregation_column="unit_spend", period=period).df
-        pdt.assert_frame_equal(upper, lower)
+    def test_period_spelling_is_normalized_before_use(self, transactions_df):
+        """A non-canonical spelling is normalized (via ensure_period) before it drives truncate/_periods_between.
+
+        The full alias/case matrix is owned by tests/core/test_validation.py::TestEnsurePeriod; this only
+        checks CohortAnalysis threads the canonical word downstream rather than the raw input.
+        """
+        variant = CohortAnalysis(df=transactions_df, aggregation_column="unit_spend", period="MoNtH").df
+        expected = CohortAnalysis(df=transactions_df, aggregation_column="unit_spend", period="month").df
+        pdt.assert_frame_equal(variant, expected)
 
     def test_cohort_percentage_normalizes_each_cohort_to_own_period_zero(self, transactions_df):
         """Tests that percentage=True normalizes each cohort row by its own period-0 value.
@@ -199,8 +202,8 @@ class TestCohortAnalysis:
 
         pdt.assert_frame_equal(result, expected_df)
 
-    def test_with_custom_column_names(self, transactions_df):
-        """Test CohortAnalysis with custom column names to ensure column overrides work correctly."""
+    def test_with_custom_column_names(self, transactions_df, expected_results_df):
+        """Overriding the customer_id/transaction_date option names yields the same cohort as the defaults."""
         custom_transactions_df = transactions_df.rename(
             columns={
                 "customer_id": "cust_id",
@@ -210,16 +213,14 @@ class TestCohortAnalysis:
         )
 
         with option_context("column.customer_id", "cust_id", "column.transaction_date", "txn_date"):
-            cohort = CohortAnalysis(
+            result = CohortAnalysis(
                 df=custom_transactions_df,
                 aggregation_column="spend_amount",
                 agg_func="nunique",
                 period="month",
-            )
+            ).df
 
-            result = cohort.df
-            assert isinstance(result, pd.DataFrame), "Should return DataFrame with custom columns"
-            assert not result.empty, "Should produce results with custom column names"
+        pdt.assert_frame_equal(result, expected_results_df)
 
 
 class TestPeriodsBetween:
