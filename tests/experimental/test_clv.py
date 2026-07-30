@@ -293,6 +293,25 @@ class TestCLVStatsCorrelationWarning:
             assert not any("correlated" in str(w.message) for w in caught)
             assert len(result) == data[cols.customer_id].nunique()  # all four are repeat buyers, none dropped
 
+    def test_repeat_buyers_all_one_time_buyers_is_empty_without_warning(self):
+        """When every customer is a one-time buyer, repeat_buyers is empty and no correlation check fires.
+
+        The correlation guard runs on an empty frame (min/max are NaN); it must not raise a spurious warning.
+        """
+        data = pd.DataFrame(
+            {
+                cols.customer_id: [101, 102, 103],
+                cols.transaction_date: pd.to_datetime(["2023-01-01", "2023-01-02", "2023-01-03"]),
+                cols.unit_spend: [100.0, 200.0, 300.0],
+            },
+        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = CLVStats(data, period="day").repeat_buyers
+        assert not any("correlated" in str(w.message) for w in caught)
+        assert len(result) == 0
+        assert list(result.columns) == BASE_BTYD_COLS
+
 
 class TestCLVStatsPymcTimeUnit:
     """CLVStats exposes the pymc-marketing time_unit matching its period."""
@@ -495,10 +514,12 @@ class TestCLVStatsCustomerAttributes:
         )
         # Every customer shares one region, no NULLs: the sole level is the dropped reference, so no dummy remains.
         attributes = pd.DataFrame({cols.customer_id: [201, 202, 203], "region": ["north", "north", "north"]})
-        with pytest.warns(UserWarning, match="zero dummy columns"):
+        with pytest.warns(UserWarning, match="zero dummy columns") as record:
             clv = CLVStats(transactions, period="day", customer_attributes=attributes, one_hot_col="region")
         assert clv.covariate_cols == []
         assert "region" not in clv.df.columns
+        # The warning is attributed to the caller's CLVStats(...) frame, not the internal encode helper.
+        assert record[0].filename.endswith("test_clv.py")
 
     @pytest.mark.parametrize(
         ("kwargs", "expected"),

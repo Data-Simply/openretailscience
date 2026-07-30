@@ -113,13 +113,13 @@ def _one_hot_encode(table: ibis.Table, cols_to_encode: list[str]) -> ibis.Table:
                 f"one_hot_col '{col}' has a single distinct level (one category, or all NULL), so dropping the "
                 "reference level leaves zero dummy columns and no covariate. Drop it from one_hot_col, or check "
                 "the column has the categories you expect.",
-                stacklevel=2,
+                stacklevel=4,  # user -> __init__ -> _attach_customer_attributes -> _one_hot_encode -> warn
             )
         elif len(emitted) > _ONE_HOT_CARDINALITY_WARN:
             warnings.warn(
                 f"one_hot_col '{col}' expands to {len(emitted)} dummy columns; high-cardinality one-hot "
                 "makes a large, sparse ParetoNBD covariate matrix. Group rare levels or use another encoding.",
-                stacklevel=2,
+                stacklevel=4,  # user -> __init__ -> _attach_customer_attributes -> _one_hot_encode -> warn
             )
         # ifelse -> portable CASE WHEN (`col == value` as a value is invalid SQL on Oracle/SQL Server);
         # NULL or non-match -> 0. int8 (TINYINT) not int64: a 0/1 flag is one byte.
