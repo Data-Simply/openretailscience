@@ -156,24 +156,34 @@ def _get_target_dirs(base: Path) -> list[Path]:
     return targets
 
 
+def _spark_current_user() -> str | None:
+    """Return the workspace username Databricks is running the session as.
+
+    Returns:
+        str | None: The username from Spark's ``current_user()``, or None when no
+        Spark session is active (so the username has to come from elsewhere).
+    """
+    from pyspark.sql import SparkSession  # noqa: PLC0415 - deferred: importing pyspark is slow
+
+    spark = SparkSession.getActiveSession()
+    if spark is None:
+        return None
+    return str(spark.sql("SELECT current_user()").collect()[0][0])
+
+
 def _databricks_user_home() -> Path | None:
     """Return the caller's ``/Workspace/Users/<user>`` directory, if it can be resolved.
 
-    Prefers the ``DATABRICKS_USER`` environment variable; otherwise derives the
-    user from the working directory, which for a workspace notebook sits under
-    ``/Workspace/Users/<user>/``.
+    The username comes from Spark's ``current_user()``, with the ``DATABRICKS_USER``
+    environment variable as an override for compute that has no Spark session.
 
     Returns:
         Path | None: The workspace home directory, or None when unresolvable.
     """
-    users_root = _DATABRICKS_WORKSPACE_ROOT / DATABRICKS_USERS_DIR
-    user = os.environ.get(_DATABRICKS_USER_ENV) or None  # blank env var counts as unknown
-    if user is not None:
-        return users_root / user
-    cwd = Path.cwd()
-    if users_root in cwd.parents:
-        return users_root / cwd.relative_to(users_root).parts[0]
-    return None
+    user = os.environ.get(_DATABRICKS_USER_ENV) or _spark_current_user()  # blank env var counts as unset
+    if user is None:
+        return None
+    return _DATABRICKS_WORKSPACE_ROOT / DATABRICKS_USERS_DIR / user
 
 
 def _get_databricks_target_dir(*, global_mode: bool) -> Path:
