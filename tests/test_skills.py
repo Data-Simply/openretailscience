@@ -72,7 +72,7 @@ def _skill_import_statements() -> list[str]:
 
 
 def _raise_oserror(*_args: object, **_kwargs: object) -> None:
-    """Stand-in for os.symlink that reports symlinks are unsupported."""
+    """Raise OSError; a patched-call stand-in for a failing operation (unsupported symlink, cross-drive path)."""
     msg = "symlinks not supported"
     raise OSError(msg)
 
@@ -84,7 +84,7 @@ def _raise_value_error(*_args: object, **_kwargs: object) -> str:
 
 
 def _raise_not_implemented(*_args: object, **_kwargs: object) -> None:
-    """Stand-in for os.symlink on a platform without symlink support."""
+    """Raise NotImplementedError; a patched-call stand-in for an operation unsupported on the platform."""
     raise NotImplementedError
 
 
@@ -256,8 +256,10 @@ class TestCopyFallback:
     def test_copies_directory_when_symlink_unsupported(
         self, source_dir: Path, project_dir: Path, monkeypatch: pytest.MonkeyPatch, raiser: object
     ) -> None:
-        """When os.symlink raises OSError or NotImplementedError, the skill is copied instead."""
-        monkeypatch.setattr(os, "symlink", raiser)
+        """When creating the symlink raises OSError or NotImplementedError, the skill is copied instead."""
+        # Patch Path.symlink_to (what _try_symlink calls), not os.symlink: on Python 3.10 pathlib binds
+        # os.symlink at import time, so patching os.symlink would not reach the symlink call.
+        monkeypatch.setattr("pathlib.Path.symlink_to", raiser)
 
         install_skills()
 
@@ -277,7 +279,8 @@ class TestCopyFallback:
         own (byte-identical to the source) and report it up to date instead of
         skipping it as a name conflict.
         """
-        monkeypatch.setattr(os, "symlink", _raise_oserror)
+        # Patch the symlink call itself (see test_copies_directory_when_symlink_unsupported).
+        monkeypatch.setattr("pathlib.Path.symlink_to", _raise_oserror)
 
         install_skills()
         result = install_skills()

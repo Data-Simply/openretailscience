@@ -56,7 +56,12 @@ import pandas as pd
 from ibis.backends.sql import compilers as sql_compilers
 from sqlglot import exp
 
-from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
+from openretailscience.core.validation import (
+    ensure_columns,
+    ensure_data_has_columns,
+    ensure_ibis_table,
+    ensure_valid_extra_aggs,
+)
 from openretailscience.options import ColumnHelper, get_option
 
 __all__ = ["SegTransactionStats", "cube", "rollup"]
@@ -377,8 +382,7 @@ class SegTransactionStats:
             ],
         )
 
-        # Validate extra_aggs if provided
-        self._validate_extra_aggs(data, extra_aggs)
+        ensure_valid_extra_aggs(data, extra_aggs)
 
         self.segment_col = segment_col
         self.extra_aggs = {} if extra_aggs is None else extra_aggs
@@ -479,29 +483,6 @@ class SegTransactionStats:
             col_type = data[col].type()
             mutations[col] = ibis.literal(values[i], type=col_type)
         return mutations
-
-    @staticmethod
-    def _validate_extra_aggs(data: ibis.Table, extra_aggs: dict[str, tuple[str, str]] | None) -> None:
-        """Validate extra_aggs parameter.
-
-        Args:
-            data (ibis.Table): The data table to validate against
-            extra_aggs (dict[str, tuple[str, str]] | None): Extra aggregations to validate
-
-        Raises:
-            ValueError: If column doesn't exist or aggregation function is not available
-        """
-        if extra_aggs is None:
-            return
-
-        for col_tuple in extra_aggs.values():
-            col, func = col_tuple
-            if col not in data.columns:
-                msg = f"Column '{col}' specified in extra_aggs does not exist in the data"
-                raise ValueError(msg)
-            if not hasattr(data[col], func):
-                msg = f"Aggregation function '{func}' not available for column '{col}'"
-                raise ValueError(msg)
 
     @staticmethod
     def _validate_grouping_sets_params(
