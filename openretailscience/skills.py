@@ -20,8 +20,8 @@ Linking behaviour:
 * On Databricks the package lives on ephemeral compute that is wiped on cluster
   restart, and Genie reads skills from a persistent ``/Workspace`` location that
   cannot symlink into site-packages. There we always **copy** skills into the
-  Genie skills directory; re-run :func:`install_skills` after upgrading the
-  package to refresh the copy.
+  user's own ``/Workspace/Users/<user>/.assistant/skills`` directory; re-run
+  :func:`install_skills` after upgrading the package to refresh the copy.
 """
 
 from __future__ import annotations
@@ -156,28 +156,49 @@ def _get_target_dirs(base: Path) -> list[Path]:
     return targets
 
 
-def _get_databricks_target_dirs(*, global_mode: bool) -> list[Path]:
-    """Return the persistent Databricks Genie skills directory.
+def _databricks_user_home() -> Path | None:
+    """Return the caller's ``/Workspace/Users/<user>`` directory, if it can be resolved.
 
-    Project mode installs to the shared workspace skills directory; global mode
-    installs to the per-user directory when the user is known, otherwise falls
-    back to the shared directory with a note.
-
-    Args:
-        global_mode (bool): Whether to install per-user rather than shared.
+    Prefers the ``DATABRICKS_USER`` environment variable; otherwise derives the
+    user from the working directory, which for a workspace notebook sits under
+    ``/Workspace/Users/<user>/``.
 
     Returns:
-        list[Path]: The single Genie skills directory to copy into.
+        Path | None: The workspace home directory, or None when unresolvable.
     """
-    if global_mode:
-        user = os.environ.get(_DATABRICKS_USER_ENV) or None  # blank env var counts as unknown
-        if user is not None:
-            base = _DATABRICKS_WORKSPACE_ROOT / DATABRICKS_USERS_DIR / user
-            return [_skills_dir(base, DATABRICKS_ASSISTANT_DIR)]
-        print(  # noqa: T201 - user-facing installer output
-            "Could not determine the Databricks user; installing to the shared workspace skills directory instead."
+    users_root = _DATABRICKS_WORKSPACE_ROOT / DATABRICKS_USERS_DIR
+    user = os.environ.get(_DATABRICKS_USER_ENV) or None  # blank env var counts as unknown
+    if user is not None:
+        return users_root / user
+    cwd = Path.cwd()
+    if users_root in cwd.parents:
+        return users_root / cwd.relative_to(users_root).parts[0]
+    return None
+
+
+def _get_databricks_target_dir() -> Path:
+    """Return the Databricks Genie skills directory in the caller's workspace home.
+
+    The shared ``/Workspace/.assistant/skills`` directory is deliberately not a
+    fallback: writing there requires workspace admin rights, and attempting it
+    fails with an opaque asynchronous 403 from the workspace filesystem.
+
+    Returns:
+        Path: The Genie skills directory to copy into.
+
+    Raises:
+        RuntimeError: When the caller's workspace home cannot be resolved.
+    """
+    home = _databricks_user_home()
+    if home is None or not home.is_dir():
+        attempted = home if home is not None else _DATABRICKS_WORKSPACE_ROOT / DATABRICKS_USERS_DIR
+        msg = (
+            f"Could not resolve your Databricks workspace home (looked under {attempted}). "
+            f"Set the {_DATABRICKS_USER_ENV} environment variable to your workspace username "
+            "(e.g. you@company.com) and re-run install_skills()."
         )
-    return [_skills_dir(_DATABRICKS_WORKSPACE_ROOT, DATABRICKS_ASSISTANT_DIR)]
+        raise RuntimeError(msg)
+    return _skills_dir(home, DATABRICKS_ASSISTANT_DIR)
 
 
 def _relative_symlink_target(source_path: Path, target_path: Path) -> str:
@@ -379,12 +400,13 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
     In project mode (default) skills are linked into the current project's
     ``.agents/skills/`` (and ``.claude/skills/`` when Claude Code is detected). In
     global mode they are linked into the equivalent home directories. On
-    Databricks, skills are copied into the persistent Genie workspace skills
-    directory instead of linked. The operation is idempotent.
+    Databricks both modes copy the skills into the caller's persistent workspace
+    Genie skills directory instead. The operation is idempotent.
 
     Args:
         global_mode (bool): Install to user-level home directories instead of the
-            current project. Defaults to False.
+            current project. Defaults to False. Ignored on Databricks, which has
+            no project tree in the workspace.
 
     Returns:
         SkillInstallResult: The skills that were installed, already up to date,
@@ -393,7 +415,7 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
     Raises:
         FileNotFoundError: When the bundled skills directory is missing.
         RuntimeError: When the bundled skills directory contains no installable
-            skills.
+            skills, or when the Databricks workspace home cannot be resolved.
     """
     source_dir = _get_source_skills_dir()
     if not source_dir.is_dir():
@@ -406,7 +428,7 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
         raise RuntimeError(msg)
 
     if _DATABRICKS_RUNTIME_ENV in os.environ:
-        target_dirs = _get_databricks_target_dirs(global_mode=global_mode)
+        target_dirs = [_get_databricks_target_dir()]
         use_copy = True
     elif global_mode:
         target_dirs = _get_target_dirs(Path.home())

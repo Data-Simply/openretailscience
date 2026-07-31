@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 # Two realistic bundled-skill names plus a junk dir with no SKILL.md.
 SKILL_NAMES = ("retail-metrics", "using-openretailscience")
+DATABRICKS_USER = "analyst@retail.com"
 FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---", re.DOTALL)
 SHIPPED_SKILL_NAME = "using-openretailscience"
 # Fenced code blocks, and openretailscience import statements inside them.
@@ -319,21 +320,59 @@ class TestDatabricksInstall:
     def workspace_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         """Simulate a Databricks runtime with a redirected persistent workspace root."""
         root = tmp_path / "Workspace"
-        root.mkdir()
+        (root / "Users" / DATABRICKS_USER).mkdir(parents=True)
         monkeypatch.setenv("DATABRICKS_RUNTIME_VERSION", "15.4")
-        monkeypatch.delenv("DATABRICKS_USER", raising=False)
+        monkeypatch.setenv("DATABRICKS_USER", DATABRICKS_USER)
         monkeypatch.setattr(skills, "_DATABRICKS_WORKSPACE_ROOT", root)
         return root
 
-    def test_project_mode_copies_to_shared_assistant_dir(self, source_dir: Path, workspace_root: Path) -> None:
-        """On Databricks, project install copies (not links) into .assistant/skills."""
-        install_skills()
+    @pytest.fixture
+    def user_skills_dir(self, workspace_root: Path) -> Path:
+        """The per-user Genie skills directory install_skills must write to."""
+        return workspace_root / "Users" / DATABRICKS_USER / ".assistant" / "skills"
+
+    @pytest.mark.parametrize("global_mode", [False, True])
+    def test_copies_to_per_user_assistant_dir(
+        self, source_dir: Path, workspace_root: Path, user_skills_dir: Path, global_mode: bool
+    ) -> None:
+        """Both modes copy (not link) into the user's own workspace .assistant/skills."""
+        install_skills(global_mode=global_mode)
 
         for name in SKILL_NAMES:
-            target = workspace_root / ".assistant" / "skills" / name
+            target = user_skills_dir / name
             assert target.is_dir()
             assert not target.is_symlink()
             assert (target / "SKILL.md").is_file()
+        # The shared workspace-root directory needs admin rights: writing there is
+        # what raised 403 PERMISSION_DENIED for non-admin users.
+        assert not (workspace_root / ".assistant").exists()
+
+    def test_user_is_derived_from_workspace_cwd_when_env_unset(
+        self, source_dir: Path, workspace_root: Path, user_skills_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without DATABRICKS_USER, the user comes from a notebook cwd under /Workspace/Users."""
+        monkeypatch.delenv("DATABRICKS_USER")
+        notebook_dir = workspace_root / "Users" / DATABRICKS_USER / "retail-analysis"
+        notebook_dir.mkdir()
+        monkeypatch.chdir(notebook_dir)
+
+        install_skills()
+
+        assert (user_skills_dir / SKILL_NAMES[0] / "SKILL.md").is_file()
+
+    @pytest.mark.parametrize("user_env", [None, "", "wrong.user@retail.com"])
+    def test_raises_when_workspace_user_cannot_be_resolved(
+        self, source_dir: Path, workspace_root: Path, monkeypatch: pytest.MonkeyPatch, user_env: str | None
+    ) -> None:
+        """An unknown, blank, or non-existent workspace user raises instead of writing to the shared dir."""
+        monkeypatch.delenv("DATABRICKS_USER")
+        if user_env is not None:
+            monkeypatch.setenv("DATABRICKS_USER", user_env)
+
+        with pytest.raises(RuntimeError, match="DATABRICKS_USER"):
+            install_skills()
+
+        assert not (workspace_root / ".assistant").exists()
 
     def test_rerun_reports_up_to_date_when_copy_matches(self, source_dir: Path, workspace_root: Path) -> None:
         """Re-running on Databricks with unchanged skills reports them up to date."""
@@ -343,7 +382,9 @@ class TestDatabricksInstall:
         assert len(result.installed) == 0
         assert len(result.up_to_date) == len(SKILL_NAMES)
 
-    def test_rerun_refreshes_copy_when_source_changed(self, source_dir: Path, workspace_root: Path) -> None:
+    def test_rerun_refreshes_copy_when_source_changed(
+        self, source_dir: Path, workspace_root: Path, user_skills_dir: Path
+    ) -> None:
         """A changed bundled skill is re-copied over the stale Databricks copy."""
         install_skills()
         (source_dir / SKILL_NAMES[0] / "SKILL.md").write_text(
@@ -353,18 +394,18 @@ class TestDatabricksInstall:
 
         result = install_skills()
 
-        target = workspace_root / ".assistant" / "skills" / SKILL_NAMES[0] / "SKILL.md"
+        target = user_skills_dir / SKILL_NAMES[0] / "SKILL.md"
         assert "Updated." in target.read_text(encoding="utf-8")
         assert len(result.installed) == 1
 
-    def test_existing_workspace_skill_dir_is_replaced(self, source_dir: Path, workspace_root: Path) -> None:
+    def test_existing_workspace_skill_dir_is_replaced(self, source_dir: Path, user_skills_dir: Path) -> None:
         """In copy mode the managed Genie skills dir is refreshed, replacing an owned same-name dir.
 
         This is the documented asymmetry with symlink mode: the workspace
         ``.assistant/skills`` directory is installer-managed, so a same-named
         directory there is treated as a prior copy and overwritten on re-run.
         """
-        existing = workspace_root / ".assistant" / "skills" / SKILL_NAMES[0]
+        existing = user_skills_dir / SKILL_NAMES[0]
         existing.mkdir(parents=True)
         (existing / "SKILL.md").write_text("stale copy", encoding="utf-8")
 
@@ -373,14 +414,14 @@ class TestDatabricksInstall:
         assert existing.is_dir()
         assert (existing / "SKILL.md").read_bytes() == (source_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes()
 
-    def test_existing_symlink_is_replaced_with_real_copy(self, source_dir: Path, workspace_root: Path) -> None:
+    def test_existing_symlink_is_replaced_with_real_copy(self, source_dir: Path, user_skills_dir: Path) -> None:
         """In copy mode an owned symlink at the target is unlinked and replaced by a real copy.
 
         A prior symlink-mode install (or a hand-made link) can leave a symlink at
         a Databricks target. Copy mode must not keep it: it unlinks the symlink
         and copies the skill so the result survives the package being wiped.
         """
-        target = workspace_root / ".assistant" / "skills" / SKILL_NAMES[0]
+        target = user_skills_dir / SKILL_NAMES[0]
         target.parent.mkdir(parents=True)
         target.symlink_to(source_dir / SKILL_NAMES[0])
 
@@ -390,7 +431,7 @@ class TestDatabricksInstall:
         assert not target.is_symlink()
         assert (target / "SKILL.md").read_bytes() == (source_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes()
 
-    def test_copy_is_independent_of_source(self, source_dir: Path, workspace_root: Path) -> None:
+    def test_copy_is_independent_of_source(self, source_dir: Path, user_skills_dir: Path) -> None:
         """The copied skill survives the ephemeral package being wiped on restart."""
         install_skills()
         expected = (source_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes()
@@ -398,33 +439,7 @@ class TestDatabricksInstall:
         # Simulate the ephemeral package being wiped on cluster restart.
         shutil.rmtree(source_dir)
 
-        target = workspace_root / ".assistant" / "skills" / SKILL_NAMES[0] / "SKILL.md"
-        assert target.read_bytes() == expected
-
-    def test_global_mode_uses_per_user_dir_when_user_known(
-        self, source_dir: Path, workspace_root: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Global Databricks install targets the per-user workspace dir when known."""
-        monkeypatch.setenv("DATABRICKS_USER", "analyst@retail.com")
-
-        install_skills(global_mode=True)
-
-        target = workspace_root / "Users" / "analyst@retail.com" / ".assistant" / "skills" / SKILL_NAMES[0]
-        assert target.is_dir()
-
-    @pytest.mark.parametrize("user_env", [None, ""])
-    def test_global_mode_falls_back_to_shared_when_user_missing_or_blank(
-        self, source_dir: Path, workspace_root: Path, monkeypatch: pytest.MonkeyPatch, user_env: str | None
-    ) -> None:
-        """Global Databricks install falls back to the shared dir when the user is unset or blank."""
-        if user_env is not None:
-            monkeypatch.setenv("DATABRICKS_USER", user_env)
-
-        install_skills(global_mode=True)
-
-        assert (workspace_root / ".assistant" / "skills" / SKILL_NAMES[0]).is_dir()
-        # A blank user must not produce a malformed ``/Workspace/Users//...`` path.
-        assert not (workspace_root / "Users").exists()
+        assert (user_skills_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes() == expected
 
 
 class TestBundledSkill:

@@ -59,9 +59,14 @@ workspace location that cannot symlink back into that storage. So on Databricks
 the installer **copies** the skill into the Genie skills directory instead of
 linking it:
 
-- Project mode → `/Workspace/.assistant/skills/`
-- Global mode → `/Workspace/Users/<you>/.assistant/skills/` (falling back to the
-  shared workspace directory when the user cannot be determined)
+Both modes install to your own workspace home,
+`/Workspace/Users/<you>/.assistant/skills/` — the workspace-wide
+`/Workspace/.assistant/skills/` directory is never written to, because it
+requires workspace admin rights. Your username comes from the `DATABRICKS_USER`
+environment variable, falling back to the notebook's working directory under
+`/Workspace/Users/`. When neither resolves, `install_skills()` raises rather than
+writing somewhere you may not own; set `DATABRICKS_USER` to your workspace
+username and re-run.
 
 Run it from a notebook, or from a cluster init script so it re-applies on every
 start:
@@ -77,7 +82,7 @@ upgrade the package. Re-run `install_skills()` after upgrading OpenRetailScience
 (a cluster init script is the easiest way to keep it current).
 
 !!! warning "Managed directory"
-    The workspace `.assistant/skills/` directory is treated as installer-managed:
+    Your workspace `.assistant/skills/` directory is treated as installer-managed:
     a folder there whose name matches a bundled skill is refreshed on every run.
     If you hand-author your own skill under that directory, give it a different
     name so `install_skills()` does not overwrite it.
