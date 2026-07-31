@@ -8,8 +8,10 @@ import runpy
 import shutil
 import sys
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 import pytest
+from pyspark.sql import SparkSession
 
 from openretailscience import skills
 from openretailscience.options import get_option, list_options, set_option
@@ -331,6 +333,13 @@ class TestDatabricksInstall:
         """The per-user Genie skills directory install_skills must write to."""
         return workspace_root / "Users" / DATABRICKS_USER / ".assistant" / "skills"
 
+    @pytest.fixture
+    def spark_session(self, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+        """Stand in for the Databricks-provided active Spark session (an external dependency)."""
+        session = MagicMock()
+        monkeypatch.setattr(SparkSession, "getActiveSession", lambda: session)
+        return session
+
     def test_copies_to_per_user_assistant_dir(
         self, source_dir: Path, workspace_root: Path, user_skills_dir: Path
     ) -> None:
@@ -365,18 +374,29 @@ class TestDatabricksInstall:
 
         assert (workspace_root / ".assistant" / "skills" / SKILL_NAMES[0]).is_dir()
 
-    def test_user_is_derived_from_workspace_cwd_when_env_unset(
-        self, source_dir: Path, workspace_root: Path, user_skills_dir: Path, monkeypatch: pytest.MonkeyPatch
+    def test_user_comes_from_spark_current_user_when_env_unset(
+        self, source_dir: Path, user_skills_dir: Path, spark_session: MagicMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Without DATABRICKS_USER, the user comes from a notebook cwd under /Workspace/Users."""
+        """Without DATABRICKS_USER, the workspace user is read from Spark's current_user()."""
         monkeypatch.delenv("DATABRICKS_USER")
-        notebook_dir = workspace_root / "Users" / DATABRICKS_USER / "retail-analysis"
-        notebook_dir.mkdir()
-        monkeypatch.chdir(notebook_dir)
+        spark_session.sql.return_value.collect.return_value = [[DATABRICKS_USER]]
 
         install_skills()
 
+        assert "current_user()" in spark_session.sql.call_args.args[0]
         assert (user_skills_dir / SKILL_NAMES[0] / "SKILL.md").is_file()
+
+    def test_env_user_overrides_spark_current_user(
+        self, source_dir: Path, user_skills_dir: Path, workspace_root: Path, spark_session: MagicMock
+    ) -> None:
+        """DATABRICKS_USER wins over current_user(), so a wrong detection can be corrected by hand."""
+        (workspace_root / "Users" / "service-principal").mkdir()
+        spark_session.sql.return_value.collect.return_value = [["service-principal"]]
+
+        install_skills()
+
+        assert (user_skills_dir / SKILL_NAMES[0]).is_dir()
+        assert not (workspace_root / "Users" / "service-principal" / ".assistant").exists()
 
     @pytest.mark.parametrize("user_env", [None, "", "wrong.user@retail.com"])
     def test_raises_when_workspace_user_cannot_be_resolved(

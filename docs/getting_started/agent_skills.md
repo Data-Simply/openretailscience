@@ -69,16 +69,18 @@ asynchronously, as an `AsyncFlushFailedException` pointing at a flush rather tha
 at the write that was rejected. Install without `global_mode` unless you intend
 to publish the skill to everyone.
 
-Your username comes from the `DATABRICKS_USER` environment variable, falling back
-to the notebook's working directory when it sits under `/Workspace/Users/`. When
-neither resolves, `install_skills()` raises rather than writing somewhere you may
-not own — set `DATABRICKS_USER` to your workspace username and re-run:
+Your workspace username is detected for you, from Spark's `current_user()`. On
+compute with no Spark session, set the `DATABRICKS_USER` environment variable
+instead — it also overrides the detected value:
 
 ```python
 import os
 
 os.environ["DATABRICKS_USER"] = "you@company.com"
 ```
+
+When neither resolves, `install_skills()` raises rather than writing somewhere you
+may not own.
 
 Run it from a notebook, or from a cluster init script so it re-applies on every
 start:
