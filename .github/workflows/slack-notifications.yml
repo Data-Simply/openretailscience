@@ -42,6 +42,13 @@ jobs:
           AUTHOR_NAME: ${{ github.event.workflow_run.head_commit.author.name }}
           COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
         run: |
+          # Slack caps a Block Kit section's text at 3000 characters and rejects the whole
+          # payload with HTTP 400 otherwise. Grouped dependabot commits blow past that, so
+          # trim the message well short of the limit to leave room for the surrounding markup.
+          message=${COMMIT_MESSAGE:0:2000}
+          if [ "$message" != "$COMMIT_MESSAGE" ]; then
+            message="$message"$'\n…(truncated)'
+          fi
           payload=$(jq -n \
             --arg repo "$REPO_FULL_NAME" \
             --arg repo_url "$REPO_URL" \
@@ -51,7 +58,7 @@ jobs:
             --arg sha "$HEAD_SHA" \
             --arg event "$EVENT_NAME" \
             --arg author "$AUTHOR_NAME" \
-            --arg message "$COMMIT_MESSAGE" \
+            --arg message "$message" \
             '{
               attachments: [{
                 color: "danger",
