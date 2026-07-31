@@ -363,15 +363,16 @@ class CLVStats:
         # A day is an occasion only if its net spend is positive; returns-only days are not purchases.
         daily = daily.filter(daily._day_spend > 0)
 
-        # A repeat occasion is any purchase day after the customer's first purchase day.
+        # A repeat occasion is any purchase day after the customer's first purchase day. The flag is
+        # an int rather than a bool because SQL Server has no boolean type to project into a SELECT.
         first_day = daily["_day"].min().over(ibis.window(group_by=daily[cols.customer_id]))
-        daily = daily.mutate(_is_repeat=daily["_day"] > first_day)
+        daily = daily.mutate(_is_repeat=ibis.ifelse(daily["_day"] > first_day, 1, 0).cast("int8"))
 
         summary = daily.group_by(cols.customer_id).aggregate(
             _first_day=daily["_day"].min(),
             _last_day=daily["_day"].max(),
             _occasions=daily.count(),
-            _repeat_spend=daily._day_spend.sum(where=daily._is_repeat),
+            _repeat_spend=daily._day_spend.sum(where=daily._is_repeat == 1),
         )
 
         days_per_period = cls._DAYS_PER_PERIOD[period]
