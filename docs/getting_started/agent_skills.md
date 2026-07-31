@@ -62,25 +62,20 @@ linking it.
 - Default → `/Workspace/Users/<you>/.assistant/skills/`, your own workspace home.
 - Global mode → `/Workspace/.assistant/skills/`, shared with the whole workspace.
 
-Only workspace admins may write to the workspace-wide directory, so
-`install_skills(global_mode=True)` without admin rights fails with a
-`PERMISSION_DENIED` (403) from the workspace filesystem — often surfaced
-asynchronously, as an `AsyncFlushFailedException` pointing at a flush rather than
-at the write that was rejected. Install without `global_mode` unless you intend
-to publish the skill to everyone.
+Only workspace admins may write to the workspace-wide directory. Without those
+rights `install_skills(global_mode=True)` fails with `PERMISSION_DENIED` (403),
+which the workspace filesystem often reports asynchronously as an
+`AsyncFlushFailedException` naming a flush rather than the rejected write.
 
-Your workspace username is detected for you, from Spark's `current_user()`. On
-compute with no Spark session, set the `DATABRICKS_USER` environment variable
-instead — it also overrides the detected value:
+Your workspace username is detected from Spark's `current_user()`. On compute with
+no Spark session, set `DATABRICKS_USER` instead; it also overrides the detected
+value:
 
 ```python
 import os
 
 os.environ["DATABRICKS_USER"] = "you@company.com"
 ```
-
-When neither resolves, `install_skills()` raises rather than writing somewhere you
-may not own.
 
 Run it from a notebook, or from a cluster init script so it re-applies on every
 start:

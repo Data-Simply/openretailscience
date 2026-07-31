@@ -335,7 +335,7 @@ class TestDatabricksInstall:
 
     @pytest.fixture
     def spark_session(self, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
-        """Stand in for the Databricks-provided active Spark session (an external dependency)."""
+        """Stand in for the Databricks-provided active Spark session."""
         session = MagicMock()
         monkeypatch.setattr(SparkSession, "getActiveSession", lambda: session)
         return session
@@ -351,14 +351,14 @@ class TestDatabricksInstall:
             assert target.is_dir()
             assert not target.is_symlink()
             assert (target / "SKILL.md").is_file()
-        # The workspace-wide directory needs admin rights: writing there by default
-        # is what raised 403 PERMISSION_DENIED for non-admin users.
+        # The workspace-wide directory needs admin rights, so a default install
+        # must not touch it.
         assert not (workspace_root / ".assistant").exists()
 
     def test_global_mode_copies_to_workspace_wide_dir(
         self, source_dir: Path, workspace_root: Path, user_skills_dir: Path
     ) -> None:
-        """Global mode installs for the whole workspace, which only admins may write to."""
+        """Global mode installs into the workspace-wide directory, not the user's home."""
         install_skills(global_mode=True)
 
         assert (workspace_root / ".assistant" / "skills" / SKILL_NAMES[0] / "SKILL.md").is_file()

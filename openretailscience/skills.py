@@ -161,7 +161,7 @@ def _spark_current_user() -> str | None:
 
     Returns:
         str | None: The username from Spark's ``current_user()``, or None when no
-        Spark session is active (so the username has to come from elsewhere).
+        Spark session is active.
     """
     from pyspark.sql import SparkSession  # noqa: PLC0415 - deferred: importing pyspark is slow
 
@@ -174,8 +174,8 @@ def _spark_current_user() -> str | None:
 def _databricks_user_home() -> Path | None:
     """Return the caller's ``/Workspace/Users/<user>`` directory, if it can be resolved.
 
-    The username comes from Spark's ``current_user()``, with the ``DATABRICKS_USER``
-    environment variable as an override for compute that has no Spark session.
+    ``DATABRICKS_USER`` overrides the detected username, for compute with no Spark
+    session.
 
     Returns:
         Path | None: The workspace home directory, or None when unresolvable.
@@ -189,10 +189,9 @@ def _databricks_user_home() -> Path | None:
 def _get_databricks_target_dir(*, global_mode: bool) -> Path:
     """Return the Databricks Genie skills directory to copy into.
 
-    Global mode targets the workspace-wide directory, which only workspace admins
-    may write to. Otherwise the skills go to the caller's own workspace home,
-    which is never silently swapped for the workspace-wide directory: falling back
-    there fails with an opaque asynchronous 403 from the workspace filesystem.
+    Only workspace admins may write to the workspace-wide directory, so an
+    unresolvable workspace home raises rather than falling back to it: that write
+    fails with an opaque asynchronous 403 from the workspace filesystem.
 
     Args:
         global_mode (bool): Install for the whole workspace rather than the caller.
