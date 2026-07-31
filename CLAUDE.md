@@ -59,6 +59,8 @@ dependencies are used.
 
 - Follow Google Python Style Guide
 - Use Google-style docstrings with Args, Returns, and Raises sections
+- Comments, docstrings, and docs must be concise and load-bearing: say only what the reader cannot get from the
+  code. Cut restatements of the code, change history (it belongs in the commit message), and self-justification.
 - Import order: standard library → third-party → internal packages
 - Use explicit type annotations for all functions and parameters
 - Class names use CamelCase; functions, methods, variables use snake_case
