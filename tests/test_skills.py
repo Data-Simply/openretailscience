@@ -72,7 +72,7 @@ def _skill_import_statements() -> list[str]:
 
 
 def _raise_oserror(*_args: object, **_kwargs: object) -> None:
-    """Stand-in for os.symlink that reports symlinks are unsupported."""
+    """Raise OSError; a patched-call stand-in for a failing operation (unsupported symlink, cross-drive path)."""
     msg = "symlinks not supported"
     raise OSError(msg)
 
@@ -84,7 +84,7 @@ def _raise_value_error(*_args: object, **_kwargs: object) -> str:
 
 
 def _raise_not_implemented(*_args: object, **_kwargs: object) -> None:
-    """Stand-in for os.symlink on a platform without symlink support."""
+    """Raise NotImplementedError; a patched-call stand-in for an operation unsupported on the platform."""
     raise NotImplementedError
 
 
