@@ -52,10 +52,8 @@ jobs:
             --arg event "$EVENT_NAME" \
             --arg author "$AUTHOR_NAME" \
             --arg message "$COMMIT_MESSAGE" \
-            '# Slack caps a Block Kit section text at 3000 characters and rejects the whole
-             # payload with HTTP 400 otherwise; grouped dependabot commits blow past that.
-             # Slicing here rather than in bash keeps the cut on codepoint boundaries
-             # regardless of the runner locale.
+            '# Slack 400s if a section text exceeds 3000 chars. Slice in jq, not bash:
+             # bash slices bytes under a C locale and can split a codepoint.
              ($message | if length > 2000 then .[0:2000] + "\n…(truncated)" else . end) as $commit_message
              | {
               attachments: [{
