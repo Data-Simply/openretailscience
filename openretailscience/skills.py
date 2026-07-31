@@ -176,12 +176,16 @@ def _databricks_user_home() -> Path | None:
     return None
 
 
-def _get_databricks_target_dir() -> Path:
-    """Return the Databricks Genie skills directory in the caller's workspace home.
+def _get_databricks_target_dir(*, global_mode: bool) -> Path:
+    """Return the Databricks Genie skills directory to copy into.
 
-    The shared ``/Workspace/.assistant/skills`` directory is deliberately not a
-    fallback: writing there requires workspace admin rights, and attempting it
-    fails with an opaque asynchronous 403 from the workspace filesystem.
+    Global mode targets the workspace-wide directory, which only workspace admins
+    may write to. Otherwise the skills go to the caller's own workspace home,
+    which is never silently swapped for the workspace-wide directory: falling back
+    there fails with an opaque asynchronous 403 from the workspace filesystem.
+
+    Args:
+        global_mode (bool): Install for the whole workspace rather than the caller.
 
     Returns:
         Path: The Genie skills directory to copy into.
@@ -189,6 +193,9 @@ def _get_databricks_target_dir() -> Path:
     Raises:
         RuntimeError: When the caller's workspace home cannot be resolved.
     """
+    if global_mode:
+        return _skills_dir(_DATABRICKS_WORKSPACE_ROOT, DATABRICKS_ASSISTANT_DIR)
+
     home = _databricks_user_home()
     if home is None or not home.is_dir():
         attempted = home if home is not None else _DATABRICKS_WORKSPACE_ROOT / DATABRICKS_USERS_DIR
@@ -400,13 +407,14 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
     In project mode (default) skills are linked into the current project's
     ``.agents/skills/`` (and ``.claude/skills/`` when Claude Code is detected). In
     global mode they are linked into the equivalent home directories. On
-    Databricks both modes copy the skills into the caller's persistent workspace
-    Genie skills directory instead. The operation is idempotent.
+    Databricks skills are copied into the caller's persistent workspace Genie
+    skills directory instead — or, in global mode, into the workspace-wide one,
+    which only workspace admins may write to. The operation is idempotent.
 
     Args:
-        global_mode (bool): Install to user-level home directories instead of the
-            current project. Defaults to False. Ignored on Databricks, which has
-            no project tree in the workspace.
+        global_mode (bool): Install for every project rather than the current one:
+            the user-level home directories, or on Databricks the workspace-wide
+            skills directory. Defaults to False.
 
     Returns:
         SkillInstallResult: The skills that were installed, already up to date,
@@ -428,7 +436,7 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
         raise RuntimeError(msg)
 
     if _DATABRICKS_RUNTIME_ENV in os.environ:
-        target_dirs = [_get_databricks_target_dir()]
+        target_dirs = [_get_databricks_target_dir(global_mode=global_mode)]
         use_copy = True
     elif global_mode:
         target_dirs = _get_target_dirs(Path.home())

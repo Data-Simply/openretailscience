@@ -57,16 +57,28 @@ automatically. A pip-installed package lives on the cluster's ephemeral storage,
 which is wiped on restart, and Databricks Genie reads skills from a persistent
 workspace location that cannot symlink back into that storage. So on Databricks
 the installer **copies** the skill into the Genie skills directory instead of
-linking it:
+linking it.
 
-Both modes install to your own workspace home,
-`/Workspace/Users/<you>/.assistant/skills/` — the workspace-wide
-`/Workspace/.assistant/skills/` directory is never written to, because it
-requires workspace admin rights. Your username comes from the `DATABRICKS_USER`
-environment variable, falling back to the notebook's working directory under
-`/Workspace/Users/`. When neither resolves, `install_skills()` raises rather than
-writing somewhere you may not own; set `DATABRICKS_USER` to your workspace
-username and re-run.
+- Default → `/Workspace/Users/<you>/.assistant/skills/`, your own workspace home.
+- Global mode → `/Workspace/.assistant/skills/`, shared with the whole workspace.
+
+Only workspace admins may write to the workspace-wide directory, so
+`install_skills(global_mode=True)` without admin rights fails with a
+`PERMISSION_DENIED` (403) from the workspace filesystem — often surfaced
+asynchronously, as an `AsyncFlushFailedException` pointing at a flush rather than
+at the write that was rejected. Install without `global_mode` unless you intend
+to publish the skill to everyone.
+
+Your username comes from the `DATABRICKS_USER` environment variable, falling back
+to the notebook's working directory when it sits under `/Workspace/Users/`. When
+neither resolves, `install_skills()` raises rather than writing somewhere you may
+not own — set `DATABRICKS_USER` to your workspace username and re-run:
+
+```python
+import os
+
+os.environ["DATABRICKS_USER"] = "you@company.com"
+```
 
 Run it from a notebook, or from a cluster init script so it re-applies on every
 start:

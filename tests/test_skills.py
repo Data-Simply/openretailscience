@@ -331,21 +331,39 @@ class TestDatabricksInstall:
         """The per-user Genie skills directory install_skills must write to."""
         return workspace_root / "Users" / DATABRICKS_USER / ".assistant" / "skills"
 
-    @pytest.mark.parametrize("global_mode", [False, True])
     def test_copies_to_per_user_assistant_dir(
-        self, source_dir: Path, workspace_root: Path, user_skills_dir: Path, global_mode: bool
+        self, source_dir: Path, workspace_root: Path, user_skills_dir: Path
     ) -> None:
-        """Both modes copy (not link) into the user's own workspace .assistant/skills."""
-        install_skills(global_mode=global_mode)
+        """The default install copies (not links) into the user's own workspace .assistant/skills."""
+        install_skills()
 
         for name in SKILL_NAMES:
             target = user_skills_dir / name
             assert target.is_dir()
             assert not target.is_symlink()
             assert (target / "SKILL.md").is_file()
-        # The shared workspace-root directory needs admin rights: writing there is
-        # what raised 403 PERMISSION_DENIED for non-admin users.
+        # The workspace-wide directory needs admin rights: writing there by default
+        # is what raised 403 PERMISSION_DENIED for non-admin users.
         assert not (workspace_root / ".assistant").exists()
+
+    def test_global_mode_copies_to_workspace_wide_dir(
+        self, source_dir: Path, workspace_root: Path, user_skills_dir: Path
+    ) -> None:
+        """Global mode installs for the whole workspace, which only admins may write to."""
+        install_skills(global_mode=True)
+
+        assert (workspace_root / ".assistant" / "skills" / SKILL_NAMES[0] / "SKILL.md").is_file()
+        assert not user_skills_dir.exists()
+
+    def test_global_mode_does_not_need_the_workspace_user(
+        self, source_dir: Path, workspace_root: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The workspace-wide target is user-independent, so an unresolvable user is not an error."""
+        monkeypatch.delenv("DATABRICKS_USER")
+
+        install_skills(global_mode=True)
+
+        assert (workspace_root / ".assistant" / "skills" / SKILL_NAMES[0]).is_dir()
 
     def test_user_is_derived_from_workspace_cwd_when_env_unset(
         self, source_dir: Path, workspace_root: Path, user_skills_dir: Path, monkeypatch: pytest.MonkeyPatch
