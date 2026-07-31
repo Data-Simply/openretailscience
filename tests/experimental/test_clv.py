@@ -7,6 +7,7 @@ import ibis
 import numpy as np
 import pandas as pd
 import pytest
+import sqlglot
 from pandas.testing import assert_frame_equal
 
 from openretailscience.experimental.clv import _ONE_HOT_CARDINALITY_WARN, CLVStats
@@ -718,3 +719,30 @@ class TestCLVStatsCustomerIdColumn:
             )
             with pytest.raises(ValueError, match="reserved BTYD"):
                 CLVStats(self._txns("shopper_id"), period="day", customer_attributes=attributes)
+
+
+class TestCLVStatsSQLServerCompilation:
+    """The compiled T-SQL must not project a boolean, which SQL Server has no type for."""
+
+    def test_no_bare_comparison_in_select_list(self):
+        """Every projection compiles to a value expression, not a bare comparison.
+
+        SQL Server rejects ``SELECT a > b AS flag`` with "Incorrect syntax near '>'", so the
+        repeat-purchase flag has to be wrapped in a conditional rather than projected directly.
+        """
+        sql = ibis.to_sql(CLVStats(_transactions(), period="week").table, dialect="mssql")
+        comparisons = (
+            sqlglot.exp.GT,
+            sqlglot.exp.LT,
+            sqlglot.exp.GTE,
+            sqlglot.exp.LTE,
+            sqlglot.exp.EQ,
+            sqlglot.exp.NEQ,
+        )
+        projected = [
+            projection.alias_or_name
+            for select in sqlglot.parse_one(str(sql), dialect="tsql").find_all(sqlglot.exp.Select)
+            for projection in select.expressions
+            if isinstance(projection.unalias(), comparisons)
+        ]
+        assert projected == []
