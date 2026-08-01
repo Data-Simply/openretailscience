@@ -67,9 +67,9 @@ rights `install_skills(global_mode=True)` fails with `PERMISSION_DENIED` (403),
 which the workspace filesystem often reports asynchronously as an
 `AsyncFlushFailedException` naming a flush rather than the rejected write.
 
-Your workspace username is detected from Spark's `current_user()`. On compute with
-no Spark session, set `DATABRICKS_USER` instead; it also overrides the detected
-value:
+Your workspace username is detected from Spark's `current_user()`, which needs an
+active Spark session — every notebook has one, an init script or a bare Python
+job does not. Set `DATABRICKS_USER` for those, or to override a detected value:
 
 ```python
 import os
@@ -77,8 +77,7 @@ import os
 os.environ["DATABRICKS_USER"] = "you@company.com"
 ```
 
-Run it from a notebook, or from a cluster init script so it re-applies on every
-start:
+Run it from a notebook:
 
 ```python
 from openretailscience.skills import install_skills
@@ -87,8 +86,9 @@ install_skills()
 ```
 
 Because this is a copy rather than a link, it does **not** update itself when you
-upgrade the package. Re-run `install_skills()` after upgrading OpenRetailScience
-(a cluster init script is the easiest way to keep it current).
+upgrade the package: re-run `install_skills()` after upgrading OpenRetailScience.
+A cluster init script can do that on every start, as long as it exports
+`DATABRICKS_USER` — it runs before any Spark session exists.
 
 !!! warning "Managed directory"
     Your workspace `.assistant/skills/` directory is treated as installer-managed:

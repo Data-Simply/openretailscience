@@ -174,8 +174,8 @@ def _spark_current_user() -> str | None:
 def _databricks_user_home() -> Path | None:
     """Return the caller's ``/Workspace/Users/<user>`` directory, if it can be resolved.
 
-    ``DATABRICKS_USER`` overrides the detected username, for compute with no Spark
-    session.
+    ``DATABRICKS_USER`` overrides the detected username, and is the only source
+    outside a notebook, where no Spark session is running.
 
     Returns:
         Path | None: The workspace home directory, or None when unresolvable.
