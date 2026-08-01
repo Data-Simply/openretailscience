@@ -39,6 +39,9 @@ SKILL_MARKER_FILENAME = "SKILL.md"
 AGENTS_DIR_NAME = ".agents"
 CLAUDE_DIR_NAME = ".claude"
 SKILLS_SUBDIR = "skills"
+# pip byte-compiles the package it installs, leaving these inside the bundled skill.
+# The Databricks workspace mount rejects them with OSError 95, part-way through a copy.
+BYTECODE_CACHE_DIR = "__pycache__"
 
 # Databricks Genie / Assistant reads skills from ``<root>/.assistant/skills``.
 DATABRICKS_ASSISTANT_DIR = ".assistant"
@@ -152,8 +155,8 @@ def _get_databricks_target_dir() -> Path:
         msg = "Installing to your Databricks workspace home needs an active Spark session; run this from a notebook."
         raise RuntimeError(msg)
 
-    rows = spark.sql("SELECT current_user()").collect()
-    user = str(rows[0][0]) if len(rows) > 0 else ""
+    # A SELECT of a scalar function always yields exactly one row.
+    user = str(spark.sql("SELECT current_user()").collect()[0][0])
     # An empty, "..", or otherwise path-like name would join back out to the admin-only workspace root.
     if user in {"", ".."} or user != Path(user).name:
         msg = f"Databricks current_user() did not name a workspace user: {user!r}"
@@ -161,10 +164,7 @@ def _get_databricks_target_dir() -> Path:
 
     home = _DATABRICKS_WORKSPACE_ROOT / "Users" / user
     if not home.is_dir():
-        msg = (
-            f"Databricks workspace home does not exist: {home}. current_user() returned {user!r}, which has no "
-            "workspace home of its own (a job running as a service principal, for example)."
-        )
+        msg = f"Databricks workspace home not found: {home}. current_user() returned {user!r}."
         raise RuntimeError(msg)
     return _skills_dir(home, DATABRICKS_ASSISTANT_DIR)
 
@@ -208,6 +208,18 @@ def _try_symlink(source_path: Path, target_path: Path) -> bool:
     return True
 
 
+def _copied_paths(root: Path) -> list[Path]:
+    """List the paths under ``root`` that an install copies.
+
+    Args:
+        root (Path): A skill directory, bundled or installed.
+
+    Returns:
+        list[Path]: Sorted paths relative to ``root``, excluding bytecode caches.
+    """
+    return sorted(p.relative_to(root) for p in root.rglob("*") if BYTECODE_CACHE_DIR not in p.parts)
+
+
 def _skill_copy_matches(source_path: Path, target_path: Path) -> bool:
     """Return whether a copied skill directory matches the source byte-for-byte.
 
@@ -220,8 +232,8 @@ def _skill_copy_matches(source_path: Path, target_path: Path) -> bool:
     """
     if not target_path.is_dir():
         return False
-    source_files = sorted(p.relative_to(source_path) for p in source_path.rglob("*"))
-    if source_files != sorted(p.relative_to(target_path) for p in target_path.rglob("*")):
+    source_files = _copied_paths(source_path)
+    if source_files != _copied_paths(target_path):
         return False
     for rel in source_files:
         source_file = source_path / rel
@@ -335,7 +347,7 @@ def _install_one(
     # so a skipped skill never leaves an empty directory behind.
     target_dir.mkdir(parents=True, exist_ok=True)
     if use_copy or not _try_symlink(source_path, target_path):
-        shutil.copytree(source_path, target_path)
+        shutil.copytree(source_path, target_path, ignore=shutil.ignore_patterns(BYTECODE_CACHE_DIR))
     result.installed.append(label)
 
 

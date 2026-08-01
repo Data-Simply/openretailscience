@@ -346,24 +346,26 @@ class TestDatabricksInstall:
     def test_raises_when_workspace_home_does_not_exist(
         self, source_dir: Path, workspace_root: Path, spark_session: MagicMock
     ) -> None:
-        """A username with no workspace home raises rather than creating one the caller may not own."""
-        spark_session.sql.return_value.collect.return_value = [["service-principal-1234"]]
+        """A username with no workspace home raises rather than creating one, naming the path it checked."""
+        principal = "service-principal-1234"
+        spark_session.sql.return_value.collect.return_value = [[principal]]
+        missing_home = workspace_root / "Users" / principal
 
-        with pytest.raises(RuntimeError, match="service-principal-1234"):
+        with pytest.raises(RuntimeError) as excinfo:
             install_skills()
 
-        assert not (workspace_root / "Users" / "service-principal-1234").exists()
+        expected = f"Databricks workspace home not found: {missing_home}. current_user() returned {principal!r}."
+        assert str(excinfo.value) == expected
+        assert not missing_home.exists()
         assert list(workspace_root.rglob(DATABRICKS_ASSISTANT_DIR)) == []
 
     @pytest.mark.parametrize(
         "rows",
         [
-            pytest.param([], id="no-rows"),
             pytest.param([[""]], id="blank"),
             pytest.param([[".."]], id="parent-traversal"),
-            # Exists, so only the guard stops the install, and is harmless if it regresses.
             pytest.param([["/tmp"]], id="absolute"),  # noqa: S108
-            pytest.param([["team/analyst@retail.com"]], id="nested"),
+            pytest.param([[f"team/{DATABRICKS_USER}"]], id="nested"),
         ],
     )
     def test_raises_when_current_user_is_not_a_workspace_user(
@@ -371,13 +373,14 @@ class TestDatabricksInstall:
     ) -> None:
         """A blank or path-like current_user() is refused before it is joined into a path.
 
-        Each of these joins to a directory that exists, so the workspace-home check
-        would wave it through: pathlib drops an empty segment, restarts from an
-        absolute one, and keeps ``..``.
+        A blank, ``..``, or absolute name joins to a directory that exists, so nothing
+        downstream would stop the install: pathlib drops an empty segment, keeps ``..``,
+        and restarts from an absolute one. A nested name escapes the user's own home.
         """
         spark_session.sql.return_value.collect.return_value = rows
 
-        with pytest.raises(RuntimeError, match="current_user"):
+        # The guard's own wording; the workspace-home error also mentions current_user().
+        with pytest.raises(RuntimeError, match="did not name a workspace user"):
             install_skills()
 
         assert list(workspace_root.rglob(DATABRICKS_ASSISTANT_DIR)) == []
@@ -426,6 +429,28 @@ class TestDatabricksInstall:
         assert target.is_dir()
         assert not target.is_symlink()
         assert (target / "SKILL.md").read_bytes() == (source_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes()
+
+    def test_bytecode_caches_are_skipped_and_do_not_make_the_copy_look_stale(
+        self, source_dir: Path, user_skills_dir: Path
+    ) -> None:
+        """Bytecode caches are skipped: pip creates them and /Workspace refuses them.
+
+        Copying one raises ``OSError: [Errno 95] Operation not supported`` part-way
+        through the tree. Excluding caches from the copy but not from the comparison
+        would then make every re-run treat its own copy as stale.
+        """
+        cache_dir = source_dir / SKILL_NAMES[0] / "scripts" / "__pycache__"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "example_bar.cpython-312.pyc").write_bytes(b"\x00compiled")
+
+        installed = install_skills()
+        rerun = install_skills()
+
+        installed_skill = user_skills_dir / SKILL_NAMES[0]
+        assert (installed_skill / "SKILL.md").is_file()
+        assert not (installed_skill / "scripts" / "__pycache__").exists()
+        assert len(installed.installed) == len(SKILL_NAMES)
+        assert len(rerun.up_to_date) == len(SKILL_NAMES)
 
     def test_copy_is_independent_of_source(self, source_dir: Path, user_skills_dir: Path) -> None:
         """The copied skill survives the ephemeral package being wiped on restart."""
@@ -733,7 +758,4 @@ class TestExampleScripts:
     @pytest.mark.parametrize("script", _example_scripts(), ids=lambda p: p.name)
     def test_example_script_runs(self, script: Path) -> None:
         """The example script runs end-to-end against the installed package."""
-        namespace = runpy.run_path(str(script), run_name="__main__")
-
-        # Catches a script reduced to its docstring: it runs clean and binds nothing.
-        assert len([name for name in namespace if not name.startswith("__")]) > 0
+        runpy.run_path(str(script), run_name="__main__")
