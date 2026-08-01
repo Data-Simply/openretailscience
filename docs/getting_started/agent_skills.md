@@ -25,17 +25,18 @@ the installed package never drift apart:
   `.claude/skills/using-openretailscience/` when Claude Code is detected (a
   `~/.claude` directory exists).
 - **Global mode** links into the equivalent directories under your home folder.
+  Not available on Databricks (see below).
 
 Each skill installs as a subfolder named after itself, so the bundled skill
 lands at `using-openretailscience/` inside whichever skills directory applies.
 
-Because the entries are symlinks back into the installed package, a
-`pip install -U openretailscience` updates the skill in place, so there is nothing
+Outside Databricks the entries are symlinks back into the installed package, so a
+`pip install -U openretailscience` updates the skill in place and there is nothing
 to reinstall.
 
 ```python
 install_skills()                       # project install
-install_skills(global_mode=True)       # install for all your projects
+install_skills(global_mode=True)       # install for all your projects (not on Databricks)
 ```
 
 The operation is **idempotent**: re-running it re-uses existing links and never
@@ -52,26 +53,22 @@ one left by an earlier install.
 
 ## Databricks
 
-Databricks works differently, and `install_skills()` adapts
+Databricks works differently, and the default `install_skills()` adapts
 automatically. A pip-installed package lives on the cluster's ephemeral storage,
 which is wiped on restart, and Databricks Genie reads skills from a persistent
 workspace location that cannot symlink back into that storage. So on Databricks
 the installer **copies** the skill into the Genie skills directory instead of
 linking it.
 
-- Default → `/Workspace/Users/<you>/.assistant/skills/`, your own workspace home.
-- Global mode → `/Workspace/.assistant/skills/`, shared with the whole workspace.
+Skills go to `/Workspace/Users/<you>/.assistant/skills/`, your own workspace home.
+`global_mode=True` raises `NotImplementedError` there: the workspace-wide
+`/Workspace/.assistant/skills/` needs admin rights, and a single shared copy
+cannot match the package version each user has installed.
 
-Only workspace admins may write to the workspace-wide directory. Without those
-rights `install_skills(global_mode=True)` fails with `PERMISSION_DENIED` (403),
-which the workspace filesystem often reports asynchronously as an
-`AsyncFlushFailedException` naming a flush rather than the rejected write.
-
-Your workspace username is detected from Spark's `current_user()`, which needs an
-active Spark session — every notebook has one, an init script or a bare Python
-job does not. Export `DATABRICKS_USER` for those, or to override a detected value.
-
-Run it from a notebook:
+Run it from a notebook, as yourself. Your workspace home comes from the Spark
+session's `current_user()`, so two cases raise rather than install: a context with
+no session (a cluster init script, a bare Python job), and an identity with no
+workspace home of its own, such as a job running as a service principal.
 
 ```python
 from openretailscience.skills import install_skills
@@ -81,8 +78,6 @@ install_skills()
 
 Because this is a copy rather than a link, it does **not** update itself when you
 upgrade the package: re-run `install_skills()` after upgrading OpenRetailScience.
-A cluster init script can do that on every start, as long as it exports
-`DATABRICKS_USER` — it runs before any Spark session exists.
 
 !!! warning "Managed directory"
     Your workspace `.assistant/skills/` directory is treated as installer-managed:
@@ -96,7 +91,7 @@ A cluster init script can do that on every start, as long as it exports
 | --- | --- | --- |
 | Local / project | symlink | Yes, automatically |
 | Global (home) | symlink | Yes, automatically |
-| Databricks | copy | No, re-run `install_skills()` |
+| Databricks (no global mode) | copy | No, re-run `install_skills()` |
 
 The skill's content is maintained alongside the codebase and validated in CI, so
 each release ships guidance that matches that version's public API.
