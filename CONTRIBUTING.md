@@ -45,9 +45,10 @@ describe the public API — analyses, plots, options, and how to connect to data
 
 If you add, rename, or remove a public class, function, plot, or option, update
 the skill in the same PR. `tests/test_skills.py` guards this: it re-executes
-every import example in the skill and fails if one no longer resolves, and it
-checks that every referenced file exists. Run `uv run pytest tests/test_skills.py`
-before pushing.
+every import example and every bundled example script, and it requires the
+`references/*.md` files on disk and the links pointing at them to match exactly,
+so a new reference file must also be linked from the skill. Run
+`uv run pytest tests/test_skills.py` before pushing.
 
 ### Getting Help
 
