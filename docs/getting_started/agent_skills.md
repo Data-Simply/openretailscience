@@ -66,9 +66,9 @@ Skills go to `/Workspace/Users/<you>/.assistant/skills/`, your own workspace hom
 cannot match the package version each user has installed.
 
 Run it from a notebook, as yourself. Your workspace home comes from the Spark
-session's `current_user()`, so two cases raise rather than install: a context with
-no session (a cluster init script, a bare Python job), and an identity with no
-workspace home of its own, such as a job running as a service principal.
+session's `current_user()`, so cases like these raise rather than install: a
+context with no session (a cluster init script, a bare Python job), and an identity
+with no workspace home of its own, such as a job running as a service principal.
 
 ```python
 from openretailscience.skills import install_skills
