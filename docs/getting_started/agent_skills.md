@@ -69,13 +69,7 @@ which the workspace filesystem often reports asynchronously as an
 
 Your workspace username is detected from Spark's `current_user()`, which needs an
 active Spark session — every notebook has one, an init script or a bare Python
-job does not. Set `DATABRICKS_USER` for those, or to override a detected value:
-
-```python
-import os
-
-os.environ["DATABRICKS_USER"] = "you@company.com"
-```
+job does not. Export `DATABRICKS_USER` for those, or to override a detected value.
 
 Run it from a notebook:
 
