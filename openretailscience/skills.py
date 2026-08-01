@@ -42,11 +42,7 @@ SKILLS_SUBDIR = "skills"
 
 # Databricks Genie / Assistant reads skills from ``<root>/.assistant/skills``.
 DATABRICKS_ASSISTANT_DIR = ".assistant"
-DATABRICKS_USERS_DIR = "Users"
 _DATABRICKS_RUNTIME_ENV = "DATABRICKS_RUNTIME_VERSION"
-_DATABRICKS_USER_ENV = "DATABRICKS_USER"
-# Persistent workspace root on Databricks. Kept as a module constant so tests
-# can redirect it away from the real ``/Workspace`` mount.
 _DATABRICKS_WORKSPACE_ROOT = Path("/Workspace")
 
 
@@ -109,7 +105,7 @@ def _find_project_root(start: Path | None = None) -> Path:
     Returns:
         Path: The resolved project root.
     """
-    start_dir = (start or Path.cwd()).resolve()
+    start_dir = (start if start is not None else Path.cwd()).resolve()
     home = Path.home().resolve()
 
     git_root: Path | None = None
@@ -137,81 +133,37 @@ def _skills_dir(base: Path, harness_dir: str) -> Path:
     return base / harness_dir / SKILLS_SUBDIR
 
 
-def _get_target_dirs(base: Path) -> list[Path]:
-    """Return the ``.agents/skills`` (and ``.claude/skills``) targets under ``base``.
-
-    Always targets ``<base>/.agents/skills``; adds ``<base>/.claude/skills`` when
-    Claude Code is detected (a ``~/.claude`` directory exists).
-
-    Args:
-        base (Path): The resolved project root (project mode) or home directory
-            (global mode).
-
-    Returns:
-        list[Path]: Target skill directories.
-    """
-    targets = [_skills_dir(base, AGENTS_DIR_NAME)]
-    if (Path.home() / CLAUDE_DIR_NAME).is_dir():
-        targets.append(_skills_dir(base, CLAUDE_DIR_NAME))
-    return targets
-
-
-def _spark_current_user() -> str | None:
-    """Return the workspace username Databricks is running the session as.
-
-    Returns:
-        str | None: The username from Spark's ``current_user()``, or None when no
-        Spark session is active.
-    """
-    from pyspark.sql import SparkSession  # noqa: PLC0415 - deferred: importing pyspark is slow
-
-    spark = SparkSession.getActiveSession()
-    if spark is None:
-        return None
-    return str(spark.sql("SELECT current_user()").collect()[0][0])
-
-
-def _databricks_user_home() -> Path | None:
-    """Return the caller's ``/Workspace/Users/<user>`` directory, if it can be resolved.
-
-    ``DATABRICKS_USER`` overrides the detected username, and is the only source
-    outside a notebook, where no Spark session is running.
-
-    Returns:
-        Path | None: The workspace home directory, or None when unresolvable.
-    """
-    user = os.environ.get(_DATABRICKS_USER_ENV) or _spark_current_user()  # blank env var counts as unset
-    if user is None:
-        return None
-    return _DATABRICKS_WORKSPACE_ROOT / DATABRICKS_USERS_DIR / user
-
-
-def _get_databricks_target_dir(*, global_mode: bool) -> Path:
-    """Return the Databricks Genie skills directory to copy into.
-
-    Only workspace admins may write to the workspace-wide directory, so an
-    unresolvable workspace home raises rather than falling back to it: that write
-    fails with an opaque asynchronous 403 from the workspace filesystem.
-
-    Args:
-        global_mode (bool): Install for the whole workspace rather than the caller.
+def _get_databricks_target_dir() -> Path:
+    """Return the Genie skills directory in the caller's Databricks workspace home.
 
     Returns:
         Path: The Genie skills directory to copy into.
 
     Raises:
-        RuntimeError: When the caller's workspace home cannot be resolved.
+        ImportError: When pyspark is unavailable, so the caller cannot be named.
+        RuntimeError: When no Spark session is running to name the caller, when
+            ``current_user()`` does not name a workspace user, or when that user's
+            workspace home does not exist.
     """
-    if global_mode:
-        return _skills_dir(_DATABRICKS_WORKSPACE_ROOT, DATABRICKS_ASSISTANT_DIR)
+    from pyspark.sql import SparkSession  # noqa: PLC0415 - pyspark is not a dependency; Databricks provides it
 
-    home = _databricks_user_home()
-    if home is None or not home.is_dir():
-        attempted = home if home is not None else _DATABRICKS_WORKSPACE_ROOT / DATABRICKS_USERS_DIR
+    spark = SparkSession.getActiveSession()
+    if spark is None:
+        msg = "Installing to your Databricks workspace home needs an active Spark session; run this from a notebook."
+        raise RuntimeError(msg)
+
+    rows = spark.sql("SELECT current_user()").collect()
+    user = str(rows[0][0]) if len(rows) > 0 else ""
+    # An empty, "..", or otherwise path-like name would join back out to the admin-only workspace root.
+    if user in {"", ".."} or user != Path(user).name:
+        msg = f"Databricks current_user() did not name a workspace user: {user!r}"
+        raise RuntimeError(msg)
+
+    home = _DATABRICKS_WORKSPACE_ROOT / "Users" / user
+    if not home.is_dir():
         msg = (
-            f"Could not resolve your Databricks workspace home (looked under {attempted}). "
-            f"Set the {_DATABRICKS_USER_ENV} environment variable to your workspace username "
-            "(e.g. you@company.com) and re-run install_skills()."
+            f"Databricks workspace home does not exist: {home}. current_user() returned {user!r}, which has no "
+            "workspace home of its own (a job running as a service principal, for example)."
         )
         raise RuntimeError(msg)
     return _skills_dir(home, DATABRICKS_ASSISTANT_DIR)
@@ -286,11 +238,8 @@ def _is_owned_target(target_path: Path, bundled_names: set[str]) -> bool:
 
     A target is owned when it is a symlink whose name matches a bundled skill, or
     a real directory named after a bundled skill that itself contains a
-    ``SKILL.md`` (a prior copy install). Anything else is user content.
-
-    Ownership only permits replacement; whether an owned *real directory* is
-    actually replaced depends on the install method (see :func:`_prepare_target`):
-    symlink mode always leaves real directories in place, copy mode refreshes them.
+    ``SKILL.md`` (a prior copy install). Anything else is user content. Ownership
+    only permits replacement; :func:`_prepare_target` decides whether it happens.
 
     Args:
         target_path (Path): The candidate target.
@@ -324,7 +273,7 @@ def _prepare_target(
         use_copy (bool): Whether the install method is copy (vs. symlink).
 
     Returns:
-        str: One of ``"install"``, ``"up_to_date"``, or ``"skip"``.
+        Literal["install", "up_to_date", "skip"]: The disposition for this target.
     """
     if not target_path.exists() and not target_path.is_symlink():
         return "install"
@@ -340,11 +289,6 @@ def _prepare_target(
         target_path.unlink()  # os.unlink semantics: remove the link, not its target
         return "install"
 
-    # Owned real directory. A byte-identical tree is a current install (a prior
-    # copy-fallback run, or a Databricks copy), so report it up to date. Otherwise
-    # copy mode refreshes it, while symlink mode skips it: a non-matching real
-    # directory may be user-authored content that merely shares a bundled skill's
-    # name, so it must not be deleted.
     if _skill_copy_matches(source_path, target_path):
         return "up_to_date"
     if not use_copy:
@@ -395,21 +339,6 @@ def _install_one(
     result.installed.append(label)
 
 
-def _print_result(result: SkillInstallResult) -> None:
-    """Print a summary of the installation outcome.
-
-    Args:
-        result (SkillInstallResult): The completed install result.
-    """
-    for label, paths in (
-        ("Installed", result.installed),
-        ("Already up to date", result.up_to_date),
-        ("Skipped (conflicting file)", result.skipped),
-    ):
-        for path in paths:
-            print(f"{label}: {path}")  # noqa: T201
-
-
 def install_skills(global_mode: bool = False) -> SkillInstallResult:
     """Install the package's bundled agent skills.
 
@@ -417,13 +346,11 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
     ``.agents/skills/`` (and ``.claude/skills/`` when Claude Code is detected). In
     global mode they are linked into the equivalent home directories. On
     Databricks skills are copied into the caller's persistent workspace Genie
-    skills directory instead — or, in global mode, into the workspace-wide one,
-    which only workspace admins may write to. The operation is idempotent.
+    skills directory instead. The operation is idempotent.
 
     Args:
-        global_mode (bool): Install for every project rather than the current one:
-            the user-level home directories, or on Databricks the workspace-wide
-            skills directory. Defaults to False.
+        global_mode (bool): Install into the user-level home directories rather
+            than the current project. Defaults to False. Unsupported on Databricks.
 
     Returns:
         SkillInstallResult: The skills that were installed, already up to date,
@@ -433,6 +360,8 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
         FileNotFoundError: When the bundled skills directory is missing.
         RuntimeError: When the bundled skills directory contains no installable
             skills, or when the Databricks workspace home cannot be resolved.
+        NotImplementedError: When ``global_mode`` is requested on Databricks.
+        ImportError: When pyspark is unavailable on Databricks.
     """
     source_dir = _get_source_skills_dir()
     if not source_dir.is_dir():
@@ -445,13 +374,19 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
         raise RuntimeError(msg)
 
     if _DATABRICKS_RUNTIME_ENV in os.environ:
-        target_dirs = [_get_databricks_target_dir(global_mode=global_mode)]
+        if global_mode:
+            msg = (
+                "global_mode is not supported on Databricks: the workspace-wide skills directory needs admin "
+                "rights, and one shared copy cannot match the package version each user has installed."
+            )
+            raise NotImplementedError(msg)
+        target_dirs = [_get_databricks_target_dir()]
         use_copy = True
-    elif global_mode:
-        target_dirs = _get_target_dirs(Path.home())
-        use_copy = False
     else:
-        target_dirs = _get_target_dirs(_find_project_root())
+        base = Path.home() if global_mode else _find_project_root()
+        target_dirs = [_skills_dir(base, AGENTS_DIR_NAME)]
+        if (Path.home() / CLAUDE_DIR_NAME).is_dir():  # Claude Code is installed
+            target_dirs.append(_skills_dir(base, CLAUDE_DIR_NAME))
         use_copy = False
 
     result = SkillInstallResult()
@@ -460,5 +395,11 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
         for target_dir in target_dirs:
             _install_one(skill_name, source_dir, target_dir, result, bundled_names, use_copy=use_copy)
 
-    _print_result(result)
+    for label, paths in (
+        ("Installed", result.installed),
+        ("Already up to date", result.up_to_date),
+        ("Skipped (conflicting file)", result.skipped),
+    ):
+        for path in paths:
+            print(f"{label}: {path}")  # noqa: T201
     return result
