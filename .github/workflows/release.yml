@@ -52,6 +52,18 @@ jobs:
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
+  databricks-integration-tests:
+    name: Databricks Integration Tests
+    uses: ./.github/workflows/databricks-integration.yml
+    secrets:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_INFRA_PROJECT_ID: ${{ secrets.GCP_INFRA_PROJECT_ID }}
+      DATABRICKS_CI_HOST: ${{ secrets.DATABRICKS_CI_HOST }}
+      DATABRICKS_CI_CLIENT_ID: ${{ secrets.DATABRICKS_CI_CLIENT_ID }}
+      DATABRICKS_CI_HTTP_PATH: ${{ secrets.DATABRICKS_CI_HTTP_PATH }}
+      DATABRICKS_CI_CATALOG: ${{ secrets.DATABRICKS_CI_CATALOG }}
+      DATABRICKS_CI_SCHEMA: ${{ secrets.DATABRICKS_CI_SCHEMA }}
+
   pyspark-integration-tests:
     name: PySpark Integration Tests
     uses: ./.github/workflows/pyspark-integration.yml
@@ -108,7 +120,16 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [security-audit, pre-commit, bigquery-integration-tests, pyspark-integration-tests, snowflake-integration-tests, sqlserver-integration-tests, oracle-integration-tests, multi-python-tests]
+    needs:
+      - security-audit
+      - pre-commit
+      - bigquery-integration-tests
+      - databricks-integration-tests
+      - pyspark-integration-tests
+      - snowflake-integration-tests
+      - sqlserver-integration-tests
+      - oracle-integration-tests
+      - multi-python-tests
     permissions:
       contents: write
       id-token: write

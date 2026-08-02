@@ -1,0 +1,231 @@
+name: Databricks Integration Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      GCP_SA_KEY:
+        required: true
+      GCP_INFRA_PROJECT_ID:
+        required: true
+      DATABRICKS_CI_HOST:
+        required: true
+      DATABRICKS_CI_CLIENT_ID:
+        required: true
+      DATABRICKS_CI_HTTP_PATH:
+        required: true
+      DATABRICKS_CI_CATALOG:
+        required: true
+      DATABRICKS_CI_SCHEMA:
+        required: true
+
+permissions:
+  contents: read
+
+# install_skills writes to one path per identity, so two runs as the same service principal
+# would delete each other's copies mid-test. Queue rather than cancel: a cancelled run
+# leaves its staged files behind.
+concurrency:
+  group: databricks-integration
+  cancel-in-progress: false
+
+jobs:
+  integration-tests:
+    name: Run Databricks Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+
+      - name: Install Dependencies
+        run: |
+          uv sync --locked --group integration
+
+      - name: Set up GCP Authentication
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Fetch Databricks OAuth Secret
+        env:
+          GCP_INFRA_PROJECT_ID: ${{ secrets.GCP_INFRA_PROJECT_ID }}
+        run: |
+          secret=$(gcloud secrets versions access latest \
+            --secret=databricks-oauth-secret \
+            --project="$GCP_INFRA_PROJECT_ID")
+          echo "::add-mask::$secret"
+          # Delimited form: a bare KEY=VALUE lets a secret containing a newline inject
+          # further environment variables into every later step.
+          {
+            echo "DATABRICKS_CLIENT_SECRET<<GH_ENV_EOF"
+            echo "$secret"
+            echo "GH_ENV_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Run Integration Tests
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_CI_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CI_CLIENT_ID }}
+          DATABRICKS_CI_HTTP_PATH: ${{ secrets.DATABRICKS_CI_HTTP_PATH }}
+          DATABRICKS_CI_CATALOG: ${{ secrets.DATABRICKS_CI_CATALOG }}
+          DATABRICKS_CI_SCHEMA: ${{ secrets.DATABRICKS_CI_SCHEMA }}
+        run: |
+          uv run pytest tests/integration -k "databricks" -v
+
+  skills-install-tests:
+    name: Run install_skills() On Databricks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+
+      # The job installs this wheel, so the run tests the working tree, not the last PyPI release.
+      - name: Build Wheel
+        run: uv build --wheel
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@8b7b124dc4f5b9621e959ea61cf4d3dd4e421f67 # v1.9.0
+
+      - name: Set up GCP Authentication
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Fetch Databricks OAuth Secret
+        env:
+          GCP_INFRA_PROJECT_ID: ${{ secrets.GCP_INFRA_PROJECT_ID }}
+        run: |
+          secret=$(gcloud secrets versions access latest \
+            --secret=databricks-oauth-secret \
+            --project="$GCP_INFRA_PROJECT_ID")
+          echo "::add-mask::$secret"
+          # Delimited form: a bare KEY=VALUE lets a secret containing a newline inject
+          # further environment variables into every later step.
+          {
+            echo "DATABRICKS_CLIENT_SECRET<<GH_ENV_EOF"
+            echo "$secret"
+            echo "GH_ENV_EOF"
+          } >> "$GITHUB_ENV"
+
+      # A notebook, not a python_file task: only a notebook has the pre-created Spark session
+      # install_skills looks for, and %pip byte-compiles the skill the way a user's install does.
+      - name: Run Workspace Skill Tests On Serverless Compute
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_CI_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CI_CLIENT_ID }}
+          DATABRICKS_CI_CATALOG: ${{ secrets.DATABRICKS_CI_CATALOG }}
+          DATABRICKS_CI_SCHEMA: ${{ secrets.DATABRICKS_CI_SCHEMA }}
+        run: |
+          set -euo pipefail
+          staging="/Volumes/${DATABRICKS_CI_CATALOG}/${DATABRICKS_CI_SCHEMA}/test_data/ci/${GITHUB_RUN_ID}"
+          notebook_dir="/Users/${DATABRICKS_CLIENT_ID}/ci/${GITHUB_RUN_ID}"
+          wheel=$(basename "$(ls dist/*.whl)")
+
+          # Recorded only once it exists, so the cleanup step never chases a path that was
+          # never created. --overwrite because GITHUB_RUN_ID is stable across re-runs.
+          databricks fs mkdir "dbfs:${staging}"
+          echo "STAGING_DIR=$staging" >> "$GITHUB_ENV"
+          databricks fs cp --overwrite "dist/${wheel}" "dbfs:${staging}/${wheel}"
+          databricks fs cp --overwrite tests/integration/test_workspace_skills.py \
+            "dbfs:${staging}/test_workspace_skills.py"
+
+          cat > runner.py <<NOTEBOOK
+          # Databricks notebook source
+          # MAGIC %pip install ${staging}/${wheel} pytest
+
+          # COMMAND ----------
+
+          # MAGIC %restart_python
+
+          # COMMAND ----------
+
+          import contextlib
+          import io
+          import os
+          import shutil
+          import tempfile
+
+          import pytest
+
+          # The one assertion outside the test module, because inside it this is the skip
+          # condition: serverless failing to set it would skip every test and report success.
+          assert "DATABRICKS_RUNTIME_VERSION" in os.environ
+
+          # Copied to local disk: pytest probes up the tree for a rootdir config file, and
+          # stat-ing one on the volume mount raises OSError 22 rather than reporting it absent.
+          local_test = shutil.copy("${staging}/test_workspace_skills.py", tempfile.mkdtemp())
+
+          report = io.StringIO()
+          with contextlib.redirect_stdout(report):
+              exit_code = pytest.main([local_test, "-v", "-p", "no:cacheprovider"])
+          if exit_code != 0:
+              raise RuntimeError(f"pytest exited {exit_code}\n{report.getvalue()}")
+
+          # Cell output is not retrievable after the run; the exported value is, so it is
+          # what the CI step below prints.
+          dbutils.notebook.exit(report.getvalue().strip().splitlines()[-1])
+          NOTEBOOK
+
+          databricks workspace mkdirs "$notebook_dir"
+          echo "NOTEBOOK_DIR=$notebook_dir" >> "$GITHUB_ENV"
+          databricks workspace import --overwrite --file runner.py --format SOURCE --language PYTHON \
+            "${notebook_dir}/run_skills_tests"
+
+          # Notebook tasks take their libraries from %pip, so there is no environment block:
+          # serverless is what a job gets when no cluster is specified.
+          jq -n \
+            --arg notebook "${notebook_dir}/run_skills_tests" \
+            --arg name "openretailscience install_skills ${GITHUB_RUN_ID}" \
+            '{
+              run_name: $name,
+              tasks: [{task_key: "install_skills", notebook_task: {notebook_path: $notebook}}]
+            }' > run.json
+
+          databricks jobs submit --json @run.json --output json > result.json
+          jq . result.json
+          # The submit response carries no notebook output, so the pytest report comes from
+          # the run-output endpoint instead.
+          databricks jobs get-run-output "$(jq -r '.tasks[0].run_id' result.json)" || true
+          # The CLI does not fail every unsuccessful run, so the result state decides.
+          state=$(jq -r '.status.termination_details.type // .state.result_state // "UNKNOWN"' result.json)
+          if [ "$state" != "SUCCESS" ]; then
+            echo "::error::Databricks run finished as $state; see the run output above."
+            exit 1
+          fi
+
+      - name: Clean Up Staged Files
+        if: always()
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_CI_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CI_CLIENT_ID }}
+        run: |
+          if [ -n "${STAGING_DIR:-}" ]; then
+            databricks fs rm --recursive "dbfs:${STAGING_DIR}"
+          fi
+          if [ -n "${NOTEBOOK_DIR:-}" ]; then
+            databricks workspace delete --recursive "$NOTEBOOK_DIR"
+          fi
