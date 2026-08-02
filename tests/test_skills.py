@@ -62,10 +62,14 @@ def _import_error(statement: str) -> str | None:
     return None
 
 
+def _shipped_reference_files() -> list[Path]:
+    """Return every reference markdown file of the shipped skill, at any depth."""
+    return sorted((_get_source_skills_dir() / SHIPPED_SKILL_NAME / "references").rglob("*.md"))
+
+
 def _shipped_skill_markdown() -> list[Path]:
     """Return SKILL.md and every reference markdown file of the shipped skill."""
-    skill_root = _get_source_skills_dir() / SHIPPED_SKILL_NAME
-    return [skill_root / "SKILL.md", *sorted(skill_root.glob("references/*.md"))]
+    return [_get_source_skills_dir() / SHIPPED_SKILL_NAME / "SKILL.md", *_shipped_reference_files()]
 
 
 def _skill_import_statements() -> list[str]:
@@ -216,9 +220,15 @@ class TestSymlinkInstall:
         assert len(result.skipped) == 0
         assert len(result.up_to_date) == len(SKILL_NAMES)
 
-    @pytest.mark.parametrize("conflict_kind", ["unrelated_file", "user_authored_skill"])
+    @pytest.mark.parametrize(
+        ("preserved_relpath", "content"),
+        [
+            pytest.param(SKILL_NAMES[0], "user data", id="unrelated_file"),
+            pytest.param(f"{SKILL_NAMES[0]}/SKILL.md", "my own skill", id="user_authored_skill"),
+        ],
+    )
     def test_conflicting_target_is_skipped_not_clobbered(
-        self, source_dir: Path, project_dir: Path, conflict_kind: str
+        self, source_dir: Path, project_dir: Path, preserved_relpath: str, content: str
     ) -> None:
         """A conflicting target is left byte-for-byte intact and reported skipped.
 
@@ -228,19 +238,13 @@ class TestSymlinkInstall:
         """
         target_dir = project_dir / ".agents" / "skills"
         conflict = target_dir / SKILL_NAMES[0]
-        if conflict_kind == "unrelated_file":
-            target_dir.mkdir(parents=True)
-            conflict.write_text("user data", encoding="utf-8")
-            preserved = conflict
-        else:
-            conflict.mkdir(parents=True)
-            (conflict / "SKILL.md").write_text("my own skill", encoding="utf-8")
-            preserved = conflict / "SKILL.md"
-        expected = preserved.read_text(encoding="utf-8")
+        preserved = target_dir / preserved_relpath
+        preserved.parent.mkdir(parents=True)
+        preserved.write_text(content, encoding="utf-8")
 
         result = install_skills()
 
-        assert preserved.read_text(encoding="utf-8") == expected
+        assert preserved.read_text(encoding="utf-8") == content
         assert not conflict.is_symlink()
         assert result.skipped == [str(conflict.relative_to(project_dir))]
         # The non-conflicting skill still installs.
@@ -364,7 +368,7 @@ class TestDatabricksInstall:
         [
             pytest.param([[""]], id="blank"),
             pytest.param([[".."]], id="parent-traversal"),
-            pytest.param([["/tmp"]], id="absolute"),  # noqa: S108
+            pytest.param([["/Workspace/Users/absent-user@retail.com"]], id="absolute"),
             pytest.param([[f"team/{DATABRICKS_USER}"]], id="nested"),
         ],
     )
@@ -373,9 +377,8 @@ class TestDatabricksInstall:
     ) -> None:
         """A blank or path-like current_user() is refused before it is joined into a path.
 
-        A blank, ``..``, or absolute name joins to a directory that exists, so nothing
-        downstream would stop the install: pathlib drops an empty segment, keeps ``..``,
-        and restarts from an absolute one. A nested name escapes the user's own home.
+        Each of these joins outside the caller's own workspace home: pathlib drops an
+        empty segment, keeps ``..``, and restarts from an absolute one.
         """
         spark_session.sql.return_value.collect.return_value = rows
 
@@ -490,6 +493,22 @@ class TestBundledSkill:
         description_body = block.split("description:", 1)[1].replace(">-", " ").strip()
         assert len(description_body) >= MIN_DESCRIPTION_LENGTH
 
+    def test_nested_reference_files_are_scanned(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A reference file in a subdirectory is one of the files the guards read.
+
+        The link guard below enumerates ``references/`` recursively, so a nested file
+        is required to be linked. Unless it is scanned too, its import examples ship
+        unchecked. Patched on this module, which imported the name directly.
+        """
+        skill_root = tmp_path / SHIPPED_SKILL_NAME
+        (skill_root / "references" / "metrics").mkdir(parents=True)
+        (skill_root / "SKILL.md").write_text("See `references/metrics/segstats.md`.\n", encoding="utf-8")
+        nested = skill_root / "references" / "metrics" / "segstats.md"
+        nested.write_text("# Segment transaction stats\n", encoding="utf-8")
+        monkeypatch.setattr(sys.modules[__name__], "_get_source_skills_dir", lambda: tmp_path)
+
+        assert _shipped_skill_markdown() == [skill_root / "SKILL.md", nested]
+
     def test_every_reference_file_is_linked_and_every_link_resolves(self) -> None:
         """The reference files the skill links to are exactly the ones on disk.
 
@@ -502,7 +521,7 @@ class TestBundledSkill:
             referenced.update(REFERENCE_RE.findall(md_file.read_text(encoding="utf-8")))
 
         # as_posix(): the links are written with forward slashes on every platform.
-        on_disk = {path.relative_to(skill_root).as_posix() for path in (skill_root / "references").rglob("*.md")}
+        on_disk = {path.relative_to(skill_root).as_posix() for path in _shipped_reference_files()}
         assert len(on_disk) >= MIN_REFERENCE_FILES
         assert referenced == on_disk
 
@@ -523,25 +542,23 @@ class TestFindProjectRoot:
     """Unit tests for _find_project_root."""
 
     @pytest.mark.parametrize(
-        ("markers", "root_is_ancestor"),
+        "marker",
         [
-            pytest.param([".git"], True, id="git-ancestor"),
-            pytest.param([".agents"], True, id="agents-ancestor"),
-            pytest.param([".claude"], True, id="claude-ancestor"),
-            pytest.param([], False, id="no-markers"),
+            pytest.param(".git", id="git-ancestor"),
+            pytest.param(".agents", id="agents-ancestor"),
+            pytest.param(".claude", id="claude-ancestor"),
+            pytest.param(None, id="no-markers"),
         ],
     )
-    def test_marker_on_an_ancestor_selects_the_root(
-        self, tmp_path: Path, fake_home: Path, markers: list[str], root_is_ancestor: bool
-    ) -> None:
+    def test_marker_on_an_ancestor_selects_the_root(self, tmp_path: Path, fake_home: Path, marker: str | None) -> None:
         """Any of .git, .agents or .claude on an ancestor makes it the root; without one, the start dir is."""
         repo = tmp_path / "repo"
         sub = repo / "pkg"
         sub.mkdir(parents=True)
-        for marker in markers:
+        if marker is not None:
             (repo / marker).mkdir()
 
-        assert _find_project_root(sub) == (repo if root_is_ancestor else sub)
+        assert _find_project_root(sub) == (sub if marker is None else repo)
 
     def test_agents_ancestor_wins_over_a_nearer_git_root(self, tmp_path: Path, fake_home: Path) -> None:
         """A .agents marker outranks a .git directory found closer to the start dir."""
