@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from ibis.backends import BaseBackend
     from ibis.expr.types import Table
@@ -22,8 +22,7 @@ _TRANSACTIONS_TABLE_NAME = "transactions"
 
 # Connection details for the local throwaway containers defined in
 # tests/integration/docker/. These are fixed, non-secret values that must match the
-# corresponding docker-compose files; they are intentionally hardcoded rather than
-# configured via environment variables.
+# corresponding docker-compose files.
 _MSSQL_HOST = "localhost"
 _MSSQL_PORT = 1433
 _MSSQL_USER = "sa"
@@ -41,6 +40,10 @@ _ORACLE_SERVICE_NAME = "FREEPDB1"  # 23ai Free pluggable database
 _PORT_PROBE_TIMEOUT_SECONDS = 1.0
 _CONNECT_MAX_ATTEMPTS = 30
 _CONNECT_RETRY_SECONDS = 2.0
+
+# Ibis creates this volume on connect to stage memtables. Named, because the default embeds the
+# process id, so every run would leave another volume behind in the CI schema.
+_DATABRICKS_MEMTABLE_VOLUME = "ibis_memtables"
 
 
 def _read_transactions() -> pd.DataFrame:
@@ -60,15 +63,13 @@ def _read_transactions() -> pd.DataFrame:
 def _require_container_reachable(host: str, port: int, name: str) -> None:
     """Fail loudly if the backend container is not listening on host:port.
 
-    This is a fast pre-flight check so a missing or failed-to-start container surfaces
-    as an immediate, clear error rather than skipping (which would hide the problem) or
-    burning the whole connection-retry budget. It deliberately does not call
-    ``pytest.skip``: these tests are only selected when the backend is meant to run.
+    Deliberately does not call ``pytest.skip``: these tests are only selected when the
+    backend is meant to run, so a container that failed to start must not be passed over.
 
     Args:
-        host: Host the container is expected to listen on.
-        port: Port the container is expected to listen on.
-        name: Human-readable backend name used in the error message.
+        host (str): Host the container is expected to listen on.
+        port (int): Port the container is expected to listen on.
+        name (str): Human-readable backend name used in the error message.
 
     Raises:
         RuntimeError: If nothing is accepting connections on host:port.
@@ -85,7 +86,7 @@ def _connect_with_retry(connect: Callable[[], BaseBackend]) -> BaseBackend:
     """Establish a backend connection, retrying while the container starts up.
 
     Args:
-        connect: Zero-argument callable that opens and returns a backend connection.
+        connect (Callable[[], BaseBackend]): Zero-argument callable that opens and returns a backend connection.
 
     Returns:
         BaseBackend: The established Ibis backend connection.
@@ -108,7 +109,7 @@ def _seed_transactions(connection: BaseBackend) -> Table:
     """Load the transactions sample data into a connected backend and return it.
 
     Args:
-        connection: An Ibis backend connection to seed.
+        connection (BaseBackend): An Ibis backend connection to seed.
 
     Returns:
         Table: The seeded transactions table expression.
@@ -170,30 +171,66 @@ def _oracle_transactions_table() -> Table:
     return _seed_transactions(connection)
 
 
+@pytest.fixture(scope="session")
+def _databricks_transactions_table() -> Iterator[Table]:
+    """Open one Databricks connection per session and close it on teardown.
+
+    Closing matters: the Thrift transport is otherwise torn down by the garbage collector,
+    which logs against pytest's already-closed capture stream.
+
+    Yields:
+        Table: The transactions table on the Databricks backend.
+    """
+    from databricks.sdk.core import Config  # noqa: PLC0415 - keeps the other backends collectable without it
+
+    # Config() takes the OAuth credentials from DATABRICKS_HOST/CLIENT_ID/CLIENT_SECRET, the SDK's
+    # own names. credentials_provider needs a callable returning cfg.authenticate, not the method.
+    config = Config()
+    connection = ibis.databricks.connect(
+        server_hostname=config.hostname,
+        http_path=os.environ["DATABRICKS_CI_HTTP_PATH"],
+        credentials_provider=lambda: config.authenticate,
+        catalog=os.environ["DATABRICKS_CI_CATALOG"],
+        schema=os.environ["DATABRICKS_CI_SCHEMA"],
+        memtable_volume=_DATABRICKS_MEMTABLE_VOLUME,
+    )
+    try:
+        yield connection.table(_TRANSACTIONS_TABLE_NAME)
+    finally:
+        connection.disconnect()
+
+
 @pytest.fixture(
-    params=["bigquery", "pyspark", "snowflake", "mssql", "oracle"],
+    params=["bigquery", "databricks", "pyspark", "snowflake", "mssql", "oracle"],
     ids=lambda backend: f"backend={backend}",
 )
 def transactions_table(request: pytest.FixtureRequest) -> Table:
-    """Parameterized fixture that provides transactions table from different backends."""
+    """Provide the transactions table from each backend in turn.
+
+    Args:
+        request (pytest.FixtureRequest): Fixture request carrying the backend name.
+
+    Returns:
+        Table: The transactions table on the parametrized backend.
+
+    Raises:
+        ValueError: If the parametrized backend name is not handled.
+    """
     if request.param == "bigquery":
         connection = ibis.bigquery.connect(
             project_id=os.environ["GCP_PROJECT_ID"],
         )
-        return connection.table("test_data.transactions")
+        return connection.table(f"test_data.{_TRANSACTIONS_TABLE_NAME}")
     if request.param == "pyspark":
         connection = ibis.pyspark.connect()
-        # Use pandas to read the parquet file first, then convert to Spark
-        # This handles timestamp compatibility issues automatically
         df = pd.read_parquet(_TRANSACTIONS_PARQUET)
         # Pyspark has no time column so we have to convert it to a datetime
         df["transaction_time"] = pd.to_datetime(
             df["transaction_date"].astype(str) + " " + df["transaction_time"].astype(str),
         )
         spark_df = connection._session.createDataFrame(df)
-        # Create a temporary view and read it back as an ibis table
-        spark_df.createOrReplaceTempView("transactions")
-        return connection.table("transactions")
+        spark_df.createOrReplaceTempView(_TRANSACTIONS_TABLE_NAME)
+        return connection.table(_TRANSACTIONS_TABLE_NAME)
     if request.param == "snowflake":
         connection = ibis.snowflake.connect(
             account=os.environ["SNOWFLAKE_CI_ACCOUNT"],
@@ -203,11 +240,10 @@ def transactions_table(request: pytest.FixtureRequest) -> Table:
             schema=os.environ["SNOWFLAKE_CI_SCHEMA"],
             warehouse=os.environ["SNOWFLAKE_CI_WAREHOUSE"],
         )
-        table = connection.table("TRANSACTIONS")
+        table = connection.table(_TRANSACTIONS_TABLE_NAME.upper())
         # Snowflake returns UPPERCASE column names; lowercase them for compatibility with integration tests
         return table.rename({col.lower(): col for col in table.columns})
-    if request.param in ("mssql", "oracle"):
-        # Containerized backends are seeded once per session by their own fixtures.
+    if request.param in ("databricks", "mssql", "oracle"):
         return request.getfixturevalue(f"_{request.param}_transactions_table")
     error_msg = f"Unknown backend: {request.param}"
     raise ValueError(error_msg)

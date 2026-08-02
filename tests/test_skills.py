@@ -8,6 +8,7 @@ import runpy
 import shutil
 import sys
 from pathlib import PurePath
+from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -36,8 +37,7 @@ DATABRICKS_USER = "analyst@retail.com"
 # Spelled out, not imported: renaming the package constant must fail these tests,
 # because Databricks reads this exact path.
 DATABRICKS_ASSISTANT_DIR = ".assistant"
-# Patched by name so pyspark, a dev-only transitive dependency, stays out of imports.
-GET_ACTIVE_SESSION = "pyspark.sql.SparkSession.getActiveSession"
+PYSPARK_SQL_MODULE = "pyspark.sql"
 FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---", re.DOTALL)
 SHIPPED_SKILL_NAME = "using-openretailscience"
 # Fenced code blocks, and openretailscience import statements inside them.
@@ -96,6 +96,22 @@ def _raise_value_error(*_args: object, **_kwargs: object) -> NoReturn:
 def _raise_not_implemented(*_args: object, **_kwargs: object) -> NoReturn:
     """Raise NotImplementedError; a patched-call stand-in for an operation unsupported on the platform."""
     raise NotImplementedError
+
+
+def _fake_pyspark(monkeypatch: pytest.MonkeyPatch, session: MagicMock | None) -> None:
+    """Register a stub ``pyspark.sql`` whose ``getActiveSession`` returns ``session``.
+
+    Stubbed rather than installed: pyspark lives in the integration group, so importing it here
+    would pull its Spark jars into every default sync. The real ``getActiveSession`` is covered
+    by ``tests/integration/test_workspace_skills.py``.
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): Fixture used to restore ``sys.modules`` afterwards.
+        session (MagicMock | None): Session to hand back, or None for a sessionless caller.
+    """
+    module = ModuleType(PYSPARK_SQL_MODULE)
+    module.SparkSession = SimpleNamespace(getActiveSession=lambda: session)
+    monkeypatch.setitem(sys.modules, PYSPARK_SQL_MODULE, module)
 
 
 def _make_bare_skill(root: Path, name: str, body: bytes = b"guidance") -> Path:
@@ -247,7 +263,6 @@ class TestSymlinkInstall:
         assert preserved.read_text(encoding="utf-8") == content
         assert not conflict.is_symlink()
         assert result.skipped == [str(conflict.relative_to(project_dir))]
-        # The non-conflicting skill still installs.
         assert (target_dir / SKILL_NAMES[1]).is_symlink()
 
     def test_stale_symlink_is_repointed_to_source(self, source_dir: Path, project_dir: Path) -> None:
@@ -284,9 +299,12 @@ class TestSymlinkInstall:
 
 
 class TestDatabricksInstall:
-    """Tests for the Databricks copy-to-Workspace branch."""
+    """Tests for the Databricks copy-to-Workspace branch, against a fake ``/Workspace``.
 
-    @pytest.fixture
+    ``tests/integration/test_workspace_skills.py`` runs the same branch against the real mount.
+    """
+
+    @pytest.fixture(autouse=True)
     def workspace_root(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         """Simulate a Databricks runtime with a redirected persistent workspace root."""
         root = tmp_path / "Workspace"
@@ -305,42 +323,30 @@ class TestDatabricksInstall:
         """Stand in for the Databricks-provided active Spark session, answering current_user()."""
         session = MagicMock()
         session.sql.return_value.collect.return_value = [[DATABRICKS_USER]]
-        monkeypatch.setattr(GET_ACTIVE_SESSION, lambda: session)
+        _fake_pyspark(monkeypatch, session)
         return session
 
-    def test_copies_to_per_user_assistant_dir(
-        self, source_dir: Path, workspace_root: Path, user_skills_dir: Path, spark_session: MagicMock
+    def test_target_is_named_by_current_user(
+        self, source_dir: Path, user_skills_dir: Path, spark_session: MagicMock
     ) -> None:
-        """The default install copies (not links) into the workspace home of the current_user()."""
+        """The target is resolved from ``current_user()``, not a configured or cached identity."""
         install_skills()
 
         assert "current_user()" in spark_session.sql.call_args.args[0]
-        for name in SKILL_NAMES:
-            target = user_skills_dir / name
-            assert target.is_dir()
-            assert not target.is_symlink()
-            assert (target / "SKILL.md").is_file()
-        # The workspace-wide directory needs admin rights.
-        assert not (workspace_root / DATABRICKS_ASSISTANT_DIR).exists()
+        assert (user_skills_dir / SKILL_NAMES[0] / "SKILL.md").is_file()
 
-    def test_global_mode_is_refused(
-        self, source_dir: Path, workspace_root: Path, user_skills_dir: Path, spark_session: MagicMock
-    ) -> None:
-        """Workspace-wide installs are refused rather than attempted without admin rights."""
+    def test_global_mode_is_refused_before_the_session_lookup(self, source_dir: Path, spark_session: MagicMock) -> None:
+        """global_mode raises without consulting Spark, so a sessionless caller is not misdirected."""
         with pytest.raises(NotImplementedError, match="global_mode"):
             install_skills(global_mode=True)
 
-        # Refusing before the session lookup keeps a sessionless caller from being
-        # told to fix the wrong thing.
         spark_session.sql.assert_not_called()
-        assert not (workspace_root / DATABRICKS_ASSISTANT_DIR).exists()
-        assert not user_skills_dir.exists()
 
     def test_raises_without_a_spark_session(
         self, source_dir: Path, workspace_root: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """With no session to name the user, the install raises instead of guessing a target."""
-        monkeypatch.setattr(GET_ACTIVE_SESSION, lambda: None)
+        _fake_pyspark(monkeypatch, None)
 
         with pytest.raises(RuntimeError, match="Spark session"):
             install_skills()
@@ -387,28 +393,6 @@ class TestDatabricksInstall:
             install_skills()
 
         assert list(workspace_root.rglob(DATABRICKS_ASSISTANT_DIR)) == []
-
-    def test_rerun_reports_up_to_date_when_copy_matches(self, source_dir: Path, workspace_root: Path) -> None:
-        """Re-running on Databricks with unchanged skills reports them up to date."""
-        install_skills()
-        result = install_skills()
-
-        assert len(result.installed) == 0
-        assert len(result.up_to_date) == len(SKILL_NAMES)
-
-    def test_rerun_refreshes_copy_when_source_changed(self, source_dir: Path, user_skills_dir: Path) -> None:
-        """A changed bundled skill is re-copied over the stale Databricks copy."""
-        install_skills()
-        (source_dir / SKILL_NAMES[0] / "SKILL.md").write_text(
-            f"---\nname: {SKILL_NAMES[0]}\ndescription: Updated.\n---\n\n# updated\n",
-            encoding="utf-8",
-        )
-
-        result = install_skills()
-
-        target = user_skills_dir / SKILL_NAMES[0] / "SKILL.md"
-        assert "Updated." in target.read_text(encoding="utf-8")
-        assert len(result.installed) == 1
 
     @pytest.mark.parametrize("existing_kind", ["stale_copy", "symlink"])
     def test_existing_target_is_replaced_by_a_current_copy(
@@ -460,7 +444,6 @@ class TestDatabricksInstall:
         install_skills()
         expected = (source_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes()
 
-        # Simulate the ephemeral package being wiped on cluster restart.
         shutil.rmtree(source_dir)
 
         assert (user_skills_dir / SKILL_NAMES[0] / "SKILL.md").read_bytes() == expected

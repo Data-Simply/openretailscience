@@ -35,7 +35,6 @@ name  = "Murray Vanwyk"
 [dependency-groups]
 dev = [
     "freezegun>=1.5.1,<2",
-    "ibis-framework[bigquery,mssql,oracle,pyspark,snowflake]>=10.0.0,<13",
     "nbstripout>=0.7.1,<0.10",
     "pre-commit>=3.6.2,<5",
     "pytest-cov>=4.1.0,<8",
@@ -53,6 +52,10 @@ docs = [
     "mkdocstrings-python>=1.11,<3",
 ]
 examples = [ "jupyterlab>=4.2.5,<5", "tqdm>=4.66.1,<5" ]
+integration = [
+    "databricks-sdk>=0.60,<1",
+    "ibis-framework[bigquery,databricks,mssql,oracle,pyspark,snowflake]>=10.0.0,<13",
+]
 
 [build-system]
 build-backend = "hatchling.build"
@@ -141,7 +144,13 @@ select = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--cov=openretailscience --cov-report=term-missing  --cov-branch --ignore=tests/integration --import-mode=importlib"
+addopts = [
+    "--cov=openretailscience",
+    "--cov-report=term-missing",
+    "--cov-branch",
+    "--ignore=tests/integration",
+    "--import-mode=importlib",
+]
 
 [tool.coverage.run]
 branch = true

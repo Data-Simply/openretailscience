@@ -258,9 +258,8 @@ tox -p auto
 ### Integration Tests
 
 Integration tests verify that all analysis modules work correctly across different backends: distributed computing
-engines (PySpark, BigQuery, Snowflake) and relational databases (SQL Server, Oracle). These tests ensure the
-Ibis-based code paths function properly across different execution environments. SQL Server and Oracle run against
-throwaway Docker containers, so they execute the same way locally and in CI.
+engines (PySpark, BigQuery, Snowflake, Databricks) and relational databases (SQL Server, Oracle). These tests ensure
+the Ibis-based code paths function properly across different execution environments.
 
 #### PySpark Integration Tests
 
@@ -268,7 +267,7 @@ The PySpark integration tests run locally using the same pytest framework as oth
 
 **Prerequisites:**
 
-- Python environment with dependencies installed (`uv sync`)
+- Python environment with the backend drivers installed (`uv sync --group integration`)
 
 **Running locally:**
 
@@ -298,8 +297,8 @@ The BigQuery integration tests verify compatibility with Google BigQuery as a ba
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-key.json
 export GCP_PROJECT_ID=your-project-id
 
-# Install dependencies
-uv sync
+# Install dependencies (the backend drivers live in a non-default group)
+uv sync --group integration
 
 # Run all BigQuery tests
 uv run pytest tests/integration -k "bigquery" -v
@@ -329,8 +328,8 @@ export SNOWFLAKE_CI_DATABASE=your-database
 export SNOWFLAKE_CI_SCHEMA=your-schema
 export SNOWFLAKE_CI_PRIVATE_KEY_PATH=/path/to/your/private-key.p8
 
-# Install dependencies
-uv sync
+# Install dependencies (the backend drivers live in a non-default group)
+uv sync --group integration
 
 # Run all Snowflake tests
 uv run pytest tests/integration -k "snowflake" -v
@@ -339,10 +338,73 @@ uv run pytest tests/integration -k "snowflake" -v
 uv run pytest tests/integration/test_cohort_analysis.py -k "snowflake" -v
 ```
 
+#### Databricks Integration Tests
+
+The Databricks integration tests verify compatibility with Databricks as a backend. They query a pre-loaded
+Unity Catalog table over a SQL warehouse, authenticating as an OAuth machine-to-machine service principal.
+
+**Prerequisites:**
+
+- A Databricks workspace with a SQL warehouse and Unity Catalog
+- An OAuth service principal (client ID and secret) with `USE_CATALOG`, `USE_SCHEMA` and `SELECT` on the test
+  schema, plus `CREATE VOLUME`, `READ VOLUME` and `WRITE VOLUME`: Ibis creates a volume on connect to stage
+  memtables, so a principal holding only `SELECT` cannot open the connection
+- The test dataset loaded in Unity Catalog (table: `<catalog>.<schema>.transactions`), kept in step with
+  `data/transactions.parquet`, which the seeded backends build their copy from
+- A `test_data` volume in the same schema, which CI stages the wheel and test module into
+
+**Running locally:**
+
+```bash
+# Set up Databricks connection. HOST/CLIENT_ID/CLIENT_SECRET are the standard
+# Databricks SDK variables, so a ~/.databrickscfg profile works instead.
+export DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
+export DATABRICKS_CLIENT_ID=your-service-principal-client-id
+export DATABRICKS_CLIENT_SECRET=your-service-principal-secret
+export DATABRICKS_CI_HTTP_PATH=/sql/1.0/warehouses/your-warehouse-id
+export DATABRICKS_CI_CATALOG=your-catalog
+export DATABRICKS_CI_SCHEMA=your-schema
+
+# Install dependencies (the backend drivers live in a non-default group)
+uv sync --group integration
+
+# Run all Databricks tests
+uv run pytest tests/integration -k "databricks" -v
+
+# Run specific test module
+uv run pytest tests/integration/test_cohort_analysis.py -k "databricks" -v
+```
+
+##### install_skills() on Databricks
+
+`install_skills` copies the bundled agent skills into `/Workspace/Users/<current_user()>/.assistant/skills`,
+a mount that exists only on Databricks compute. Coverage is shared between:
+
+- `tests/test_skills.py::TestDatabricksInstall` runs on every commit, against a temp directory and a
+  stub Spark session. It covers the states a real workspace will not produce on demand.
+- `tests/integration/test_workspace_skills.py` holds every assertion made against the real mount.
+  Plain pytest skips it.
+- The `skills-install-tests` job in `.github/workflows/databricks-integration.yml` delivers it, running
+  a wheel built from the working tree rather than the last PyPI release.
+- The notebook that job generates is where the `DATABRICKS_RUNTIME_VERSION` guard lives.
+
+To run them by hand, attach a Databricks notebook to serverless compute and execute the following.
+They delete and reinstall the bundled skills in your own workspace home:
+
+```python
+%pip install openretailscience pytest
+%restart_python
+```
+
+```python
+import pytest
+pytest.main(["/Workspace/path/to/test_workspace_skills.py", "-v", "-p", "no:cacheprovider"])
+```
+
 #### SQL Server and Oracle Integration Tests
 
 SQL Server and Oracle run against throwaway Docker containers, so they execute the same way locally and in CI.
-CI covers the supported free editions — SQL Server Developer 2022 and 2025, and Oracle 23ai Free.
+CI covers the supported free editions: SQL Server Developer 2022 and 2025, and Oracle 23ai Free.
 
 These backends have a one-time setup (the SQL Server ODBC driver) and per-version image tags, so their
 instructions live next to the Compose files. See
