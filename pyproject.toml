@@ -84,7 +84,7 @@ extend-exclude = [ "openretailscience/.agents" ]
 force-exclude  = true
 
 [tool.ruff.lint]
-ignore = [ "COM812", "EM101", "ISC001", "PD010", "PD901", "PT011", "PTH123", "SLF001", "TRY003" ]
+ignore = [ "COM812", "EM101", "ISC001", "PD010", "PD901", "PLR0917", "PT011", "PTH123", "SLF001", "TRY003" ]
 select = [
     "A",
     "ANN",
