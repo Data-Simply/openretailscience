@@ -46,7 +46,13 @@ repos:
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
     rev: v1.25.2
     hooks:
+      # zizmor enables online audits whenever GH_TOKEN/GITHUB_TOKEN is in the
+      # environment, so audit depth would otherwise vary by machine. CI runs this
+      # job with `permissions: {}` and no token, so offline is the real baseline;
+      # pinning it keeps local runs identical instead of failing against repos a
+      # developer's token cannot read.
       - id: zizmor
+        args: ["--offline"]
   - repo: local
     hooks:
       - id: pytest
