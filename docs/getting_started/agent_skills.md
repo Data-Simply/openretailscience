@@ -60,27 +60,18 @@ one CLI wires them into any project that depends on them. OpenRetailScience ship
 that layout already, so the tool needs no extra configuration:
 
 ```bash
-uvx library-skills --claude
+uvx library-skills
 ```
 
 It reads your project's dependencies, finds `using-openretailscience` inside the
 installed package, and offers to symlink it into `.agents/skills/`. The `--claude`
 flag adds `.claude/skills/`, which Claude Code needs because it does not read
 `.agents`. Run the command again after your dependencies change and it repairs
-stale links. `uvx library-skills --check` reports drift without touching anything,
-so it works as a CI step, and `--copy` writes real files where symlinks are
-unavailable. The command asks before it installs anything; `--all --yes` answers
-those prompts for you when you are scripting the setup.
+stale links; `--copy` writes real files where symlinks are unavailable.
 
-Both installers write the same relative symlink, so the note above about keeping
-these out of source control applies to the CLI too. The CLI's own docs suggest
-committing them, which holds only when everyone keeps the environment at the same
-path, on the same Python minor version and platform: all three sit in the link
-(`../../.venv/lib/python3.11/site-packages/...`).
-
-Either route installs the same skill folder, so use whichever suits your project.
-`install_skills()` is still the one to reach for on Databricks, or when you want
-the skill available to every project instead of one.
+It asks before installing anything. Name the skill to script that away:
+`uvx library-skills -s using-openretailscience -y`. `--all` also skips the
+prompt, but it takes every skill in your dependency tree, transitive ones included.
 
 ## Databricks
 
