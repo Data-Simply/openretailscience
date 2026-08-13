@@ -71,8 +71,15 @@ so it works as a CI step, and `--copy` writes real files where symlinks are
 unavailable.
 
 The links it creates are relative to the project rather than absolute paths into a
-virtual environment, so you can commit these, provided everyone installs into a
-repo-local `.venv`.
+virtual environment:
+
+```text
+.agents/skills/using-openretailscience
+  -> ../../.venv/lib/python3.11/site-packages/openretailscience/.agents/skills/using-openretailscience
+```
+
+So unlike the ones `install_skills()` writes, you can commit these, provided
+everyone installs into a repo-local `.venv`.
 
 Either route installs the same skill folder, so use whichever suits your project.
 `install_skills()` is still the one to reach for on Databricks, or when you want
