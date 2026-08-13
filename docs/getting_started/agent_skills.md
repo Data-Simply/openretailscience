@@ -69,8 +69,8 @@ flag adds `.claude/skills/`, which Claude Code needs because it does not read
 `.agents`. Run the command again after your dependencies change and it repairs
 stale links; `--copy` writes real files where symlinks are unavailable.
 
-It asks before installing anything. To script it, name the skill and skip the
-prompts: `uvx library-skills -s using-openretailscience -y`.
+The command prompts for what to install, so a scripted setup names the skill and
+skips the prompts: `uvx library-skills -s using-openretailscience -y`.
 
 ## Databricks
 
