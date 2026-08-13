@@ -237,14 +237,14 @@ uv run pytest --cov=openretailscience
 
 ### Multi-Python Version Testing
 
-OpenRetailScience supports Python 3.10, 3.11, 3.12, and 3.13. You can test across all supported versions locally using tox:
+OpenRetailScience supports Python 3.10 through 3.14. You can test across all supported versions locally using tox:
 
 ```bash
 # Test all supported Python versions
-tox -e py310,py311,py312,py313
+tox -e py310,py311,py312,py313,py314
 
 # Test specific Python version
-tox -e py313
+tox -e py314
 
 # Run tests in parallel across versions
 tox -p auto
