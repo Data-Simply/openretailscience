@@ -69,7 +69,8 @@ flag adds `.claude/skills/`, which Claude Code needs because it does not read
 `.agents`. Run the command again after your dependencies change and it repairs
 stale links. `uvx library-skills --check` reports drift without touching anything,
 so it works as a CI step, and `--copy` writes real files where symlinks are
-unavailable.
+unavailable. The command asks before it installs anything; `--all --yes` answers
+those prompts for you when you are scripting the setup.
 
 The links it creates are relative to the project rather than absolute paths into a
 virtual environment:
@@ -79,8 +80,11 @@ virtual environment:
   -> ../../.venv/lib/python3.11/site-packages/openretailscience/.agents/skills/using-openretailscience
 ```
 
-So unlike the ones `install_skills()` writes, you can commit these, provided
-everyone installs into a repo-local `.venv`.
+So unlike the ones `install_skills()` writes, you can commit these, as long as
+everyone builds a repo-local `.venv`. The path also carries the Python minor
+version and the platform's own layout, so a link committed under `python3.11`
+breaks for anyone on 3.12, or on Windows, where the directory is
+`.venv\Lib\site-packages`.
 
 Either route installs the same skill folder, so use whichever suits your project.
 `install_skills()` is still the one to reach for on Databricks, or when you want
