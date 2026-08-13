@@ -53,7 +53,8 @@ one left by an earlier install.
 
 ## Installing with the library-skills CLI
 
-The bundled skill also follows the [Library Skills](https://library-skills.io)
+The bundled skill also follows the
+[Library Skills](https://library-skills.io){target="_blank" rel="noopener"}
 convention: libraries publish their skills under `<package>/.agents/skills/`, and
 one CLI wires them into any project that depends on them. OpenRetailScience ships
 that layout already, so the tool needs no extra configuration:
