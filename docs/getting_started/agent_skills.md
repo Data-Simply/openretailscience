@@ -72,19 +72,11 @@ so it works as a CI step, and `--copy` writes real files where symlinks are
 unavailable. The command asks before it installs anything; `--all --yes` answers
 those prompts for you when you are scripting the setup.
 
-The links it creates are relative to the project rather than absolute paths into a
-virtual environment:
-
-```text
-.agents/skills/using-openretailscience
-  -> ../../.venv/lib/python3.11/site-packages/openretailscience/.agents/skills/using-openretailscience
-```
-
-So unlike the ones `install_skills()` writes, you can commit these, as long as
-everyone builds a repo-local `.venv`. The path also carries the Python minor
-version and the platform's own layout, so a link committed under `python3.11`
-breaks for anyone on 3.12, or on Windows, where the directory is
-`.venv\Lib\site-packages`.
+Both installers write the same relative symlink, so the note above about keeping
+these out of source control applies to the CLI too. The CLI's own docs suggest
+committing them, which holds only when everyone keeps the environment at the same
+path, on the same Python minor version and platform: all three sit in the link
+(`../../.venv/lib/python3.11/site-packages/...`).
 
 Either route installs the same skill folder, so use whichever suits your project.
 `install_skills()` is still the one to reach for on Databricks, or when you want
