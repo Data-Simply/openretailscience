@@ -2,7 +2,7 @@ name: Security Audit
 
 # Scans the resolved dependency lockfile (uv.lock) for known vulnerabilities
 # using OSV-Scanner. Because it reads uv.lock statically, it audits every pinned
-# version across all supported Python versions (3.10-3.13) and platforms.
+# version across all supported Python versions (3.10-3.14) and platforms.
 # Results are uploaded to GitHub code scanning (Security tab) as SARIF, so a
 # newly-disclosed CVE in a pinned dependency surfaces as a failing check and a
 # code-scanning alert rather than a passive Dependabot alert.

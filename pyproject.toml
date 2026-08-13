@@ -6,6 +6,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "duckdb>=1.1.0,<1.6",
@@ -26,7 +27,7 @@ description = "Retail Data Science Tools"
 license = "Elastic-2.0"
 name = "openretailscience"
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10,<3.15"
 version = "0.48.1"
 [[project.authors]]
 email = "2493311+mvanwyk@users.noreply.github.com"
