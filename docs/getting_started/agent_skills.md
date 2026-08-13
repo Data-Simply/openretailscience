@@ -51,6 +51,33 @@ one left by an earlier install.
     installed skill paths (for example `.agents/skills/using-openretailscience/`)
     to your `.gitignore`.
 
+## Installing with the library-skills CLI
+
+The bundled skill also follows the [Library Skills](https://library-skills.io)
+convention: libraries publish their skills under `<package>/.agents/skills/`, and
+one CLI wires them into any project that depends on them. OpenRetailScience ships
+that layout already, so the tool needs no extra configuration:
+
+```bash
+uvx library-skills --claude
+```
+
+It reads your project's dependencies, finds `using-openretailscience` inside the
+installed package, and offers to symlink it into `.agents/skills/`. The `--claude`
+flag adds `.claude/skills/`, which Claude Code needs because it does not read
+`.agents`. Run the command again after your dependencies change and it repairs
+stale links. `uvx library-skills --check` reports drift without touching anything,
+so it works as a CI step, and `--copy` writes real files where symlinks are
+unavailable.
+
+The links it creates are relative to the project rather than absolute paths into a
+virtual environment, so you can commit these, provided everyone installs into a
+repo-local `.venv`.
+
+Either route installs the same skill folder, so use whichever suits your project.
+`install_skills()` is still the one to reach for on Databricks, or when you want
+the skill available to every project instead of one.
+
 ## Databricks
 
 Databricks works differently, and the default `install_skills()` adapts
