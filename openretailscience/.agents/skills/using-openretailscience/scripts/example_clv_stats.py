@@ -13,9 +13,9 @@ from openretailscience.experimental.clv import CLVStats
 rng = np.random.default_rng(42)
 
 # ~600 customers shopping across 2023. Each starts on a random day in the first ~200 days
-# and makes 1-11 purchases; one-time buyers arise naturally and get frequency 0. 600 rather than
-# fewer: the frequency/monetary correlation must stay inside repeat_buyers' independence check for
-# the sample drawn below too.
+# and makes 1-11 purchases; one-time buyers arise naturally and get frequency 0. Keep the population
+# large enough that the sampled subset below still has a stable frequency/monetary correlation:
+# repeat_buyers checks it against a fixed threshold that a small sample crosses on noise alone.
 n_customers = 600
 epoch = np.datetime64("2023-01-01")
 last_day_offset = 364  # 2023-12-31
@@ -84,5 +84,5 @@ covariate_cols = clv_covariates.covariate_cols
 
 # Feed to pymc-marketing (install separately): fit ParetoNBDModel on train.df and GammaGammaModel on
 # train_repeat_buyers, then score the full population with clv.df / repeat_buyers, passing time_unit
-# for finite-horizon CLV. For covariates, fit on clv_covariates (or a sample of it) and pass
-# covariate_cols as ParetoNBDModel's purchase/dropout covariate columns.
+# for finite-horizon CLV. For covariates, pass summary_covariates (or clv_covariates.sample(...).df)
+# as ParetoNBDModel's data and covariate_cols as its purchase/dropout covariate columns.

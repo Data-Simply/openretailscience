@@ -139,7 +139,8 @@ def test_clv_stats_sample_integration(transactions_table):
 
     The sampling key compiles to a different hash function per engine (``ORA_HASH``, ``CHECKSUM``,
     ``FARM_FINGERPRINT``, ``HASH``), and the ``frac`` path adds an ``ABS(MOD(...))``, so this guards
-    that selection stays valid SQL and stays stable across executions everywhere.
+    that selection stays valid SQL and stays stable across executions everywhere. Row counts and the
+    ``n`` > population case are covered locally; only the per-engine SQL needs a round trip.
 
     Args:
         transactions_table: Parameterized fixture providing the transactions table on each backend.
@@ -154,6 +155,15 @@ def test_clv_stats_sample_integration(transactions_table):
     assert sampled_ids <= all_customers
     # Same random_state, same customers -- what a re-rolled random() predicate would fail.
     assert set(clv.sample(n=_SAMPLE_CUSTOMERS).df[cols.customer_id]) == sampled_ids
-    assert set(clv.sample(n=_SUBSET_CUSTOMERS * 2).df[cols.customer_id]) == all_customers
-    # frac=1.0 exercises the modulo/abs predicate rather than the order-by-hash path.
+    # Not the lowest ids: a hash that compiled to a constant would still satisfy every assertion above,
+    # because the customer_id tiebreaker alone yields a stable subset.
+    assert sampled_ids != set(sorted(all_customers)[:_SAMPLE_CUSTOMERS])
+    # frac exercises the modulo/abs predicate rather than the order-by-hash path. A mid-range share
+    # must land strictly inside the population: `bucket < _SAMPLE_BUCKETS` alone is true of any value
+    # the predicate can produce, so frac=1.0 on its own would pass even on an engine selecting nothing.
+    half = set(clv.sample(frac=0.5).df[cols.customer_id])
+    assert set() < half < all_customers
     assert set(clv.sample(frac=1.0).df[cols.customer_id]) == all_customers
+    # A real share pins the predicate's selectivity, which frac=1.0 cannot -- `bucket < 1_000_000`
+    # holds for any bucket, so a dropped ABS() on a signed-hash engine would pass unnoticed.
+    assert 0 < len(clv.sample(frac=0.5).df) < _SUBSET_CUSTOMERS
