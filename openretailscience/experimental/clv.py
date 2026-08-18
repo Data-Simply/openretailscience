@@ -31,7 +31,7 @@ from __future__ import annotations
 import datetime
 import functools
 import warnings
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import ibis
 import pandas as pd
@@ -40,10 +40,16 @@ from openretailscience.core.validation import (
     ensure_columns,
     ensure_data_has_columns,
     ensure_ibis_table,
+    ensure_integer,
     ensure_period,
+    ensure_positive,
     ensure_tznaive_datetime,
+    ensure_unit_interval,
 )
 from openretailscience.options import ColumnHelper
+
+if TYPE_CHECKING:
+    from typing import Self
 
 
 def _coerce_to_date(value: str | datetime.date) -> datetime.date:
@@ -189,6 +195,9 @@ class CLVStats:
     #: assumes the two are independent, and a stronger correlation biases its spend estimates (0.10-0.15
     #: is the practical "weak enough" band in BTYD guidance).
     _MONETARY_FREQUENCY_CORR_WARN: ClassVar[float] = 0.15
+    #: Buckets the per-customer sampling hash is folded into, setting the resolution of ``frac``
+    #: (1e-6). Large enough that rounding never distorts a realistic sample share.
+    _SAMPLE_BUCKETS: ClassVar[int] = 1_000_000
     #: The base BTYD output columns (literal pymc-marketing names); anything else on the summary is a
     #: covariate attached via customer_attributes / one_hot_col. See ``covariate_cols``.
     _BASE_SUMMARY_COLUMNS: ClassVar[tuple[str, ...]] = ("customer_id", "frequency", "recency", "T", "monetary_value")
@@ -395,6 +404,64 @@ class CLVStats:
             "T",
             "monetary_value",
         )
+
+    def sample(self, *, n: int | None = None, frac: float | None = None, random_state: int = 42) -> Self:
+        """Draws a random sample of customers, as a new :class:`CLVStats` over the same summary.
+
+        For fitting a model on a tractable subset and scoring the full population: fit on
+        ``clv.sample(n=50_000)``, predict on ``clv.df``. Selection is a deterministic hash of
+        ``customer_id`` salted with ``random_state``, so the same arguments draw the same customers on
+        every execution (unlike a ``random()`` predicate, which re-rolls per execution and is unseeded
+        on several backends), while different ``random_state`` values draw independent samples.
+
+        Sampling the summary is equivalent to sampling customers before aggregating -- a customer's
+        summary row depends only on their own transactions -- so the one aggregate serves both the fit
+        and the scoring. Row order in the result is not meaningful.
+
+        Args:
+            n (int | None, optional): Number of customers to draw. Yields every customer if it exceeds
+                the population. Mutually exclusive with ``frac``. Defaults to ``None``.
+            frac (float | None, optional): Share of customers to draw, in (0, 1]. A per-customer
+                Bernoulli draw, so the count lands near ``frac`` * population rather than on it, and it
+                costs a single predicate instead of ``n``'s sort. Mutually exclusive with ``n``.
+                Defaults to ``None``.
+            random_state (int, optional): Seed for reproducible sampling. Defaults to 42.
+
+        Returns:
+            Self: A ``CLVStats`` over the sampled customers, with the same ``period`` and covariates.
+
+        Raises:
+            TypeError: If ``n`` or ``random_state`` is not an integer, or ``frac`` is not a number.
+            ValueError: If both or neither of ``n`` and ``frac`` are given, if ``n`` is not positive,
+                or if ``frac`` is outside (0, 1].
+        """
+        if (n is None) == (frac is None):
+            msg = "sample requires exactly one of n or frac."
+            raise ValueError(msg)
+        ensure_integer(random_state, "random_state")
+        # The id column is the literal "customer_id" here: __init__ renames it. Cast to string so the
+        # salt concatenates whatever the configured id type is.
+        key = (self.table["customer_id"].cast("string") + ibis.literal(f"::{random_state}")).hash()
+        if n is not None:
+            ensure_integer(n, "n")
+            ensure_positive(n, "n")
+            # Ordering by the hash is a pseudo-random permutation of customers, so the first n are a
+            # uniform sample; the backend runs it as a top-N. Order on the raw hash, not the bucketed
+            # value below, whose ties would make the cut ambiguous past _SAMPLE_BUCKETS customers.
+            sampled = self.table.order_by(key).limit(n)
+        else:
+            ensure_positive(frac, "frac")
+            ensure_unit_interval(frac, "frac")
+            # abs() after the modulo, not before: abs(-2**63) overflows int64.
+            bucket = (key % self._SAMPLE_BUCKETS).abs()
+            sampled = self.table.filter(bucket < int(frac * self._SAMPLE_BUCKETS))
+        # Bypass __init__: the summary is already built and validated, and the sample shares its state
+        # (period, table) wholesale. Constructing through __init__ would re-run the observation-window
+        # and attribute queries against a table that no longer holds transactions.
+        sample = object.__new__(type(self))
+        sample.period = self.period
+        sample.table = sampled
+        return sample
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:

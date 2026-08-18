@@ -12,9 +12,11 @@ from openretailscience.experimental.clv import CLVStats
 
 rng = np.random.default_rng(42)
 
-# ~200 customers shopping across 2023. Each starts on a random day in the first ~200 days
-# and makes 1-11 purchases; one-time buyers arise naturally and get frequency 0.
-n_customers = 200
+# ~600 customers shopping across 2023. Each starts on a random day in the first ~200 days
+# and makes 1-11 purchases; one-time buyers arise naturally and get frequency 0. Enough customers
+# that the sampling noise in the frequency/monetary correlation stays well inside repeat_buyers'
+# independence check, for the full summary and for the sample drawn below alike.
+n_customers = 600
 epoch = np.datetime64("2023-01-01")
 last_day_offset = 364  # 2023-12-31
 
@@ -54,6 +56,12 @@ summary_asof = CLVStats(transactions, period="week", observation_period_end="202
 # repeat_buyers (frequency > 0) is the GammaGammaModel input.
 repeat_buyers = clv.repeat_buyers
 
+# sample() draws a random customer subset as another CLVStats, for fitting a model on a tractable
+# population and scoring everyone from clv.df. Pass n (exact count) or frac (share), never both;
+# selection is a deterministic hash of customer_id salted with random_state (default 42).
+train = clv.sample(n=150)
+train_repeat_buyers = train.repeat_buyers  # the sample's GammaGammaModel input
+
 # pymc_time_unit ("W" here) is the time_unit for expected_customer_lifetime_value; its default "D"
 # silently misreads a weekly/monthly horizon.
 time_unit = clv.pymc_time_unit
@@ -77,4 +85,5 @@ covariate_cols = clv_covariates.covariate_cols
 
 # Feed to pymc-marketing (install separately): summary_covariates -> ParetoNBDModel, repeat_buyers ->
 # GammaGammaModel (pass time_unit for finite-horizon CLV), summary_covariates + covariate_cols ->
-# ParetoNBDModel covariates.
+# ParetoNBDModel covariates. To fit on a sample, fit on train.df / train_repeat_buyers and predict on
+# clv.df.

@@ -15,7 +15,8 @@ clv = CLVStats(data, period="week", observation_period_end=None)
 Reads `customer_id`, `transaction_date` (must be a date/datetime type), and `unit_spend`
 from the options system. Undated rows and returns-only days (net spend zero or less) are dropped
 (a customer left with none drops out). Read `.table` (Ibis) / `.df` (pandas); `.repeat_buyers` is the
-GammaGamma-ready subset (`frequency > 0`); `.covariate_cols`
+GammaGamma-ready subset (`frequency > 0`); `.sample()` draws a customer subset to fit on;
+`.covariate_cols`
 lists the attached customer_attributes / one-hot columns; `.pymc_time_unit` is the matching
  pymc-marketing `time_unit`. `help(CLVStats)` for full Args/Raises.
 
@@ -85,6 +86,37 @@ ParetoNBDModel(data=clv.df, model_config={
 Values are used verbatim in column names (same as ibis `pivot_wider`, no sanitisation).
 `GammaGammaModel` has **no** covariate support in pymc-marketing, so for spend-by-channel, fit a
 separate Gamma-Gamma per channel.
+
+## Fitting on a sample, scoring everyone
+
+`.sample()` returns **another `CLVStats`** over a random subset of customers, so the sample keeps
+`.df`, `.repeat_buyers`, `.covariate_cols`, and `.pymc_time_unit`. Fit on the sample when the full
+population is too large for MCMC; predict on the full `.df`.
+
+```python
+clv = CLVStats(data, period="week")
+train = clv.sample(n=50_000)  # or frac=0.1; exactly one of the two
+
+pareto = ParetoNBDModel(data=train.df)
+pareto.fit()
+gamma_gamma = GammaGammaModel(data=train.repeat_buyers)
+gamma_gamma.fit()
+
+everyone = pareto.expected_purchases(data=clv.df, future_t=52)  # score the full population
+```
+
+- `n` — exact number of customers; yields every customer if it exceeds the population (no error).
+  Costs a backend top-N sort.
+- `frac` — share in `(0, 1]`, drawn per customer, so the count lands *near* `frac` * population, not
+  on it. One pushed-down predicate, no sort.
+- `random_state` — defaults to `42`. Selection is a deterministic hash of `customer_id` salted with it,
+  so the same arguments draw the same customers on every execution and on re-execution of `.table`;
+  a different `random_state` draws an independent sample.
+
+Sampling the summary is equivalent to sampling customers before aggregating (a customer's row depends
+only on their own transactions), so one aggregate pass serves both the fit and the scoring, and a
+sampled row is byte-for-byte the row that customer has in the full `.df`. Row order in the result is
+not meaningful.
 
 ## Feeding pymc-marketing
 

@@ -110,6 +110,40 @@ gamma_gamma.fit()
     computes it with no month conversion and no `time_unit`.
 <!-- markdownlint-enable MD046 -->
 
+## Fitting on a sample, scoring everyone
+
+Pareto/NBD sampling is expensive on a large customer base, so a common workflow is to fit on a
+subset and predict on everyone. `clv.sample()` returns **another `CLVStats`** over a random subset
+of customers, so the sample keeps `.df`, `.repeat_buyers`, `.covariate_cols`, and `.pymc_time_unit`:
+
+```python
+clv = CLVStats(transactions, period="week")
+train = clv.sample(n=50_000)  # or frac=0.1 -- exactly one of the two
+
+pareto = ParetoNBDModel(data=train.df)
+pareto.fit()
+gamma_gamma = GammaGammaModel(data=train.repeat_buyers)
+gamma_gamma.fit()
+
+# Score the full population from the model fitted on the sample.
+expected_purchases = pareto.expected_purchases(data=clv.df, future_t=52)
+```
+
+`n` draws an exact number of customers, and yields every customer if it exceeds the population
+rather than raising. `frac` is a share in `(0, 1]` drawn independently per customer, so the row
+count lands *near* `frac` x population rather than exactly on it; it costs a single pushed-down
+predicate instead of `n`'s sort.
+
+Selection is a deterministic hash of `customer_id` salted with `random_state` (default `42`), not a
+`random()` predicate, so the same arguments draw the same customers on every execution and on every
+re-execution of `.table` — a re-rolled sample would silently change which customers a model was
+fitted on. A different `random_state` draws an independent sample.
+
+Sampling the summary is equivalent to sampling customers before aggregating, since a customer's
+summary row depends only on their own transactions. One aggregate pass therefore serves both the fit
+and the scoring, and a sampled row is exactly the row that customer has in the full `.df`. Row order
+in the result is not meaningful.
+
 ## Extra columns and covariates
 
 `customer_attributes` attaches a caller-supplied per-customer table (one row per `customer_id`) to the

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 cols = ColumnHelper()
 
 _SUBSET_CUSTOMERS = 25
+_SAMPLE_CUSTOMERS = 10
 
 
 def _subset(transactions_table: Table) -> Table:
@@ -131,3 +132,28 @@ def test_clv_stats_customer_attributes_and_one_hot_integration(transactions_tabl
         pd.testing.assert_series_equal(result[dummy], (max_store == value).astype("int8"), check_names=False)
     # A row flags at most one dummy (its max store); reference-level customers flag none.
     assert (result[store_dummies].sum(axis=1) <= 1).all()
+
+
+def test_clv_stats_sample_integration(transactions_table):
+    """CLVStats.sample draws a deterministic customer subset on each backend.
+
+    The sampling key compiles to a different hash function per engine (``ORA_HASH``, ``CHECKSUM``,
+    ``FARM_FINGERPRINT``, ``HASH``), and the ``frac`` path adds a portable ``ABS(MOD(...))``, so this
+    guards that selection stays valid SQL and stays stable across executions everywhere.
+
+    Args:
+        transactions_table: Parameterized fixture providing the transactions table on each backend.
+    """
+    clv = CLVStats(_subset(transactions_table), period="week")
+    all_customers = set(clv.df[cols.customer_id])
+
+    sampled = clv.sample(n=_SAMPLE_CUSTOMERS)
+    sampled_ids = set(sampled.df[cols.customer_id])
+
+    assert len(sampled.df) == _SAMPLE_CUSTOMERS
+    assert sampled_ids <= all_customers
+    # Same random_state, same customers: a re-executed random() predicate would not hold here.
+    assert set(clv.sample(n=_SAMPLE_CUSTOMERS).df[cols.customer_id]) == sampled_ids
+    assert set(clv.sample(n=_SUBSET_CUSTOMERS * 2).df[cols.customer_id]) == all_customers
+    # frac=1.0 exercises the modulo/abs predicate (rather than the order-by-hash path) portably.
+    assert set(clv.sample(frac=1.0).df[cols.customer_id]) == all_customers
