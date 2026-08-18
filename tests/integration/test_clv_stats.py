@@ -138,8 +138,8 @@ def test_clv_stats_sample_integration(transactions_table):
     """CLVStats.sample draws a deterministic customer subset on each backend.
 
     The sampling key compiles to a different hash function per engine (``ORA_HASH``, ``CHECKSUM``,
-    ``FARM_FINGERPRINT``, ``HASH``), and the ``frac`` path adds a portable ``ABS(MOD(...))``, so this
-    guards that selection stays valid SQL and stays stable across executions everywhere.
+    ``FARM_FINGERPRINT``, ``HASH``), and the ``frac`` path adds an ``ABS(MOD(...))``, so this guards
+    that selection stays valid SQL and stays stable across executions everywhere.
 
     Args:
         transactions_table: Parameterized fixture providing the transactions table on each backend.
@@ -152,8 +152,8 @@ def test_clv_stats_sample_integration(transactions_table):
 
     assert len(sampled.df) == _SAMPLE_CUSTOMERS
     assert sampled_ids <= all_customers
-    # Same random_state, same customers: a re-executed random() predicate would not hold here.
+    # Same random_state, same customers -- what a re-rolled random() predicate would fail.
     assert set(clv.sample(n=_SAMPLE_CUSTOMERS).df[cols.customer_id]) == sampled_ids
     assert set(clv.sample(n=_SUBSET_CUSTOMERS * 2).df[cols.customer_id]) == all_customers
-    # frac=1.0 exercises the modulo/abs predicate (rather than the order-by-hash path) portably.
+    # frac=1.0 exercises the modulo/abs predicate rather than the order-by-hash path.
     assert set(clv.sample(frac=1.0).df[cols.customer_id]) == all_customers

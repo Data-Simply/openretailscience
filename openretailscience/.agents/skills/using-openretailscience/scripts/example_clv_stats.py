@@ -13,9 +13,9 @@ from openretailscience.experimental.clv import CLVStats
 rng = np.random.default_rng(42)
 
 # ~600 customers shopping across 2023. Each starts on a random day in the first ~200 days
-# and makes 1-11 purchases; one-time buyers arise naturally and get frequency 0. Enough customers
-# that the sampling noise in the frequency/monetary correlation stays well inside repeat_buyers'
-# independence check, for the full summary and for the sample drawn below alike.
+# and makes 1-11 purchases; one-time buyers arise naturally and get frequency 0. 600 rather than
+# fewer: the frequency/monetary correlation must stay inside repeat_buyers' independence check for
+# the sample drawn below too.
 n_customers = 600
 epoch = np.datetime64("2023-01-01")
 last_day_offset = 364  # 2023-12-31
@@ -56,9 +56,8 @@ summary_asof = CLVStats(transactions, period="week", observation_period_end="202
 # repeat_buyers (frequency > 0) is the GammaGammaModel input.
 repeat_buyers = clv.repeat_buyers
 
-# sample() draws a random customer subset as another CLVStats, for fitting a model on a tractable
-# population and scoring everyone from clv.df. Pass n (exact count) or frac (share), never both;
-# selection is a deterministic hash of customer_id salted with random_state (default 42).
+# sample() draws a random customer subset as another CLVStats: fit on it, score everyone from clv.df.
+# Pass n (exact count) or frac (share), never both; the draw is deterministic given random_state.
 train = clv.sample(n=150)
 train_repeat_buyers = train.repeat_buyers  # the sample's GammaGammaModel input
 

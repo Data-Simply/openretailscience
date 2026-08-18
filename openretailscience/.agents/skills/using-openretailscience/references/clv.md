@@ -109,14 +109,13 @@ everyone = pareto.expected_purchases(data=clv.df, future_t=52)  # score the full
   Costs a backend top-N sort.
 - `frac` — share in `(0, 1]`, drawn per customer, so the count lands *near* `frac` * population, not
   on it. One pushed-down predicate, no sort.
-- `random_state` — defaults to `42`. Selection is a deterministic hash of `customer_id` salted with it,
-  so the same arguments draw the same customers on every execution and on re-execution of `.table`;
-  a different `random_state` draws an independent sample.
+- `random_state` — defaults to `42`. Customers are selected by a deterministic hash of `customer_id`
+  salted with it, so the same arguments always draw the same customers and a different `random_state`
+  draws an independent sample.
 
 Sampling the summary is equivalent to sampling customers before aggregating (a customer's row depends
 only on their own transactions), so one aggregate pass serves both the fit and the scoring, and a
-sampled row is byte-for-byte the row that customer has in the full `.df`. Row order in the result is
-not meaningful.
+sampled row is the row that customer has in the full `.df`. Row order is not meaningful.
 
 ## Feeding pymc-marketing
 

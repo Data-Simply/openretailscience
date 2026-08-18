@@ -720,24 +720,23 @@ class TestCLVStatsCustomerIdColumn:
                 CLVStats(self._txns("shopper_id"), period="day", customer_attributes=attributes)
 
 
-# Sampling behaviour (share drawn, unbiasedness) is only observable over a population, so the sampling
-# tests use a generated one rather than the hand-computed fixture above.
+# Share drawn and unbiasedness are only observable over a population, so these tests generate one
+# rather than reuse the hand-computed fixture above.
 SAMPLE_POPULATION = 1000
 SAMPLE_N = 250
 SAMPLE_FRAC = 0.25
-# frac is a per-customer Bernoulli draw, so the count varies around SAMPLE_FRAC * SAMPLE_POPULATION.
-# Five standard deviations keeps the bound independent of the backend's hash function while still
-# failing on a systematically wrong share.
+# frac draws per customer, so the count varies around the expectation. Five standard deviations keeps
+# the bound independent of the backend's hash while still failing on a systematically wrong share.
 _EXPECTED_DRAWN = SAMPLE_FRAC * SAMPLE_POPULATION
 _DRAWN_TOLERANCE = 5 * np.sqrt(SAMPLE_POPULATION * SAMPLE_FRAC * (1 - SAMPLE_FRAC))
-# Two independent SAMPLE_FRAC draws overlap in ~SAMPLE_FRAC of either one; a near-0 or near-1 share
-# would mean random_state is partitioning the population rather than re-drawing from it.
+# Two independent draws overlap in ~SAMPLE_FRAC of either one; a near-0 or near-1 share would mean
+# random_state partitions the population rather than re-drawing from it.
 _MIN_CROSS_SEED_OVERLAP = 0.10
 _MAX_CROSS_SEED_OVERLAP = 0.45
-# The population mean frequency is ~2.5 (1-6 purchase days per customer); a head-of-table sample
-# ordered by anything correlated with the id would drift further than this.
+# The population mean frequency is ~2.5; a sample skewed toward one end of the id range would drift
+# further than this.
 _UNBIASED_FREQUENCY_TOLERANCE = 0.15
-# A smaller population for tests that only need the sample's identity, not its distribution.
+# For tests that need only which customers were drawn, not the distribution of the draw.
 _SMALL_POPULATION = 200
 _SMALL_SAMPLE_N = 50
 
