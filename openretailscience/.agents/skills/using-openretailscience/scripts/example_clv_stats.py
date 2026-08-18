@@ -53,13 +53,13 @@ clv = CLVStats(transactions, period="week")
 # observation_period_end pins the window instead of defaulting to the latest transaction date.
 summary_asof = CLVStats(transactions, period="week", observation_period_end="2023-12-31").df
 
-# repeat_buyers (frequency > 0) is the GammaGammaModel input.
-repeat_buyers = clv.repeat_buyers
-
 # sample() draws a random customer subset as another CLVStats: fit on it, score everyone from clv.df.
 # Pass n (exact count) or frac (share), never both; the draw is deterministic given random_state.
 train = clv.sample(n=150)
-train_repeat_buyers = train.repeat_buyers  # the sample's GammaGammaModel input
+train_repeat_buyers = train.repeat_buyers  # frequency > 0: the GammaGammaModel fitting input
+
+# The same property over the full population: the frame fitted spend is scored on.
+repeat_buyers = clv.repeat_buyers
 
 # pymc_time_unit ("W" here) is the time_unit for expected_customer_lifetime_value; its default "D"
 # silently misreads a weekly/monthly horizon.
@@ -82,7 +82,7 @@ summary_covariates = clv_covariates.df
 # covariate_cols = the attached columns (one-hot dummies + stores_shopped) to pass as covariates.
 covariate_cols = clv_covariates.covariate_cols
 
-# Feed to pymc-marketing (install separately): summary_covariates -> ParetoNBDModel, repeat_buyers ->
-# GammaGammaModel (pass time_unit for finite-horizon CLV), summary_covariates + covariate_cols ->
-# ParetoNBDModel covariates. To fit on a sample, fit on train.df / train_repeat_buyers and predict on
-# clv.df.
+# Feed to pymc-marketing (install separately): fit ParetoNBDModel on train.df and GammaGammaModel on
+# train_repeat_buyers, then score the full population with clv.df / repeat_buyers, passing time_unit
+# for finite-horizon CLV. For covariates, fit on clv_covariates (or a sample of it) and pass
+# covariate_cols as ParetoNBDModel's purchase/dropout covariate columns.

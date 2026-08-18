@@ -79,17 +79,26 @@ print(clv.df.sort_values("customer_id").reset_index(drop=True))
 # 2          103          1      2.0  2.714286            80.0
 ```
 
-The summary feeds pymc-marketing directly (install it separately):
+The summary feeds pymc-marketing directly (install it separately). Fitting a Pareto/NBD on a large
+customer base is expensive, so the usual shape is to fit on a sample of customers and score all of
+them: `clv.sample()` returns **another `CLVStats`**, so the sample keeps `.df`, `.repeat_buyers`,
+`.covariate_cols`, and `.pymc_time_unit`.
 
 ```python
 from pymc_marketing.clv import ParetoNBDModel, GammaGammaModel
 
 clv = CLVStats(transactions, period="week", observation_period_end="2023-01-29")
-pareto = ParetoNBDModel(data=clv.df) # frequency, recency, T
+# Drop this line and fit on clv.df / clv.repeat_buyers when the whole base is tractable.
+train = clv.sample(n=50_000) # or frac=0.1 -- exactly one of the two
+
+pareto = ParetoNBDModel(data=train.df) # frequency, recency, T
 pareto.fit()
 
-gamma_gamma = GammaGammaModel(data=clv.repeat_buyers) # frequency > 0
+gamma_gamma = GammaGammaModel(data=train.repeat_buyers) # frequency > 0
 gamma_gamma.fit()
+
+# Score every customer from the models fitted on the sample.
+expected_purchases = pareto.expected_purchases(data=clv.df, future_t=52)
 ```
 
 <!-- markdownlint-disable MD046 -->
@@ -110,24 +119,7 @@ gamma_gamma.fit()
     computes it with no month conversion and no `time_unit`.
 <!-- markdownlint-enable MD046 -->
 
-## Fitting on a sample, scoring everyone
-
-Fitting a Pareto/NBD on a large customer base is expensive, so a common workflow is to fit on a
-subset and predict on everyone. `clv.sample()` returns **another `CLVStats`** over a random subset of
-customers, so the sample keeps `.df`, `.repeat_buyers`, `.covariate_cols`, and `.pymc_time_unit`:
-
-```python
-clv = CLVStats(transactions, period="week")
-train = clv.sample(n=50_000)  # or frac=0.1 -- exactly one of the two
-
-pareto = ParetoNBDModel(data=train.df)
-pareto.fit()
-gamma_gamma = GammaGammaModel(data=train.repeat_buyers)
-gamma_gamma.fit()
-
-# Score the full population from the model fitted on the sample.
-expected_purchases = pareto.expected_purchases(data=clv.df, future_t=52)
-```
+## Sampling customers
 
 `n` draws an exact number of customers, and yields every customer if it exceeds the population
 rather than raising. `frac` is a share in `(0, 1]` drawn independently per customer, so the row count

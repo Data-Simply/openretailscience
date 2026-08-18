@@ -87,49 +87,26 @@ Values are used verbatim in column names (same as ibis `pivot_wider`, no sanitis
 `GammaGammaModel` has **no** covariate support in pymc-marketing, so for spend-by-channel, fit a
 separate Gamma-Gamma per channel.
 
-## Fitting on a sample, scoring everyone
-
-`.sample()` returns **another `CLVStats`** over a random subset of customers, so the sample keeps
-`.df`, `.repeat_buyers`, `.covariate_cols`, and `.pymc_time_unit`. Fit on the sample when the full
-population is too large for MCMC; predict on the full `.df`.
-
-```python
-clv = CLVStats(data, period="week")
-train = clv.sample(n=50_000)  # or frac=0.1; exactly one of the two
-
-pareto = ParetoNBDModel(data=train.df)
-pareto.fit()
-gamma_gamma = GammaGammaModel(data=train.repeat_buyers)
-gamma_gamma.fit()
-
-everyone = pareto.expected_purchases(data=clv.df, future_t=52)  # score the full population
-```
-
-- `n` — exact number of customers; yields every customer if it exceeds the population (no error).
-  Costs a backend top-N sort.
-- `frac` — share in `(0, 1]`, drawn per customer, so the count lands *near* `frac` * population, not
-  on it. One pushed-down predicate, no sort.
-- `random_state` — defaults to `42`. Customers are selected by a deterministic hash of `customer_id`
-  salted with it, so the same arguments always draw the same customers and a different `random_state`
-  draws an independent sample.
-
-Sampling the summary is equivalent to sampling customers before aggregating (a customer's row depends
-only on their own transactions), so one aggregate pass serves both the fit and the scoring, and a
-sampled row is the row that customer has in the full `.df`. Row order is not meaningful.
-
 ## Feeding pymc-marketing
+
+Fit on a sample of customers, score all of them. `.sample()` returns **another `CLVStats`**, so the
+sample keeps `.df`, `.repeat_buyers`, `.covariate_cols`, and `.pymc_time_unit`.
 
 ```python
 from openretailscience.experimental.clv import CLVStats
 from pymc_marketing.clv import ParetoNBDModel, GammaGammaModel
 
 clv = CLVStats(data)
+# Drop this line and fit on clv.df / clv.repeat_buyers when the full population is tractable.
+train = clv.sample(n=50_000) # or frac=0.1; exactly one of the two
 
-pareto = ParetoNBDModel(data=clv.df) # frequency, recency, T
+pareto = ParetoNBDModel(data=train.df) # frequency, recency, T
 pareto.fit()
 
-gamma_gamma = GammaGammaModel(data=clv.repeat_buyers) # frequency > 0
+gamma_gamma = GammaGammaModel(data=train.repeat_buyers) # frequency > 0
 gamma_gamma.fit()
+
+everyone = pareto.expected_purchases(data=clv.df, future_t=52) # score the full population
 ```
 
 **Finite-horizon CLV: pass `time_unit`, or it fails silently.**
@@ -147,6 +124,20 @@ Want an undiscounted CLV over a fixed horizon set directly in the model's units 
 next 52 weeks)?
 `pareto.expected_purchases(data=clv.df, future_t=52) * gamma_gamma.expected_customer_spend(data=clv.repeat_buyers)`
 computes it with no month conversion and no `time_unit`.
+
+### sample() arguments
+
+- `n` — exact number of customers; yields every customer if it exceeds the population (no error).
+  Costs a backend top-N sort.
+- `frac` — share in `(0, 1]`, drawn per customer, so the count lands *near* `frac` * population, not
+  on it. One pushed-down predicate, no sort.
+- `random_state` — defaults to `42`. Customers are selected by a deterministic hash of `customer_id`
+  salted with it, so the same arguments always draw the same customers and a different `random_state`
+  draws an independent sample.
+
+Sampling the summary is equivalent to sampling customers before aggregating (a customer's row depends
+only on their own transactions), so one aggregate pass serves both the fit and the scoring, and a
+sampled row is the row that customer has in the full `.df`. Row order is not meaningful.
 
 ## Caveat: truncated history
 
