@@ -708,3 +708,76 @@ class TestApplyLegend:
             assert anchor.y0 == pytest.approx(0.0)
             assert anchor.x1 == pytest.approx(1.0)
             assert anchor.y1 == pytest.approx(1.0)
+
+
+class TestOutsideLegendFit:
+    """An outside legend is anchored to the axes top and grows downward.
+
+    More entries than the plot band can hold pushed the stack through the chrome's
+    source line and, once the overflow exceeded the bottom margin, off the figure.
+    """
+
+    SOURCE_LINE = "Traffic sensor data (Apr 2024 - Jun 2024), excludes days with sensor downtime over two hours"
+
+    @pytest.fixture
+    def store_footfall(self) -> pd.DataFrame:
+        """Monthly footfall for fourteen stores: more series than a 3.6in plot band holds."""
+        months = pd.date_range("2024-01-01", periods=12, freq="MS")
+        return pd.DataFrame(
+            {f"Store {store:02d}": [1000 + store * 50 + month * 10 for month in range(12)] for store in range(1, 15)},
+            index=months,
+        )
+
+    def _draw(self, df: pd.DataFrame, figsize: tuple[float, float]) -> tuple[plt.Figure, plt.Axes]:
+        """Render ``df`` as an outside-legend line chart at ``figsize`` and draw it once."""
+        fig, ax = plt.subplots(figsize=figsize)
+        line.plot(
+            df,
+            value_col=list(df.columns),
+            title="Footfall by store",
+            y_label="Visits",
+            source_text=self.SOURCE_LINE,
+            move_legend_outside=True,
+            ax=ax,
+        )
+        fig.canvas.draw()
+        return fig, ax
+
+    @staticmethod
+    def _source_box(fig: plt.Figure):
+        """Measure the source artist, found by prefix since chrome bakes its wrap in as newlines."""
+        artist = next(t for t in fig.texts if t.get_text().startswith("Traffic sensor data"))
+        return artist.get_window_extent(renderer=fig.canvas.get_renderer())
+
+    @staticmethod
+    def _column_count(ax: plt.Axes) -> int:
+        """Count the legend's rendered columns as the distinct x-positions of its entries."""
+        renderer = ax.get_figure().canvas.get_renderer()
+        return len({round(t.get_window_extent(renderer=renderer).x0) for t in ax.get_legend().get_texts()})
+
+    def test_tall_outside_legend_clears_the_source_line(self, store_footfall):
+        """The legend must not render on top of the source text."""
+        fig, ax = self._draw(store_footfall, (6.4, 3.6))
+        legend_box = ax.get_legend().get_window_extent(renderer=fig.canvas.get_renderer())
+
+        assert not legend_box.overlaps(self._source_box(fig))
+
+    def test_tall_outside_legend_keeps_every_entry_on_the_figure(self, store_footfall):
+        """Wrapping preserves all entries and keeps them inside the figure, not off the bottom."""
+        fig, ax = self._draw(store_footfall, (6.4, 3.6))
+        legend_box = ax.get_legend().get_window_extent(renderer=fig.canvas.get_renderer())
+
+        assert legend_box.y0 >= 0
+        assert len(ax.get_legend().get_texts()) == len(store_footfall.columns)
+
+    def test_short_outside_legend_keeps_one_column(self, store_footfall):
+        """A legend that already fits the plot band is left in a single column."""
+        _, ax = self._draw(store_footfall[["Store 01", "Store 02"]], (6.4, 3.6))
+
+        assert self._column_count(ax) == 1
+
+    def test_tall_outside_legend_wraps_into_columns(self, store_footfall):
+        """The fourteen-entry legend is what buys the vertical room: it wraps rather than overflowing."""
+        _, ax = self._draw(store_footfall, (6.4, 3.6))
+
+        assert self._column_count(ax) > 1
