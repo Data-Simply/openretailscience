@@ -161,9 +161,5 @@ def test_clv_stats_sample_integration(transactions_table):
     # frac exercises the modulo/abs predicate rather than the order-by-hash path. A mid-range share
     # must land strictly inside the population: `bucket < _SAMPLE_BUCKETS` alone is true of any value
     # the predicate can produce, so frac=1.0 on its own would pass even on an engine selecting nothing.
-    half = set(clv.sample(frac=0.5).df[cols.customer_id])
-    assert set() < half < all_customers
+    assert set() < set(clv.sample(frac=0.5).df[cols.customer_id]) < all_customers
     assert set(clv.sample(frac=1.0).df[cols.customer_id]) == all_customers
-    # A real share pins the predicate's selectivity, which frac=1.0 cannot -- `bucket < 1_000_000`
-    # holds for any bucket, so a dropped ABS() on a signed-hash engine would pass unnoticed.
-    assert 0 < len(clv.sample(frac=0.5).df) < _SUBSET_CUSTOMERS

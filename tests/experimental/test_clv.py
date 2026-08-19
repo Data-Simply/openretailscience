@@ -106,6 +106,18 @@ class TestCLVStats:
         with pytest.raises(TypeError, match="date or datetime"):
             CLVStats(data)
 
+    def test_empty_data_raises_clear_error(self):
+        """Empty transaction data raises a clear ValueError, not a misleading date-coercion TypeError."""
+        empty = pd.DataFrame(
+            {
+                cols.customer_id: pd.Series([], dtype="int64"),
+                cols.transaction_date: pd.Series([], dtype="datetime64[ns]"),
+                cols.unit_spend: pd.Series([], dtype="float64"),
+            },
+        )
+        with pytest.raises(ValueError, match="no transactions"):
+            CLVStats(empty)
+
     def test_null_transaction_date_rows_are_dropped(self):
         """Rows with a NULL transaction_date are dropped.
 
@@ -171,16 +183,32 @@ class TestCLVStats:
         )
         assert_frame_equal(result, expected)
 
-    @pytest.mark.parametrize("bad_period", ["fortnight", "year", "quarter"])
-    def test_invalid_period_raises(self, bad_period):
-        """Periods outside day/week/month are rejected (year/quarter are real words but unsupported here)."""
-        with pytest.raises(ValueError, match="period"):
-            CLVStats(_transactions(), period=bad_period)
-
-    def test_observation_period_end_before_last_purchase_raises(self):
-        """An observation_period_end earlier than a customer's last purchase is rejected."""
-        with pytest.raises(ValueError, match="observation_period_end"):
-            CLVStats(_transactions(), observation_period_end="2023-01-10")
+    @pytest.mark.parametrize(
+        ("kwargs", "error", "match"),
+        [
+            # year/quarter are real period words, but unsupported here.
+            pytest.param({"period": "fortnight"}, ValueError, "period", id="period-not-a-word"),
+            pytest.param({"period": "year"}, ValueError, "period", id="period-year"),
+            pytest.param({"period": "quarter"}, ValueError, "period", id="period-quarter"),
+            # An end before a customer's last purchase would give them a negative age.
+            pytest.param(
+                {"observation_period_end": "2023-01-10"},
+                ValueError,
+                "observation_period_end",
+                id="obs-end-before-last-purchase",
+            ),
+            pytest.param(
+                {"observation_period_end": 20230129},
+                TypeError,
+                "observation_period_end",
+                id="obs-end-not-a-date",
+            ),
+        ],
+    )
+    def test_invalid_construction_argument_raises(self, kwargs, error, match):
+        """A period or observation_period_end outside its contract is rejected at construction."""
+        with pytest.raises(error, match=match):
+            CLVStats(_transactions(), **kwargs)
 
     def test_observation_period_end_equal_to_latest_is_allowed(self):
         """An observation_period_end exactly on the latest transaction is accepted (guard is strict <)."""
@@ -191,11 +219,6 @@ class TestCLVStats:
             explicit.sort_values(cols.customer_id).reset_index(drop=True),
             default.sort_values(cols.customer_id).reset_index(drop=True),
         )
-
-    def test_observation_period_end_invalid_type_raises(self):
-        """A non-date observation_period_end (e.g. an int) is rejected with TypeError."""
-        with pytest.raises(TypeError, match="observation_period_end"):
-            CLVStats(_transactions(), observation_period_end=20230129)
 
     def test_repeat_buyers_keeps_only_repeat_buyers(self):
         """repeat_buyers is the GammaGamma-ready subset: the repeat buyers (frequency > 0).
@@ -572,18 +595,6 @@ class TestCLVStatsCustomerAttributes:
         )
         assert_frame_equal(dummies, expected_dummies)
 
-    def test_empty_data_raises_clear_error(self):
-        """Empty transaction data raises a clear ValueError, not a misleading date-coercion TypeError."""
-        empty = pd.DataFrame(
-            {
-                cols.customer_id: pd.Series([], dtype="int64"),
-                cols.transaction_date: pd.Series([], dtype="datetime64[ns]"),
-                cols.unit_spend: pd.Series([], dtype="float64"),
-            },
-        )
-        with pytest.raises(ValueError, match="no transactions"):
-            CLVStats(empty)
-
     def test_duplicate_one_hot_col_is_deduplicated(self):
         """A repeated one_hot_col is de-duplicated, not encoded twice (which would drop-then-not-find it)."""
         transactions = pd.DataFrame(
@@ -837,8 +848,8 @@ class TestCLVStatsSample:
         assert set(repeat_buyers["customer_id"]) < set(clv.repeat_buyers["customer_id"])
         assert_frame_equal(repeat_buyers, sample.df[sample.df["frequency"] > 0].reset_index(drop=True))
 
-    def test_sample_keeps_covariate_columns(self):
-        """Covariates attached to the full summary survive into the sample, one-hot dummies included."""
+    def test_sample_keeps_each_customers_covariate_values(self):
+        """Covariates attached to the full summary reach the sample unchanged, one-hot dummies included."""
         transactions = _many_customers(_SMALL_POPULATION)
         customer_ids = transactions[cols.customer_id].drop_duplicates().to_numpy()
         attributes = pd.DataFrame(
