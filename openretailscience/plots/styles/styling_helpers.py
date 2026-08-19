@@ -893,12 +893,10 @@ def _fit_outside_legend(ax: Axes, title: str | None) -> None:
     height, capped at ``_MAX_OUTSIDE_LEGEND_WIDTH_FRAC`` of the figure width so widening the
     legend never starves the axes. One that cannot fit within the cap is left as it is.
 
-    Runs after chrome, which sets the final axes height; the chrome reflow is repeated so
-    ``tight_layout`` reserves the widened legend's slot.
+    Runs after chrome, which sets both the final axes height and ``_ors_chrome_rect``; the
+    chrome reflow is repeated so ``tight_layout`` reserves the widened legend's slot.
     """
     legend = ax.get_legend()
-    if legend is None:
-        return
     fig = ax.figure
     renderer = _active_renderer(fig)
     axes_height = ax.get_window_extent(renderer=renderer).height
@@ -917,9 +915,8 @@ def _fit_outside_legend(ax: Axes, title: str | None) -> None:
     if ncols == 1:
         return
 
-    chrome_rect = getattr(fig, "_ors_chrome_rect", None)
-    if chrome_rect is not None:
-        _reflow_axes(fig, top=chrome_rect[0], bottom=chrome_rect[1])
+    chrome_top, chrome_bottom = fig._ors_chrome_rect
+    _reflow_axes(fig, top=chrome_top, bottom=chrome_bottom)
 
 
 def apply_legend(
