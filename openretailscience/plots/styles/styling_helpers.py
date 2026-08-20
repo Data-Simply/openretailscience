@@ -914,6 +914,8 @@ def _fit_outside_legend(ax: Axes, title: str | None) -> None:
     if ncols == 1:
         return
 
+    # Unlike the other callers, this one ignores the return: the same rect already reflowed
+    # successfully inside apply_chart_chrome earlier this call, so it cannot fail here.
     chrome_top, chrome_bottom = fig._ors_chrome_rect
     _reflow_axes(fig, top=chrome_top, bottom=chrome_bottom)
 
