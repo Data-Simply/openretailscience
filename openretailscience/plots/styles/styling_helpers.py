@@ -897,17 +897,20 @@ def _fit_outside_legend(ax: Axes, title: str | None) -> None:
     fig = ax.figure
     renderer = _active_renderer(fig)
     axes_height = ax.get_window_extent(renderer=renderer).height
-    # An under-count: the first column carries the legend's padding, so later ones cost less.
-    one_column_width = legend.get_window_extent(renderer=renderer).width
-    max_cols = max(int(_MAX_OUTSIDE_LEGEND_WIDTH_FRAC * fig.bbox.width / one_column_width), 1)
+    width_cap = _MAX_OUTSIDE_LEGEND_WIDTH_FRAC * fig.bbox.width
     handles = list(legend.legend_handles)
     labels = [text.get_text() for text in legend.get_texts()]
 
+    # Each candidate is measured rather than extrapolated from the single-column width: a column
+    # can cost more than the first one (its labels may be wider), so an estimate overshoots the cap.
     ncols = 1
-    while legend.get_window_extent(renderer=renderer).height > axes_height and ncols < max_cols:
-        ncols += 1
-        legend = _build_outside_legend(ax, handles, labels, ncols)
-        _style_legend(legend, title)
+    while legend.get_window_extent(renderer=renderer).height > axes_height and ncols < len(handles):
+        candidate = _build_outside_legend(ax, handles, labels, ncols + 1)
+        _style_legend(candidate, title)
+        if candidate.get_window_extent(renderer=renderer).width > width_cap:
+            _style_legend(_build_outside_legend(ax, handles, labels, ncols), title)
+            break
+        ncols, legend = ncols + 1, candidate
     if ncols == 1:
         return
 

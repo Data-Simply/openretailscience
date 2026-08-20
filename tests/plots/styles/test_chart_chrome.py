@@ -13,6 +13,7 @@ from openretailscience.options import PlotStyleHelper, get_option, option_contex
 from openretailscience.plots import heatmap, line
 from openretailscience.plots.styles.styling_helpers import (
     _CHROME_TAB_WIDTH_IN,
+    _MAX_OUTSIDE_LEGEND_WIDTH_FRAC,
     _CHROME_TOP_LABEL_HEADROOM_FACTOR,
     apply_chart_chrome,
     apply_legend,
@@ -782,3 +783,20 @@ class TestOutsideLegendFit:
         _, ax = self._draw(store_footfall, (6.4, 3.6))
 
         assert self._column_count(ax) > 1
+
+    def test_wrapped_legend_never_outgrows_the_width_cap(self):
+        """Columns stop before the legend claims more than its share, leaving the axes the rest.
+
+        Twenty-four entries at this size are the case that overshot when the column budget was
+        extrapolated from the single-column width instead of measuring each candidate.
+        """
+        months = pd.date_range("2024-01-01", periods=12, freq="MS")
+        many_stores = pd.DataFrame(
+            {f"Store {store:02d}": [1000 + store * 50 + month * 10 for month in range(12)] for store in range(1, 25)},
+            index=months,
+        )
+        fig, ax = self._draw(many_stores, (7.0, 3.2))
+        legend_box = ax.get_legend().get_window_extent(renderer=fig.canvas.get_renderer())
+
+        assert self._column_count(ax) > 1
+        assert legend_box.width / fig.bbox.width <= _MAX_OUTSIDE_LEGEND_WIDTH_FRAC
