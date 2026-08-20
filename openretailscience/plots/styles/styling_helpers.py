@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from matplotlib.artist import Artist
     from matplotlib.axes import Axes
     from matplotlib.backend_bases import RendererBase
+    from matplotlib.container import Container
     from matplotlib.figure import Figure
     from matplotlib.legend import Legend
     from matplotlib.text import Text
@@ -856,7 +857,7 @@ def apply_ticks(ax: Axes) -> None:
     _hide_zero_value_ticks(ax)
 
 
-def _build_outside_legend(ax: Axes, handles: list[Artist], labels: list[str], ncols: int) -> Legend:
+def _build_outside_legend(ax: Axes, handles: list[Artist | Container], labels: list[str], ncols: int) -> Legend:
     """Build the legend anchored outside the axes, spread over ``ncols`` columns."""
     style = PlotStyleHelper()
     return ax.legend(
@@ -901,21 +902,21 @@ def _fit_outside_legend(ax: Axes, title: str | None) -> None:
     handles = list(legend.legend_handles)
     labels = [text.get_text() for text in legend.get_texts()]
 
-    # Each candidate is measured rather than extrapolated from the single-column width: a column
-    # can cost more than the first one (its labels may be wider), so an estimate overshoots the cap.
+    # Every candidate is measured: a column can cost more width than the one before it (its
+    # labels may be wider), so a budget estimated from the first column's width overshoots the cap.
     ncols = 1
-    while legend.get_window_extent(renderer=renderer).height > axes_height and ncols < len(handles):
+    height = legend.get_window_extent(renderer=renderer).height
+    while height > axes_height and ncols < len(handles):
         candidate = _build_outside_legend(ax, handles, labels, ncols + 1)
         _style_legend(candidate, title)
-        if candidate.get_window_extent(renderer=renderer).width > width_cap:
+        candidate_box = candidate.get_window_extent(renderer=renderer)
+        if candidate_box.width > width_cap:
             _style_legend(_build_outside_legend(ax, handles, labels, ncols), title)
             break
-        ncols, legend = ncols + 1, candidate
+        ncols, height = ncols + 1, candidate_box.height
     if ncols == 1:
         return
 
-    # Unlike the other callers, this one ignores the return: the same rect already reflowed
-    # successfully inside apply_chart_chrome earlier this call, so it cannot fail here.
     chrome_top, chrome_bottom = fig._ors_chrome_rect
     _reflow_axes(fig, top=chrome_top, bottom=chrome_bottom)
 
