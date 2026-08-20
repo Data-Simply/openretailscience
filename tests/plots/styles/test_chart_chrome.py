@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 from matplotlib.colors import to_hex
+from matplotlib.transforms import Bbox
 
 from openretailscience.options import PlotStyleHelper, get_option, option_context
 from openretailscience.plots import heatmap, line
@@ -711,10 +712,10 @@ class TestApplyLegend:
 
 
 class TestOutsideLegendFit:
-    """An outside legend is anchored to the axes top and grows downward.
+    """An outside legend stays beside the plot however many entries it carries.
 
-    More entries than the plot band can hold pushed the stack through the chrome's
-    source line and, once the overflow exceeded the bottom margin, off the figure.
+    It is anchored to the axes top and grows downward, so without a column wrap it
+    runs through the chrome's source line and off the bottom of the figure.
     """
 
     SOURCE_LINE = "Traffic sensor data (Apr 2024 - Jun 2024), excludes days with sensor downtime over two hours"
@@ -744,8 +745,8 @@ class TestOutsideLegendFit:
         return fig, ax
 
     @staticmethod
-    def _source_box(fig: plt.Figure):
-        """Measure the source artist, found by prefix since chrome bakes its wrap in as newlines."""
+    def _source_box(fig: plt.Figure) -> Bbox:
+        """Measure the source artist, matched by prefix since chrome bakes its wrap in as newlines."""
         artist = next(t for t in fig.texts if t.get_text().startswith("Traffic sensor data"))
         return artist.get_window_extent(renderer=fig.canvas.get_renderer())
 
@@ -763,7 +764,7 @@ class TestOutsideLegendFit:
         assert not legend_box.overlaps(self._source_box(fig))
 
     def test_tall_outside_legend_keeps_every_entry_on_the_figure(self, store_footfall):
-        """Wrapping preserves all entries and keeps them inside the figure, not off the bottom."""
+        """Wrapping keeps every entry, and keeps them all on the canvas."""
         fig, ax = self._draw(store_footfall, (6.4, 3.6))
         legend_box = ax.get_legend().get_window_extent(renderer=fig.canvas.get_renderer())
 
@@ -777,7 +778,7 @@ class TestOutsideLegendFit:
         assert self._column_count(ax) == 1
 
     def test_tall_outside_legend_wraps_into_columns(self, store_footfall):
-        """The fourteen-entry legend is what buys the vertical room: it wraps rather than overflowing."""
+        """A legend taller than the plot band buys its vertical room by wrapping into columns."""
         _, ax = self._draw(store_footfall, (6.4, 3.6))
 
         assert self._column_count(ax) > 1

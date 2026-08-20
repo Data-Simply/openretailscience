@@ -11,10 +11,9 @@ from openretailscience.plots import time, period_on_period, broken_timeline, pri
 
 Most `plot()` functions share these chrome keywords: `title`, `eyebrow`,
 `subtitle`, `source_text`, `x_label`, `y_label`, `ax`, `legend_title`,
-`move_legend_outside`. An outside legend taller than the plot area wraps into
-columns automatically, up to half the figure width; more series than that still
-overflow, so prefer a taller figure or `legend_style="end_of_line"` there. Pass
-`ax=` to draw onto one axes you manage. The chrome
+`move_legend_outside`. An outside legend too tall for the plot wraps into columns,
+up to half the figure width; past that prefer a taller figure or
+`legend_style="end_of_line"`. Pass `ax=` to draw onto one axes you manage. The chrome
 (title/eyebrow/subtitle/source) is figure-level (`fig.text` plus
 `fig.subplots_adjust`), so it does not compose with a `plt.subplots` grid: give
 each chart its own figure rather than tiling several into one. Only the
