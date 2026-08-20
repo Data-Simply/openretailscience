@@ -7,12 +7,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 from matplotlib.colors import to_hex
+from matplotlib.transforms import Bbox
 
 from openretailscience.options import PlotStyleHelper, get_option, option_context
 from openretailscience.plots import heatmap, line
 from openretailscience.plots.styles.styling_helpers import (
     _CHROME_TAB_WIDTH_IN,
     _CHROME_TOP_LABEL_HEADROOM_FACTOR,
+    _MAX_OUTSIDE_LEGEND_WIDTH_FRAC,
     apply_chart_chrome,
     apply_legend,
     standard_graph_styles,
@@ -130,6 +132,18 @@ def _topmost_axes_content_fig_y(*, labeltop: bool) -> float:
     topmost_fig = max([spine_top_fig, *top_label_tops_fig])
     plt.close(fig)
     return topmost_fig
+
+
+def _store_footfall(store_count: int) -> pd.DataFrame:
+    """Monthly footfall over a year for ``store_count`` stores, one labelled series each."""
+    months = pd.date_range("2024-01-01", periods=12, freq="MS")
+    return pd.DataFrame(
+        {
+            f"Store {store:02d}": [1000 + store * 50 + month * 10 for month in range(12)]
+            for store in range(1, store_count + 1)
+        },
+        index=months,
+    )
 
 
 class TestApplyChartChrome:
@@ -708,3 +722,84 @@ class TestApplyLegend:
             assert anchor.y0 == pytest.approx(0.0)
             assert anchor.x1 == pytest.approx(1.0)
             assert anchor.y1 == pytest.approx(1.0)
+
+
+class TestOutsideLegendFit:
+    """An outside legend stays beside the plot however many entries it carries.
+
+    It is anchored to the axes top and grows downward, so without a column wrap it
+    runs through the chrome's source line and off the bottom of the figure.
+    """
+
+    SOURCE_LINE = "Traffic sensor data (Apr 2024 - Jun 2024), excludes days with sensor downtime over two hours"
+    FIGSIZE = (6.4, 3.6)
+
+    @pytest.fixture
+    def store_footfall(self) -> pd.DataFrame:
+        """Fourteen stores: more series than the 3.6in plot band holds in one column."""
+        return _store_footfall(14)
+
+    def _draw(self, df: pd.DataFrame, figsize: tuple[float, float] | None = None) -> tuple[plt.Figure, plt.Axes]:
+        """Render ``df`` as an outside-legend line chart and draw it once."""
+        fig, ax = plt.subplots(figsize=self.FIGSIZE if figsize is None else figsize)
+        line.plot(
+            df,
+            value_col=list(df.columns),
+            title="Footfall by store",
+            y_label="Visits",
+            source_text=self.SOURCE_LINE,
+            move_legend_outside=True,
+            ax=ax,
+        )
+        fig.canvas.draw()
+        return fig, ax
+
+    def _source_box(self, fig: plt.Figure) -> Bbox:
+        """Measure the source artist, un-baking the newlines chrome wraps into it."""
+        artist = next(t for t in fig.texts if t.get_text().replace("\n", " ") == self.SOURCE_LINE)
+        return artist.get_window_extent(renderer=fig.canvas.get_renderer())
+
+    @staticmethod
+    def _legend_box(ax: plt.Axes) -> Bbox:
+        """Measure the axes' rendered legend."""
+        return ax.get_legend().get_window_extent(renderer=ax.get_figure().canvas.get_renderer())
+
+    @staticmethod
+    def _column_count(ax: plt.Axes) -> int:
+        """Count the legend's rendered columns as the distinct x-positions of its entries."""
+        renderer = ax.get_figure().canvas.get_renderer()
+        return len({round(t.get_window_extent(renderer=renderer).x0) for t in ax.get_legend().get_texts()})
+
+    def test_tall_outside_legend_clears_the_source_line(self, store_footfall):
+        """The legend must not render on top of the source text."""
+        fig, ax = self._draw(store_footfall)
+
+        assert not self._legend_box(ax).overlaps(self._source_box(fig))
+
+    def test_tall_outside_legend_keeps_every_entry_on_the_figure(self, store_footfall):
+        """Wrapping keeps every entry, and keeps them all on the canvas.
+
+        The right-edge bound is what pins the reflow that follows the wrap: widening the legend
+        without re-reserving its slot pushes a whole column past the figure, where it is clipped.
+        """
+        fig, ax = self._draw(store_footfall)
+        legend_box = self._legend_box(ax)
+
+        assert legend_box.y0 >= 0
+        assert legend_box.x1 <= fig.bbox.width
+        assert len(ax.get_legend().get_texts()) == len(store_footfall.columns)
+
+    @pytest.mark.parametrize(
+        ("store_count", "figsize", "expected_columns"),
+        [(2, (6.4, 3.6), 1), (14, (6.4, 3.6), 2), (24, (7.0, 3.2), 2)],
+    )
+    def test_outside_legend_wraps_into_columns_within_the_width_cap(self, store_count, figsize, expected_columns):
+        """A legend that fits the plot band stays single-column; a taller one wraps, but only up to the cap.
+
+        The twenty-four-entry row is held to two columns by the cap: its third column is wider
+        than the first, so the legend would claim over half the figure.
+        """
+        fig, ax = self._draw(_store_footfall(store_count), figsize)
+
+        assert self._column_count(ax) == expected_columns
+        assert self._legend_box(ax).width / fig.bbox.width <= _MAX_OUTSIDE_LEGEND_WIDTH_FRAC
