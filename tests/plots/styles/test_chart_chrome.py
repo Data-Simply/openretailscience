@@ -134,6 +134,18 @@ def _topmost_axes_content_fig_y(*, labeltop: bool) -> float:
     return topmost_fig
 
 
+def _store_footfall(store_count: int) -> pd.DataFrame:
+    """Monthly footfall over a year for ``store_count`` stores, one labelled series each."""
+    months = pd.date_range("2024-01-01", periods=12, freq="MS")
+    return pd.DataFrame(
+        {
+            f"Store {store:02d}": [1000 + store * 50 + month * 10 for month in range(12)]
+            for store in range(1, store_count + 1)
+        },
+        index=months,
+    )
+
+
 class TestApplyChartChrome:
     """Verify the chrome layout engine renders only the present elements."""
 
@@ -720,19 +732,16 @@ class TestOutsideLegendFit:
     """
 
     SOURCE_LINE = "Traffic sensor data (Apr 2024 - Jun 2024), excludes days with sensor downtime over two hours"
+    FIGSIZE = (6.4, 3.6)
 
     @pytest.fixture
     def store_footfall(self) -> pd.DataFrame:
-        """Monthly footfall for fourteen stores: more series than a 3.6in plot band holds."""
-        months = pd.date_range("2024-01-01", periods=12, freq="MS")
-        return pd.DataFrame(
-            {f"Store {store:02d}": [1000 + store * 50 + month * 10 for month in range(12)] for store in range(1, 15)},
-            index=months,
-        )
+        """Fourteen stores: more series than the 3.6in plot band holds in one column."""
+        return _store_footfall(14)
 
-    def _draw(self, df: pd.DataFrame, figsize: tuple[float, float]) -> tuple[plt.Figure, plt.Axes]:
-        """Render ``df`` as an outside-legend line chart at ``figsize`` and draw it once."""
-        fig, ax = plt.subplots(figsize=figsize)
+    def _draw(self, df: pd.DataFrame, figsize: tuple[float, float] | None = None) -> tuple[plt.Figure, plt.Axes]:
+        """Render ``df`` as an outside-legend line chart and draw it once."""
+        fig, ax = plt.subplots(figsize=self.FIGSIZE if figsize is None else figsize)
         line.plot(
             df,
             value_col=list(df.columns),
@@ -745,11 +754,15 @@ class TestOutsideLegendFit:
         fig.canvas.draw()
         return fig, ax
 
-    @staticmethod
-    def _source_box(fig: plt.Figure) -> Bbox:
-        """Measure the source artist, matched by prefix since chrome bakes its wrap in as newlines."""
-        artist = next(t for t in fig.texts if t.get_text().startswith("Traffic sensor data"))
+    def _source_box(self, fig: plt.Figure) -> Bbox:
+        """Measure the source artist, un-baking the newlines chrome wraps into it."""
+        artist = next(t for t in fig.texts if t.get_text().replace("\n", " ") == self.SOURCE_LINE)
         return artist.get_window_extent(renderer=fig.canvas.get_renderer())
+
+    @staticmethod
+    def _legend_box(ax: plt.Axes) -> Bbox:
+        """Measure the axes' rendered legend."""
+        return ax.get_legend().get_window_extent(renderer=ax.get_figure().canvas.get_renderer())
 
     @staticmethod
     def _column_count(ax: plt.Axes) -> int:
@@ -759,44 +772,34 @@ class TestOutsideLegendFit:
 
     def test_tall_outside_legend_clears_the_source_line(self, store_footfall):
         """The legend must not render on top of the source text."""
-        fig, ax = self._draw(store_footfall, (6.4, 3.6))
-        legend_box = ax.get_legend().get_window_extent(renderer=fig.canvas.get_renderer())
+        fig, ax = self._draw(store_footfall)
 
-        assert not legend_box.overlaps(self._source_box(fig))
+        assert not self._legend_box(ax).overlaps(self._source_box(fig))
 
     def test_tall_outside_legend_keeps_every_entry_on_the_figure(self, store_footfall):
-        """Wrapping keeps every entry, and keeps them all on the canvas."""
-        fig, ax = self._draw(store_footfall, (6.4, 3.6))
-        legend_box = ax.get_legend().get_window_extent(renderer=fig.canvas.get_renderer())
+        """Wrapping keeps every entry, and keeps them all on the canvas.
+
+        The right-edge bound is what pins the reflow that follows the wrap: widening the legend
+        without re-reserving its slot pushes a whole column past the figure, where it is clipped.
+        """
+        fig, ax = self._draw(store_footfall)
+        legend_box = self._legend_box(ax)
 
         assert legend_box.y0 >= 0
+        assert legend_box.x1 <= fig.bbox.width
         assert len(ax.get_legend().get_texts()) == len(store_footfall.columns)
 
-    def test_short_outside_legend_keeps_one_column(self, store_footfall):
-        """A legend that already fits the plot band is left in a single column."""
-        _, ax = self._draw(store_footfall[["Store 01", "Store 02"]], (6.4, 3.6))
+    @pytest.mark.parametrize(
+        ("store_count", "figsize", "expected_columns"),
+        [(2, (6.4, 3.6), 1), (14, (6.4, 3.6), 2), (24, (7.0, 3.2), 2)],
+    )
+    def test_outside_legend_wraps_into_columns_within_the_width_cap(self, store_count, figsize, expected_columns):
+        """A legend that fits the plot band stays single-column; a taller one wraps, but only up to the cap.
 
-        assert self._column_count(ax) == 1
-
-    def test_tall_outside_legend_wraps_into_columns(self, store_footfall):
-        """A legend taller than the plot band buys its vertical room by wrapping into columns."""
-        _, ax = self._draw(store_footfall, (6.4, 3.6))
-
-        assert self._column_count(ax) > 1
-
-    def test_wrapped_legend_never_outgrows_the_width_cap(self):
-        """Columns stop before the legend claims more than its share, leaving the axes the rest.
-
-        Twenty-four entries at this size are the case that overshot when the column budget was
-        extrapolated from the single-column width instead of measuring each candidate.
+        The twenty-four-entry row is held to two columns by the cap: its third column is wider
+        than the first, so the legend would claim over half the figure.
         """
-        months = pd.date_range("2024-01-01", periods=12, freq="MS")
-        many_stores = pd.DataFrame(
-            {f"Store {store:02d}": [1000 + store * 50 + month * 10 for month in range(12)] for store in range(1, 25)},
-            index=months,
-        )
-        fig, ax = self._draw(many_stores, (7.0, 3.2))
-        legend_box = ax.get_legend().get_window_extent(renderer=fig.canvas.get_renderer())
+        fig, ax = self._draw(_store_footfall(store_count), figsize)
 
-        assert self._column_count(ax) > 1
-        assert legend_box.width / fig.bbox.width <= _MAX_OUTSIDE_LEGEND_WIDTH_FRAC
+        assert self._column_count(ax) == expected_columns
+        assert self._legend_box(ax).width / fig.bbox.width <= _MAX_OUTSIDE_LEGEND_WIDTH_FRAC
