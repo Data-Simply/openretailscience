@@ -736,16 +736,12 @@ class TestCLVStatsCustomerIdColumn:
 SAMPLE_POPULATION = 1000
 SAMPLE_N = 250
 SAMPLE_FRAC = 0.25
-# frac draws per customer, so the count varies around the expectation. Five standard deviations keeps
-# the bound independent of the backend's hash while still failing on a systematically wrong share.
-_EXPECTED_DRAWN = SAMPLE_FRAC * SAMPLE_POPULATION
-_DRAWN_TOLERANCE = 5 * np.sqrt(SAMPLE_POPULATION * SAMPLE_FRAC * (1 - SAMPLE_FRAC))
 # Two independent draws overlap in ~SAMPLE_FRAC of either one; a near-0 or near-1 share would mean
 # random_state partitions the population rather than re-drawing from it.
 _MIN_CROSS_SEED_OVERLAP = 0.10
 _MAX_CROSS_SEED_OVERLAP = 0.45
-# Standard errors of tolerance for a sample statistic, matching _DRAWN_TOLERANCE's bound: wide enough
-# that an unbiased draw never trips it on a backend hash change, tight enough to fail on real skew.
+# Standard errors of tolerance for a sample statistic: wide enough that an unbiased draw never trips it
+# on a backend hash change, tight enough to fail on a systematically wrong share or a skewed draw.
 _SAMPLE_STAT_SIGMAS = 5
 # For tests that need only which customers were drawn, not the distribution of the draw.
 _SMALL_POPULATION = 200
@@ -785,11 +781,12 @@ class TestCLVStatsSample:
         """A CLVStats over SAMPLE_POPULATION customers; every test in the class only reads it."""
         return CLVStats(_many_customers(), period="week")
 
-    def test_sample_n_returns_exactly_n_customers(self, clv):
+    @pytest.mark.parametrize("n", [1, SAMPLE_N], ids=["single-customer", "many-customers"])
+    def test_sample_n_returns_exactly_n_customers(self, clv, n):
         """An n draw yields that exact number of customers, all of them from the full summary."""
-        sample = clv.sample(n=SAMPLE_N)
+        sample = clv.sample(n=n)
 
-        assert len(sample.df) == SAMPLE_N
+        assert len(sample.df) == n
         assert set(sample.df["customer_id"]) <= set(clv.df["customer_id"])
 
     @pytest.mark.parametrize(
@@ -801,11 +798,13 @@ class TestCLVStatsSample:
         """An n above the population, or frac=1.0, yields the whole summary rather than an error."""
         assert set(clv.sample(**kwargs).df["customer_id"]) == set(clv.df["customer_id"])
 
-    def test_sample_frac_draws_approximately_the_requested_share(self, clv):
-        """A frac draw is per-customer, so the row count lands near frac * population."""
-        drawn = len(clv.sample(frac=SAMPLE_FRAC).df)
+    @pytest.mark.parametrize("frac", [0.1, SAMPLE_FRAC, 0.5])
+    def test_sample_frac_draws_approximately_the_requested_share(self, clv, frac):
+        """The drawn count tracks frac across its range, landing near frac * population, not on it."""
+        expected = frac * SAMPLE_POPULATION
+        tolerance = _SAMPLE_STAT_SIGMAS * np.sqrt(SAMPLE_POPULATION * frac * (1 - frac))
 
-        assert abs(drawn - _EXPECTED_DRAWN) <= _DRAWN_TOLERANCE
+        assert abs(len(clv.sample(frac=frac).df) - expected) <= tolerance
 
     @pytest.mark.parametrize("kwargs", [{"n": SAMPLE_N}, {"frac": SAMPLE_FRAC}])
     def test_sample_is_deterministic_for_a_given_random_state(self, clv, kwargs):
