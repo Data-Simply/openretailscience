@@ -13,8 +13,8 @@ from openretailscience.options import PlotStyleHelper, get_option, option_contex
 from openretailscience.plots import heatmap, line
 from openretailscience.plots.styles.styling_helpers import (
     _CHROME_TAB_WIDTH_IN,
-    _MAX_OUTSIDE_LEGEND_WIDTH_FRAC,
     _CHROME_TOP_LABEL_HEADROOM_FACTOR,
+    _MAX_OUTSIDE_LEGEND_WIDTH_FRAC,
     apply_chart_chrome,
     apply_legend,
     standard_graph_styles,
