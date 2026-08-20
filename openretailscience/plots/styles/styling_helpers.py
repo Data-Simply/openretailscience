@@ -120,8 +120,7 @@ _CHROME_GAP_TITLE_TO_SUBTITLE_IN = 0.072
 _CHROME_GAP_HEADER_TO_AXES_IN = 0.108
 _CHROME_GAP_SOURCE_TO_AXES_IN = 0.15
 _CHROME_TOP_LABEL_HEADROOM_FACTOR = 1.2
-# A column-wrapped outside legend may claim at most this share of the figure width; the
-# axes keeps the rest. Beyond it, overflowing entries beat a plot squeezed to a sliver.
+# Past half the figure width, a few overflowing legend entries beat a plot squeezed to a sliver.
 _MAX_OUTSIDE_LEGEND_WIDTH_FRAC = 0.5
 
 END_OF_LINE_LEGEND_CONFLICT_MSG = (
@@ -887,21 +886,18 @@ def _style_legend(legend: Legend, title: str | None) -> None:
 def _fit_outside_legend(ax: Axes, title: str | None) -> None:
     """Wrap an over-tall outside legend into columns so it stays beside the plot.
 
-    An outside legend is pinned to the axes top and grows downward, so more entries than
-    the plot band holds spill past the axes bottom, across the chrome's source line and
-    eventually off the figure. Columns are added and re-measured until the stack fits the axes
-    height, capped at ``_MAX_OUTSIDE_LEGEND_WIDTH_FRAC`` of the figure width so widening the
-    legend never starves the axes. One that cannot fit within the cap is left as it is.
+    An outside legend is pinned to the axes top and grows downward, so more entries than the
+    plot band holds spill past the axes bottom, across the chrome's source line and eventually
+    off the figure. A legend still too tall at the width cap is left overflowing.
 
-    Runs after chrome, which sets both the final axes height and ``_ors_chrome_rect``; the
-    chrome reflow is repeated so ``tight_layout`` reserves the widened legend's slot.
+    Runs after chrome, which settles the axes height and sets ``_ors_chrome_rect``; the chrome
+    reflow is repeated so ``tight_layout`` reserves the widened legend's slot.
     """
     legend = ax.get_legend()
     fig = ax.figure
     renderer = _active_renderer(fig)
     axes_height = ax.get_window_extent(renderer=renderer).height
-    # Derived from the single-column width, so it under-counts how many columns the budget
-    # really holds (a column costs less than the first one, which carries the padding).
+    # An under-count: the first column carries the legend's padding, so later ones cost less.
     one_column_width = legend.get_window_extent(renderer=renderer).width
     max_cols = max(int(_MAX_OUTSIDE_LEGEND_WIDTH_FRAC * fig.bbox.width / one_column_width), 1)
     handles = list(legend.legend_handles)
@@ -1074,8 +1070,7 @@ def standard_graph_styles(  # noqa: PLR0913
         source_text=source_text,
     )
 
-    # Column-wrap the outside legend before auto-rotation, since both the fit and the
-    # rotation decision depend on the axes box chrome just settled.
+    # Before auto-rotation: widening the legend changes the axes width the rotation test reads.
     if legend_show and move_legend_outside:
         _fit_outside_legend(ax, legend_title)
 
