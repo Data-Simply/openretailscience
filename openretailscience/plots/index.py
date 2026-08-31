@@ -195,7 +195,7 @@ def filter_top_bottom_n(df: pd.DataFrame, top_n: int | None = None, bottom_n: in
     return selected_rows
 
 
-def plot(  # noqa: C901, PLR0913
+def plot(  # noqa: C901, PLR0913, PLR0917
     df: pd.DataFrame,
     value_col: str,
     group_col: str,

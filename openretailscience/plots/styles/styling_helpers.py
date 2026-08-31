@@ -965,7 +965,7 @@ def apply_legend(
     _style_legend(legend, title)
 
 
-def standard_graph_styles(  # noqa: PLR0913
+def standard_graph_styles(  # noqa: PLR0913, PLR0917
     ax: Axes,
     title: str | None = None,
     x_label: str | None = None,
