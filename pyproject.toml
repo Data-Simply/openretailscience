@@ -72,22 +72,20 @@ artifacts = [ "openretailscience/.agents/**" ]
 [tool.uv]
 default-groups = [ "dev", "docs", "examples" ]
 # Dependabot and CI's setup-uv install their own uv, and a version this bound
-# rejects disables the uv ecosystem silently. The floor is the minimum uv that
-# reads lockfile revision 3.
-required-version = ">=0.10.0"
+# rejects disables the uv ecosystem silently, so keep the floor at or below the
+# uv Dependabot ships.
+required-version = ">=0.12.0"
 
 [tool.ruff]
 line-length    = 120
 show-fixes     = true
 src            = [ "openretailscience", "tests" ]
 target-version = "py310"
-# Bundled agent-skill example scripts are demo-style, not package source, and
-# are validated by execution in tests. "*.md" is excluded because ruff formats
-# Python inside documentation fences, reflowing hand-tuned examples.
-# force-exclude makes the pre-commit hook (which passes explicit filenames)
-# skip both too.
+# .agents example scripts are demo-style, caught by execution in tests instead;
+# ruff reformats Python inside "*.md" documentation fences.
 extend-exclude = [ "openretailscience/.agents", "*.md" ]
-force-exclude  = true
+# pre-commit passes explicit filenames, which bypass extend-exclude without this.
+force-exclude = true
 
 [tool.ruff.lint]
 ignore = [ "COM812", "EM101", "ISC001", "PD010", "PT011", "PTH123", "SLF001", "TRY003" ]
