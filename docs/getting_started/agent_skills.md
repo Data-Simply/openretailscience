@@ -47,12 +47,13 @@ one left by an earlier install.
 
 ### Committing the links
 
-Each link points at the installed package by the shortest relative path that
+A symlink points at the installed package by the shortest relative path that
 reaches it, so whether it belongs in source control depends on where your
 environment lives.
 
-With a **repo-local virtualenv** — the default for `uv`, Poetry, and
-`python -m venv .venv` — the target stays inside the repo:
+With a **repo-local virtualenv** — `uv`'s default, and what you get from
+`python -m venv .venv` or Poetry's `virtualenvs.in-project = true` — the target
+stays inside the repo:
 
 <!-- markdownlint-disable MD013 -->
 
@@ -63,17 +64,29 @@ With a **repo-local virtualenv** — the default for `uv`, Poetry, and
 <!-- markdownlint-enable MD013 -->
 
 Commit that, and a fresh clone has the skill without anyone remembering to run the
-installer. It stays broken until dependencies are installed, then resolves. The
-caveat is the interpreter version in the target (`lib/python3.12/`): a project that
-does not pin its Python — a `.python-version` file, or a CI setup that matches it —
-leaves the link dangling wherever a different interpreter was resolved, and a
-dangling skill link fails silently. The agent simply does not load the skill.
+installer; the link is broken until dependencies are installed, then resolves. It
+keeps resolving only where a checkout reproduces that exact path, which needs both:
 
-With an environment **outside the project tree** — a global install, conda, or
-`uv tool` — the target escapes the repo as a long `../../..` chain, or as an
-absolute path when no relative path exists at all (different Windows drives). Those
-links only resolve on the machine that installed them, so add the installed skill
-paths (for example `.agents/skills/using-openretailscience/`) to your `.gitignore`.
+- **A pinned Python.** The target names the interpreter version (`lib/python3.12/`),
+  so without a `.python-version` file — or a CI setup that matches it — any checkout
+  resolving a different interpreter dangles.
+- **One platform.** POSIX virtualenvs use `lib/pythonX.Y/site-packages`; Windows uses
+  `Lib/site-packages`, with no version segment at all. A committed link resolves on
+  one or the other, never both, so a mixed-OS team should not commit it even with
+  Python pinned.
+
+A dangling skill link fails silently: the agent simply does not load the skill.
+
+With an environment **outside the project tree** — a global install, conda,
+`uv tool`, or Poetry's default cache location — the target escapes the repo as a
+long `../../..` chain, or as an absolute path when no relative path exists at all
+(different Windows drives). Those resolve only on the machine that installed them,
+so add the installed skill paths (for example
+`.agents/skills/using-openretailscience/`) to your `.gitignore`.
+
+Where symlinks are unavailable the installer copies the skill instead. A copy has
+none of this to weigh, but committing one vendors a snapshot that no longer tracks
+the installed package.
 
 ## Installing with the library-skills CLI
 
