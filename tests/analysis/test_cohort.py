@@ -48,7 +48,9 @@ class TestCohortAnalysis:
                 2: [2.0, 1.0, 0.0, 0.0, 0.0],
                 3: [1.0, 0.0, 0.0, 0.0, 0.0],
             },
-            index=pd.date_range("2023-01-01", periods=5, freq="MS"),
+            # CohortAnalysis resolves dates through the DuckDB backend, which yields second
+            # resolution; pandas' own default is microseconds, so the unit must be pinned.
+            index=pd.date_range("2023-01-01", periods=5, freq="MS", unit="s"),
         )
 
         expected_df.index.name = "min_period_shopped"
@@ -95,7 +97,7 @@ class TestCohortAnalysis:
 
         expected_df = pd.DataFrame(
             {0: [1.0, 1.0], 1: [1.0, 0.0]},
-            index=pd.date_range("2023-01-02", periods=2, freq="7D"),
+            index=pd.date_range("2023-01-02", periods=2, freq="7D", unit="s"),
         )
         expected_df.index.name = "min_period_shopped"
         expected_df.columns.name = "period_since"
@@ -152,7 +154,7 @@ class TestCohortAnalysis:
                 2: [1.0, 1.0, 0.0, 0.0, 0.0],
                 3: [0.5, 0.0, 0.0, 0.0, 0.0],
             },
-            index=pd.date_range("2023-01-01", periods=5, freq="MS"),
+            index=pd.date_range("2023-01-01", periods=5, freq="MS", unit="s"),
         )
         expected_df.index.name = "min_period_shopped"
         expected_df.columns.name = "period_since"
@@ -195,7 +197,7 @@ class TestCohortAnalysis:
                 0: [1.0, 0.0],
                 1: [0.17, 0.0],
             },
-            index=pd.date_range("2023-01-01", periods=2, freq="MS"),
+            index=pd.date_range("2023-01-01", periods=2, freq="MS", unit="s"),
         )
         expected_df.index.name = "min_period_shopped"
         expected_df.columns.name = "period_since"
