@@ -48,8 +48,8 @@ class TestCohortAnalysis:
                 2: [2.0, 1.0, 0.0, 0.0, 0.0],
                 3: [1.0, 0.0, 0.0, 0.0, 0.0],
             },
-            # CohortAnalysis resolves dates through the DuckDB backend, which yields second
-            # resolution; pandas' own default is microseconds, so the unit must be pinned.
+            # CohortAnalysis resolves dates through DuckDB, which yields second resolution;
+            # pandas' own default is microseconds.
             index=pd.date_range("2023-01-01", periods=5, freq="MS", unit="s"),
         )
 
