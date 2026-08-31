@@ -70,8 +70,12 @@ requires      = [ "hatchling" ]
 artifacts = [ "openretailscience/.agents/**" ]
 
 [tool.uv]
-default-groups   = [ "dev", "docs", "examples" ]
-required-version = ">=0.10.0,<0.13.0"
+default-groups = [ "dev", "docs", "examples" ]
+# No upper bound: Dependabot ships its own uv and CI's setup-uv installs the
+# newest, so a rejected version disables the uv ecosystem silently instead of
+# failing loudly. The floor pins the minimum uv that understands lockfile
+# revision 3.
+required-version = ">=0.10.0"
 
 [tool.ruff]
 line-length    = 120
