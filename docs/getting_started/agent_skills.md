@@ -45,11 +45,35 @@ directories. It does repoint a **symlink** that shares the bundled skill's name
 (`using-openretailscience`), treating such a link as its own so it can refresh
 one left by an earlier install.
 
-!!! note "Symlinks are environment-specific"
-    Project-mode links point into the Python environment that installed the
-    package, so they generally should not be committed to source control. Add the
-    installed skill paths (for example `.agents/skills/using-openretailscience/`)
-    to your `.gitignore`.
+### Committing the links
+
+Each link points at the installed package by the shortest relative path that
+reaches it, so whether it belongs in source control depends on where your
+environment lives.
+
+With a **repo-local virtualenv** — the default for `uv`, Poetry, and
+`python -m venv .venv` — the target stays inside the repo:
+
+<!-- markdownlint-disable MD013 -->
+
+```text
+.agents/skills/using-openretailscience -> ../../.venv/lib/python3.12/site-packages/openretailscience/.agents/skills/using-openretailscience
+```
+
+<!-- markdownlint-enable MD013 -->
+
+Commit that, and a fresh clone has the skill without anyone remembering to run the
+installer. It stays broken until dependencies are installed, then resolves. The
+caveat is the interpreter version in the target (`lib/python3.12/`): a project that
+does not pin its Python — a `.python-version` file, or a CI setup that matches it —
+leaves the link dangling wherever a different interpreter was resolved, and a
+dangling skill link fails silently. The agent simply does not load the skill.
+
+With an environment **outside the project tree** — a global install, conda, or
+`uv tool` — the target escapes the repo as a long `../../..` chain, or as an
+absolute path when no relative path exists at all (different Windows drives). Those
+links only resolve on the machine that installed them, so add the installed skill
+paths (for example `.agents/skills/using-openretailscience/`) to your `.gitignore`.
 
 ## Installing with the library-skills CLI
 
