@@ -44,7 +44,7 @@ repos:
         args: ["--config", ".markdownlint.json"]
         exclude: ^\.claude/
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.25.2
+    rev: v1.30.0
     hooks:
       # zizmor enables online audits whenever GH_TOKEN/GITHUB_TOKEN is in the
       # environment, so audit depth would otherwise vary by machine. CI runs this
