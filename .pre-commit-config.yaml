@@ -38,7 +38,7 @@ repos:
         args: ["--config", "taplo.toml"]
         exclude: ^tests/toml_files/corrupt.toml$
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.48.0
+    rev: v0.49.1
     hooks:
       - id: markdownlint
         args: ["--config", ".markdownlint.json"]
