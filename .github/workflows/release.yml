@@ -40,21 +40,21 @@ jobs:
 
   security-audit:
     name: Dependency Security Audit
-    uses: ./.github/workflows/security-audit.yml
+    uses: $/.github/workflows/security-audit.yml
     permissions:
       contents: read
       security-events: write
 
   bigquery-integration-tests:
     name: BigQuery Integration Tests
-    uses: ./.github/workflows/bigquery-integration.yml
+    uses: $/.github/workflows/bigquery-integration.yml
     secrets:
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
   databricks-integration-tests:
     name: Databricks Integration Tests
-    uses: ./.github/workflows/databricks-integration.yml
+    uses: $/.github/workflows/databricks-integration.yml
     secrets:
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       GCP_INFRA_PROJECT_ID: ${{ secrets.GCP_INFRA_PROJECT_ID }}
@@ -66,11 +66,11 @@ jobs:
 
   pyspark-integration-tests:
     name: PySpark Integration Tests
-    uses: ./.github/workflows/pyspark-integration.yml
+    uses: $/.github/workflows/pyspark-integration.yml
 
   snowflake-integration-tests:
     name: Snowflake Integration Tests
-    uses: ./.github/workflows/snowflake-integration.yml
+    uses: $/.github/workflows/snowflake-integration.yml
     secrets:
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
       GCP_INFRA_PROJECT_ID: ${{ secrets.GCP_INFRA_PROJECT_ID }}
@@ -82,11 +82,11 @@ jobs:
 
   sqlserver-integration-tests:
     name: SQL Server Integration Tests
-    uses: ./.github/workflows/sqlserver-integration.yml
+    uses: $/.github/workflows/sqlserver-integration.yml
 
   oracle-integration-tests:
     name: Oracle Integration Tests
-    uses: ./.github/workflows/oracle-integration.yml
+    uses: $/.github/workflows/oracle-integration.yml
 
   multi-python-tests:
     name: Multi-Python Version Tests
@@ -176,7 +176,7 @@ jobs:
       - name: Build package
         run: uv build
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: "dist/*"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -224,4 +224,4 @@ jobs:
       contents: read
       pages: write
       id-token: write
-    uses: ./.github/workflows/gh-page.yml
+    uses: $/.github/workflows/gh-page.yml

@@ -18,9 +18,12 @@ from openretailscience.plots.styles.graph_utils import draw_end_of_line_labels
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from matplotlib.artist import Artist
     from matplotlib.axes import Axes
     from matplotlib.backend_bases import RendererBase
+    from matplotlib.container import Container
     from matplotlib.figure import Figure
+    from matplotlib.legend import Legend
     from matplotlib.text import Text
 
 GridAxis = Literal["both", "x", "y", "none"]
@@ -118,6 +121,8 @@ _CHROME_GAP_TITLE_TO_SUBTITLE_IN = 0.072
 _CHROME_GAP_HEADER_TO_AXES_IN = 0.108
 _CHROME_GAP_SOURCE_TO_AXES_IN = 0.15
 _CHROME_TOP_LABEL_HEADROOM_FACTOR = 1.2
+# Past half the figure width, a few overflowing legend entries beat a plot squeezed to a sliver.
+_MAX_OUTSIDE_LEGEND_WIDTH_FRAC = 0.5
 
 END_OF_LINE_LEGEND_CONFLICT_MSG = (
     "`move_legend_outside` and `legend_title` are ignored when legend_style='end_of_line'."
@@ -852,6 +857,70 @@ def apply_ticks(ax: Axes) -> None:
     _hide_zero_value_ticks(ax)
 
 
+def _build_outside_legend(ax: Axes, handles: list[Artist | Container], labels: list[str], ncols: int) -> Legend:
+    """Build the legend anchored outside the axes, spread over ``ncols`` columns."""
+    style = PlotStyleHelper()
+    return ax.legend(
+        handles,
+        labels,
+        frameon=False,
+        bbox_to_anchor=style.legend_bbox_to_anchor,
+        loc=style.legend_loc,
+        ncols=ncols,
+    )
+
+
+def _style_legend(legend: Legend, title: str | None) -> None:
+    """Apply the configured legend font to ``legend``'s entries and optional ``title``."""
+    style = PlotStyleHelper()
+    legend_font_props = get_font_properties(style.legend_font)
+    if title is not None:
+        legend.set_title(title)
+        legend.get_title().set_fontproperties(legend_font_props)
+        legend.get_title().set_fontsize(style.legend_size)
+
+    for text in legend.get_texts():
+        text.set_fontproperties(legend_font_props)
+        text.set_fontsize(style.legend_size)
+
+
+def _fit_outside_legend(ax: Axes, title: str | None) -> None:
+    """Wrap an over-tall outside legend into columns so it stays beside the plot.
+
+    An outside legend is pinned to the axes top and grows downward, so more entries than the
+    plot band holds spill past the axes bottom, across the chrome's source line and eventually
+    off the figure. A legend still too tall at the width cap is left overflowing.
+
+    Runs after chrome, which settles the axes height and sets ``_ors_chrome_rect``; the chrome
+    reflow is repeated so ``tight_layout`` reserves the widened legend's slot.
+    """
+    legend = ax.get_legend()
+    fig = ax.figure
+    renderer = _active_renderer(fig)
+    axes_height = ax.get_window_extent(renderer=renderer).height
+    width_cap = _MAX_OUTSIDE_LEGEND_WIDTH_FRAC * fig.bbox.width
+    handles = list(legend.legend_handles)
+    labels = [text.get_text() for text in legend.get_texts()]
+
+    # Every candidate is measured: a column can cost more width than the one before it (its
+    # labels may be wider), so a budget estimated from the first column's width overshoots the cap.
+    ncols = 1
+    height = legend.get_window_extent(renderer=renderer).height
+    while height > axes_height and ncols < len(handles):
+        candidate = _build_outside_legend(ax, handles, labels, ncols + 1)
+        _style_legend(candidate, title)
+        candidate_box = candidate.get_window_extent(renderer=renderer)
+        if candidate_box.width > width_cap:
+            _style_legend(_build_outside_legend(ax, handles, labels, ncols), title)
+            break
+        ncols, height = ncols + 1, candidate_box.height
+    if ncols == 1:
+        return
+
+    chrome_top, chrome_bottom = fig._ors_chrome_rect
+    _reflow_axes(fig, top=chrome_top, bottom=chrome_bottom)
+
+
 def apply_legend(
     ax: Axes,
     title: str | None = None,
@@ -880,7 +949,6 @@ def apply_legend(
         ValueError: If ``custom_labels`` is provided and its length does not
             match the number of legend handles on ``ax``.
     """
-    style = PlotStyleHelper()
     handles, labels = ax.get_legend_handles_labels()
     if reverse:
         handles = list(reversed(handles))
@@ -891,26 +959,10 @@ def apply_legend(
             raise ValueError(msg)
         labels = list(custom_labels)
 
-    if outside:
-        legend = ax.legend(
-            handles,
-            labels,
-            frameon=False,
-            bbox_to_anchor=style.legend_bbox_to_anchor,
-            loc=style.legend_loc,
-        )
-    else:
-        legend = ax.legend(handles, labels, frameon=False)
-
-    legend_font_props = get_font_properties(style.legend_font)
-    if title is not None:
-        legend.set_title(title)
-        legend.get_title().set_fontproperties(legend_font_props)
-        legend.get_title().set_fontsize(style.legend_size)
-
-    for text in legend.get_texts():
-        text.set_fontproperties(legend_font_props)
-        text.set_fontsize(style.legend_size)
+    legend = (
+        _build_outside_legend(ax, handles, labels, ncols=1) if outside else ax.legend(handles, labels, frameon=False)
+    )
+    _style_legend(legend, title)
 
 
 def standard_graph_styles(  # noqa: PLR0913
@@ -1023,6 +1075,10 @@ def standard_graph_styles(  # noqa: PLR0913
         subtitle=subtitle,
         source_text=source_text,
     )
+
+    # Before auto-rotation: widening the legend changes the axes width the rotation test reads.
+    if legend_show and move_legend_outside:
+        _fit_outside_legend(ax, legend_title)
 
     # Auto-rotate AFTER chrome so the axes width reflects the final layout
     # (legend placement and chrome's tight_layout both shrink the axes).
