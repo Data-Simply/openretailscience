@@ -767,6 +767,87 @@ cr.df.sort_values(["product_category", "composite_rank"])
 | 3          | Electronics      | 75    | 15        | 5.0                | 3          | 3              | 1                       | 2.33           |
 <!-- markdownlint-enable MD013 -->
 
+### Purchase Path Analysis
+
+<div class="clear" markdown>
+
+The Purchase Path Analysis module tracks customer journeys through product categories over time,
+providing insights into sequential purchasing behavior and category transitions.
+This analysis helps retailers understand how customers navigate between different product categories
+during their shopping journey.
+
+Key applications include:
+
+- **Customer Journey Mapping**: Understanding the sequence of categories customers purchase from
+- **Cross-Selling Optimization**: Identifying natural category progressions for targeted recommendations
+- **Category Management**: Planning product placement and promotional strategies based on purchase paths
+- **Customer Segmentation**: Grouping customers based on their shopping patterns across categories
+- **Inventory Planning**: Predicting demand patterns based on typical purchase sequences
+
+The module provides flexible options for handling multiple categories within the same transaction,
+aggregation methods, and filtering criteria to focus on meaningful patterns.
+
+</div>
+
+Example:
+
+```python
+import pandas as pd
+from pyretailscience.analysis.purchase_path import purchase_path_analysis
+
+sample_data = pd.DataFrame({
+    'customer_id': [
+        1, 1, 1, 1, 1, 1,
+        2, 2, 2, 2, 2, 2,
+        3, 3, 3, 3, 3, 3,
+        4, 4, 4, 4,
+        5, 5, 5, 5, 5, 5,
+        6, 6, 6, 6
+    ],
+    'transaction_id': [
+        101, 101, 102, 102, 103, 103,
+        201, 201, 202, 202, 203, 203,
+        301, 301, 302, 302, 303, 303,
+        401, 401, 402, 402,
+        501, 501, 502, 502, 503, 503,
+        601, 601, 602, 602
+    ],
+    'transaction_date': [
+        '2024-01-01', '2024-01-01', '2024-01-10', '2024-01-10', '2024-01-20', '2024-01-20',
+        '2024-01-02', '2024-01-02', '2024-01-11', '2024-01-11', '2024-01-21', '2024-01-21',
+        '2024-01-03', '2024-01-03', '2024-01-12', '2024-01-12', '2024-01-22', '2024-01-22',
+        '2024-01-04', '2024-01-04', '2024-01-13', '2024-01-13',
+        '2024-01-05', '2024-01-05', '2024-01-14', '2024-01-14', '2024-01-23', '2024-01-23',
+        '2024-01-06', '2024-01-06', '2024-01-15', '2024-01-15'
+    ],
+    'product_id': range(1, 33),
+    'product_category': [
+        'womens_clothing', 'womens_clothing', 'kids_clothing', 'kids_clothing', 'mens_clothing', 'mens_clothing',
+        'womens_clothing', 'womens_clothing', 'kids_clothing', 'kids_clothing', 'kids_clothing', 'kids_clothing',
+        'womens_clothing', 'womens_clothing', 'kids_clothing', 'kids_clothing', 'mens_clothing', 'mens_clothing',
+        'womens_clothing', 'womens_clothing', 'kids_clothing', 'kids_clothing',
+        'mens_clothing', 'mens_clothing', 'womens_clothing', 'womens_clothing', 'kids_clothing', 'kids_clothing',
+        'mens_clothing', 'mens_clothing', 'womens_clothing', 'womens_clothing'
+    ],
+    'revenue': [50] * 32
+})
+
+result = purchase_path_analysis(
+    sample_data,
+    category_column='product_category',
+    min_customers=1,
+    min_transactions=3,
+    multi_category_handling='concatenate'
+)
+
+```
+
+| basket_1        | basket_2        | basket_3      | customer_count | transition_probability |
+|:----------------|:----------------|:--------------|---------------:|-----------------------:|
+| mens_clothing   | womens_clothing | kids_clothing |              1 |                   0.25 |
+| womens_clothing | kids_clothing   | mens_clothing |              2 |                   0.50 |
+| womens_clothing | kids_clothing   |               |              1 |                   0.25 |
+
 ## Utils
 
 ### Filter and Label by Periods
