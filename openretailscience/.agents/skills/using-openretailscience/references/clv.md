@@ -15,9 +15,9 @@ clv = CLVStats(data, period="week", observation_period_end=None)
 Reads `customer_id`, `transaction_date` (must be a date/datetime type), and `unit_spend`
 from the options system. Undated rows and returns-only days (net spend zero or less) are dropped
 (a customer left with none drops out). Read `.table` (Ibis) / `.df` (pandas); `.repeat_buyers` is the
-GammaGamma-ready subset (`frequency > 0`); `.covariate_cols`
-lists the attached customer_attributes / one-hot columns; `.pymc_time_unit` is the matching
- pymc-marketing `time_unit`. `help(CLVStats)` for full Args/Raises.
+GammaGamma-ready subset (`frequency > 0`); `.sample(n=...)` draws a customer subset to fit on;
+`.covariate_cols` lists the attached customer_attributes / one-hot columns; `.pymc_time_unit` is the
+matching pymc-marketing `time_unit`. `help(CLVStats)` for full Args/Raises.
 
 ## Output columns
 
@@ -88,17 +88,24 @@ separate Gamma-Gamma per channel.
 
 ## Feeding pymc-marketing
 
+Fit on a sample of customers, score all of them. `.sample(n=...)` returns **another `CLVStats`**, so the
+sample keeps `.df`, `.repeat_buyers`, `.covariate_cols`, and `.pymc_time_unit`.
+
 ```python
 from openretailscience.experimental.clv import CLVStats
 from pymc_marketing.clv import ParetoNBDModel, GammaGammaModel
 
 clv = CLVStats(data)
+# Drop this line and fit on clv.df / clv.repeat_buyers when the full population is tractable.
+train = clv.sample(n=50_000) # or frac=0.1; exactly one of the two
 
-pareto = ParetoNBDModel(data=clv.df) # frequency, recency, T
+pareto = ParetoNBDModel(data=train.df) # frequency, recency, T
 pareto.fit()
 
-gamma_gamma = GammaGammaModel(data=clv.repeat_buyers) # frequency > 0
+gamma_gamma = GammaGammaModel(data=train.repeat_buyers) # frequency > 0
 gamma_gamma.fit()
+
+everyone = pareto.expected_purchases(data=clv.df, future_t=52) # score the full population
 ```
 
 **Finite-horizon CLV: pass `time_unit`, or it fails silently.**
@@ -116,6 +123,33 @@ Want an undiscounted CLV over a fixed horizon set directly in the model's units 
 next 52 weeks)?
 `pareto.expected_purchases(data=clv.df, future_t=52) * gamma_gamma.expected_customer_spend(data=clv.repeat_buyers)`
 computes it with no month conversion and no `time_unit`.
+
+### sample() arguments
+
+- `n` — exact number of customers; yields every customer if it exceeds the population (no error).
+  Costs a backend top-N sort.
+- `frac` — share in `(0, 1]`, decided per customer, so the count lands *near* `frac` * population, not
+  on it. One predicate, no sort; **raises** below the hash's `1e-6` bucket resolution.
+- `random_state` — defaults to `42`. Customers are selected by a deterministic hash of `customer_id`
+  salted with it.
+
+**Reproducibility is per engine and per version.** The key compiles to the backend's own hash, and
+DuckDB's `HASH` output changes between releases, so record the drawn ids rather than the seed when a
+fit must be reproduced. Backends with no Ibis `hash` rule (SQLite, MySQL, Trino, Athena) raise when
+the sample is executed, not when `sample()` is called.
+
+**Draws nest, they do not partition.** At one `random_state`, `sample(frac=0.2)` is a subset of
+`sample(frac=0.8)` and re-sampling a sample returns it unchanged; a different `random_state` re-draws
+independently, which still overlaps. There is no disjoint train/holdout split.
+
+A sample's `.df` validates NULL covariates over **its own rows only**, so `train.df` can pass where
+`clv.df` raises. Read `clv.df` before the fit if the covariates are not known complete.
+
+A sampled row is the row that customer has in the full `.df`, so the fit and the scoring agree. This
+is **not** the same as filtering transactions before constructing `CLVStats`: `T` is measured from
+`observation_period_end`, which defaults to the population's latest transaction, and one-hot
+reference levels come from the population's categories. Sampling makes the fit tractable, not the
+query — `clv.df` and `train.df` each run the full aggregation. Row order is not meaningful.
 
 ## Caveat: truncated history
 
