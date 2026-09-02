@@ -1,21 +1,16 @@
 name: Security Audit
 
-# Scans the resolved dependency lockfile (uv.lock) for known vulnerabilities
-# using OSV-Scanner. Because it reads uv.lock statically, it audits every pinned
-# version across all supported Python versions (3.10-3.14) and platforms.
-# Results are uploaded to GitHub code scanning (Security tab) as SARIF, so a
-# newly-disclosed CVE in a pinned dependency surfaces as a failing check and a
-# code-scanning alert rather than a passive Dependabot alert.
+# Reading uv.lock statically covers every pinned version across all supported
+# Python versions and platforms, so this audit needs no matrix.
 #
-# Suppressions (each with a rationale, and an ignoreUntil expiry where a fix may
-# yet appear) live in osv-scanner.toml at the repo root.
+# Every trigger hard-gates. The path filter means only dependency changes reach
+# it, so an ordinary code pull request is never blocked. Pushes to main also
+# refresh the default-branch code-scanning state.
 #
-# On pull requests the scan runs only when dependencies or this workflow change,
-# and is advisory (results still post to code scanning); pushes to main (same
-# path filter) refresh the default-branch code-scanning state, and manual
-# dispatches and release calls are hard gates. Detection of newly-disclosed CVEs
-# against already-pinned dependencies (with no repo change) is left to Dependabot
-# alerts and security updates, so no scheduled scan is needed here.
+# Newly-disclosed CVEs against unchanged pins are left to Dependabot alerts and
+# security updates, so no scheduled scan is needed. A pass only claims the
+# advisory database was clean at that moment: a pull request can pass and its
+# merge commit still fail.
 
 on:
   pull_request:
@@ -74,13 +69,10 @@ jobs:
           sarif_file: results.sarif
           category: osv-scanner
       - name: Enforce gate
-        # Pull requests are advisory only (results still post to code scanning);
-        # every other trigger is a hard gate. Fail closed: block unless the scan
-        # completed successfully, so a failed, errored, or skipped scan never
-        # passes the gate. !cancelled() (rather than always()) avoids marking a
-        # concurrency-superseded run as failed; a real timeout still blocks
-        # downstream via the job's needs dependency.
-        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.osv.outcome != 'success' }}
+        # Fail closed on any non-success outcome, including an errored or skipped
+        # scan. !cancelled() rather than always() so a concurrency-superseded run
+        # is not marked failed; a real timeout still blocks downstream via needs.
+        if: ${{ !cancelled() && steps.osv.outcome != 'success' }}
         run: |
           echo "::error::OSV-Scanner did not complete cleanly (vulnerabilities found or scan failed) — see the SARIF results in the Security tab."
           exit 1
