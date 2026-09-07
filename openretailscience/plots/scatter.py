@@ -242,7 +242,7 @@ def _add_point_labels(
         )
 
 
-def plot(  # noqa: PLR0913
+def plot(  # noqa: PLR0913, PLR0917
     df: pd.DataFrame | pd.Series,
     value_col: str | list[str],
     x_label: str | None = None,
