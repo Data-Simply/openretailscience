@@ -52,7 +52,7 @@ jobs:
       - name: Run OSV-Scanner
         id: osv
         continue-on-error: true # gate is enforced explicitly below, after SARIF upload
-        uses: google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d27d4950be7312dac076a1 # v2.5.0
+        uses: google/osv-scanner-action/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1
         with:
           scan-args: |-
             --config=osv-scanner.toml
@@ -64,7 +64,7 @@ jobs:
         # than erroring and being swallowed by continue-on-error.
         if: always() && hashFiles('results.sarif') != ''
         continue-on-error: true # never let SARIF upload (e.g. missing perms) break the gate
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: results.sarif
           category: osv-scanner
