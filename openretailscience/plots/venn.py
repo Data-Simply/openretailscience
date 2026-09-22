@@ -1,27 +1,8 @@
-"""This module provides functionality for creating Venn and Euler diagrams from pandas DataFrames.
+"""Venn and Euler diagrams from pre-aggregated subset sizes.
 
-It is designed to visualize relationships between sets, highlighting intersections and differences between them.
-
-### Core Features
-
-- **Supports 2-set and 3-set Diagrams**: Allows visualization of up to three overlapping sets.
-- **Venn and Euler Diagrams**: Uses Venn diagrams by default; switches to Euler diagrams when `vary_size=True`.
-- **Customizable Colors and Labels**: Automatically assigns colors and labels for subset representation.
-- **Dynamic Sizing**: Adjusts circle sizes for Euler diagrams to reflect proportions.
-- **Title and Source Attribution**: Optionally adds a title and source text.
-
-### Use Cases
-
-- **Set Comparisons**: Identify shared and unique elements across two or three sets.
-- **Proportional Representation**: Euler diagrams ensure area-accurate representation.
-- **Data Overlap Visualization**: Helps in understanding relationships within categorical data.
-
-### Limitations and Warnings
-
-- **Only Supports 2 or 3 Sets**: Does not extend to Venn diagrams with more than three sets.
-- **Pre-Aggregated Data Required**: The module does not perform data aggregation; input data
-should already be structured correctly.
-
+Only 2- or 3-set diagrams are supported; input is subset sizes (no aggregation is
+performed). vary_size=True switches from an equal-circle VennDiagram to an area-accurate
+EulerDiagram.
 """
 
 from collections.abc import Callable
@@ -92,26 +73,32 @@ def plot(
     subset_label_formatter: Callable | None = None,
     **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
-    """Plots a Venn or Euler diagram using subset sizes extracted from a DataFrame.
+    """Plot a Venn or Euler diagram from the subset sizes in a DataFrame.
+
+    df needs `groups` (a tuple of 0/1 membership flags, one element per set) and `percent`
+    (the subset size); the all-zero subset is dropped.
 
     Args:
-        df (pd.DataFrame): DataFrame with 'groups' and 'percent' columns.
-        labels (list[str]): Labels for the sets in the diagram.
-        title (str, optional): Title of the plot. Defaults to None.
-        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-        source_text (str, optional): Source text for attribution. Defaults to None.
-        vary_size (bool, optional): Whether to vary circle size based on subset sizes. Defaults to False.
-        figsize (tuple[int, int], optional): Size of the plot. Defaults to None.
-        ax (Axes, optional): Matplotlib axes object to plot on. Defaults to None.
-        subset_label_formatter (callable, optional): Function to format subset labels. Defaults to None.
-        **kwargs: Additional keyword arguments.
+        df (pd.DataFrame): Frame with `groups` and `percent` columns.
+        labels (list[str]): Labels for the sets (2 or 3).
+        title (str, optional): Plot title.
+        eyebrow (str, optional): Uppercase label rendered above the title.
+        subtitle (str, optional): Supporting copy rendered below the title.
+        source_text (str, optional): Source attribution rendered at the bottom.
+        vary_size (bool, optional): False for an equal-circle VennDiagram; True for an
+            area-accurate EulerDiagram.
+        figsize (tuple[int, int], optional): Figure size, used only when ax is None.
+        ax (Axes, optional): Axes to plot on.
+        subset_label_formatter (callable, optional): Applied to each subset size; if None,
+            the raw value is stringified.
+        **kwargs: Forwarded to the diagram constructor.
 
     Returns:
-        SubplotBase: The matplotlib axes object with the plotted diagram.
+        SubplotBase: The matplotlib axes object.
 
     Raises:
-        ValueError: If the number of sets is not 2 or 3.
+        ValueError: If the number of sets (len(labels)) is not 2 or 3.
+
     """
     num_sets = len(labels)
     if num_sets not in {MIN_SUPPORTED_SETS, MAX_SUPPORTED_SETS}:

@@ -1,30 +1,9 @@
-"""This module provides functionality for creating generic heatmap plots from pandas DataFrames.
+"""Generic 2D heatmap: index → y-axis, columns → x-axis, cell values shown as-is.
 
-This module is designed to create flexible heatmap visualizations suitable for various use cases
-including migration matrices, confusion matrices, correlation matrices, and other 2D data
-visualizations. It provides a clean, reusable interface without domain-specific assumptions.
-
-### Core Features
-
-- **Generic Design**: No domain-specific assumptions or hardcoded elements
-- **Color Mapping**: Uses Tailwind green colormap for consistent visualization
-- **Auto-contrast Text**: Text color automatically switches between black and white based on cell intensity
-- **Customizable Labels**: Supports custom labels for x-axis, y-axis, title, and colorbar
-- **Flexible Data**: Displays values as-is without formatting assumptions
-
-### Use Cases
-
-- **Migration Matrices**: Visualize customer movement between segments
-- **Correlation Matrices**: Show relationships between variables
-- **Confusion Matrices**: Display classification results
-- **Any 2D Data**: Generic support for any tabular data visualization
-
-### Design Principles
-
-- Display values as-is from the DataFrame (no percentage or other formatting assumptions)
-- Consistent with existing OpenRetailScience plotting modules (line.py, bar.py)
-- Minimal parameters with **kwargs for advanced customization
-- Match visual style of existing plots while remaining generic
+cbar_format controls the in-cell text (no percentage formatting is applied); cell text
+auto-contrasts (black/white) at the normalized midpoint; the y-axis is inverted so row 0
+is on top; x labels rotate 45 past 10 chars; colors come from the option-driven sequential
+colormap.
 """
 
 from typing import Literal
@@ -84,38 +63,36 @@ def plot(
     colormap_style: Literal["discrete", "continuous"] = "discrete",
     x_labels_position: Literal["top", "bottom"] = "bottom",
 ) -> SubplotBase:
-    """Creates a generic heatmap visualization from a pandas DataFrame.
+    """Create a generic heatmap: index → y-axis, columns → x-axis, cell values as text.
 
-    This function creates a color-coded heatmap with cell values displayed as text. It is suitable
-    for visualizing any 2D data structure including migration matrices, confusion matrices,
-    correlation matrices, or cohort analysis data.
+    NaN cells are skipped (no patch or text).
 
     Args:
-        df (pd.DataFrame): DataFrame to visualize. Index becomes y-axis, columns become x-axis.
-        cbar_label (str): Label for the colorbar.
-        x_label (str, optional): Label for x-axis.
-        y_label (str, optional): Label for y-axis.
-        title (str, optional): Title of the plot.
-        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-        ax (Axes, optional): Matplotlib axes object to plot on.
-        source_text (str, optional): Additional source text annotation.
-        figsize (tuple[int, int], optional): The size of the plot. Defaults to None.
-        cbar_format (str, optional): Format string applied to in-cell text. In
-            ``colormap_style="continuous"`` it is also applied to colorbar tick labels; discrete mode
-            labels the colorbar with fixed ``"Low"``/``"High"`` anchors and ignores ``cbar_format`` for
-            the bar. Defaults to ``"{x:g}"`` which renders whole numbers without trailing zeros (8, not
-            8.00) and keeps fractional values readable.
-        colormap_style (Literal["discrete", "continuous"], optional): Render the colorbar as a
-            stepped 5-bin scale ("discrete", default — matches the design system) or a smooth
-            gradient ("continuous"). Discrete bins lose precision but read more cleanly when
-            cell values are annotated; continuous gives a finer-grained sense of magnitude.
-        x_labels_position (Literal["top", "bottom"], optional): Whether x-axis tick labels render above
-            or below the matrix. Cohort charts conventionally use ``"top"`` so the chronology reads
-            top-to-bottom alongside the row labels. Defaults to ``"bottom"``.
+        df (pd.DataFrame): Frame to visualize; the index becomes the y-axis and the
+            columns the x-axis.
+        cbar_label (str): Colorbar label.
+        x_label (str, optional): X-axis label.
+        y_label (str, optional): Y-axis label.
+        title (str, optional): Plot title.
+        eyebrow (str, optional): Uppercase label rendered above the title.
+        subtitle (str, optional): Supporting copy rendered below the title.
+        ax (Axes, optional): Axes to plot on.
+        source_text (str, optional): Source attribution rendered at the bottom.
+        figsize (tuple[int, int], optional): Figure size, used only when ax is None.
+        cbar_format (str, optional): Format for in-cell text; in continuous mode it is also
+            applied to the colorbar ticks, but discrete mode ignores it and uses fixed
+            "Low"/"High" anchors.
+        colormap_style ("discrete", "continuous", optional): A stepped 5-bin colorbar
+            (discrete) or a smooth gradient (continuous).
+        x_labels_position ("top", "bottom", optional): Draw x tick labels above or below the
+            matrix; cohort charts use "top" so the chronology reads top-to-bottom.
 
     Returns:
         SubplotBase: The matplotlib axes object.
+
+    Raises:
+        ValueError: If df is empty or contains no finite values.
+
     """
     data, vmin, vmax, is_uniform = _resolve_data_range(df)
 

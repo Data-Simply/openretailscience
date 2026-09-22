@@ -1,37 +1,7 @@
-"""Cohort Analysis and User Segmentation.
+"""Cohort retention matrix from transaction data.
 
-This module implements functionality for performing cohort analysis, a powerful technique used in customer analytics
-and retention strategies.
-
-Cohort analysis helps in understanding customer behavior over time by grouping users based on shared characteristics
-or experiences, such as sign-up date, first purchase, or marketing campaign interaction. This method provides
-valuable insights into user engagement, retention, and lifetime value, which businesses can leverage in various ways:
-
-1. Customer retention analysis: By tracking how different cohorts behave over time, businesses can identify trends
-   in user engagement and develop strategies to improve customer loyalty.
-
-2. Marketing performance evaluation: Understanding how different user groups respond to marketing efforts helps in
-   optimizing campaigns for higher conversions and better ROI.
-
-3. Product lifecycle insights: Analyzing user activity across cohorts can reveal product adoption trends and inform
-   feature development or enhancements.
-
-4. Revenue forecasting: Cohort-based revenue tracking enables more accurate predictions of future earnings and
-   helps in financial planning.
-
-5. Personalization and segmentation: Businesses can tailor their offerings based on cohort behavior to enhance
-   customer experience and increase retention rates.
-
-The module employs key metrics such as retention rate, churn rate, and customer lifetime value (CLV) to measure
-cohort performance and user engagement over time:
-
-- Retention Rate: The percentage of users who continue to engage with a product or service over a given period.
-- Churn Rate: The percentage of users who stop engaging with the product within a specific timeframe.
-- Customer Lifetime Value (CLV): The predicted total revenue a customer will generate throughout their relationship
-  with the business.
-
-By leveraging cohort analysis, businesses can make data-driven decisions to enhance customer experience, improve
-marketing strategies, and drive long-term growth.
+Index = cohort start period; integer columns = periods since start. For churn per
+purchase-day ordinal, use `customer.TransactionChurn`; render with `plots.cohort.plot`.
 """
 
 from typing import ClassVar
@@ -87,7 +57,12 @@ def _periods_between(start: pd.Series, end: pd.Series, period: str) -> pd.Series
 
 
 class CohortAnalysis:
-    """Class for performing cohort analysis and visualization."""
+    """Computes a cohort retention matrix from transaction data.
+
+    Materialized eagerly at construction (``.execute()``); ``.df`` is the pandas result
+    (index = cohort start period, integer columns = period index since start, missing
+    cells 0). There is no ``.table``; pair with `plots.cohort.plot` for rendering.
+    """
 
     VALID_PERIODS: ClassVar[tuple[str, ...]] = ("year", "quarter", "month", "week", "day")
 
@@ -99,7 +74,10 @@ class CohortAnalysis:
         period: str = "month",
         percentage: bool = False,
     ) -> None:
-        """Initializes the Cohort Analysis object.
+        """Initialize the CohortAnalysis object.
+
+        Construction runs the aggregate query (eager ``.execute()``); filter large
+        remote tables before constructing.
 
         Args:
             df (pd.DataFrame | ibis.Table): The dataset containing transaction data.
@@ -110,6 +88,8 @@ class CohortAnalysis:
             percentage (bool): If True, converts cohort values into retention percentages relative to the first period.
 
         Raises:
+            TypeError: If `df` is not a pandas DataFrame or an Ibis Table.
+            TypeError: If `period` is not a string.
             ValueError: If `period` is not one of the allowed values.
             ValueError: If `df` is missing required columns
                 (`customer_id`, `transaction_date`, or `aggregation_column`).
@@ -177,12 +157,14 @@ class CohortAnalysis:
             df (pd.DataFrame | ibis.Table): The dataset containing transaction data.
             aggregation_column (str): The column to apply the aggregation function on (e.g., 'unit_spend').
             agg_func (str, optional): Aggregation function (e.g., "nunique", "sum", "mean"). Defaults to "nunique".
-            period (str): Period for cohort analysis: "year", "quarter", "month", "week", or "day"
-                (case-insensitive; short forms like "m"/"d" accepted).
+            period (str): Period for cohort analysis: "year", "quarter", "month", "week", or "day".
             percentage (bool): If True, converts cohort values into retention percentages relative to the first period.
 
         Returns:
-            pd.DataFrame: Cohort analysis table with user retention values.
+            pd.DataFrame: Pivot with index = cohort start period (`min_period_shopped`) and
+                integer columns = period index since start (`period_since`); values are the
+                aggregated `aggregation_column`, missing cells 0. With `percentage=True`,
+                each row is divided by its first-period value (rounded to 2), NaN filled with 0.
         """
         cols = ColumnHelper()
 

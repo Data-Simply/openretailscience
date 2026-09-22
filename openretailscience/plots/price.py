@@ -1,29 +1,7 @@
-"""Bubble chart visualizations for price distribution analysis across categories.
+"""Price-band bubble distribution across categories.
 
-The bubble chart shows price distribution as vertical layers (price bands) with bubble sizes
-representing the percentage of products in each price range for different categories like
-retailers, countries, etc.
-
-### Core Features
-
-- **Price Band Analysis**: Automatically bins price data into ranges using pandas.cut()
-- **Categorical Grouping**: Groups data by categorical columns (retailers, countries, etc.)
-- **Bubble Sizing**: Bubble sizes represent percentage of products in each price band per group
-- **Flexible Binning**: Supports both integer (equal-width bins) and array (custom boundaries) inputs
-- **Grid Layout**: X-axis shows categories, Y-axis shows price bands
-
-### Use Cases
-
-- **Retailer Price Comparison**: Compare price distributions across different retailers
-- **Regional Price Analysis**: Analyze price positioning by country/region
-- **Competitive Pricing**: Identify pricing gaps and opportunities
-- **Price Architecture Visualization**: Visualize competitive pricing landscapes
-
-### Limitations
-
-- **Pandas DataFrame Only**: No Ibis table support
-- **Pre-aggregated Data**: Data should be at product level (one row per product)
-- **Numeric Price Column**: Requires numeric price/value column for binning
+x = category, y = price bands, bubble area proportional to the share of each group's
+products in a band. One row per product with a numeric price column (pandas only).
 """
 
 from typing import Any
@@ -42,22 +20,26 @@ def _validate_inputs(
     group_col: str,
     bins: int | list[float],
 ) -> tuple[pd.DataFrame, int | list[float]]:
-    """Validates and processes inputs for price distribution plotting.
+    """Validate and clean the inputs, returning the trimmed frame and validated bins.
+
+    Drops NaN rows in the two key columns; the returned frame holds only value_col and
+    group_col.
 
     Args:
         df: Input DataFrame containing product-level data.
-        value_col: Column containing the price/value data.
-        group_col: Column containing the categorical grouping.
-        bins: Either number of equal-width bins (int) or custom bin boundaries (list).
+        value_col: Column with the numeric price/value data.
+        group_col: Column with the categorical grouping.
+        bins: Number of equal-width bins (int) or custom bin boundaries (list).
 
     Returns:
-        Tuple of (cleaned_dataframe, validated_bins).
+        tuple[pd.DataFrame, int | list[float]]: The cleaned 2-column frame and validated bins.
 
     Raises:
-        ValueError: If DataFrame is empty, columns don't exist, value column is not numeric,
-            or bins parameter is invalid.
-        KeyError: If specified columns are not found in DataFrame.
-        TypeError: If bins parameter has invalid type.
+        ValueError: If df is empty, value_col is not numeric, bins is invalid, or no rows
+            remain after dropna.
+        KeyError: If value_col or group_col is not a column of df.
+        TypeError: If bins is neither an int nor a list.
+
     """
     # Validate DataFrame is not empty
     if df.empty:
@@ -91,17 +73,21 @@ def _validate_inputs(
 
 
 def _validate_bins_parameter(bins: int | list[float]) -> int | list[float]:
-    """Validates and processes the bins parameter for price distribution plotting.
+    """Validate the bins parameter, returning it normalized.
+
+    An int must be > 0; a list needs at least 2 numeric values and is returned sorted.
 
     Args:
-        bins: Either number of equal-width bins (int) or custom bin boundaries (list).
+        bins: Number of equal-width bins (int) or custom bin boundaries (list).
 
     Returns:
-        Validated and processed bins parameter.
+        int | list[float]: The validated bins (a list is returned sorted).
 
     Raises:
-        ValueError: If bins parameter is invalid.
-        TypeError: If bins parameter has invalid type.
+        ValueError: If bins is a non-positive int, or a list with fewer than 2 values or any
+            non-numeric value.
+        TypeError: If bins is neither an int nor a list.
+
     """
     if isinstance(bins, int):
         if bins <= 0:
@@ -147,35 +133,35 @@ def plot(
     move_legend_outside: bool = False,
     **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
-    """Creates a bubble chart visualization showing price distribution analysis across categories.
+    """Plot a price-band bubble chart: categories on x, price bands on y.
 
-    The chart displays price bands as vertical layers with bubble sizes representing the percentage
-    of products in each price range for different groups (retailers, countries, etc.).
+    Bubble area is proportional to the absolute share of each group's products in a band,
+    so sizes stay comparable across groups. Y tick labels read "left - right".
 
     Args:
-        df (pd.DataFrame): Input DataFrame containing product-level data.
-        value_col (str): Column containing the price/value data (e.g., "unit_price").
-        group_col (str): Column containing the categorical grouping (e.g., "retailer").
-        bins (int | list[float]): Either number of equal-width bins (int) or custom bin boundaries (list).
-        title (str, optional): The title of the plot. Defaults to None.
-        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-        x_label (str, optional): The label for the x-axis. Defaults to None.
-        y_label (str, optional): The label for the y-axis. Defaults to None.
-        legend_title (str, optional): The title for the legend. Defaults to None.
-        figsize (tuple[int, int], optional): Size of the new figure when ``ax`` is None. Defaults to None.
-        ax (Axes, optional): The Matplotlib Axes object to plot on. Defaults to None.
-        source_text (str, optional): Text to be displayed as a source at the bottom of the plot. Defaults to None.
-        move_legend_outside (bool, optional): Whether to move the legend outside the plot area. Defaults to False.
-        **kwargs (Any): Additional keyword arguments for the scatter plot function.
-
-    Returns:
-        SubplotBase: The Matplotlib Axes object with the generated bubble chart.
+        df (pd.DataFrame): Product-level frame (one row per product).
+        value_col (str): Numeric price/value column to bin.
+        group_col (str): Categorical grouping column (x-axis).
+        bins (int or list[float]): Number of equal-width bins, or custom boundaries.
+        title (str, optional): Plot title.
+        eyebrow (str, optional): Uppercase label rendered above the title.
+        subtitle (str, optional): Supporting copy rendered below the title.
+        x_label (str, optional): X-axis label.
+        y_label (str, optional): Y-axis label.
+        legend_title (str, optional): Legend title.
+        figsize (tuple[int, int], optional): Figure size, used only when ax is None.
+        ax (Axes, optional): Axes to plot on.
+        source_text (str, optional): Source attribution rendered at the bottom.
+        move_legend_outside (bool, optional): Move the legend outside the plot.
+        **kwargs: Forwarded to matplotlib scatter; s scales bubble area (default 2000) and
+            edgecolor defaults to black.
 
     Raises:
-        ValueError: If DataFrame is empty, columns don't exist, or bins parameter is invalid.
-        KeyError: If specified columns are not found in DataFrame.
-        TypeError: If bins parameter has invalid type.
+        ValueError: If df is empty, value_col is not numeric, no rows remain after dropna,
+            or no data falls within the bins.
+        KeyError: If value_col or group_col is not a column of df.
+        TypeError: If bins is neither an int nor a list.
+
     """
     # Validate inputs and get clean data
     df_clean, bins = _validate_inputs(df, value_col, group_col, bins)

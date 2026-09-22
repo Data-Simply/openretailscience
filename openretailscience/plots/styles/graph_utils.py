@@ -68,11 +68,7 @@ def format_shorthand(
     decimals: int = 0,
     prefix: str = "",
 ) -> str:
-    """Format a number the way a person would write it, with K/M/B/T/P magnitude suffixes.
-
-    Examples:
-        ``500000 → "500K"``, ``1.4e7 → "14M"``, ``1500 → "2K"`` (zero decimals),
-        ``1500 → "1.5K"`` (one decimal). Trailing zeros are dropped.
+    """Format a number with K/M/B/T/P magnitude suffixes, dropping trailing zeros.
 
     Args:
         num (float): The number to format.
@@ -168,12 +164,10 @@ def truncate_to_x_digits(num_str: str, digits: int) -> str:
 def draw_end_of_line_labels(ax: Axes) -> None:
     """Annotate each visible line with its series label at its right-most point.
 
-    Used by line-style plots when ``legend_style="end_of_line"``. For each
-    visible labeled line, places a small filled marker at the line's last
-    finite (x, y) and a colored text label to its right. When two or more
-    labels would overlap vertically, label y-positions are bumped apart by
-    the font line height (markers stay anchored at the true line endpoints)
-    and a thin leader connects each displaced label back to its marker.
+    Entry point for ``legend_style="end_of_line"``. For each visible labeled line, places a
+    marker at the line's last finite (x, y) and a colored label to its right; overlapping
+    labels are bumped apart by the font line height (markers stay anchored) and a thin
+    leader connects each displaced label back to its marker.
 
     Args:
         ax: Matplotlib axes containing the line plots.
@@ -274,11 +268,10 @@ def draw_end_of_line_labels(ax: Axes) -> None:
 def _resolve_end_of_line_label_ys(ax: Axes, candidates: list[_EndOfLineCandidate], font_pts: float) -> list[float]:
     """Greedy bump of overlapping label y-positions, returned in input order.
 
-    Works in display (pixel) space so the minimum gap reflects the rendered
-    font height regardless of the data y-scale. Sorts candidates by initial
-    pixel y, walks bottom-to-top pushing each label up if it would collide
-    with the previous one, and — if the topmost label exceeds the data area
-    — clamps it down and back-propagates.
+    Works in display (pixel) space so the minimum gap tracks the rendered font height.
+    Walks bottom-to-top pushing labels up, and clamps at the data-area edges with
+    back-propagation. Emits ``UserWarning`` when labels cannot fit (suggests a box
+    legend or fewer series).
 
     Args:
         ax: The axes whose transData maps the label points.
@@ -287,8 +280,7 @@ def _resolve_end_of_line_label_ys(ax: Axes, candidates: list[_EndOfLineCandidate
         font_pts: Label font size in points; sets the per-label gap.
 
     Returns:
-        A list of resolved y-positions in data coordinates, aligned with
-        ``candidates`` by index.
+        list[float]: Resolved y-positions in data coordinates, aligned with ``candidates``.
     """
     n = len(candidates)
     initial_px = np.array([ax.transData.transform((0, c["y_end"]))[1] for c in candidates])
@@ -337,11 +329,10 @@ def _resolve_end_of_line_label_ys(ax: Axes, candidates: list[_EndOfLineCandidate
 def expand_ylim_for_bar_labels(ax: Axes, labels: list[Annotation]) -> None:
     """Grow the y-limits so bar-end value labels sit inside the axes data area.
 
-    matplotlib bars have sticky edges that suppress autoscale margins, so the y-view is pinned to the
-    bar extents and ``bar_label``'s edge labels overflow the axes. This grows ``ylim`` on whichever
-    side overflows until every label clears, in pixel space so the reserved room tracks the font
-    height, not a fixed fraction of the data range. Must run after the chrome layout has reflowed the
-    axes, since the overflow-to-data conversion needs the final axes height.
+    Bars have sticky edges that pin the y-view, so ``bar_label``'s edge labels overflow the
+    axes; this grows ``ylim`` in pixel space (so the reserved room tracks font height) until
+    every label clears. Must run after the chrome layout has reflowed the axes. Warns if not
+    converged within the pass cap.
 
     Args:
         ax (Axes): The axes holding the labelled bars.
@@ -385,13 +376,12 @@ def expand_ylim_for_bar_labels(ax: Axes, labels: list[Annotation]) -> None:
 def apply_hatches(ax: Axes, num_segments: int) -> Axes:
     """Apply hatch patterns to patches in a plot, such as bars, histograms, or area plots.
 
-    This function divides the patches in the given Axes object into the specified
-    number of segments and applies a different hatch pattern to each segment.
+    Splits ``ax.patches`` into ``num_segments`` groups and applies one hatch pattern per group,
+    mirroring the hatches onto the legend patches.
 
     Args:
         ax (Axes): The matplotlib Axes object containing the plot with patches (bars, histograms, etc.).
-        num_segments (int): The number of segments to divide the patches into, with each
-            segment receiving a different hatch pattern.
+        num_segments (int): The number of segments to divide the patches into.
 
     Returns:
         Axes: The modified Axes object with hatches applied to the patches.

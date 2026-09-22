@@ -1,14 +1,4 @@
-"""Label Utilities - Labeling by Condition.
-
-This module provides utilities to label groups in an Ibis table based on whether
-any items in the group meet a specified condition. It supports both binary labeling
-(contains/not_contains) and extended labeling (contains/mixed/not_contains).
-
-Example use cases:
-- Tag transactions as containing a product, product category, or promotion
-- Tag customers as containing a product, product category, or promotion, or store_id
-- Tag a transaction as containing promo items, no promo items, or both on/off promo items
-"""
+"""Label ibis groups by whether items meet a condition (binary or extended strategies)."""
 
 from typing import Literal
 
@@ -28,33 +18,25 @@ def label_by_condition(
     not_contains_label: str | ibis.Value = "not_contains",
     mixed_label: str | ibis.Value = "mixed",
 ) -> ibis.Table:
-    """Labels groups in a table based on whether items in the group meet a condition.
+    """Label groups in a table based on whether their items meet a condition.
 
-    This function groups a table by the specified label column and determines whether
-    any items in each group meet the given condition. It supports two labeling strategies:
-    - "binary": Labels groups as either "contains" or "not_contains" based on whether
-      any item in the group meets the condition
-    - "extended": Labels groups as "contains" (all items meet condition), "mixed"
-      (some items meet condition), or "not_contains" (no items meet condition)
+    binary: a group is labeled ``contains`` if ANY item meets the condition, else
+    ``not_contains``. extended: ``contains`` (all items meet it), ``mixed`` (some do),
+    ``not_contains`` (none do).
 
     Args:
-        table (ibis.Table): An ibis table to process.
-        condition (ibis.expr.types.BooleanColumn): Boolean expression representing
-            the condition to evaluate.
-        label_col (str | None, optional): Column name to group by for labeling. If None, defaults to the setting
-            column.customer_id.
-        return_col (str, optional): Name of the column to add with the labels. Defaults to "label_name".
-        labeling_strategy (Literal["binary", "extended"], optional): Strategy for labeling groups.
-            Defaults to "binary".
-        contains_label (str | ibis.Value, optional): Label for groups that contain
-            items meeting the condition. Defaults to "contains".
-        not_contains_label (str | ibis.Value, optional): Label for groups that do not
-            contain items meeting the condition. Defaults to "not_contains".
-        mixed_label (str | ibis.Value, optional): Label for groups with mixed results
-            (only used with "extended" strategy). Defaults to "mixed".
+        table (ibis.Table): The ibis table to label.
+        condition (ibis.expr.types.BooleanColumn): Boolean expression evaluated per row.
+        label_col (str | None): Column to group by. If None, uses the ``column.customer_id``
+            option.
+        return_col (str): Name of the added label column.
+        labeling_strategy (Literal["binary", "extended"]): Labeling strategy.
+        contains_label (str | ibis.Value): Label for contains.
+        not_contains_label (str | ibis.Value): Label for not_contains.
+        mixed_label (str | ibis.Value): Label for mixed (extended strategy only).
 
     Returns:
-        ibis.Table: An ibis table grouped by label_col with an added label column.
+        ibis.Table: One row per group, with the added label column.
     """
     if label_col is None:
         label_col = get_option("column.customer_id")

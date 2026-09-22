@@ -1,20 +1,8 @@
-"""Geospatial Distance Analysis for Retail Location Intelligence.
+"""Great-circle (haversine) distance between two lat/lon column pairs.
 
-This module provides efficient geospatial distance calculations that power location-based retail analytics and
-strategic decision-making.
-
-## Technical Features
-
-- **Ibis-Based Computation**: Scalable processing within existing data pipelines
-- **Database Integration**: Calculations performed in SQL databases for efficiency
-- **Haversine Formula**: Accurate great-circle distance computation
-- **Backend Agnostic**: Works with multiple database and processing engines
-
-## Limitations
-
-- **Spherical Earth Assumption**: Minor inaccuracies due to Earth's actual oblate shape
-- **Straight-Line Distance**: Measures "as the crow flies", not driving distances
-- **Requires Trigonometric Functions**: Backend must support mathematical functions
+All arguments and the return value are lazy Ibis expressions, so computation is pushed to the
+backend, which must support trigonometric functions. Spherical-Earth approximation; the result is
+a straight-line distance, not a driving distance, in the units of ``radius`` (km by default).
 """
 
 import ibis
@@ -27,17 +15,20 @@ def haversine_distance(
     target_lon_col: ibis.Column,
     radius: float = 6371.0,
 ) -> ibis.Column:
-    """Computes the Haversine distance between two sets of latitude and longitude columns.
+    """Compute the Haversine distance between two sets of latitude and longitude columns.
 
-    Parameters:
-        lat_col (ibis.Column): Column containing source latitudes.
-        lon_col (ibis.Column): Column containing source longitudes.
-        target_lat_col (ibis.Column): Column containing target latitudes.
-        target_lon_col (ibis.Column): Column containing target longitudes.
-        radius (float, optional): Earth's radius in kilometers (default: 6371 km).
+    Input columns are in degrees; the return value is a lazy Ibis expression in the
+    units of ``radius`` — nothing is materialized here.
+
+    Args:
+        lat_col (ibis.Column): Source latitudes in degrees.
+        lon_col (ibis.Column): Source longitudes in degrees.
+        target_lat_col (ibis.Column): Target latitudes in degrees.
+        target_lon_col (ibis.Column): Target longitudes in degrees.
+        radius (float): Earth's radius in the desired output units; defaults to 6371.0 km.
 
     Returns:
-        ibis.Column: An Ibis expression representing the computed distances.
+        ibis.Column: Lazy Ibis expression for the distance between each source/target pair.
     """
     lat1_rad = lat_col.radians()
     lat2_rad = target_lat_col.radians()

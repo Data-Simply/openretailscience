@@ -1,64 +1,8 @@
-"""Composite Rank Analysis Module for Multi-Factor Retail Decision Making.
+"""Composite ranking across multiple metrics.
 
-## Business Context
-
-In retail, critical decisions like product ranging, supplier selection, and store
-performance evaluation require balancing multiple competing factors. A product might
-have high sales but low margin, or a supplier might offer great prices but poor
-delivery reliability. Composite ranking enables data-driven decisions by combining
-multiple performance metrics into a single, actionable score.
-
-## Real-World Applications
-
-1. **Product Range Optimization**: Rank products for listing/delisting decisions based on:
-   - Sales velocity (units per week)
-   - Gross margin percentage
-   - Stock turn rate
-   - Customer satisfaction scores
-   - Return rates
-
-2. **Supplier Performance Management**: Evaluate suppliers using:
-   - On-time delivery percentage
-   - Price competitiveness
-   - Quality scores (defect rates)
-   - Payment terms flexibility
-   - Order fill rates
-
-3. **Store Performance Assessment**: Rank stores for investment decisions based on:
-   - Sales per square foot
-   - Conversion rates
-   - Labor productivity
-   - Customer satisfaction (NPS)
-   - Shrinkage rates
-
-4. **Category Management**: Prioritize categories for space allocation using:
-   - Category growth rates
-   - Market share
-   - Profitability
-   - Cross-category purchase influence
-   - Seasonal consistency
-
-## How It Works
-
-The module creates individual rankings for each metric, then combines these rankings
-using aggregation functions (mean, sum, min, max) to produce a final composite score.
-This approach normalizes metrics with different scales and ensures each factor contributes
-appropriately to the final decision.
-
-## Business Value
-
-- **Objective Decision Making**: Removes bias by systematically weighing all factors
-- **Scalability**: Can evaluate thousands of products/stores/suppliers simultaneously
-- **Transparency**: Clear methodology that stakeholders can understand and trust
-- **Flexibility**: Different aggregation methods suit different business strategies
-- **Actionable Output**: Direct ranking enables clear cut-off decisions
-
-Key Features:
-- Creates individual ranks for multiple columns with business metrics
-- Supports both ascending and descending sort orders for each metric
-- Combines individual ranks using business-appropriate aggregation functions
-- Handles tie values for fair comparison
-- Utilizes Ibis for efficient query execution on large retail datasets
+Ranks each metric column (ascending or descending per column), then aggregates the
+per-column ranks — not the raw values — into a `composite_rank` column (lower is
+better overall).
 """
 
 import functools
@@ -73,45 +17,14 @@ VALID_AGG_FUNCS = ("mean", "sum", "min", "max")
 
 
 class CompositeRank:
-    """Creates multi-factor composite rankings for retail decision-making.
+    """Creates composite rankings by aggregating per-metric ranks.
 
-    The CompositeRank class enables retailers to make data-driven decisions by combining
-    multiple performance metrics into a single, actionable ranking. This is essential for
-    scenarios where no single metric tells the complete story.
-
-    ## Business Problem Solved
-
-    Retailers face complex trade-offs daily: Should we keep the high-volume product with
-    low margins or the high-margin product with slow sales? Which supplier offers the best
-    overall value when considering price, quality, and reliability? This class provides a
-    systematic approach to these multi-dimensional decisions.
-
-    ## Example Use Case: Product Range Review
-
-    When conducting quarterly range reviews, a retailer might rank products by:
-    - Sales performance (higher is better → descending order)
-    - Days of inventory (lower is better → ascending order)
-    - Customer rating (higher is better → descending order)
-    - Return rate (lower is better → ascending order)
-
-    The composite rank identifies products that perform well across ALL metrics, not just
-    excel in one area. Products with the best composite scores are clear "keep" decisions,
-    while those with the worst scores are candidates for delisting.
-
-    ## Aggregation Strategies
-
-    Different business contexts require different aggregation approaches:
-    - **Mean**: Balanced scorecard approach, all factors equally important
-    - **Min**: Conservative approach, focus on worst-performing metric
-    - **Max**: Optimistic approach, highlight strength in any area
-    - **Sum**: Cumulative performance across all dimensions
-
-    ## Actionable Outcomes
-
-    The composite rank directly supports decisions like:
-    - Top 20% composite rank → Increase inventory investment
-    - Bottom 20% composite rank → Consider delisting or markdown
-    - Middle 60% → Maintain current strategy, monitor for changes
+    Ranks are 1-based with rank 1 = best in the given sort direction, so a lower
+    `composite_rank` is better overall. `composite_rank` aggregates the per-column
+    ranks, not the raw values: mean = average rank, sum = total rank, min = `ibis.least`
+    (best single-metric rank dominates), max = `ibis.greatest` (worst single-metric rank
+    dominates). `.table` is a lazy ibis Table; `.df` materializes on first access and is
+    cached.
     """
 
     def __init__(
@@ -122,65 +35,38 @@ class CompositeRank:
         ignore_ties: bool = False,
         group_col: str | list[str] | None = None,
     ) -> None:
-        """Initialize the CompositeRank class for multi-criteria retail analysis.
+        """Initialize a CompositeRank over `df`.
 
         Args:
-            df (pd.DataFrame | ibis.Table): Product, store, or supplier performance data.
-            rank_cols (List[Union[Tuple[str, str], str]]): Metrics to rank with their optimization direction.
-                Examples for product ranging:
-                - ("sales_units", "desc") - Higher sales are better
-                - ("days_inventory", "asc") - Lower inventory days are better
-                - ("margin_pct", "desc") - Higher margins are better
-                - ("return_rate", "asc") - Lower returns are better
-                If just a string is provided, ascending order is assumed.
-            agg_func (str): How to combine individual rankings:
-                - "mean": Balanced scorecard (most common for range reviews)
-                - "sum": Total performance score (for bonus calculations)
-                - "min": Worst-case performance (for risk assessment)
-                - "max": Best-case performance (for opportunity identification)
-            ignore_ties (bool, optional): How to handle identical values:
-                - False (default): Products with same sales get same rank (fair comparison)
-                - True: Force unique ranks even for ties (strict ordering needed)
-            group_col (str | list[str], optional): Column(s) to partition rankings by group.
-                - None (default): Rank across entire dataset (current behavior)
-                - If specified: Calculate ranks independently within each group
-                Examples for group-based ranking:
-                - "product_category": Rank products within each category
-                - "store_region": Rank stores within their regions
-                - "supplier_type": Rank suppliers within their specialization
+            df (pd.DataFrame | ibis.Table): Data to rank.
+            rank_cols (list[tuple[str, str] | str]): Metrics to rank with their sort
+                direction. Each entry is a column name (defaults to "asc") or a
+                (column, sort_order) tuple; sort_order is "asc", "ascending", "desc", or
+                "descending" (case-insensitive).
+            agg_func (str): How to combine the per-column ranks (not raw values):
+                "mean" = average rank, "sum" = total rank, "min" = `ibis.least`,
+                "max" = `ibis.greatest`.
+            ignore_ties (bool, optional): False (default) uses `ibis.rank` — tied values
+                share a rank. True uses `ibis.row_number` — every row gets a unique rank.
+            group_col (str | list[str], optional): Column(s) to partition the ranking by.
+                None (default) ranks globally; otherwise ranks are computed independently
+                within each group.
 
         Raises:
-            ValueError: If specified metrics are not in the data or sort order is invalid.
-            ValueError: If aggregation function is not supported.
-            ValueError: If group_col is specified but doesn't exist in the data.
+            TypeError: If `df` is not a pandas DataFrame or an Ibis Table.
+            ValueError: If `rank_cols` is empty.
+            ValueError: If a specified metric is not in the data or the sort order is invalid.
+            ValueError: If the aggregation function is not supported.
+            ValueError: If `group_col` is specified but doesn't exist in the data.
 
         Examples:
-            >>> # Global ranking: Rank all products together (current behavior)
+            >>> # Group-based ranking: each product competes with its own category
             >>> ranker = CompositeRank(
             ...     df=product_data,
-            ...     rank_cols=[
-            ...         ("weekly_sales", "desc"),
-            ...         ("margin_percentage", "desc"),
-            ...         ("stock_cover_days", "asc"),
-            ...         ("customer_rating", "desc")
-            ...     ],
-            ...     agg_func="mean"
-            ... )
-            >>> # Products with lowest composite_rank should be reviewed for delisting
-
-            >>> # Group-based ranking: Rank products within each category
-            >>> ranker = CompositeRank(
-            ...     df=product_data,
-            ...     rank_cols=[
-            ...         ("weekly_sales", "desc"),
-            ...         ("margin_percentage", "desc"),
-            ...         ("stock_cover_days", "asc")
-            ...     ],
+            ...     rank_cols=[("weekly_sales", "desc"), ("margin_percentage", "desc"), ("stock_cover_days", "asc")],
             ...     agg_func="mean",
-            ...     group_col="product_category"
+            ...     group_col="product_category",
             ... )
-            >>> # Electronics products ranked against other electronics
-            >>> # Apparel products ranked against other apparel
         """
         df = ensure_ibis_table(df)
 
@@ -199,10 +85,7 @@ class CompositeRank:
         group_col: list[str] | None,
         ignore_ties: bool,
     ) -> dict[str, ir.IntegerColumn]:
-        """Process rank columns and create ranking expressions.
-
-        Validates each column specification, then builds an ibis ranking expression
-        for each metric using the appropriate window function and tie-handling strategy.
+        """Build an ibis ranking expression for each rank column spec.
 
         Args:
             rank_cols (list[tuple[str, str] | str]): Column specifications to rank. Each element is
@@ -214,9 +97,11 @@ class CompositeRank:
                 which assigns the same rank to tied values.
 
         Returns:
-            dict[str, ir.IntegerColumn]: Mapping of rank column names (e.g., "sales_rank") to ibis ranking expressions.
+            dict[str, ir.IntegerColumn]: Mapping of output column names (`{col_name}_rank`)
+                to ibis ranking expressions.
 
         Raises:
+            ValueError: If `rank_cols` is empty.
             ValueError: If a specified column is not found in the DataFrame.
             ValueError: If a sort order is not one of "asc", "ascending", "desc", or "descending".
         """
@@ -271,10 +156,7 @@ class CompositeRank:
         rank_mutates: dict[str, ir.IntegerColumn],
         agg_func: str,
     ) -> ibis.Table:
-        """Create the final composite ranking by aggregating individual rank columns.
-
-        Combines the individual ranking columns into a single composite_rank column
-        using the specified aggregation function.
+        """Aggregate per-metric rank columns into a `composite_rank` column.
 
         Args:
             df (ibis.Table): The table with individual rank columns already added.
@@ -297,12 +179,10 @@ class CompositeRank:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Returns ranked data ready for business decision-making.
+        """Materialized ranked data (computed lazily on first access, then cached).
 
         Returns:
-            pd.DataFrame: Performance data with ranking columns added:
-                - Original metrics (sales, margin, etc.)
-                - Individual rank columns (e.g., sales_rank, margin_rank)
-                - composite_rank: Final combined ranking for decisions
+            pd.DataFrame: The input metrics plus one `{col}_rank` column per ranked
+                metric and the final `composite_rank` column.
         """
         return self.table.execute()

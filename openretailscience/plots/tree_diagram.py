@@ -1,7 +1,7 @@
-"""Tree Diagram Module.
+"""Grid-based tree diagrams for hierarchical KPI decomposition.
 
-This module implements tree visualization components using matplotlib for creating
-hierarchical tree diagrams with custom node types and grid-based layouts.
+Internal: TreeGrid lays out pluggable TreeNode subclasses on a grid and draws
+elbow connectors between parent and child nodes.
 """
 
 from abc import ABC, abstractmethod
@@ -30,15 +30,15 @@ class BaseRoundedBox(mpatches.PathPatch):
         bottom_radius: float = 0.3,
         **kwargs: Any,  # noqa: ANN401
     ) -> None:
-        """Initialize the custom rounded box.
+        """Create a box whose top and bottom corners use independent radii.
 
         Args:
-            xy: Bottom-left corner coordinates (x, y).
-            width: Width of the box.
-            height: Height of the box.
-            top_radius: Radius for top corners.
-            bottom_radius: Radius for bottom corners.
-            **kwargs: Additional keyword arguments for PathPatch.
+            xy: Bottom-left corner (x, y), not the center.
+            width: Box width.
+            height: Box height.
+            top_radius: Radius of the top corners (default 0.3).
+            bottom_radius: Radius of the bottom corners (default 0.3).
+            **kwargs: Forwarded to PathPatch.
 
         """
         x, y = xy
@@ -97,20 +97,10 @@ class BaseRoundedBox(mpatches.PathPatch):
         fallback_point: tuple[float, float],
         is_first: bool,
     ) -> tuple[list[tuple[float, float]], list[int]]:
-        """Generate vertices and codes for a single corner.
+        """Emit the vertices and path codes for one corner.
 
-        Args:
-            center_x: X-coordinate of the corner's center.
-            center_y: Y-coordinate of the corner's center.
-            radius: Radius of the corner.
-            start_angle: Starting angle for the corner arc (in radians).
-            end_angle: Ending angle for the corner arc (in radians).
-            fallback_point: Point to use if radius is 0.
-            is_first: Whether this is the first corner (uses MOVETO instead of LINETO).
-
-        Returns:
-            Tuple of (vertices, codes) for this corner.
-
+        radius > 0 yields an arc; radius == 0 degenerates to the single fallback_point
+        (a straight corner). The first corner uses MOVETO, the rest use LINETO.
         """
         arc_points = 10  # Number of points to use for the corner arc
 
@@ -131,8 +121,8 @@ class BaseRoundedBox(mpatches.PathPatch):
 class TreeNode(ABC):
     """Abstract base class for tree nodes.
 
-    All TreeNode subclasses must define NODE_WIDTH and NODE_HEIGHT class attributes
-    and implement the render() method.
+    Subclasses must define the NODE_WIDTH and NODE_HEIGHT class attributes and
+    implement render(ax).
     """
 
     # Subclasses must define these class attributes
@@ -145,12 +135,12 @@ class TreeNode(ABC):
         x: float,
         y: float,
     ) -> None:
-        """Initialize the tree node.
+        """Create a tree node at a grid position.
 
         Args:
-            data: Dictionary containing node data. Each subclass defines required keys.
-            x: X-coordinate of bottom-left corner.
-            y: Y-coordinate of bottom-left corner.
+            data: Node data dict; required keys are defined per subclass.
+            x: X-coordinate of the bottom-left corner.
+            y: Y-coordinate of the bottom-left corner.
 
         """
         self._data = data
@@ -168,21 +158,11 @@ class TreeNode(ABC):
         ...
 
     def get_width(self) -> float:
-        """Return the node width.
-
-        Returns:
-            float: Node width.
-
-        """
+        """Return the node width."""
         return self.NODE_WIDTH
 
     def get_height(self) -> float:
-        """Return the node height.
-
-        Returns:
-            float: Node height.
-
-        """
+        """Return the node height."""
         return self.NODE_HEIGHT
 
 
@@ -205,16 +185,10 @@ class SimpleTreeNode(TreeNode):
 
     @staticmethod
     def _get_color(percent_change: float) -> str:
-        """Return color based on percent change thresholds.
+        """Return the named color for a percent change.
 
-        Green if >= GREEN_THRESHOLD, Red if <= RED_THRESHOLD, Gray otherwise.
-
-        Args:
-            percent_change: Percentage change value.
-
-        Returns:
-            str: Hex color code as string.
-
+        "positive" (green) at or above GREEN_THRESHOLD (+1.0), "negative" (red) at or
+        below RED_THRESHOLD (-1.0), "neutral" otherwise.
         """
         if percent_change >= SimpleTreeNode.GREEN_THRESHOLD:
             return get_named_color("positive")
@@ -345,22 +319,24 @@ class TreeGrid:
         vertical_spacing: float | None = None,
         horizontal_spacing: float | None = None,
     ) -> None:
-        """Initialize the tree grid.
+        """Create a grid of nodes with validated positions and a computed layout.
+
+        Each node's ``position`` is ``(col, row)`` where row 0 is the TOP row (rows
+        increase downward, the reverse of matplotlib's default y-axis).
 
         Args:
-            tree_structure: Dictionary mapping node IDs to node data with required keys
-                depending on the node_class being used.
-            num_rows: Number of rows in the grid.
-            num_cols: Number of columns in the grid.
-            node_class: The TreeNode subclass to use for rendering nodes.
-            vertical_spacing: Vertical spacing between rows. If None, automatically calculated as
-                node_height + 0.6 gap.
-            horizontal_spacing: Horizontal spacing between columns. If None, automatically calculated as
-                node_width - 1.0 overlap for compact layout.
+            tree_structure: Node IDs mapped to node data; each entry needs a
+                ``position`` key plus the keys its node_class requires.
+            num_rows: Number of grid rows (must be positive).
+            num_cols: Number of grid columns (must be positive).
+            node_class: TreeNode subclass used to render nodes.
+            vertical_spacing: Gap between rows; if None, node_height + 0.6.
+            horizontal_spacing: Gap between columns; if None, node_width - 1.0
+                (columns overlap for a compact layout).
 
         Raises:
-            ValueError: If grid dimensions are not positive, if tree_structure is empty,
-                or if node positions are out of bounds.
+            ValueError: If grid dimensions are non-positive, tree_structure is empty,
+                a node is missing its ``position`` key, or a position is out of bounds.
             TypeError: If node_class is not a TreeNode subclass.
 
         """
@@ -411,13 +387,17 @@ class TreeGrid:
         self.col = {i: i * self.horizontal_spacing for i in range(num_cols)}
 
     def render(self, ax: Axes | None = None) -> Axes:
-        """Render the tree diagram.
+        """Render every node and the elbow connector from each parent to its children.
 
         Args:
-            ax: Optional matplotlib axes object. If None, creates a new figure and axes.
+            ax: Axes to draw on; if None, a new figure sized to the layout is created.
 
         Returns:
-            The matplotlib axes object.
+            Axes: The rendered matplotlib axes.
+
+        Raises:
+            ValueError: If a node's ``children`` references an id absent from
+                tree_structure.
 
         """
         if ax is None:
@@ -489,17 +469,7 @@ class TreeGrid:
         x_offset: float,
         y_offset: float,
     ) -> None:
-        """Add Bezier curve control points to the path.
-
-        Args:
-            verts: List of vertices to append to.
-            codes: List of path codes to append to.
-            x: X-coordinate of the curve start point.
-            y: Y-coordinate of the curve start point.
-            x_offset: X offset for the curve end point.
-            y_offset: Y offset for the curve end point.
-
-        """
+        """Append two CURVE3 control points, curving from (x, y) toward its offset end."""
         verts.append((x, y))
         codes.append(Path.CURVE3)
         verts.append((x + x_offset, y + y_offset))
@@ -507,16 +477,7 @@ class TreeGrid:
 
     @staticmethod
     def _draw_connection(ax: Axes, x1: float, y1: float, x2: float, y2: float) -> None:
-        """Draw connection line between nodes with curved corners.
-
-        Args:
-            ax: Matplotlib axes object.
-            x1: X-coordinate of first point.
-            y1: Y-coordinate of first point.
-            x2: X-coordinate of second point.
-            y2: Y-coordinate of second point.
-
-        """
+        """Draw the parent-bottom-to-child-top connector as an elbow with curved corners."""
         # Use class constants for connection styling
         curve_radius = TreeGrid.CONNECTION_CURVE_RADIUS
         line_width = TreeGrid.CONNECTION_LINE_WIDTH
@@ -558,19 +519,19 @@ class TreeGrid:
 
 
 class DetailedTreeNode(TreeNode):
-    """Detailed tree node with current period, previous period, diff, pct diff, and contribution.
+    """Detailed tree node showing current/previous period, diff, pct diff, and contribution.
 
     Required data keys:
         header: str - Node header text
-        percent: float - Percentage change value
+        percent: float - Percentage change; also drives the "Pct Diff" row and header color
         current_period: str - Current period value text
         previous_period: str - Previous period value text
         diff: str - Absolute difference text
 
     Optional data keys:
-        contribution: str - Contribution value text (if not provided, row is left blank)
-        current_label: str - Label for current period (default: "Current Period")
-        previous_label: str - Label for previous period (default: "Previous Period")
+        contribution: str - Contribution value (row left blank if absent)
+        current_label: str - Current period label (default "Current Period")
+        previous_label: str - Previous period label (default "Previous Period")
     """
 
     NODE_WIDTH = 3.5
@@ -582,16 +543,10 @@ class DetailedTreeNode(TreeNode):
 
     @staticmethod
     def _get_color(percent_change: float) -> str:
-        """Return color based on percent change thresholds.
+        """Return the named color for a percent change.
 
-        Green if >= GREEN_THRESHOLD, Red if <= RED_THRESHOLD, Gray otherwise.
-
-        Args:
-            percent_change: Percentage change value.
-
-        Returns:
-            str: Hex color code as string.
-
+        "positive" (green) at or above GREEN_THRESHOLD (+1.0), "negative" (red) at or
+        below RED_THRESHOLD (-1.0), "neutral" otherwise.
         """
         if percent_change >= DetailedTreeNode.GREEN_THRESHOLD:
             return get_named_color("positive")

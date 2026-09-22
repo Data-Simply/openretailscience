@@ -1,28 +1,9 @@
-"""Revenue Tree Analysis Module.
+"""Decompose period-over-period revenue change into per-factor contributions.
 
-This module implements a Revenue Tree analysis for retail businesses. The Revenue Tree
-is a hierarchical breakdown of factors contributing to overall revenue, allowing for
-detailed analysis of sales performance and identification of areas for improvement.
-
-Key Components of the Revenue Tree:
-
-1. Revenue: The top-level metric, calculated as Customers * Revenue per Customer.
-
-2. Revenue per Customer: Average revenue generated per customer, calculated as:
-   Orders per Customer * Average Order Value.
-
-3. Orders per Customer: Average number of orders placed by each customer.
-
-4. Average Order Value: Average monetary value of each order, calculated as:
-   Items per Order * Price per Item.
-
-5. Items per Order: Average number of items in each order.
-
-6. Price per Item: Average price of each item sold.
-
-This module can be used to create, update, and analyze Revenue Tree data structures
-for retail businesses, helping to identify key drivers of revenue changes and
-inform strategic decision-making.
+Revenue = customers x spend per customer = customers x transactions per customer x
+spend per transaction, extended with units per transaction x price per unit when
+``unit_quantity`` is present (those conditional columns define the ``.df`` output).
+Provides ``RevenueTree`` (with ``.draw_tree()``) and ``calc_tree_kpis``.
 """
 
 import ibis
@@ -41,16 +22,30 @@ def calc_tree_kpis(
     p1_index: list[bool] | pd.Series,
     p2_index: list[bool] | pd.Series,
 ) -> pd.DataFrame:
-    """Calculate various key performance indicators (KPIs) for tree analysis.
+    """Calculate the revenue-tree KPIs from a pre-aggregated frame.
+
+    Input contract: the frame built by ``RevenueTree._agg_data`` — one row per
+    (group, period) with the option-derived columns ``column.agg.customer_id``,
+    ``column.agg.transaction_id``, ``column.agg.unit_spend``, and optionally
+    ``column.agg.unit_quantity`` (only when units were in the input). ``p1_index``
+    and ``p2_index`` are boolean row selectors for the two period rows.
+
+    Output columns are ``{metric}_p1`` / ``_p2`` / ``_diff`` / ``_pct_diff`` (suffixes
+    from the ``column.suffix.*`` options) plus ``{metric}_contrib`` contribution
+    columns (quantity/price columns present only when units were) and the two
+    elasticity columns. ``pct_diff = diff / p1``, with p1 = 0 giving NaN. The
+    elasticity columns use ARC (midpoint) percentage changes: price = %delta units /
+    %delta price per unit, frequency = %delta transactions per customer / %delta
+    spend per customer.
 
     Args:
-        df (pd.DataFrame): Input DataFrame containing relevant data.
-        p1_index (list[bool] | pd.Series): Boolean index for period 1.
-        p2_index (list[bool] | pd.Series): Boolean index for period 2.
+        df (pd.DataFrame): Pre-aggregated frame as described above.
+        p1_index (list[bool] | pd.Series): Boolean row selector for the period 1 rows.
+        p2_index (list[bool] | pd.Series): Boolean row selector for the period 2 rows.
 
     Returns:
-        pd.DataFrame: A DataFrame with calculated KPI values, including differences
-        and percentage differences between periods.
+        pd.DataFrame: One row per (group) with the period, difference, percent-difference,
+            and contribution columns described above.
     """
     cols = ColumnHelper()
     required_cols = [cols.agg.customer_id, cols.agg.transaction_id, cols.agg.unit_spend]
@@ -203,7 +198,12 @@ def calc_tree_kpis(
 
 
 class RevenueTree:
-    """Revenue Tree Analysis Class."""
+    """Period-over-period revenue decomposition with per-factor contributions.
+
+    Accepts pandas or Ibis input; the period aggregation runs in the Ibis engine via
+    ``_agg_data``. The result is in ``df`` (pandas); ``draw_tree()`` renders the
+    decomposition diagram.
+    """
 
     def __init__(
         self,
@@ -213,26 +213,23 @@ class RevenueTree:
         p2_value: str,
         group_col: str | list[str] | None = None,
     ) -> None:
-        """Initialize the Revenue Tree Analysis Class.
+        """Initialize the Revenue Tree and compute the KPI table immediately.
+
+        If the input contains the option-derived ``column.unit_quantity`` column,
+        units/price/price-elasticity metrics are added. ``p1_value`` / ``p2_value``
+        are matched by equality against ``period_col``; rows for any other period
+        are silently dropped.
 
         Args:
-            df (pd.DataFrame | ibis.Table): The input DataFrame or ibis Table containing transaction data.
-            period_col (str): The column representing the period.
-            p1_value (str): The value representing the first period.
-            p2_value (str): The value representing the second period.
-            group_col (str | list[str] | None, optional): The column(s) to group the data by. Can be a single
-                column name (str) or a list of column names (list[str]). Defaults to None.
+            df (pd.DataFrame | ibis.Table): Transaction data with the option-derived
+                customer_id, transaction_id, unit_spend, and (optional) unit_quantity columns.
+            period_col (str): Column identifying the period.
+            p1_value (str): Value representing the first period.
+            p2_value (str): Value representing the second period.
+            group_col (str | list[str] | None): Column(s) to break the analysis down by.
 
         Raises:
             ValueError: If the required columns are not present in the data.
-
-        Examples:
-            Single column grouping:
-                tree = RevenueTree(df, period_col="year", p1_value="2023", p2_value="2024", group_col="store")
-
-            Multi-column grouping:
-                tree = RevenueTree(df, period_col="year", p1_value="2023", p2_value="2024",
-                                   group_col=["region", "store"])
         """
         cols = ColumnHelper()
 
@@ -261,17 +258,21 @@ class RevenueTree:
         p2_value: str,
         group_col: list[str] | None = None,
     ) -> tuple[pd.DataFrame, list[bool], list[bool]]:
-        """Aggregate data by period and optional grouping columns.
+        """Aggregate data by period and optional grouping columns in the Ibis engine.
 
         Args:
-            df (pd.DataFrame | ibis.Table): Input DataFrame or ibis Table.
+            df (pd.DataFrame | ibis.Table): Input data.
             period_col (str): Column name for the period.
             p1_value (str): Value representing period 1.
             p2_value (str): Value representing period 2.
-            group_col (list[str] | None, optional): List of column names to group by. Defaults to None.
+            group_col (list[str] | None): List of column names to group by.
 
         Returns:
-            tuple[pd.DataFrame, list[bool], list[bool]]: Aggregated DataFrame and boolean indices for p1 and p2.
+            tuple[pd.DataFrame, list[bool], list[bool]]: Materialized frame (one row per
+                (group, period), p1 rows first, sorted by ``group_col``) plus boolean masks
+                selecting the p1 and p2 rows. The frame index is ``["p1", "p2"]`` when
+                ungrouped, else the group index (categorical for a single column,
+                MultiIndex for multiple).
         """
         cols = ColumnHelper()
 
@@ -398,30 +399,28 @@ class RevenueTree:
         units_per_transaction_label: str = "Units / Visit",
         price_per_unit_label: str = "Price / Unit",
     ) -> Axes:
-        """Draw the Revenue Tree graph as a matplotlib visualization.
+        """Draw the revenue tree diagram for one row of ``df``.
+
+        The Units / Visit and Price / Unit nodes render only when the input contained
+        the unit_quantity column.
 
         Args:
-            row_index (int, optional): Index of the row to visualize from the RevenueTree DataFrame. Defaults to 0.
-                Useful when the RevenueTree has multiple groups (e.g., by region, store, etc.).
-            value_labels (tuple[str, str] | None, optional): Labels for period columns. If None, uses "Current Period"
-                and "Previous Period". If provided, should be a tuple of (current_label, previous_label).
-            unit_spend_label (str, optional): Label for the Revenue node. Defaults to "Revenue".
-            customer_id_label (str, optional): Label for the Customers node. Defaults to "Customers".
-            spend_per_customer_label (str, optional): Label for the Spend / Customer node.
-                Defaults to "Spend / Customer".
-            transactions_per_customer_label (str, optional): Label for the Visits / Customer node.
-                Defaults to "Visits / Customer".
-            spend_per_transaction_label (str, optional): Label for the Spend / Visit node.
-                Defaults to "Spend / Visit".
-            units_per_transaction_label (str, optional): Label for the Units / Visit node.
-                Defaults to "Units / Visit".
-            price_per_unit_label (str, optional): Label for the Price / Unit node. Defaults to "Price / Unit".
+            row_index (int): Row of ``df`` to draw; use it to select a group when grouped.
+            value_labels (tuple[str, str] | None): (current, previous) = (p2_value, p1_value)
+                labels — easy to reverse. Defaults to ("Current Period", "Previous Period").
+            unit_spend_label (str): Header for the Revenue node.
+            customer_id_label (str): Header for the Customers node.
+            spend_per_customer_label (str): Header for the Spend / Customer node.
+            transactions_per_customer_label (str): Header for the Visits / Customer node.
+            spend_per_transaction_label (str): Header for the Spend / Visit node.
+            units_per_transaction_label (str): Header for the Units / Visit node.
+            price_per_unit_label (str): Header for the Price / Unit node.
 
         Returns:
             matplotlib.axes.Axes: The matplotlib axes containing the tree visualization.
 
         Raises:
-            IndexError: If row_index is out of bounds for the DataFrame.
+            IndexError: If ``row_index`` is out of bounds for ``df``.
 
         """
         cols = ColumnHelper()

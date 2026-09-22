@@ -1,65 +1,8 @@
-"""Customer Decision Hierarchy Analysis for Product Substitutability and Range Optimization.
+"""Product substitutability from customer co-purchase patterns via Yule's Q and ward hierarchical clustering.
 
-## Business Context
-
-Customer Decision Hierarchy (CDH) analysis reveals how customers perceive products
-as substitutes or complements. This critical intelligence informs range planning,
-assortment optimization, and delisting decisions by understanding which products
-customers view as interchangeable versus essential variety.
-
-## The Business Problem
-
-Retailers often struggle with range rationalization decisions:
-- Which products can be delisted without losing customers?
-- When does variety add value versus create confusion?
-- Which products are true substitutes in customers' minds?
-- How to optimize shelf space without sacrificing choice?
-
-CDH analysis answers these questions by analyzing actual switching behavior rather
-than relying on product attributes or manager intuition.
-
-## How It Works
-
-The analysis examines customer purchase patterns to identify substitutability:
-- Products rarely bought by the same customer → likely substitutes
-- Products often bought by the same customer → complements or variety-seeking
-- Uses Yule's Q coefficient to measure substitutability strength
-- Creates hierarchical clusters showing substitution relationships
-
-## Real-World Applications
-
-1. **Range Rationalization**
-   - Identify safe delisting candidates within substitute clusters
-   - Maintain one option per cluster to preserve choice
-   - Reduce SKU count while maintaining customer satisfaction
-
-2. **New Product Introduction**
-   - Understand which existing products new items might cannibalize
-   - Position new products to fill gaps rather than duplicate
-   - Predict source of volume for new launches
-
-3. **Private Label Strategy**
-   - Identify national brand products suitable for PL alternatives
-   - Understand where PL can substitute vs. complement
-   - Optimize PL/NB mix within categories
-
-4. **Space Optimization**
-   - Allocate more space to non-substitutable products
-   - Reduce facings for products within same substitute cluster
-   - Optimize variety/productivity trade-off
-
-5. **Markdown Strategy**
-   - Clear substitute products sequentially, not simultaneously
-   - Understand which products can drive category traffic
-   - Identify products that won't cannibalize when promoted
-
-## Business Value
-
-- **Efficient Assortment**: Reduce complexity without losing sales
-- **Better Space Productivity**: Allocate space based on true variety value
-- **Improved Margins**: Replace duplicative SKUs with unique offerings
-- **Customer Satisfaction**: Maintain perceived choice while reducing confusion
-- **Strategic Clarity**: Data-driven approach to range decisions
+Use to cluster products into substitute versus complement groups for range decisions.
+For market-basket co-occurrence rules between products, use
+:mod:`openretailscience.analysis.product_association` instead.
 """
 
 from typing import Any, Literal
@@ -78,44 +21,19 @@ from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
 
 class CustomerDecisionHierarchy:
-    """Analyzes product substitutability patterns to optimize retail assortments.
+    """Identifies which products customers treat as substitutes versus complements.
 
-    The CustomerDecisionHierarchy class identifies which products customers view as
-    substitutes versus essential variety. This enables data-driven range planning
-    decisions that maintain customer choice while improving operational efficiency.
+    Substitutes are rarely co-bought; complements are often co-bought. Input is
+    transaction-level rows with the option-derived customer_id and transaction_id
+    columns plus a product column (``product_col``); with the default
+    ``exclude_same_transaction_products=True``, (customer, product) pairs bought
+    together in the same transaction are excluded.
 
-    ## Business Insight
+    Results, available after initialization:
 
-    Traditional range planning often assumes products in the same category are
-    substitutes (e.g., all yogurts are interchangeable). However, customer behavior
-    reveals the truth: some customers always buy both Greek and regular yogurt
-    (complements), while others switch between strawberry and raspberry flavors
-    (substitutes).
-
-    ## Substitutability Logic
-
-    The analysis identifies substitutes through purchase patterns:
-    - **High substitutability**: Customers buy product A OR product B, rarely both
-    - **Low substitutability**: Customers often buy both A AND B
-    - **Exclusion logic**: Products bought in same transaction can't be substitutes
-
-    ## Decision Framework
-
-    The hierarchy output guides range decisions:
-    - **Tight clusters**: Strong substitutes - keep best performer
-    - **Loose clusters**: Weak substitutes - maintain variety
-    - **Separate branches**: Different needs - preserve both
-    - **Isolated products**: Unique value - protect from delisting
-
-    ## Example Use Case
-
-    A supermarket analyzing yogurt finds:
-    - Cluster 1: Store brand vanilla, strawberry, raspberry (substitutes)
-    - Cluster 2: Greek plain, Greek honey (substitutes)
-    - Separate branch: Kids' squeezable yogurt (unique need)
-
-    Decision: Can reduce flavor variety in Cluster 1, maintain Greek options,
-    must keep kids' yogurt despite low sales.
+    - ``pairs_df``: the deduplicated (customer, product) pairs used.
+    - ``distances``: square product-distance matrix.
+    - ``plot()``: dendrogram of the ward hierarchical clustering.
     """
 
     def __init__(
@@ -126,35 +44,21 @@ class CustomerDecisionHierarchy:
         method: Literal["yules_q"] = "yules_q",
         random_state: int = 42,
     ) -> None:
-        """Initialize customer decision hierarchy analysis for range optimization.
+        """Initialize the analysis; pairs, distances, and clustering inputs are computed immediately.
 
         Args:
-            df (pd.DataFrame): Transaction data with customer purchase history.
-                Must contain: customer_id, transaction_id, and product identifier.
-            product_col (str): Column containing products to analyze for substitutability
-                (e.g., "product_name", "sku", "brand", "subcategory").
-            exclude_same_transaction_products (bool, optional): Whether products bought
-                together in one transaction should be considered non-substitutes.
-                True = If customer buys milk and eggs together, they're not substitutes.
-                False = Include all purchase patterns.
-                Defaults to True (recommended for most retail contexts).
-            method (Literal["yules_q"], optional): Statistical method for measuring
-                substitutability. "yules_q" measures association strength between
-                binary purchase patterns. Defaults to "yules_q".
-            random_state (int, optional): Seed for reproducible clustering results.
-                Important for consistent range planning decisions. Defaults to 42.
+            df (pd.DataFrame): Transaction-level rows; must contain the option-derived
+                customer_id and transaction_id columns and ``product_col``.
+            product_col (str): Column with the product identifiers to analyze.
+            exclude_same_transaction_products (bool): When True (default), (customer,
+                product) pairs bought together in the same transaction are dropped.
+            method (Literal["yules_q"]): Distance method; only "yules_q" is accepted.
+            random_state (int): Stored but never used; ward linkage on the deterministic
+                distance matrix is already reproducible.
 
         Raises:
-            ValueError: If required columns are missing from the dataframe.
-
-        Business Example:
-            >>> # Analyze substitutability in coffee category
-            >>> cdh = CustomerDecisionHierarchy(
-            ...     df=transactions,
-            ...     product_col="brand_flavor",  # e.g., "Folgers_Original"
-            ...     exclude_same_transaction_products=True  # Bought together = not substitutes
-            ... )
-            >>> # Use results to identify which coffee SKUs can be delisted
+            ValueError: If the required columns are missing from the dataframe.
+            ValueError: If ``method`` is not "yules_q".
         """
         cols = ColumnHelper()
         required_cols = [cols.customer_id, cols.transaction_id, product_col]
@@ -167,6 +71,15 @@ class CustomerDecisionHierarchy:
 
     @staticmethod
     def _get_pairs(df: pd.DataFrame, exclude_same_transaction_products: bool, product_col: str) -> pd.DataFrame:
+        """Deduplicate (customer, product) pairs from transaction rows.
+
+        With ``exclude_same_transaction_products``, any (customer, product) pair that
+        appears in a multi-item transaction for that customer is removed entirely
+        (pair-level left-anti-join, not row-level).
+
+        Returns:
+            pd.DataFrame: Deduplicated (customer_id, product) frame with categorical dtypes.
+        """
         cols = ColumnHelper()
         if exclude_same_transaction_products:
             pairs_df = df[[cols.customer_id, cols.transaction_id, product_col]].drop_duplicates()
@@ -190,16 +103,18 @@ class CustomerDecisionHierarchy:
 
     @staticmethod
     def _calculate_yules_q(bought_product_1: np.array, bought_product_2: np.array) -> float:
-        """Calculates the Yule's Q coefficient between two binary arrays.
+        """Calculate Yule's Q coefficient between two boolean purchase vectors.
+
+        Q = (ad - bc) / (ad + bc) on the 2x2 co-purchase table. Empty arrays, and
+        degenerate tables where a*d + b*c == 0, return 0.0 because NaN would break
+        scipy's ``linkage`` downstream.
 
         Args:
-            bought_product_1 (np.array): Binary array representing the first bought product. Each element is 1 if the
-                customer bought the product and 0 if they didn't.
-            bought_product_2 (np.array): Binary array representing the second bought product. Each element is 1 if the
-                customer bought the product and 0 if they didn't.
+            bought_product_1 (np.array): Boolean vector, True where the customer bought the product.
+            bought_product_2 (np.array): Boolean vector, True where the customer bought the product.
 
         Returns:
-            float: The Yule's Q coefficient.
+            float: The Yule's Q coefficient, in [-1, 1].
 
         Raises:
             ValueError: If the lengths of `bought_product_1` and `bought_product_2` are not the same.
@@ -228,10 +143,15 @@ class CustomerDecisionHierarchy:
         return (a * d - b * c) / denominator
 
     def _get_yules_q_distances(self) -> np.ndarray:
-        """Calculate the Yule's Q distances between pairs of products.
+        """Calculate the square product-distance matrix.
+
+        Distance is (1 - Yule's Q) / 2, rescaled from [0, 2] into [0, 1] so the
+        result is a valid distance matrix. Rows and columns are ordered by
+        ``pairs_df[product_col].cat.categories``, so ``distances[i, j]`` aligns
+        with that category list (the order ``plot()`` uses for its labels).
 
         Returns:
-            np.ndarray: A square matrix of Yule's Q distances between pairs of products.
+            np.ndarray: Square matrix of pairwise product distances in [0, 1].
         """
         # Create a sparse matrix where the rows are the customers and the columns are the products
         # The values are True if the customer bought the product and False if they didn't
@@ -272,16 +192,16 @@ class CustomerDecisionHierarchy:
         self,
         method: Literal["yules_q"],
     ) -> np.ndarray:
-        """Calculates distances between items using the specified method.
+        """Calculate the product-distance matrix using the specified method.
 
         Args:
-            method (Literal["yules_q"], optional): The method to use for calculating distances.
-
-        Raises:
-            ValueError: If the method is not valid.
+            method (Literal["yules_q"]): Only "yules_q" is implemented.
 
         Returns:
             np.ndarray: A square matrix of pairwise product distances.
+
+        Raises:
+            ValueError: If the method is not "yules_q".
         """
         # Check method is valid
         if method == "yules_q":
@@ -313,21 +233,24 @@ class CustomerDecisionHierarchy:
         source_text: str | None = None,
         **kwargs: Any,  # noqa: ANN401
     ) -> SubplotBase:
-        """Plots the customer decision hierarchy dendrogram.
+        """Plot the customer decision hierarchy dendrogram.
+
+        ``**kwargs`` are passed through to scipy's ``dendrogram`` (``orientation``
+        defaults to "top"). A figure is created when ``ax`` is None.
 
         Args:
-            title (str, optional): The title of the plot. Defaults to "Customer Decision Hierarchy".
-            x_label (str, optional): The label for the x-axis. Defaults to None.
-            y_label (str, optional): The label for the y-axis. Defaults to None.
-            ax (Axes, optional): The matplotlib Axes object to plot on. Defaults to None.
-            figsize (tuple[int, int], optional): The figure size. Defaults to None.
-            eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-            subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-            source_text (str, optional): The source text to annotate on the plot. Defaults to None.
-            **kwargs (Any): Additional keyword arguments to pass to the dendrogram function.
+            title (str): The title of the plot.
+            x_label (str | None): X-axis label; defaults to "Distance" for left/right orientations.
+            y_label (str | None): Y-axis label; defaults to "Distance" for top/bottom orientations.
+            ax (Axes | None): Axes to plot on; a new figure is created when None.
+            figsize (tuple[int, int] | None): Figure size for the new figure.
+            eyebrow (str | None): Small uppercase label rendered above the title.
+            subtitle (str | None): Supporting copy rendered below the title.
+            source_text (str | None): Source annotation.
+            **kwargs (Any): Additional keyword arguments forwarded to scipy's ``dendrogram``.
 
         Returns:
-            SubplotBase: The matplotlib SubplotBase object.
+            SubplotBase: The axes the dendrogram was drawn on.
         """
         linkage_matrix = self._compute_linkage_matrix()
         labels = self.pairs_df[self.product_col].cat.categories

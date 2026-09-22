@@ -1,36 +1,8 @@
-"""This module provides flexible functionality for creating bar plots from pandas DataFrames or Series.
+"""Bar and grouped bar plots from a DataFrame or Series.
 
-It allows you to create bar plots with optional grouping, sorting, orientation, and data labels. The module supports
-both single and grouped bar plots, where grouped bars are created by providing a `x_col`, which defines the x-axis
-labels or categories.
-
-### Features
-
-- **Single or Grouped Bar Plots**: Plot one or more value columns (`value_col`) as bars. The `x_col` is used to define
-categories or groups on the x-axis (e.g., products, categories, or regions). Grouped bars can be created by
-specifying both `value_col` (list of columns) and `x_col`.
-- **Sorting and Orientation**: Customize the sorting of bars (ascending or descending) and choose between
-vertical (`"v"`, `"vertical"`) or horizontal (`"h"`, `"horizontal"`) bar orientations.
-- **Data Labels**: Add data labels to bars, with options to show absolute values or percentages.
-- **Hatching Patterns**: Apply hatch patterns to the bars for enhanced visual differentiation.
-- **Legend Customization**: Move the legend outside the plot for better visibility, especially when dealing
-with grouped bars or multiple value columns.
-
-
-### Use Cases
-
-- **Sales and Revenue Analysis**: Visualize sales or revenue across different products or categories by creating grouped
-  bar plots (e.g., revenue across quarters or regions). The `x_col` will define the products or categories displayed on
-  the x-axis.
-- **Comparative Analysis**: Compare multiple metrics simultaneously by plotting grouped bars. For instance, you can
-  compare product sales for different periods side by side, with `x_col` defining the x-axis categories.
-- **Distribution Analysis**: Visualize the distribution of categorical data (e.g., product sales) across different
-  categories, where `x_col` defines the x-axis labels.
-
-### Limitations and Handling of Data
-- **Series Support**: The module can also handle pandas Series, though **`x_col`** cannot be provided when plotting a
-Series.
-  In this case, the index of the Series will define the x-axis labels.
+Grouped bars come from a list of ``value_col`` columns; ``x_col`` only sets the x-axis categories.
+A Series is plotted against its index — ``x_col`` cannot be combined with one. Use ``index.plot``
+for relative performance against a baseline and ``line.plot`` for sequential x-values.
 """
 
 import warnings
@@ -97,43 +69,53 @@ def plot(  # noqa: PLR0913
     num_digits: int = 3,
     **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
-    """Creates a customizable bar plot from a DataFrame or Series.
+    """Create a bar plot (vertical or horizontal) from a DataFrame or Series.
 
-    Supports optional sorting, orientation, and data labels. Grouped bars can be created with a grouping column.
+    A list of ``value_col`` columns creates grouped bars; ``x_col`` is the x-axis category
+    column. When ``df`` is a Series, it is plotted against its index, ``value_col`` may be None,
+    and ``x_col`` must be None. For a DataFrame, ``value_col=None`` becomes ``["Value"]`` and
+    raises ``KeyError`` unless a column literally named "Value" exists. A ``UserWarning`` is
+    emitted when a percentage ``data_label_format`` is combined with negative values.
 
     Args:
         df (pd.DataFrame | pd.Series): The input DataFrame or Series containing the data to be plotted.
-        value_col (str | list[str], optional): The column(s) containing values to plot as bars. Multiple value columns
-                                               create grouped bars. Defaults to None.
-        x_col (str, optional): The column to group data by, used for grouping bars. Defaults to None.
-        title (str, optional): The title of the plot. Defaults to None.
-        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-        x_label (str, optional): The label for the x-axis. Defaults to None.
-        y_label (str, optional): The label for the y-axis. Defaults to None.
-        legend_title (str, optional): The title for the legend. Defaults to None.
+        value_col (str | list[str], optional): The column(s) containing values to plot as bars. Multiple
+            columns create grouped bars.
+        x_col (str, optional): The x-axis category column (e.g., products, regions).
+        title (str, optional): The title of the plot.
+        eyebrow (str, optional): Small uppercase label rendered above the title.
+        subtitle (str, optional): Supporting copy rendered below the title.
+        x_label (str, optional): The label for the x-axis.
+        y_label (str, optional): The label for the y-axis.
+        legend_title (str, optional): The title for the legend.
         legend_labels (list[str], optional): Override the legend labels read from the plotted series
-            (e.g. swap column ids for human-readable names). Length must match the number of
-            value columns or ``ValueError`` is raised. Defaults to None.
-        ax (Axes, optional): The Matplotlib Axes object to plot on. Defaults to None.
-        source_text (str, optional): Text to be displayed as a source at the bottom of the plot. Defaults to None.
-        move_legend_outside (bool, optional): Whether to move the legend outside the plot area. Defaults to False.
-        orientation (Literal["horizontal", "h", "vertical", "v"], optional): Orientation of the bars. Can be
-                                                                             "horizontal", "h", "vertical", or "v".
-                                                                             Defaults to "vertical".
-        sort_order (Literal["asc", "ascending", "desc", "descending"] | None, optional): Sorting order for the
-                                                                          bars. Accepts short or long forms, case-
-                                                                          insensitive. Defaults to None.
+            (e.g. swap column ids for human-readable names). Length must match the number of legend
+            handles or a ``ValueError`` is raised.
+        ax (Axes, optional): The Matplotlib Axes object to plot on.
+        source_text (str, optional): Text to be displayed as a source at the bottom of the plot.
+        move_legend_outside (bool, optional): Whether to move the legend outside the plot area.
+        orientation (Literal["horizontal", "h", "vertical", "v"], optional): Orientation of the bars.
+            Accepts short or long forms, case-insensitive.
+        sort_order (Literal["asc", "ascending", "desc", "descending"] | None, optional): Sorting order
+            for the bars. Accepts short or long forms, case-insensitive.
         data_label_format (Literal["absolute", "percentage_by_bar_group", "percentage_by_series"] | None, optional):
             Format for the data labels. "absolute" shows the raw value of each bar;
             "percentage_by_bar_group" shows each bar's share of its x-axis group;
-            "percentage_by_series" shows each bar's share of its value-column series. Defaults to None.
-        use_hatch (bool, optional): Whether to apply hatch patterns to the bars. Defaults to False.
-        num_digits (int, optional): The number of digits to display in the data labels. Defaults to 3.
-        **kwargs (Any): Additional keyword arguments for the Pandas `plot` function.
+            "percentage_by_series" shows each bar's share of its value-column series.
+        use_hatch (bool, optional): Whether to apply hatch patterns to the bars.
+        num_digits (int, optional): The number of digits to display in the data labels.
+        **kwargs: Additional keyword arguments for pandas' ``plot`` function. ``width`` (default 0.8),
+            ``color`` (default a per-column palette), and ``legend`` (default True for grouped bars)
+            are popped and consumed.
 
     Returns:
         SubplotBase: The Matplotlib Axes object with the generated plot.
+
+    Raises:
+        ValueError: If df is empty.
+        ValueError: If df is a Series and x_col is provided.
+        ValueError: If orientation, sort_order, or data_label_format is not an accepted value.
+        ValueError: If legend_labels is provided and its length does not match the number of legend handles.
     """
     orientation, sort_order, data_label_format = _validate_bar_inputs(
         df,
@@ -269,14 +251,14 @@ def _generate_bar_labels(
 
 
 def _get_bar_value(v: Rectangle, plot_type: str) -> float:
-    """Retrieve the raw value from the bar/rectangle.
+    """Return the bar's value: height for "bar", width for "barh".
 
     Args:
         v (Rectangle): The bar/rectangle object.
-        plot_type (str): The type of plot ('bar' for vertical, 'barh' for horizontal).
+        plot_type (str): The type of plot ("bar" for vertical, "barh" for horizontal).
 
     Returns:
-        float: The value represented by the bar (height or width).
+        float: The value represented by the bar.
     """
     return v.get_height() if plot_type == "bar" else v.get_width()
 
@@ -286,11 +268,11 @@ def _generate_absolute_labels(
     plot_kind: str,
     num_digits: int,
 ) -> list[str]:
-    """Generate absolute value labels for the bars.
+    """Generate absolute-value labels, formatted in shorthand and truncated to ``num_digits``.
 
     Args:
         container (BarContainer): The container holding the bar objects.
-        plot_kind (str): The type of plot ('bar' or 'barh').
+        plot_kind (str): The type of plot ("bar" or "barh").
         num_digits (int): The number of digits to display in the labels.
 
     Returns:
@@ -314,13 +296,18 @@ def _generate_percentage_labels(
 ) -> list[str]:
     """Generate percentage labels for each bar against a per-bar denominator.
 
+    ``denominators`` must align with the container, one entry per bar. A zero denominator yields a
+    blank label and is tracked so the caller can warn about the skipped percentages.
+
     Args:
         container (BarContainer): The container holding the bar objects.
-        denominators (Iterable[float]): Per-bar denominators aligned with the container. Pass a Series for
-            per-bar-group totals or a broadcast scalar (e.g. ``[total] * len(container)``) for a shared series total.
-        plot_kind (str): The type of plot ('bar' or 'barh').
+        denominators (Iterable[float]): Per-bar denominators aligned with the container. Pass a Series
+            for per-bar-group totals or a broadcast scalar (e.g. ``[total] * len(container)``) for a
+            shared series total.
+        plot_kind (str): The type of plot ("bar" or "barh").
         num_digits (int): The number of digits to display in the labels.
-        division_by_zero_list (list): A list to track occurrences of division by zero.
+        division_by_zero_list (list): Mutable list tracking zero-denominator bars for the caller's
+            aggregate warning.
 
     Returns:
         list[str]: A list of formatted percentage labels.
@@ -351,15 +338,15 @@ def _apply_labels_to_container(
 ) -> None:
     """Apply the formatted labels to the bar container.
 
+    Labels are placed at the bar edge with padding 4, or centered with no padding when stacked.
+    A "%" suffix is appended unless the format is "absolute".
+
     Args:
         ax (Axes): The matplotlib axes object containing the plot.
         container (BarContainer): The container holding the bar objects.
         container_labels (list[str]): A list of formatted labels to apply.
-        data_label_format (str): The format of the labels (e.g., 'absolute', 'percentage').
+        data_label_format (str): The format of the labels (e.g., "absolute", "percentage").
         is_stacked (bool): Whether the bars are stacked or not.
-
-    Returns:
-        None
     """
     formatted_labels = [f"{v}%" if v != "" and data_label_format != "absolute" else v for v in container_labels]
     style = PlotStyleHelper()

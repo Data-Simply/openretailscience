@@ -54,3 +54,42 @@ line.plot(
     move_legend_outside=True,
     fill_na_value=0,  # fill missing values after pivot
 )
+
+# Example 4: Highlight a single group value (other groups render muted behind it)
+store_df = pd.DataFrame({
+    "week": [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4],
+    "store": ["Riverside"] * 4 + ["Midtown"] * 4 + ["Harborview"] * 4,
+    "weekly_sales": [4200, 4400, 4600, 4900, 3100, 3300, 3200, 3500, 2400, 2500, 2700, 2900]
+})
+
+line.plot(
+    df=store_df,
+    value_col="weekly_sales",
+    x_col="week",
+    group_col="store",
+    highlight="Riverside",
+    x_label="Week",
+    y_label="Sales (£)",
+    title="Weekly Sales by Store (Riverside Highlighted)",
+    legend_title="Store",
+    source_text="Source: OpenRetailScience - 2024",
+)
+
+# Example 5: Highlight specific value columns (other columns render muted)
+metrics_df = pd.DataFrame({
+    "day": range(1, 6),
+    "revenue": [10000, 11200, 10800, 12400, 13100],
+    "units_sold": [520, 545, 538, 602, 640],
+    "avg_order_value": [19.2, 20.6, 20.1, 20.6, 20.5]
+})
+
+line.plot(
+    df=metrics_df,
+    value_col=["revenue", "units_sold", "avg_order_value"],
+    x_col="day",
+    highlight=["revenue", "avg_order_value"],
+    x_label="Day",
+    y_label="Value",
+    title="Daily Store Metrics (Revenue & AOV Highlighted)",
+    source_text="Source: OpenRetailScience - 2024",
+)

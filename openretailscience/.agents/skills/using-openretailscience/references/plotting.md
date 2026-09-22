@@ -27,7 +27,8 @@ distinctive arguments are listed below; see each function's docstring for the re
   percentage_by_series.
 - `line.plot(df, value_col=None, x_col=None, group_col=None, legend_style=None, highlight=None, ...)` —
   line chart; `legend_style` ∈ box / end_of_line.
-- `area.plot(df, value_col, x_col=None, group_col=None, legend_style=None, ...)` — stacked area.
+- `area.plot(df, value_col, x_col=None, group_col=None, legend_style=None, ...)` — stacked
+  area; for time series you resample or aggregate by period, prefer `time.plot`.
 - `scatter.plot(df, value_col, x_col=None, group_col=None, size_col=None, label_col=None, ...)` —
   scatter / bubble.
 - `histogram.plot(df, value_col=None, group_col=None, clip_range=None, ...)` — histogram.
@@ -43,7 +44,8 @@ distinctive arguments are listed below; see each function's docstring for the re
 - `period_on_period.plot(df, x_col, value_col, periods, ...)` — overlay periods aligned to
   a reference start (`periods` from `utils.date.find_overlapping_periods`).
 - `broken_timeline.plot(df, category_col, value_col, period="D", threshold_value=None, ...)` —
-  data-availability / gaps timeline.
+  data-availability / gaps timeline; the date column comes from the `column.transaction_date`
+  option (not a parameter).
 - `price.plot(df, value_col, group_col, bins, ...)` — price-band bubble distribution.
 - `index.plot(df, value_col, group_col, index_col, value_to_index, top_n=None, bottom_n=None, ...)` —
   index plot (baseline 100). Same-module helpers: `index.get_indexes(...)`,

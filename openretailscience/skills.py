@@ -1,27 +1,17 @@
 """Install bundled agent skills into well-known agent skill directories.
 
-This module ships the package's agent skills (folders containing a ``SKILL.md``
-with YAML frontmatter) under ``openretailscience/.agents/skills/`` and links them
-into the directories that AI coding agents read from, so upgrading the package
-propagates updated skills automatically.
+Skills ship under ``openretailscience/.agents/skills/`` and are linked into the
+directories that AI coding agents read, so ``pip install -U`` propagates updated
+skills in place. Symlinks are used when available; otherwise the skill folder is
+copied. On Databricks skills are always copied into the user's
+``/Workspace/Users/<user>/.assistant/skills`` (ephemeral compute is wiped on
+cluster restart); re-run :func:`install_skills` after upgrading the package to
+refresh the copy.
 
-The public entry point is :func:`install_skills`:
+Public entry point:
 
     from openretailscience.skills import install_skills
     install_skills()
-
-Linking behaviour:
-
-* On POSIX (and Windows with symlink support) skills are **symlinked** into the
-  target directories, so a ``pip install -U`` of the package updates them in
-  place.
-* When symlinks are unavailable (e.g. Windows without Developer Mode) the skill
-  folder is **copied** instead.
-* On Databricks the package lives on ephemeral compute that is wiped on cluster
-  restart, and Genie reads skills from a persistent ``/Workspace`` location that
-  cannot symlink into site-packages. There we always **copy** skills into the
-  user's own ``/Workspace/Users/<user>/.assistant/skills`` directory; re-run
-  :func:`install_skills` after upgrading the package to refresh the copy.
 """
 
 from __future__ import annotations
@@ -248,10 +238,9 @@ def _skill_copy_matches(source_path: Path, target_path: Path) -> bool:
 def _is_owned_target(target_path: Path, bundled_names: set[str]) -> bool:
     """Return whether the installer may replace ``target_path``.
 
-    A target is owned when it is a symlink whose name matches a bundled skill, or
-    a real directory named after a bundled skill that itself contains a
-    ``SKILL.md`` (a prior copy install). Anything else is user content. Ownership
-    only permits replacement; :func:`_prepare_target` decides whether it happens.
+    Owned = a symlink named after a bundled skill, or a real directory named after
+    one that contains a ``SKILL.md`` (a prior copy install). Anything else is user
+    content. Ownership only permits replacement; :func:`_prepare_target` decides.
 
     Args:
         target_path (Path): The candidate target.
@@ -272,11 +261,11 @@ def _prepare_target(
 ) -> Literal["install", "up_to_date", "skip"]:
     """Clear or evaluate an existing target before installing.
 
-    An existing owned *real directory* that byte-matches the source is a prior
-    install (a copy-fallback run in symlink mode, or a Databricks copy) and is
-    reported up to date. Otherwise copy mode (Databricks) refreshes it
-    (``shutil.rmtree`` then re-copy), while symlink mode skips it to protect
-    possibly user-authored content that merely shares a bundled skill's name.
+    ``up_to_date`` when the target is an owned symlink pointing at the source or an
+    owned real directory that byte-matches it; ``skip`` when it is not owned;
+    otherwise install. Copy mode refreshes a mismatched owned directory via
+    ``shutil.rmtree`` + re-copy; symlink mode skips it to protect user content.
+    Broken owned symlinks are replaced.
 
     Args:
         source_path (Path): The bundled skill directory.
@@ -365,8 +354,7 @@ def install_skills(global_mode: bool = False) -> SkillInstallResult:
             than the current project. Defaults to False. Unsupported on Databricks.
 
     Returns:
-        SkillInstallResult: The skills that were installed, already up to date,
-        or skipped.
+        SkillInstallResult: Target paths, grouped as installed, up to date, or skipped.
 
     Raises:
         FileNotFoundError: When the bundled skills directory is missing.

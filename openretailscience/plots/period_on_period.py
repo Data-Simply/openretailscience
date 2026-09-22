@@ -1,13 +1,8 @@
-"""Period on period module.
+"""Overlay several time windows of one series on a single line chart.
 
-This module provides functionality for plotting multiple overlapping time periods
-from the same time series on a single line chart using matplotlib.
-
-The `plot` function is useful for visual comparisons of temporal trends
-across different time windows, with each time window plotted as a separate line
-but aligned to a common starting point.
-
-Example use case: Comparing sales data across multiple promotional weeks or seasonal periods.
+Each window is shifted by whole years onto the first period's year. Use
+``utils.date.find_overlapping_periods`` to build the periods. Use ``plots.time`` for one
+continuous resampled series; use this module to compare multiple windows.
 """
 
 from datetime import datetime
@@ -59,44 +54,42 @@ def plot(
 ) -> Axes:
     """Plot multiple overlapping periods from a single time series as individual lines.
 
-    This function is used to align and overlay several time intervals from the same
-    dataset to facilitate visual comparison. Each period is realigned to the reference
-    start date and plotted as a separate line using a distinct linestyle.
+    Each period is shifted by ``start.year - first_period.start.year`` whole years, so the x-axis
+    is calendar position within the year of the first tuple; windows whose in-year start dates
+    differ do not line up at x=0. Periods with no matching rows are silently skipped.
 
-    Note:
-        The `periods` argument accepts a list of (start_date, end_date) tuples,
-        which define the time windows to overlay. Each element in the tuple can be either
-        a string (e.g., "2022-01-01") or a `datetime` object. You can use
-        `find_overlapping_periods` from `openretailscience.utils.date` to generate
-        the `periods` input automatically.
+    Newer periods are drawn darker, thicker, and on top; a user-supplied ``linewidth`` overrides
+    the thickness gradient.
 
     Args:
         df (pd.DataFrame): Input DataFrame containing the time series data.
         x_col (str): Name of the column representing datetime values.
         value_col (str): Name of the column representing the y-axis values (e.g. sales, counts).
-        periods (List[Tuple[Union[str, datetime], Union[str, datetime]]]):
-            A list of (start_date, end_date) tuples representing the periods to plot.
-        x_label (Optional[str]): Custom label for the x-axis.
-        y_label (Optional[str]): Custom label for the y-axis.
-        title (Optional[str]): Title for the plot.
-        eyebrow (Optional[str]): Small uppercase label rendered above the title.
-        subtitle (Optional[str]): Supporting copy rendered below the title.
-        source_text (Optional[str]): Text to show below the plot as a data source.
-        legend_title (Optional[str]): Title for the plot legend.
-        move_legend_outside (bool): Whether to place the legend outside the plot area.
-        legend_style (Literal["box", "end_of_line"], optional): How periods are labelled. ``"box"`` renders the
-            standard legend; ``"end_of_line"`` suppresses the legend and places a colored period label at the
-            right end of each line.
-        ax (Optional[Axes]): Matplotlib Axes object to draw on. If None, a new one is created.
-        figsize (tuple[int, int], optional): Size of the new figure when ``ax`` is None. Defaults to None.
-        **kwargs: Additional keyword arguments passed to the base line plot function.
+        periods (list[tuple[str | datetime, str | datetime]]):
+            A list of at least two (start_date, end_date) tuples, each element a string or
+            datetime. Use ``find_overlapping_periods`` from ``openretailscience.utils.date`` to
+            generate them automatically.
+        x_label (str, optional): Custom label for the x-axis.
+        y_label (str, optional): Custom label for the y-axis.
+        title (str, optional): Title for the plot.
+        eyebrow (str, optional): Small uppercase label rendered above the title.
+        subtitle (str, optional): Supporting copy rendered below the title.
+        source_text (str, optional): Text to show below the plot as a data source.
+        legend_title (str, optional): Title for the plot legend.
+        move_legend_outside (bool, optional): Whether to place the legend outside the plot area.
+        legend_style (Literal["box", "end_of_line"], optional): How periods are labelled. ``"box"``
+            (default when None) renders the standard legend; ``"end_of_line"`` suppresses the
+            legend and places a colored period label at the right end of each line.
+        ax (Axes, optional): Matplotlib Axes object to draw on. If None, a new one is created.
+        figsize (tuple[int, int], optional): Size of the new figure when ``ax`` is None.
+        **kwargs: Additional keyword arguments passed to ``ax.plot``.
 
     Returns:
         matplotlib.axes.Axes: The matplotlib Axes object with the completed plot.
 
     Raises:
-        ValueError: The 'periods' list must contain at least two (start, end) tuples for comparison.
-        ValueError: If `legend_style` is not one of ``None``, ``"box"``, or ``"end_of_line"``.
+        ValueError: If periods contains fewer than two (start, end) tuples.
+        ValueError: If legend_style is not one of ``None``, ``"box"``, or ``"end_of_line"``.
     """
     if legend_style not in (None, "box", "end_of_line"):
         msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"

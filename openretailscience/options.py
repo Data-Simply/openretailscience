@@ -1,20 +1,4 @@
-"""This module provides a simplified implementation of a pandas-like options system.
-
-It allows users to get, set, and reset various options that control the behavior
-of data display and processing. The module also includes a context manager for
-temporarily changing options.
-
-Example:
-    >>> set_option('column.customer_id', 'cust_id')
-    >>> print(get_option('column.customer_id'))
-    cust_id
-    >>> with option_context('column.customer_id', 'shopper_id'):
-    ...     print(get_option('column.customer_id'))
-    shopper_id
-    >>> print(get_option('column.customer_id'))
-    cust_id
-
-"""
+"""Pandas-like options system (get/set/reset + ``option_context``)."""
 
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -425,7 +409,11 @@ class Options:
 
 
 def find_project_root() -> str | None:
-    """Returns the directory containing .git, .hg, or pyproject.toml, starting from the current working directory."""
+    """Walk up from the current working directory to find the project root.
+
+    Returns the first directory containing a ``.git`` directory or an
+    ``openretailscience.toml`` file, or None at the filesystem root.
+    """
     current_dir = Path.cwd()
 
     while True:
@@ -447,11 +435,9 @@ _global_options = Options().load_from_project()
 def set_option(pat: str, val: OptionTypes) -> None:
     """Set the value of the specified option.
 
-    This is a global function that delegates to the _global_options instance.
-
     Args:
-        pat: The option name.
-        val: The value to set the option to.
+        pat (str): The option name.
+        val (OptionTypes): The value to set the option to.
 
     Raises:
         ValueError: If the option name is unknown.
@@ -462,13 +448,11 @@ def set_option(pat: str, val: OptionTypes) -> None:
 def get_option(pat: str) -> OptionTypes:
     """Get the value of the specified option.
 
-    This is a global function that delegates to the _global_options instance.
-
     Args:
-        pat: The option name.
+        pat (str): The option name.
 
     Returns:
-        The value of the option.
+        OptionTypes: The value of the option.
 
     Raises:
         ValueError: If the option name is unknown.
@@ -479,10 +463,8 @@ def get_option(pat: str) -> OptionTypes:
 def reset_option(pat: str) -> None:
     """Reset the specified option to its default value.
 
-    This is a global function that delegates to the _global_options instance.
-
     Args:
-        pat: The option name.
+        pat (str): The option name.
 
     Raises:
         ValueError: If the option name is unknown.
@@ -493,10 +475,8 @@ def reset_option(pat: str) -> None:
 def list_options() -> list[str]:
     """List all available options.
 
-    This is a global function that delegates to the _global_options instance.
-
     Returns:
-        A list of all option names.
+        list[str]: All option names.
     """
     return _global_options.list_options()
 
@@ -504,13 +484,11 @@ def list_options() -> list[str]:
 def describe_option(pat: str) -> str:
     """Describe the specified option.
 
-    This is a global function that delegates to the _global_options instance.
-
     Args:
-        pat: The option name.
+        pat (str): The option name.
 
     Returns:
-        A string describing the option and its current value.
+        str: A description of the option and its current value.
 
     Raises:
         ValueError: If the option name is unknown.
@@ -522,30 +500,17 @@ def describe_option(pat: str) -> str:
 def option_context(*args: OptionTypes) -> Generator[None, None, None]:
     """Context manager to temporarily set options.
 
-    Temporarily set options and restore them to their previous values after the
-    context exits. Options may be supplied either as alternating option names and
-    values, or as a single mapping of option names to values.
+    Options may be supplied either as alternating option names and values, or as a
+    single mapping of option names to values. Previous values are restored on exit,
+    even if the body raises.
 
     Args:
-        *args: Either an even number of arguments alternating between option names
-               (str) and their corresponding values, or a single dict mapping
-               option names to values.
-
-    Yields:
-        None
+        *args (OptionTypes): An even number of arguments alternating between option names
+            and their values, or a single dict mapping option names to values.
 
     Raises:
         ValueError: If an odd number of arguments is supplied (positional form), or if an
             unknown option name is supplied (either form).
-
-    Example:
-        >>> with option_context('column.customer_id', 'cust_id', 'column.store_id', 'outlet_id'):
-        ...     # Do something with modified options
-        ...     pass
-        >>> with option_context({'column.customer_id': 'cust_id', 'column.store_id': 'outlet_id'}):
-        ...     # Equivalent dict form
-        ...     pass
-        >>> # Options are restored to their previous values here
     """
     if len(args) == 1 and isinstance(args[0], dict):
         items = args[0].items()
@@ -852,21 +817,18 @@ class ColumnHelper:
 
     @staticmethod
     def join_options(*args: str, sep: str = "_") -> str:
-        """Join multiple option values together with a separator.
+        """Resolve option keys to their values and join them with a separator.
 
-        This method resolves option keys to their configured values and joins them.
-        Commonly used to create column names with suffixes like period indicators.
+        Used to build suffixed column names (e.g. period indicators ``p1``/``p2``,
+        ``diff``).
 
         Args:
-            *args: Option keys to resolve and join (e.g., "column.agg.unit_spend", "column.suffix.period_1")
-            sep: Separator to use when joining values (default: "_")
+            *args (str): Option keys to resolve and join (e.g. ``"column.agg.unit_spend"``,
+                ``"column.suffix.period_1"``).
+            sep (str): Separator used when joining values. Defaults to ``"_"``.
 
         Returns:
-            A string with all resolved option values joined together.
-
-        Example:
-            >>> join_options("column.agg.unit_spend", "column.suffix.period_1")
-            "spend_p1"  # Assuming default options
+            str: The resolved option values joined by ``sep``.
         """
         return sep.join(map(get_option, args))
 

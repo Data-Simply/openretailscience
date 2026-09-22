@@ -1,7 +1,4 @@
-"""Constants used throughout OpenRetailScience.
-
-This module contains constant values that are shared across the package.
-"""
+"""Constants shared across the package (Tailwind COLORS palette)."""
 
 # Tailwind CSS color palette definitions
 # https://raw.githubusercontent.com/tailwindlabs/tailwindcss/a1e74f055b13a7ef5775bdd72a77a4d397565016/src/public/colors.js

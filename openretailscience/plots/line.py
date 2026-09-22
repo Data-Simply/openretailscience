@@ -1,48 +1,8 @@
-"""This module provides flexible functionality for creating line plots from pandas DataFrames.
+"""Line plots of pre-aggregated data, with one line per value column or group value.
 
-It focuses on visualizing sequences that are ordered or sequential but not necessarily categorical, such as "days since
-an event" or "months since a competitor opened." However, while this module can handle datetime values on the x-axis,
-the **plots.time_line** module has additional features that make working with datetimes easier,
-such as easily resampling the data to alternate time frames.
-
-The sequences used in this module can include values like "days since an event" (e.g.,
--2, -1, 0, 1, 2) or "months since a competitor store opened." **This module is not intended
-for use with actual datetime values**.
-
-### Core Features
-
-- **Plotting Sequences or Indexes**: Plot one or more value columns (**`value_col`**) with
-  support for sequences like -2, -1, 0, 1, 2 (e.g., months since an event), using either the
-  index or a specified x-axis column (**`x_col`**).
-- **Custom X-Axis or Index**: Use any column as the x-axis (**`x_col`**) or plot based on the
-  index if no x-axis column is specified.
-- **Multiple Lines**: Create separate lines for each unique value in **`group_col`** (e.g.,
-  categories or product types).
-- **Comprehensive Customization**: Easily customize plot titles, axis labels, and legends, with
-  the option to move the legend outside the plot.
-- **Pre-Aggregated Data**: The data must be pre-aggregated before plotting, as no aggregation
-  occurs within the module.
-
-### Use Cases
-
-- **Daily Trends**: Plot trends such as daily revenue or user activity, for example, tracking
-  revenue since the start of the year.
-- **Event Impact**: Visualize how metrics (e.g., revenue, sales, or traffic) change before and
-  after an important event, such as a competitor store opening or a product launch.
-- **Category Comparison**: Compare metrics across multiple categories over time, for example,
-  tracking total revenue for the top categories before and after an event like the introduction
-  of a new competitor.
-
-### Limitations and Handling of Temporal Data
-
-- **Limited Handling of Temporal Data**: This module can plot simple time-based sequences, such
-  as "days since an event," but it cannot manipulate or directly handle datetime or date-like
-  columns. It is not optimized for actual datetime values. If a datetime column is passed or more
-  complex temporal plotting is needed, consider using the **`plots.time_line`** module, which is
-  specifically designed for working with temporal data and performing time-based manipulation.
-- **Pre-Aggregated Data Required**: The module does not perform any data aggregation, so all
-  data must be pre-aggregated before being passed in for plotting.
-
+For x-axes that are relative or sequential values ("days since an event", "months since a
+competitor opened"), use ``line.plot``. For an actual datetime x-axis use ``plots.time``, which
+resamples and aggregates; this module does not aggregate and only pivots its input.
 """
 
 from typing import Any, Literal
@@ -96,12 +56,11 @@ def _validate_highlight_parameter(
     group_col: str | None,
     pivot_df: pd.DataFrame,
 ) -> list[str] | None:
-    """Validate and normalize the highlight parameter against the pivot's available columns.
+    """Validate and normalize the ``highlight`` parameter.
 
-    Avoid ``ensure_columns`` here: after pivoting on a non-string ``group_col`` (e.g. integer
-    store ids), ``pivot_df.columns`` can hold non-string labels and ``ensure_columns`` would
-    reject the matching highlight values purely on type. Membership against the actual pivot
-    columns is the right check.
+    Membership is checked against the pivot columns rather than ``ensure_columns`` because, after
+    pivoting on a non-string ``group_col`` (e.g. integer store ids), ``pivot_df.columns`` can hold
+    non-string labels that ``ensure_columns`` would reject purely on type.
     """
     if highlight is None:
         return None
@@ -223,102 +182,55 @@ def plot(  # noqa: PLR0913
     highlight: str | list[str] | None = None,
     **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
-    """Plots `value_col` over `x_col` or index, with a separate line per unique `group_col` value.
+    """Plot ``value_col`` over ``x_col`` or the index, with a separate line per unique ``group_col`` value.
 
-    This function supports both pandas DataFrames and Series as input. When a Series is provided,
-    the Series values are plotted against its index, and `value_col` must be None.
+    When ``df`` is a Series, its values are plotted against its index and ``value_col``,
+    ``x_col``, and ``group_col`` must all be None. For a DataFrame, ``value_col`` is required,
+    and a list of columns cannot be combined with ``group_col``.
 
     Args:
-        df (pd.DataFrame | pd.Series): The dataframe or series to plot. When a Series is provided,
-            it represents the values to plot against its index.
-        value_col (str | list[str], optional): The column(s) to plot. Must be None when df is a Series.
-            Required when df is a DataFrame.
+        df (pd.DataFrame | pd.Series): The dataframe or series to plot.
+        value_col (str | list[str], optional): The column(s) to plot; a list renders one line per
+            column. Required when ``df`` is a DataFrame.
         x_label (str, optional): The x-axis label.
         y_label (str, optional): The y-axis label.
         title (str, optional): The title of the plot.
-        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-        x_col (str, optional): The column to be used as the x-axis. If None, the index is used.
+        eyebrow (str, optional): Small uppercase label rendered above the title.
+        subtitle (str, optional): Supporting copy rendered below the title.
+        x_col (str, optional): The column to use as the x-axis. If None, the index is used.
         group_col (str, optional): The column used to define different lines.
-        legend_title (str, optional): The title of the legend.
         ax (Axes, optional): Matplotlib axes object to plot on.
         source_text (str, optional): The source text to add to the plot.
+        legend_title (str, optional): The title of the legend.
         move_legend_outside (bool, optional): Move the legend outside the plot.
-        legend_style (Literal["box", "end_of_line"], optional): How series are labelled. ``"box"`` (default
-            when None) renders the standard matplotlib legend. ``"end_of_line"`` suppresses the legend and
-            places a colored series label at the right end of each line — the design system default for
-            line charts with few series. When ``"end_of_line"`` is set, ``move_legend_outside`` and
-            ``legend_title`` are ignored and a warning is emitted if either is supplied.
-        fill_na_value (float, optional): Value to fill NaNs with after pivoting.
-        highlight (str | list[str], optional): Line(s) to highlight. When using
-            `group_col`, these should be group values. When using a list of `value_col`,
-            these should be column names. Highlighted lines will be rendered with bold
-            linewidth (3), full opacity (alpha=1.0), and saturated colors. Non-highlighted
-            lines will be muted with gray color (#9ca3af), reduced opacity (alpha=0.6),
-            thinner linewidth (1.5), and rendered behind highlighted lines.
-        **kwargs: Additional keyword arguments for Pandas' `plot` function.
+        legend_style (Literal["box", "end_of_line"], optional): How series are labelled. ``"box"``
+            (default when None) renders the standard matplotlib legend. ``"end_of_line"`` suppresses
+            the legend and places a colored series label at the right end of each line; it is a no-op
+            on single-line plots. When a legend would show, ``move_legend_outside`` and
+            ``legend_title`` are ignored and a UserWarning is emitted if either is supplied.
+        fill_na_value (float, optional): Value to fill NaNs with after pivoting. Applied only when
+            ``group_col`` is set; silently ignored otherwise.
+        highlight (str | list[str], optional): Line(s) to emphasize; only for multi-line plots. With
+            ``group_col`` these are group values; with a list of ``value_col`` these are column
+            names. Highlighted lines use the ``linewidth`` kwarg (default 3) and the ``color`` kwarg
+            (default palette colors); non-highlighted context lines are rendered behind them in the
+            ``plot.color.context`` color (default #d1d5db, option-configurable) with a 1.0 linewidth.
+        **kwargs: Additional keyword arguments for pandas' ``plot`` function. ``linewidth`` and
+            ``color`` are consumed by the highlighted lines and do not apply to context lines.
 
     Returns:
         SubplotBase: The matplotlib axes object.
 
     Raises:
-        ValueError: If `value_col` is a list and `group_col` is provided (which causes ambiguity in plotting).
-        ValueError: If df is a Series and `value_col` is not None.
-        ValueError: If df is a DataFrame and `value_col` is None.
-        ValueError: If df is a Series and `x_col` is specified (Series uses its index as x-axis).
-        ValueError: If df is a Series and `group_col` is specified (cannot group a single series).
-        ValueError: If `highlight` is provided for single-line plot.
-        ValueError: If `highlight` values don't match available groups/columns.
-        ValueError: If `legend_style` is not one of ``None``, ``"box"``, or ``"end_of_line"``.
-
-    Examples:
-        Highlighting specific product categories:
-
-        >>> import pandas as pd
-        >>> from openretailscience.plots import line
-        >>> df = pd.DataFrame({
-        ...     "month": [1, 2, 3, 1, 2, 3, 1, 2, 3],
-        ...     "category": ["Electronics", "Electronics", "Electronics",
-        ...                  "Clothing", "Clothing", "Clothing",
-        ...                  "Home", "Home", "Home"],
-        ...     "revenue": [100, 120, 140, 80, 85, 90, 60, 65, 70]
-        ... })
-        >>> line.plot(
-        ...     df=df,
-        ...     x_col="month",
-        ...     value_col="revenue",
-        ...     group_col="category",
-        ...     highlight=["Electronics", "Clothing"],  # Home will be muted
-        ...     title="Revenue by Category (Electronics & Clothing Highlighted)"
-        ... )
-
-        Highlighting specific value columns:
-
-        >>> df = pd.DataFrame({
-        ...     "day": range(1, 6),
-        ...     "revenue": [100, 110, 120, 130, 140],
-        ...     "units_sold": [50, 55, 60, 65, 70],
-        ...     "avg_order_value": [2.0, 2.0, 2.0, 2.0, 2.0],
-        ...     "profit_margin": [0.2, 0.22, 0.24, 0.26, 0.28]
-        ... })
-        >>> line.plot(
-        ...     df=df,
-        ...     x_col="day",
-        ...     value_col=["revenue", "units_sold", "avg_order_value", "profit_margin"],
-        ...     highlight=["revenue", "profit_margin"],  # Other metrics muted
-        ...     title="Daily Metrics (Revenue & Profit Margin Highlighted)"
-        ... )
-
-        Single highlighted line:
-
-        >>> line.plot(
-        ...     df=df,
-        ...     x_col="month",
-        ...     value_col="revenue",
-        ...     group_col="category",
-        ...     highlight="Electronics",  # str is acceptable for single highlight
-        ...     title="Revenue by Category (Electronics Highlighted)"
-        ... )
+        ValueError: If value_col is a list and group_col is provided.
+        ValueError: If df is a Series and value_col is not None.
+        ValueError: If df is a Series and x_col is specified (the Series index is the x-axis).
+        ValueError: If df is a Series and group_col is specified (cannot group a single series).
+        ValueError: If df is a DataFrame and value_col is None.
+        ValueError: If highlight is provided for a single-line plot.
+        ValueError: If highlight is an empty list.
+        ValueError: If highlight values do not match available groups/columns.
+        ValueError: If legend_style is not one of ``None``, ``"box"``, or ``"end_of_line"``.
     """
     if legend_style not in (None, "box", "end_of_line"):
         msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"

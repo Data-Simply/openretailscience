@@ -20,12 +20,11 @@ from openretailscience.options import get_option
 
 
 class Acv:
-    """Calculates ACV (All Commodity Volume) for a set of stores.
+    """Calculates ACV (All Commodity Volume) for a set of stores, expressed in millions ($MM).
 
-    ACV represents total dollar sales across all products, expressed in millions ($MM).
     NaN values in the spend column are excluded from the sum.
 
-    Results are accessible via the `table` attribute (ibis Table) or the `df` property
+    Results are accessible via the ``table`` attribute (ibis Table) or the ``df`` property
     (materialized pandas DataFrame).
 
     Args:
@@ -72,6 +71,6 @@ class Acv:
         """Returns the materialized pandas DataFrame of ACV results.
 
         Returns:
-            pd.DataFrame: DataFrame with ACV values.
+            pd.DataFrame: Single ``acv`` column (plus group_col columns when grouped).
         """
         return self.table.execute()

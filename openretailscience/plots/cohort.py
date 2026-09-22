@@ -1,30 +1,7 @@
-"""This module provides functionality for creating cohort plots from pandas DataFrames.
+"""Cohort heatmap: wraps heatmap.plot with x tick labels on top and percentage formatting.
 
-It is designed to visualize data distributions using color-coded heatmaps, helping to highlight
-trends and comparisons between different groups.
-
-### Core Features
-
-- **Color Mapping**: Uses a predefined colormap for visualizing data.
-- **Customizable Labels**: Supports custom labels for x-axis, y-axis, title, and colorbar.
-- **Source Text**: Provides an option to add source attribution to the plot.
-- **Grid and Tick Customization**: Applies standard styling for better readability.
-
-### Use Cases
-
-- **Cohort Analysis**: Visualize how different groups behave over time.
-- **Category-Based Heatmaps**: Compare values across different categories.
-
-### Default Behavior
-
-- **Percentage Display**: By default, values are displayed as percentages (e.g., "50%").
-  Set `percentage=False` for raw number display (e.g., "0.50").
-
-### Limitations and Warnings
-
-- **Data Aggregation Required**: The module does not perform data aggregation; data should be
-pre-aggregated before being passed to the function.
-- **Fixed Color Mapping**: The module uses a predefined colormap without dynamic adjustments.
+Input is a pre-aggregated matrix (rows = cohorts, columns = periods since start); no
+aggregation is performed.
 """
 
 from typing import Literal
@@ -49,27 +26,30 @@ def plot(
     figsize: tuple[int, int] | None = None,
     colormap_style: Literal["discrete", "continuous"] = "discrete",
 ) -> SubplotBase:
-    """Plots a cohort plot for the given DataFrame.
+    """Plot a cohort heatmap by wrapping heatmap.plot.
+
+    Passes x_labels_position="top" (so the chronology reads top-to-bottom) and
+    cbar_format="{x:.0%}" when percentage is True, else "{x:g}".
 
     Args:
-        df (pd.DataFrame): Dataframe containing cohort analysis data.
-        cbar_label (str): Label for the colorbar.
-        x_label (str, optional): Label for x-axis.
-        y_label (str, optional): Label for y-axis.
-        title (str, optional): Title of the plot.
-        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-        ax (Axes, optional): Matplotlib axes object to plot on.
-        source_text (str, optional): Additional source text annotation.
-        percentage (bool, optional): If True, displays cohort values as percentages. Defaults to True.
-        figsize (tuple[int, int], optional): The size of the plot. Defaults to None.
-        colormap_style (Literal["discrete", "continuous"], optional): Render the colorbar as a
-            stepped 5-bin scale ("discrete", default) or a smooth gradient ("continuous"). Use
-            "continuous" when retention differences between cohorts are small enough that the
-            discrete bins lump them together.
+        df (pd.DataFrame): Pre-aggregated cohort matrix (rows = cohorts, columns = periods).
+        cbar_label (str): Colorbar label.
+        x_label (str, optional): X-axis label.
+        y_label (str, optional): Y-axis label.
+        title (str, optional): Plot title.
+        eyebrow (str, optional): Uppercase label rendered above the title.
+        subtitle (str, optional): Supporting copy rendered below the title.
+        ax (Axes, optional): Axes to plot on.
+        source_text (str, optional): Source attribution rendered at the bottom.
+        percentage (bool, optional): Display values as percentages (True) or raw numbers.
+        figsize (tuple[int, int], optional): Figure size, used only when ax is None.
+        colormap_style ("discrete", "continuous", optional): Use "continuous" when retention
+            differences between cohorts are small enough that the discrete bins lump them
+            together.
 
     Returns:
         SubplotBase: The matplotlib axes object.
+
     """
     return heatmap.plot(
         df=df,
