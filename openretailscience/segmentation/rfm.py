@@ -1,26 +1,8 @@
-"""Customer Segmentation Using RFM Analysis.
+"""Customer segmentation via RFM (Recency, Frequency, Monetary) scoring.
 
-This module implements RFM (Recency, Frequency, Monetary) segmentation, a widely used technique in customer analytics
-to categorize customers based on their purchasing behavior.
-
-RFM segmentation assigns scores to customers based on:
-1. Recency (R): How recently a customer made a purchase.
-2. Frequency (F): How often a customer makes purchases.
-3. Monetary (M): The total amount spent by a customer.
-
-### Benefits of RFM Segmentation:
-- **Customer Value Analysis**: Identifies high-value customers who contribute the most revenue.
-- **Personalized Marketing**: Enables targeted campaigns based on customer purchasing behavior.
-- **Customer Retention Strategies**: Helps recognize at-risk customers and develop engagement strategies.
-- **Sales Forecasting**: Provides insights into future revenue trends based on past spending behavior.
-
-### Scoring Methodology:
-- Each metric (R, F, M) is divided into 10 bins (0-9) using the NTILE(10) function.
-- A higher score indicates a better customer (e.g., lower recency, higher frequency, and monetary value).
-- The final RFM segment is computed as `R*100 + F*10 + M`, providing a unique customer classification.
-
-This module leverages `pandas` and `ibis` for efficient data processing and integrates with retail analytics workflows
-to enhance customer insights and business decision-making.
+Each dimension is binned with NTILE (default 10) or custom percentile cut points (score
+0..n for n cut points); a higher score marks a better customer, with recency inverted so
+fewer days since the last purchase score higher. The composite segment is R*100 + F*10 + M.
 """
 
 import datetime
@@ -37,14 +19,13 @@ class RFMSegmentation:
     """Segments customers using the RFM (Recency, Frequency, Monetary) methodology.
 
     Customers are scored on three dimensions:
-    - Recency (R): Days since the last transaction (lower is better).
-    - Frequency (F): Number of unique transactions (higher is better).
-    - Monetary (M): Total amount spent (higher is better).
+    - Recency (R): days since the last transaction (lower days is better).
+    - Frequency (F): number of unique transactions (higher is better).
+    - Monetary (M): total amount spent (higher is better).
 
-    Each metric is ranked into bins using either NTILE or custom cut points where,
-    - The highest score represents the best score (top percentile of customers).
-    - The lowest score represents the lowest score (bottom percentile of customers).
-    The RFM segment is a 3-digit number (R*100 + F*10 + M), representing customer value.
+    Each metric is binned via NTILE or custom cut points; the highest score marks the top
+    percentile of customers. The composite `rfm_segment` is R*100 + F*10 + M; with 0-based
+    scores (custom cut points, or NTILE on the pandas backend) it is a 3-digit number 0-999.
     """
 
     def __init__(
@@ -59,36 +40,30 @@ class RFMSegmentation:
         min_frequency: int | None = None,
         max_frequency: int | None = None,
     ) -> None:
-        """Initializes the RFM segmentation process.
+        """Computes RFM scores and the composite segment for each customer.
 
         Args:
-            df (pd.DataFrame | ibis.Table): A DataFrame or Ibis table containing transaction data.
-                Must include the following columns:
-                - customer_id
-                - transaction_date
-                - unit_spend
-                - transaction_id
-            current_date (Optional[Union[str, datetime.date]]): The reference date for calculating recency.
-                Can be a string (format: "YYYY-MM-DD"), a date object, or None (defaults to the current system date).
-            r_segments (Union[int, list[float]], optional): Number of bins (1-10) or custom percentile
-                cut points (max 9 cut points). Defaults to 10 bins.
-            f_segments (Union[int, list[float]], optional): Number of bins (1-10) or custom percentile
-                cut points (max 9 cut points). Defaults to 10 bins.
-            m_segments (Union[int, list[float]], optional): Number of bins (1-10) or custom percentile
-                cut points (max 9 cut points). Defaults to 10 bins.
-            min_monetary (Optional[float]): Minimum monetary value to include in segmentation.
-                Customers with total spend below this value will be excluded from the analysis.
-            max_monetary (Optional[float]): Maximum monetary value to include in segmentation.
-                Customers with total spend above this value will be excluded from the analysis.
-            min_frequency (Optional[int]): Minimum purchase frequency to include in segmentation.
-                Customers with fewer transactions will be excluded from the analysis.
-            max_frequency (Optional[int]): Maximum purchase frequency to include in segmentation.
-                Customers with more transactions will be excluded from the analysis.
+            df (pd.DataFrame | ibis.Table): Transaction data. Must contain the customer_id,
+                transaction_date, unit_spend and transaction_id columns.
+            current_date (str | datetime.date | None): Reference date for recency, as a
+                "YYYY-MM-DD" string, a date, or None (today, UTC).
+            r_segments (int | list[float]): Number of NTILE bins (1-10) or 1-9 custom percentile
+                cut points in (0, 1), unique and ascending.
+            f_segments (int | list[float]): As r_segments, for frequency.
+            m_segments (int | list[float]): As r_segments, for monetary.
+            min_monetary (float | None): Minimum total spend to include a customer.
+            max_monetary (float | None): Maximum total spend to include a customer.
+            min_frequency (int | None): Minimum number of transactions to include a customer.
+            max_frequency (int | None): Maximum number of transactions to include a customer.
+                Filters drop customers outside the min/max ranges before scoring.
 
         Raises:
-            ValueError: If the dataframe is missing required columns, invalid segment parameters,
-                       or invalid filter parameters.
-            TypeError: If the input data is not a pandas DataFrame or an Ibis Table.
+            ValueError: If required columns are missing, a segment parameter is invalid
+                (out of range, non-numeric, duplicate or unsorted cut points), or a filter
+                bound is out of range.
+            TypeError: If df is not a DataFrame or ibis Table, current_date has an invalid
+                type, a segment is neither an int nor a list, or a filter bound has the
+                wrong type.
         """
         cols = ColumnHelper()
         required_cols = [
@@ -127,12 +102,16 @@ class RFMSegmentation:
     def _validate_segments(self, segments: int | list[float], param_name: str) -> None:
         """Validates segment parameters.
 
+        Accepted shapes: an int in 1-10 (NTILE bin count), or a list of 1-9 unique ascending
+        floats in (0, 1) (percentile cut points).
+
         Args:
-            segments: The segment parameter to validate
-            param_name: Name of the parameter for error messages
+            segments (int | list[float]): The segment parameter to validate.
+            param_name (str): Name of the parameter for error messages.
 
         Raises:
-            ValueError: If segment parameters are invalid
+            ValueError: If segment parameters are invalid.
+            TypeError: If segments is neither an int nor a list.
         """
         max_segments_int = 10
         max_segments_list = 9
@@ -166,6 +145,12 @@ class RFMSegmentation:
             raise TypeError(msg)
 
     def _validate_monetary_filters(self, min_monetary: float | None, max_monetary: float | None) -> None:
+        """Validates min/max monetary filters: numeric, non-negative, and min < max.
+
+        Raises:
+            TypeError: If a bound is not numeric.
+            ValueError: If a bound is negative, or min_monetary >= max_monetary.
+        """
         if min_monetary is not None:
             if not isinstance(min_monetary, int | float):
                 raise TypeError("min_monetary must be a numeric value")
@@ -182,6 +167,12 @@ class RFMSegmentation:
             raise ValueError("min_monetary must be less than max_monetary")
 
     def _validate_frequency_filters(self, min_frequency: float | None, max_frequency: float | None) -> None:
+        """Validates min/max frequency filters: integers >= 1, and min <= max.
+
+        Raises:
+            TypeError: If a bound is not an integer.
+            ValueError: If a bound is below 1, or min_frequency > max_frequency.
+        """
         if min_frequency is not None:
             if not isinstance(min_frequency, int):
                 raise TypeError("min_frequency must be an integer")
@@ -198,14 +189,16 @@ class RFMSegmentation:
             raise ValueError("min_frequency must be less than or equal to max_frequency")
 
     def _compute_rfm(self, df: ibis.Table, current_date: datetime.date) -> ibis.Table:
-        """Computes the RFM metrics and segments customers accordingly.
+        """Computes the RFM metrics and scores customers accordingly.
 
         Args:
             df (ibis.Table): The transaction data table.
             current_date (datetime.date): The reference date for calculating recency.
 
         Returns:
-            ibis.Table: A table with RFM scores and segment values.
+            ibis.Table: One row per customer with the raw recency_days, frequency and
+                monetary metrics, the r/f/m scores, `rfm_segment` (R*100 + F*10 + M) and
+                `fm_segment` (F*10 + M).
         """
         cols = ColumnHelper()
         current_date_expr = ibis.literal(current_date)
@@ -234,11 +227,14 @@ class RFMSegmentation:
     def _apply_filters(self, customer_metrics: ibis.Table) -> ibis.Table:
         """Applies the specified filters to the customer metrics.
 
+        Bounds are inclusive: monetary >= min_monetary and <= max_monetary; frequency >=
+        min_frequency and <= max_frequency.
+
         Args:
-            customer_metrics: Table with customer metrics (recency_days, frequency, monetary)
+            customer_metrics (ibis.Table): Table with customer metrics (recency_days, frequency, monetary).
 
         Returns:
-            Filtered table containing only customers meeting all filter criteria
+            ibis.Table: Filtered table containing only customers meeting all filter criteria.
         """
         filter_configs = [
             ("monetary", self.min_monetary, self.max_monetary),
@@ -265,14 +261,19 @@ class RFMSegmentation:
     ) -> ibis.expr.types.IntegerColumn:
         """Computes score for a given column using either NTILE or custom cut points.
 
+        `ascending` orders the scoring window by value ascending: True for frequency/monetary
+        so larger values score higher, False for recency so fewer days score higher (NTILE
+        assigns its bins in window order). Ties break deterministically by customer_id. Scores
+        are cast to int64 so both branches share a dtype.
+
         Args:
-            table: The table containing the data
-            column: The column name to compute scores for
-            segments: Either number of bins or list of cut points
-            ascending: Whether lower values should get higher scores (for recency=False, for frequency/monetary=True)
+            table (ibis.Table): The table containing the data.
+            column (str): The column name to compute scores for.
+            segments (int | list[float]): Either number of bins or list of cut points.
+            ascending (bool): Order the scoring window by value ascending.
 
         Returns:
-            An Ibis expression representing the computed scores
+            ibis.expr.types.IntegerColumn: An ibis expression of the computed scores.
         """
         order_fn = ibis.asc if ascending else ibis.desc
         window = ibis.window(
@@ -299,5 +300,5 @@ class RFMSegmentation:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Returns the dataframe with the segment names."""
+        """Returns the dataframe with the segment names, indexed by customer_id."""
         return self.table.execute().set_index(get_option("column.customer_id"))

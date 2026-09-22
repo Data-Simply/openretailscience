@@ -98,34 +98,24 @@ def filter_and_label_by_periods(
     period_ranges: dict[str, tuple[datetime, datetime] | tuple[str, str]],
     period_col: str = "period_name",
 ) -> ibis.Table:
-    """Filters transactions to specified time periods and adds period labels.
+    """Filter transactions to named time periods and label each row with its period.
 
-    This function filters transactions based on specified time periods and adds a new column indicating the period name.
-    It is useful for analyzing transactions within specific date ranges and comparing KPIs between them.
-
-    Example:
-        transactions = ibis.table("transactions")
-        period_ranges = {
-            "Q1": ("2023-01-01", "2023-03-31"),
-            "Q2": ("2023-04-01", "2023-06-30"),
-        }
-        filtered_transactions = filter_and_label_by_periods(transactions, period_ranges)
-        # filtered_transactions will only contain transactions from the date ranges specified in Q1 and Q2 and a new
-        # column 'period_name' will be in the table defining the period for each transaction.
+    Rows outside every period are dropped. The date column is read from the
+    ``column.transaction_date`` option; string dates in ``period_ranges`` are
+    parsed as ``%Y-%m-%d`` and localized to UTC.
 
     Args:
-        transactions (ibis.Table): An ibis table with a transaction_date column.
-        period_ranges (dict[str, tuple[datetime, datetime] | tuple[str, str]]): Dict where keys are period names and
-            values are(start_date, end_date) tuples.
-        period_col (str, optional): Name of the column to create for period labels. Defaults to "period_name".
+        transactions (ibis.Table): Table containing the transaction date column.
+        period_ranges (dict[str, tuple[datetime, datetime] | tuple[str, str]]): Period names
+            mapped to ``(start_date, end_date)`` tuples.
+        period_col (str): Name of the label column to add. Defaults to ``"period_name"``.
 
     Returns:
-        An ibis table with filtered transactions and added period label column.
+        ibis.Table: Filtered table with the ``period_col`` label column.
 
     Raises:
-        ValueError: If any value in period_ranges is not a tuple of length 2.
-        ValueError: If first date > second date for any period.
-        ValueError: If periods overlap with each other.
+        ValueError: If a period value is not a ``(start, end)`` tuple, if a start date is
+            after its end date, or if two periods overlap.
     """
     # Validate periods first
     _validate_and_normalize_periods(period_ranges)
@@ -153,36 +143,29 @@ def find_overlapping_periods(
     end_date: datetime | str,
     return_str: bool = True,
 ) -> list[tuple[str | datetime, str | datetime]]:
-    """Find overlapping time periods within the given date range, split by year.
+    """Split a date range into year-aligned overlapping periods.
 
-    This function generates overlapping periods between a given start date and end date.
-    The first period will start from the given start date, and each subsequent period will start on
-    the same month and day for the following years, ending each period on the same month and day
-    of the end date but in the subsequent year,
-    except for the last period, which ends at the provided end date.
+    The first period starts at ``start_date``; each subsequent period starts on the same
+    month and day one year later. Each period ends on ``end_date``'s month and day in the
+    following year, so the last period ends exactly at ``end_date``. Both dates in the
+    same year yield an empty list.
 
     Note:
-        This function does not adjust for leap years. If the start or end date is February 29,
-        it may cause an issue in non-leap years.
+        No leap-year adjustment: a Feb 29 start or end date raises ``ValueError`` in a
+        non-leap year.
 
     Args:
-        start_date (datetime | str): The starting date of the range, either as a
-            datetime object or 'YYYY-MM-DD' string.
-        end_date (datetime | str): The ending date of the range, either as a
-            datetime object or 'YYYY-MM-DD' string.
-        return_str (bool, optional): If True, returns dates as ISO-formatted strings ('YYYY-MM-DD').
-                                     If False, returns datetime objects. Defaults to True.
+        start_date (datetime | str): Range start, a datetime or ``YYYY-MM-DD`` string.
+        end_date (datetime | str): Range end, a datetime or ``YYYY-MM-DD`` string.
+        return_str (bool): If True, dates are returned as ISO-formatted strings; if
+            False, as datetime objects. Defaults to True.
 
     Returns:
-        list[tuple[str | datetime, str | datetime]]:
-        A list of tuples where each tuple contains the start and end dates of an overlapping period,
-        either as strings (ISO format) or datetime objects. Returned datetimes preserve the
-        timezone-awareness of the input (naive in → naive out, aware in → aware out).
-        String inputs produce naive datetime outputs.
+        list[tuple[str | datetime, str | datetime]]: ``(start, end)`` pairs; datetime
+            outputs preserve the input timezone-awareness (string inputs give naive outputs).
 
     Raises:
-        TypeError: If start_date and end_date have mismatched timezone awareness
-            (one naive or string and one timezone-aware, or vice versa).
+        TypeError: If ``start_date`` and ``end_date`` have mismatched timezone awareness.
         ValueError: If the start date is after the end date.
     """
     # Track whether outputs should be tz-naive to preserve backward compatibility.

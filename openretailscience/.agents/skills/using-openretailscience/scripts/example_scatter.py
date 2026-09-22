@@ -56,6 +56,19 @@ scatter.plot(
     s=80,
 )
 
+# Example 4: Bubble chart - size_col scales point area, label_col labels each point
+scatter.plot(
+    df=df,
+    value_col="sales",
+    x_col="profit",
+    size_col="customers",
+    label_col="category",
+    title="Sales vs Profit (bubble size = customers)",
+    x_label="Profit ($)",
+    y_label="Sales ($)",
+    alpha=0.7,
+)
+
 # Example 5: Time series scatter
 time_df = df[df["category"] == "Electronics"].copy()
 

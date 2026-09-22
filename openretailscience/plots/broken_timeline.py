@@ -1,20 +1,8 @@
-"""This module provides functionality for creating broken timeline plots from pandas DataFrames.
+"""Broken timeline of data availability: horizontal bars per category over time.
 
-A broken timeline plot visualizes data availability across categories over time, showing periods where
-data is available as horizontal bars, with gaps indicating missing data periods.
-
-### Features
-
-- **Multiple Categories**: Support for displaying multiple categories with different colors
-- **Customizable Periods**: Aggregate data by different time periods (daily, weekly)
-- **Threshold Filtering**: Filter out values below a specified threshold
-- **Date Formatting**: Uses matplotlib's ConciseDateFormatter for clean date axis labels
-
-### Use Cases
-
-- **Data Quality Assessment**: Visualize data availability gaps across categories/segments over time
-- **Product Availability Analysis**: Identify periods with stock outs by store/category
-- **Seasonality Analysis**: Assess to look for period of low sales that may indicate seasonality or other trends
+Each bar spans periods with data; gaps mark missing periods. Values are aggregated per
+period (period D/W via agg_func) rather than plotted as raw rows; threshold filtering is
+supported.
 """
 
 from typing import Any
@@ -63,36 +51,38 @@ def plot(
     figsize: tuple[int, int] | None = None,
     **kwargs: Any,  # noqa: ANN401
 ) -> SubplotBase:
-    """Creates a broken timeline plot showing data availability across categories over time.
+    """Plot data availability as horizontal bars per category, with gaps for missing periods.
 
-    Shows periods where data is available as horizontal bars, with gaps indicating missing data periods.
+    Values are aggregated per period (groupby category + period, then agg_func on value_col)
+    before plotting. The date column is not a parameter; it is read from the
+    ``column.transaction_date`` option and must be present in df.
 
     Args:
-        df (pd.DataFrame): The input DataFrame containing the data to be plotted.
-        category_col (str): The column containing categories to display on y-axis.
-        value_col (str): The column containing values to determine data availability.
-        title (str, optional): The title of the plot. Defaults to None.
-        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-        x_label (str, optional): The label for the x-axis. Defaults to None.
-        y_label (str, optional): The label for the y-axis. Defaults to None.
-        ax (Axes, optional): The Matplotlib Axes object to plot on. Defaults to None.
-        source_text (str, optional): Text to be displayed as a source at the bottom of the plot. Defaults to None.
-        period (str, optional): Period for aggregating data. Accepts "D"/"day" or "W"/"week"
-            (case-insensitive); resolved to the corresponding pandas frequency code internally.
-            Defaults to "D".
-        agg_func (str, optional): The aggregation function to apply to the value_col when grouping by period.
-            Defaults to "sum".
-        threshold_value (float, optional): Values below this threshold are considered gaps. Defaults to None.
-        bar_height (float, optional): Height of timeline bars as fraction of available space. Defaults to 0.8.
-        figsize: tuple[int, int] | None = None,
-        **kwargs (Any): Additional keyword arguments for matplotlib broken_barh function.
+        df (pd.DataFrame): Input frame; must include the ``column.transaction_date`` column.
+        category_col (str): Column of categories, one bar row per category.
+        value_col (str): Column of values used to determine availability.
+        title (str, optional): Plot title.
+        eyebrow (str, optional): Uppercase label rendered above the title.
+        subtitle (str, optional): Supporting copy rendered below the title.
+        x_label (str, optional): X-axis label.
+        y_label (str, optional): Y-axis label.
+        ax (Axes, optional): Axes to plot on.
+        source_text (str, optional): Source attribution rendered at the bottom.
+        period (str, optional): Aggregation period; "D"/"day" or "W"/"week" (case-insensitive).
+        agg_func (str, optional): Aggregation applied to value_col within each period.
+        threshold_value (float, optional): Rows below this value are dropped before period
+            aggregation; a period that still has data above the threshold gets a shorter bar,
+            not a gap.
+        bar_height (float, optional): Bar thickness as a fraction of the available row space.
+        figsize (tuple[int, int], optional): Figure size, used only when ax is None.
+        **kwargs: Forwarded to matplotlib broken_barh.
 
     Returns:
-        SubplotBase: The Matplotlib Axes object with the generated plot.
+        SubplotBase: The matplotlib axes object.
 
     Raises:
-        ValueError: If DataFrame is empty, required columns are missing, or invalid period specified.
+        ValueError: If df is empty, a required column is missing, or period is invalid.
+
     """
     date_col = get_option("column.transaction_date")
 

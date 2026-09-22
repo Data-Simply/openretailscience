@@ -99,6 +99,9 @@ Prefer reading the relevant script over assembling calls from signatures alone.
 - Configure column names through the options system rather than hardcoding — the
   package owns a canonical name for each column (see `references/configuration.md`).
 - Use vectorized pandas/numpy on result frames — never `.iterrows()`.
+- `CohortAnalysis` materializes at construction; filter large remote tables first.
+- `TransactionChurn` runs one aggregate query at construction; apply row filters before
+  constructing on large remote tables.
 
 ## When NOT to use this skill
 

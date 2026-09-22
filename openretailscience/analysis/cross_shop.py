@@ -1,62 +1,4 @@
-"""Cross-Shopping Analysis Module for Category and Brand Interaction Insights.
-
-## Business Context
-
-Cross-shopping analysis reveals how customers navigate between different product
-categories, brands, or store locations. This intelligence drives critical retail
-decisions from store layout and category adjacencies to promotional bundling and
-targeted marketing campaigns.
-
-## Real-World Problem
-
-Retailers often make incorrect assumptions about customer behavior. They might place
-baby products far from beer, not realizing these categories have high cross-shopping
-rates (the famous "diapers and beer" phenomenon). Cross-shop analysis replaces
-assumptions with data-driven insights about actual customer purchase patterns.
-
-## Business Applications
-
-1. **Store Layout Optimization**
-   - Place frequently cross-shopped categories near each other
-   - Create logical customer journey paths through the store
-   - Reduce friction in the shopping experience
-
-2. **Promotional Strategy**
-   - Bundle products from highly cross-shopped categories
-   - Time promotions to capture cross-category purchases
-   - Design "buy from A, get discount on B" offers
-
-3. **Category Management**
-   - Understand category interdependencies
-   - Identify opportunity categories for existing shoppers
-   - Spot categories at risk when others decline
-
-4. **Multi-Channel Strategy**
-   - Analyze cross-shopping between online and physical stores
-   - Optimize channel-specific assortments
-   - Design omnichannel customer journeys
-
-5. **Competitive Analysis**
-   - Understand customer loyalty across competing brands
-   - Identify vulnerable competitor segments
-   - Design conquest strategies for shared customers
-
-## Business Value
-
-- **Increased Basket Size**: Strategic placement increases impulse purchases
-- **Customer Retention**: Better store experience reduces defection
-- **Marketing Efficiency**: Target promotions to actual behavior patterns
-- **Strategic Insights**: Understand true category relationships
-- **Competitive Advantage**: Leverage unique customer behavior insights
-
-## Visualization Output
-
-The module generates Venn diagrams showing:
-- Exclusive shoppers for each category/brand
-- Overlap segments with cross-shopping behavior
-- Relative size of each segment by customer count or spend
-- Percentage breakdowns for strategic planning
-"""
+"""Cross-shop analysis: per-customer overlap (Venn) of 2-3 segments defined by column=value filters."""
 
 from collections.abc import Callable
 from typing import Any
@@ -71,21 +13,10 @@ from openretailscience.plots import venn
 
 
 class CrossShop:
-    """Analyzes customer cross-shopping behavior between categories, brands, or locations.
+    """Per-customer overlap of 2-3 segments defined by column=value filters.
 
-    The CrossShop class reveals hidden relationships in customer purchasing patterns,
-    enabling retailers to optimize everything from store layouts to marketing campaigns.
-    By understanding which products customers buy together across shopping trips, retailers
-    can make smarter decisions about product placement, promotions, and assortment.
-
-    ## Business Problem Solved
-
-    Many retail decisions assume customer behavior that may not reflect reality. For example:
-    - Are organic shoppers also buying conventional products?
-    - Do online grocery shoppers still visit physical stores?
-    - Which private label categories attract national brand buyers?
-
-    This analysis provides definitive answers with actionable percentages.
+    Computed eagerly at construction (``.execute()``); ``.cross_shop_df`` and
+    ``.cross_shop_table_df`` are pandas DataFrames.
     """
 
     @staticmethod
@@ -114,61 +45,33 @@ class CrossShop:
         value_col: str | None = None,
         agg_func: str = "sum",
     ) -> None:
-        """Initialize cross-shopping analysis between retail categories, brands, or locations.
+        """Initialize cross-shop analysis for 2 or 3 segments defined by column=value filters.
+
+        Each entity appears once: a segment flag is 1 if the entity has ANY transaction
+        matching that segment (max of the 0/1 flags), and `value_col` is the entity's
+        `agg_func` over ALL of its transactions, not just matching ones.
 
         Args:
             df (pd.DataFrame | ibis.Table): Transaction data with customer purchases.
-            group_1_col (str): Column identifying first segment (e.g., "category", "brand", "channel").
-            group_1_val (str): Value to analyze for first segment (e.g., "organic", "Brand_A", "online").
-            group_2_val (str): Value to analyze for second segment.
-            group_2_col (str, optional): Column identifying second segment.
-                Defaults to group_1_col.
+            group_1_col (str): Column defining the first segment (e.g., "category", "brand", "channel").
+            group_1_val (str): Value of `group_1_col` defining the first segment (e.g., "organic").
+            group_2_val (str): Value of `group_2_col` defining the second segment.
+            group_2_col (str, optional): Column defining the second segment.
+                Defaults to `group_1_col`.
             group_3_col (str, optional): Column for three-way analysis.
-                Defaults to group_1_col when group_3_val provided.
-            group_3_val (str, optional): Value for third segment. Defaults to None.
-            labels (list[str], optional): Custom labels for diagram (e.g., ["Organic", "Local"]).
-                Defaults to alphabetical labels [A, B, C].
-            group_col (str, optional): Grouping column (e.g., customer_id, store_id,
-                segment_name). Defaults to customer_id from options.
-            value_col (str, optional): Metric to analyze (sales, units, visits).
-                Defaults to spend column from options.
-            agg_func (str, optional): How to combine customer values ("sum", "mean", "count").
-                Defaults to "sum" for total opportunity sizing.
-
-        Returns:
-            None
+                Defaults to `group_1_col` when `group_3_val` is provided.
+            group_3_val (str, optional): Value of `group_3_col` defining the third segment. Defaults to None.
+            labels (list[str], optional): Segment labels. Defaults to alphabetical labels [A, B, C].
+            group_col (str, optional): Entity column to overlap on. Defaults to option
+                `column.customer_id`.
+            value_col (str, optional): Metric to aggregate per entity. Defaults to option
+                `column.unit_spend`.
+            agg_func (str, optional): How to combine the entity's values ("sum", "mean", "count").
+                Defaults to "sum".
 
         Raises:
-            ValueError: If required columns missing or label count doesn't match groups.
-
-        Business Examples:
-            >>> # Analyze organic vs conventional shoppers
-            >>> cross_shop = CrossShop(
-            ...     df=transactions,
-            ...     group_1_col="product_type",
-            ...     group_1_val="organic",
-            ...     group_2_val="conventional",
-            ...     labels=["Organic", "Conventional"]
-            ... )
-            ...
-            >>> # Three-way analysis
-            >>> cross_shop = CrossShop(
-            ...     df=transactions,
-            ...     group_1_col="channel",
-            ...     group_1_val="online",
-            ...     group_2_val="store",
-            ...     group_3_val="mobile",
-            ...     labels=["Online", "Store", "Mobile"]
-            ... )
-            ...
-            >>> # Custom customer column
-            >>> cross_shop = CrossShop(
-            ...     df=transactions,
-            ...     group_1_col="brand",
-            ...     group_1_val="Nike",
-            ...     group_2_val="Adidas",
-            ...     group_col="user_id"
-            ... )
+            TypeError: If `df` is not a pandas DataFrame or an Ibis Table.
+            ValueError: If required columns are missing or the label count doesn't match the groups.
         """
         # Apply smart defaults for simplified interface
         group_col = group_col or get_option("column.customer_id")
@@ -222,10 +125,10 @@ class CrossShop:
         agg_func: str = "sum",
         labels: list[str] | None = None,
     ) -> pd.DataFrame:
-        """Calculate the cross-shop dataframe that will be used to plot the diagram.
+        """Calculate the per-entity cross-shop dataframe used to plot the diagram.
 
         Args:
-            df (pd.DataFrame | ibis.Table):  The input DataFrame or ibis Table containing transactional data.
+            df (pd.DataFrame | ibis.Table): The input DataFrame or ibis Table containing transactional data.
             group_1_col (str): Column name for the first group.
             group_1_val (str): Value to filter for the first group.
             group_2_col (str): Column name for the second group.
@@ -239,7 +142,10 @@ class CrossShop:
             labels (list[str], optional): The labels for the groups. Defaults to None.
 
         Returns:
-            pd.DataFrame: The cross-shop dataframe.
+            pd.DataFrame: One row per `group_col` value, indexed by it. Columns: int32 0/1
+                flags `group_1`/`group_2` (and `group_3` for three-way), `groups` (tuple of
+                the flags), `group_labels` (comma-joined labels, or "No Groups"), and the
+                aggregated `value_col`.
 
         Raises:
             ValueError: If group_3_col or group_3_val is populated, then the other must be as well.
@@ -302,14 +208,18 @@ class CrossShop:
         df: pd.DataFrame,
         value_col: str = get_option("column.unit_spend"),
     ) -> pd.DataFrame:
-        """Calculate the aggregated cross-shop table that will be used to plot the diagram.
+        """Calculate the aggregated cross-shop table used to plot the diagram.
+
+        The `value_col` default is evaluated at import time; the only caller passes it
+        explicitly, so a future caller running after `set_option` would get a stale default.
 
         Args:
             df (pd.DataFrame): The cross-shop dataframe.
             value_col (str, optional): The column to aggregate. Defaults to option column.unit_spend.
 
         Returns:
-            pd.DataFrame: The cross-shop table.
+            pd.DataFrame: One row per (`groups`, `group_labels`) with the summed `value_col`
+                and `percent`, the segment's share of the total value.
         """
         df = df.groupby(["groups", "group_labels"], dropna=False)[value_col].sum().reset_index().copy()
         df["percent"] = df[value_col] / df[value_col].sum()
@@ -327,18 +237,20 @@ class CrossShop:
         subset_label_formatter: Callable | None = None,
         **kwargs: Any,  # noqa: ANN401
     ) -> SubplotBase:
-        """Generate Venn diagram showing customer segment overlaps.
+        """Generate a Venn diagram of customer segment overlaps.
+
+        Delegates to `openretailscience.plots.venn.plot` with `self.cross_shop_table_df`.
 
         Args:
             title (str, optional): Chart title (e.g., "Cross-Shopping: Organic vs Conventional").
             eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
             subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
             source_text (str, optional): Data source attribution. Defaults to None.
-            vary_size (bool, optional): Scale circles by segment value for visual impact.
+            vary_size (bool, optional): Scale circles by segment value.
                 True = larger segments appear bigger. Defaults to False.
             figsize (tuple[int, int], optional): Plot dimensions. Defaults to None.
             ax (Axes, optional): Existing axes for subplot integration. Defaults to None.
-            subset_label_formatter (callable, optional): Custom formatting for percentages.
+            subset_label_formatter (Callable, optional): Custom formatting for subset percentages.
                 Default shows one decimal place (e.g., "34.5%").
             **kwargs (Any): Additional diagram customization options.
 

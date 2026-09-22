@@ -1,109 +1,7 @@
-"""Market Basket Analysis and Product Association Rules for Retail Optimization.
+"""Market-basket (product association) rules from transaction data.
 
-## Business Context
-
-Product association analysis (market basket analysis) uncovers the hidden relationships
-in customer purchasing behavior. This intelligence transforms how retailers approach
-merchandising, marketing, and operations by revealing which products naturally sell
-together and why.
-
-## The Business Problem
-
-Retailers lose revenue from missed cross-selling opportunities and poor product
-placement. Without understanding product associations, stores might:
-- Place complementary items in different aisles, reducing impulse purchases
-- Miss bundling opportunities that could increase average transaction value
-- Stock-out on associated items when promoting a product
-- Fail to identify new product opportunities based on basket gaps
-
-## Real-World Applications
-
-1. **Strategic Merchandising**
-   - Place chips near beer when data shows strong association
-   - Position phone cases near phones based on attachment rates
-   - Create end-cap displays with products that sell together
-   - Optimize shelf space allocation using association strength
-
-2. **Dynamic Bundle Pricing**
-   - Create "Breakfast bundle": Coffee + Pastry when uplift shows synergy
-   - Design seasonal bundles based on historical associations
-   - Price bundles to incentivize larger baskets while maintaining margins
-   - Test bundle combinations using confidence metrics
-
-3. **Personalized Recommendations**
-   - Power "Customers who bought X also bought Y" suggestions
-   - Enhance cart abandonment recovery with associated items
-   - Design email campaigns based on previous purchase associations
-   - Improve search results by showing associated products
-
-4. **Inventory Optimization**
-   - Stock pasta sauce when pasta is promoted (if association exists)
-   - Prepare battery inventory when toys are featured
-   - Coordinate supply chain for products that sell together
-   - Reduce stockouts by understanding product relationships
-
-5. **New Product Placement**
-   - Place new organic items near existing organic purchases
-   - Position private label next to associated national brands
-   - Test new products within high-association categories
-   - Leverage existing associations to drive trial
-
-## Key Metrics Explained
-
-### Support (Frequency)
-The proportion of all transactions containing both products. Higher support
-indicates a more common pairing. Use this to identify:
-- Core product relationships for everyday decisions
-- Sufficient sample size for confident conclusions
-- Opportunities worth marketing investment
-
-### Confidence (Conditional Probability)
-The probability of buying product B given product A was purchased. This answers
-"If a customer buys A, how likely are they to buy B?" Use this for:
-- Recommendation engine rules
-- Promotional targeting decisions
-- Cross-sell prioritization
-
-### Uplift/Lift (Synergy Indicator)
-Measures how much more likely products are bought together than would be expected
-by chance. Uplift = Observed probability / Expected probability. Interpretation:
-- Uplift > 1: Products have positive association (sell better together)
-- Uplift = 1: Products are independent (no relationship)
-- Uplift < 1: Products have negative association (rarely bought together)
-
-Higher uplift values indicate stronger synergies worth exploiting.
-
-## Actionable Decision Framework
-
-Retailers should consider multiple metrics together:
-
-**High Support + High Confidence**
-- Strong, frequent relationship
-- Priority for permanent merchandising changes
-- Core bundle candidates
-
-**Low Support + High Confidence**
-- Niche but reliable relationship
-- Targeted marketing opportunities
-- Specialized customer segments
-
-**High Support + Low Confidence**
-- Common but weak relationship
-- Test before major changes
-- Monitor for shifts over time
-
-**High Uplift (regardless of support)**
-- Strong synergy exists
-- Test for merchandising opportunities
-- Consider for promotional strategies
-
-## Implementation Considerations
-
-- Validate associations across time periods before major changes
-- Consider seasonality in association patterns
-- Test recommendations with A/B experiments
-- Monitor associations as product mix evolves
-- Account for external factors (promotions, events) affecting associations
+Rules are computed lazily in the Ibis engine: ``table`` is the lazy Ibis table and
+``df`` materializes it.
 """
 
 import functools
@@ -117,42 +15,23 @@ from openretailscience.options import get_option
 
 
 class ProductAssociation:
-    """A class for generating and analyzing product association rules.
+    """Association rules between products from transaction data.
 
-    This class calculates association rules between products based on transaction data,
-    helping to identify patterns in customer purchasing behavior.
+    The unit of analysis is the distinct (group, product) pair. Output columns are
+    ``{value_col}_1`` / ``{value_col}_2`` (the product pair), ``occurrences_1`` /
+    ``occurrences_2`` (count of distinct ``group_col`` values containing that product),
+    ``cooccurrences`` (distinct ``group_col`` values containing both), plus:
 
-    Args:
-        df (pandas.DataFrame): The input DataFrame containing transaction data.
-        value_col (str): The name of the column in the input DataFrame that contains
-            the product identifiers.
-        group_col (str, optional): The name of the column that identifies unique
-            transactions or customers. Defaults to option column.column_id.
-        target_item (str | float | list[str | float] | None, optional): A specific
-            product or list of products to focus the association analysis on.
-            If None, associations for all products are calculated. Defaults to None.
+    - ``support = cooccurrences / total``, where ``total`` is the count of distinct
+      ``group_col`` values over the ENTIRE input — not just groups containing either product.
+    - ``confidence = cooccurrences / occurrences_1`` = P(product_2 | product_1) — asymmetric.
+    - ``uplift = support / (prob_1 * prob_2)`` — may legitimately exceed 1.
 
-    Attributes:
-        df (pandas.DataFrame): A DataFrame containing the calculated association
-            rules and their metrics.
+    With ``target_item=None`` both directions (a, b) and (b, a) are emitted, each with its
+    own confidence; with a given ``target_item`` only rows with the target as product_1 are
+    emitted. ``min_confidence`` filters both directions after the union.
 
-    Example:
-        >>> import pandas as pd
-        >>> transaction_df = pd.DataFrame({
-        ...     'customer_id': [1, 1, 2, 2, 3],
-        ...     'product_id': ['A', 'B', 'B', 'C', 'A']
-        ... })
-        >>> pa = ProductAssociation(df=transaction_df, value_col='product_id', group_col='customer_id')
-        >>> print(pa.df)  # View the calculated association rules
-
-    Note:
-        The resulting DataFrame (pa.df) contains the following columns:
-        - product_1, product_2: The pair of products for which the association is calculated.
-        - occurrences_1, occurrences_2: The number of transactions containing each product.
-        - cooccurrences: The number of transactions containing both products.
-        - support: The proportion of transactions containing both products.
-        - confidence: The probability of buying product_2 given that product_1 was bought.
-        - uplift: The ratio of the observed support to the expected support if the products were independent.
+    ``table`` is the lazy Ibis result; ``df`` materializes it.
     """
 
     def __init__(
@@ -167,32 +46,26 @@ class ProductAssociation:
         min_confidence: float = 0.0,
         min_uplift: float = 0.0,
     ) -> None:
-        """Initialize the ProductAssociation object.
+        """Initialize the ProductAssociation and compute the rules lazily.
 
         Args:
-            df (pd.DataFrame | ibis.Table): The input DataFrame or ibis Table containing transaction data.
-            value_col (str): The name of the column in the input DataFrame that contains the product identifiers.
-            group_col (str, optional): The name of the column that identifies unique transactions or customers. Defaults
-                to option column.unit_spend.
-            target_item (str | float | list[str | float] | None, optional): A specific product
-                or list of products to focus the association analysis on. If None,
-                associations for all products are calculated. Defaults to None.
-            min_occurrences (int, optional): The minimum number of occurrences required for each product in the
-                association analysis. Defaults to 1. Must be at least 1.
-            min_cooccurrences (int, optional): The minimum number of co-occurrences required for the product pairs in
-                the association analysis. Defaults to 1. Must be at least 1.
-            min_support (float, optional): The minimum support value required for the association rules. Defaults to
-                0.0. Must be between 0 and 1.
-            min_confidence (float, optional): The minimum confidence value required for the association rules. Defaults
-                to 0.0. Must be between 0 and 1.
-            min_uplift (float, optional): The minimum uplift value required for the association rules. Defaults to 0.0.
-                Must be greater or equal to 0.
+            df (pd.DataFrame | ibis.Table): Transaction data with one row per (group, product) occurrence.
+            value_col (str): Column containing the product identifiers.
+            group_col (str | None): Column identifying unique transactions or customers; defaults to
+                option ``column.customer_id``.
+            target_item (str | float | list[str | float] | None): Product(s) to focus the analysis on;
+                if None, associations for all products are calculated.
+            min_occurrences (int): Minimum distinct-group count per product; must be >= 1. Defaults to 1.
+            min_cooccurrences (int): Minimum distinct-group count per pair; must be >= 1. Defaults to 1.
+            min_support (float): Minimum support; must be in [0, 1]. Defaults to 0.0.
+            min_confidence (float): Minimum confidence; must be in [0, 1]. Defaults to 0.0.
+            min_uplift (float): Minimum uplift; must be >= 0. Defaults to 0.0.
 
         Raises:
-            ValueError: If the number of combinations is not 2 or 3, or if any of the minimum values are invalid.
-            ValueError: If the minimum support, confidence, or uplift values are outside the valid range.
-            ValueError: If the minimum occurrences or cooccurrences are less than 1.
-            ValueError: If the input DataFrame does not contain the required columns or if they have null values.
+            ValueError: If any ``min_*`` value is out of range.
+            ValueError: If ``target_item`` is an empty list.
+            TypeError: If ``target_item`` contains values that are not str or float.
+            ValueError: If ``group_col`` or ``value_col`` columns are missing from the data.
         """
         group_col = group_col or get_option("column.customer_id")
         required_cols = [group_col, value_col]
@@ -218,17 +91,18 @@ class ProductAssociation:
         min_confidence: float,
         min_uplift: float,
     ) -> None:
-        """Validate minimum value parameters.
+        """Validate the minimum value parameters.
 
         Args:
-            min_occurrences (int): The minimum number of occurrences required for each product.
-            min_cooccurrences (int): The minimum number of co-occurrences required for product pairs.
-            min_support (float): The minimum support value required for association rules.
-            min_confidence (float): The minimum confidence value required for association rules.
-            min_uplift (float): The minimum uplift value required for association rules.
+            min_occurrences (int): Minimum occurrences per product; must be >= 1.
+            min_cooccurrences (int): Minimum co-occurrences per pair; must be >= 1.
+            min_support (float): Minimum support; must be in [0, 1].
+            min_confidence (float): Minimum confidence; must be in [0, 1].
+            min_uplift (float): Minimum uplift; must be >= 0. Uplift is a ratio and may
+                legitimately exceed 1.
 
         Raises:
-            ValueError: If any parameter is outside the valid range.
+            ValueError: If any parameter is outside its valid range.
         """
         if min_occurrences < 1:
             raise ValueError("Minimum occurrences must be at least 1")
@@ -253,46 +127,21 @@ class ProductAssociation:
         min_confidence: float = 0.0,
         min_uplift: float = 0.0,
     ) -> pd.DataFrame:
-        """Calculate product association rules based on transaction data.
+        """Build the association rules as a lazy Ibis expression tree.
 
-        This method calculates association rules between products based on transaction data,
-        helping to identify patterns in customer purchasing behavior.
-
-        Args:
-            df (pd.DataFrame | ibis.Table): The input DataFrame or ibis Table containing transaction data.
-            value_col (str): The name of the column in the input DataFrame that contains the product identifiers.
-            group_col (str, optional): The name of the column that identifies unique transactions or customers. Defaults
-                to option column.unit_spend.
-            target_item (str | float | list[str | float] | None, optional): A specific product
-                or list of products to focus the association analysis on. If None,
-                associations for all products are calculated. Defaults to None.
-            min_occurrences (int, optional): The minimum number of occurrences required for each product in the
-                association analysis. Defaults to 1. Must be at least 1.
-            min_cooccurrences (int, optional): The minimum number of co-occurrences required for the product pairs in
-                the association analysis. Defaults to 1. Must be at least 1.
-            min_support (float, optional): The minimum support value required for the association rules. Defaults to
-                0.0. Must be between 0 and 1.
-            min_confidence (float, optional): The minimum confidence value required for the association rules. Defaults
-                to 0.0. Must be between 0 and 1.
-            min_uplift (float, optional): The minimum uplift value required for the association rules. Defaults to 0.0.
-                Must be greater or equal to 0.
+        Returns the result table without executing it. The unit of analysis is the
+        distinct (group, product) pair; ``min_confidence`` is applied after the
+        both-directions union. Argument semantics as in ``ProductAssociation.__init__``.
 
         Returns:
-            pandas.DataFrame: A DataFrame containing the calculated association rules and their metrics.
+            ibis.Table: Lazy result table with columns ``{value_col}_1``, ``{value_col}_2``,
+                ``occurrences_1``, ``occurrences_2``, ``cooccurrences``, ``support``,
+                ``confidence``, ``uplift``.
 
         Raises:
-            ValueError: If the number of combinations is not 2 or 3, or if any of the minimum values are invalid.
-            ValueError: If the minimum support, confidence, or uplift values are outside the valid range.
-            ValueError: If the minimum occurrences or cooccurrences are less than 1.
-
-        Note:
-            The resulting DataFrame contains the following columns:
-            - product_1, product_2: The pair of products for which the association is calculated.
-            - occurrences_1, occurrences_2: The number of transactions containing each product.
-            - cooccurrences: The number of transactions containing both products.
-            - support: The proportion of transactions containing both products.
-            - confidence: The probability of buying product_2 given that product_1 was bought.
-            - uplift: The ratio of the observed support to the expected support if the products were independent.
+            ValueError: Out-of-range ``min_*`` values (see ``_validate_minimum_values``) or
+                an empty ``target_item`` list.
+            TypeError: If ``target_item`` items are not str or float.
         """
         ProductAssociation._validate_minimum_values(
             min_occurrences=min_occurrences,
@@ -410,5 +259,5 @@ class ProductAssociation:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Returns the executed DataFrame."""
+        """Materialized association rules DataFrame (cached after first execution)."""
         return self.table.execute().reset_index(drop=True)

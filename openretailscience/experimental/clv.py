@@ -13,7 +13,7 @@ first purchase and observed until ``observation_period_end``:
 - ``recency`` — time from the first purchase to the last purchase.
 - ``T`` — the customer's "age": time from the first purchase to ``observation_period_end``.
 - ``monetary_value`` — mean spend across the *repeat* purchases (excludes the first, per the
-  Gamma-Gamma assumption). ``NaN`` for one-time buyers, who fall back to the population mean.
+   Gamma-Gamma assumption). ``NaN`` for one-time buyers (excluded by ``repeat_buyers``).
 
 ``recency`` and ``T`` are expressed in ``period`` units (``"day"``, ``"week"``, or ``"month"``;
 a month is a fixed 365.25/12-day unit) and are fractional (e.g. 2.5 weeks). The elapsed time is

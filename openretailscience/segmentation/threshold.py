@@ -1,46 +1,7 @@
-"""Threshold-Based Segmentation for Flexible Business Classification.
+"""Generic percentile-threshold segmentation with user-defined cut points and segment names.
 
-## Business Context
-
-Many retail segmentation needs don't fit standard models like RFM. Businesses often need
-custom segments based on specific metrics and thresholds - whether segmenting customers
-by spend percentiles, stores by performance quintiles, or products by sales velocity.
-This module provides flexible threshold-based segmentation for any business dimension.
-
-## The Business Problem
-
-Retailers need custom segmentation rules for different business scenarios:
-- Create spend-based customer tiers (Bronze, Silver, Gold, Platinum)
-- Classify stores into performance bands (A, B, C, D stores)
-- Segment products by velocity (Fast, Medium, Slow movers)
-- Define custom categories based on business-specific thresholds
-
-Standard segmentation approaches are too rigid, while manual classification is inconsistent
-and doesn't scale across large datasets.
-
-## Real-World Applications
-
-### Customer Classification
-- Create VIP tiers based on total spend percentiles
-- Segment by transaction frequency for different service levels
-- Classify customers by recency for retention campaigns
-
-### Store Performance Tiers
-- Classify stores by sales per square foot into performance bands
-- Segment locations by customer conversion rates
-- Create store tiers for investment prioritization
-
-### Product Categorization
-- Segment SKUs by sales velocity for inventory management
-- Classify products by margin contribution for pricing strategies
-- Create ABC analysis categories for supply chain optimization
-
-## Technical Features
-
-- Flexible percentile-based thresholds for consistent segment sizing
-- Custom aggregation functions for different business metrics
-- Configurable handling of zero-value entities
-- Efficient execution using Ibis for large datasets
+Base class for `HMLSegmentation`; use this class directly for custom thresholds and segment
+names beyond the fixed HML cuts.
 """
 
 import functools
@@ -67,27 +28,35 @@ class ThresholdSegmentation:
         zero_value_customers: Literal["separate_segment", "exclude", "include_with_light"] = "separate_segment",
         group_col: str | list[str] | None = None,
     ) -> None:
-        """Segments customers based on user-defined thresholds and segments.
+        """Segments customers by assigning the first segment whose threshold their percentile rank reaches.
+
+        A customer's aggregated value_col is ranked with percent_rank and assigned the first
+        segment whose threshold the rank is <= (percentile cuts, not value cuts). Zero handling
+        happens before ranking: "exclude" and "separate_segment" remove zero-value rows from
+        the ranked population, while "include_with_light" keeps them in (they typically land
+        in the lowest segment; the code does not force a specific segment). Ties break by
+        customer_id for deterministic output.
 
         Args:
             df (pd.DataFrame | ibis.Table): A dataframe with the transaction data. The dataframe must contain a
                 customer_id column.
-            thresholds (List[float]): The percentile thresholds for segmentation.
-            segments (List[str]): A list of segment names for each threshold.
+            thresholds (list[float]): The percentile thresholds for segmentation; must be unique
+                and match the number of segments.
+            segments (list[str]): A list of segment names, one per threshold.
             value_col (str, optional): The column to use for the segmentation. Defaults to
                 ColumnHelper().unit_spend.
             agg_func (str, optional): The aggregation function to use when grouping by customer_id. Defaults to "sum".
-            zero_segment_name (str, optional): The name of the segment for customers with zero spend.
-                Defaults to "Zero".
-            zero_value_customers (Literal["separate_segment", "exclude", "include_with_light"], optional): How to handle
-                customers with zero spend. Defaults to "separate_segment".
+            zero_segment_name (str, optional): The name of the zero-value segment (used with
+                "separate_segment"). Defaults to "Zero".
+            zero_value_customers (Literal["separate_segment", "exclude", "include_with_light"], optional):
+                How to handle zero-value customers. Defaults to "separate_segment".
             group_col (str | list[str] | None, optional): Column(s) to group by when calculating segments. When
-                specified, segments are calculated within each group independently. For example, setting
-                group_col="store_id" calculates Heavy/Medium/Light segments within each store. Defaults to None.
+                specified, percentiles are computed within each group. Defaults to None.
 
         Raises:
-            ValueError: If the dataframe is missing the columns option column.customer_id or `value_col`, or these
-                columns contain null values.
+            ValueError: If the dataframe is missing the customer_id or value_col columns, the
+                thresholds are not unique, or the number of thresholds does not match the
+                number of segments.
         """
         self._group_col: list[str] | None = None
         if len(thresholds) != len(set(thresholds)):
@@ -148,7 +117,11 @@ class ThresholdSegmentation:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Returns the dataframe with the segment names."""
+        """Returns the dataframe with the segment names.
+
+        Indexed by customer_id (and group_col if specified); columns: the aggregated value_col
+        and segment_name.
+        """
         cols = ColumnHelper()
         index_cols = [cols.customer_id]
         if self._group_col is not None:

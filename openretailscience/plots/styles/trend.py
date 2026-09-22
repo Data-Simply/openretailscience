@@ -186,19 +186,7 @@ def _add_equation_text(
     show_r2: bool,
     trend_type: TrendType = "linear",
 ) -> None:
-    """Add equation and R² text to the plot.
-
-    Args:
-        ax (Axes): The matplotlib axes object.
-        param1 (float): First trend parameter (slope/a coefficient).
-        param2 (float): Second trend parameter (intercept/b coefficient).
-        r_squared (float): The R² value of the trend fit.
-        color (str): The color of the text.
-        text_position (float): The relative y-position of the text.
-        show_equation (bool): Whether to display the equation.
-        show_r2 (bool): Whether to display the R² value.
-        trend_type (TrendType): The type of trend for equation formatting.
-    """
+    """Render the equation and/or R² text at ``text_position`` in the source font style."""
     style = PlotStyleHelper()
 
     equation_parts = []
@@ -247,10 +235,8 @@ def _add_equation_text(
 def _extract_plot_data(ax: Axes) -> tuple[np.ndarray, np.ndarray]:
     """Extract x and y data from a matplotlib plot (line, scatter, or bar).
 
-    Supports multiple plot types:
-    - Line plots: Extracts data from line objects
-    - Bar charts: Extracts center positions and heights/widths, with automatic orientation detection
-    - Scatter plots: Extracts data from collection offsets
+    Tries visible lines first, then bars (orientation detected via ``BarContainer``), then
+    scatter collections.
 
     Args:
         ax (Axes): The matplotlib axes object containing the plot.
@@ -422,51 +408,32 @@ def add_trend_line(
 ) -> Axes:
     """Add a trend line with configurable algorithm to a matplotlib plot.
 
-    This function examines the data in a matplotlib Axes object and adds a
-    trend line to it. It supports line plots, scatter plots, and bar charts
-    (both vertical and horizontal), and can handle both numeric and datetime x-axis values.
-
-    For bar charts, the function automatically detects orientation using matplotlib's
-    BarContainer API and extracts appropriate x,y coordinates from bar positions and heights.
-
-    Note: If an axes contains multiple plot types (e.g., both lines and bars), the function
-    processes them in priority order: lines first, then bars, then scatter plots. Only the
-    first available plot type will be used for trend analysis.
+    Works on line, scatter, and bar charts (vertical and horizontal), with numeric or
+    datetime x values. When plot types are mixed, lines take priority over bars over
+    scatter; only the first available type is fitted. Emits ``UserWarning`` and returns
+    the axes unchanged when the fit yields no finite values in the visible range.
+    Defaults: ``color="red"``, ``linestyle="--"``, ``text_position=0.6``, equation and R² shown.
 
     Args:
         ax (Axes): The matplotlib axes object containing the plot (line, scatter, or bar).
-        trend_type (TrendType, optional):
-            Trend algorithm to use. Supported values:
-            - "linear": y = mx + b (default, OLS fit)
-            - "power": y = ax^b (elasticity analysis, log-log transformation)
-            - "logarithmic": y = a*ln(x) + b (diminishing returns analysis)
-            - "exponential": y = ae^(bx) (growth/decay patterns)
-            Defaults to "linear".
-        color (str, optional): Color of the trend line. Defaults to "red".
-        linestyle (str, optional): Style of the trend line. Defaults to "--".
-        text_position (float, optional): Relative position (0-1) for the equation text. Defaults to 0.6.
-        show_equation (bool, optional): Whether to display the equation on the plot. Defaults to True.
-        show_r2 (bool, optional): Whether to display the R² value on the plot. Defaults to True.
-        kwargs: Additional keyword arguments to pass to the plot function.
+        trend_type (TrendType):
+            Trend algorithm to use:
+            - "linear": y = mx + b (OLS fit)
+            - "power": y = ax^b (elasticity analysis)
+            - "logarithmic": y = a·ln(x) + b (diminishing returns)
+            - "exponential": y = ae^(bx) (growth/decay)
+        color (str): Color of the trend line.
+        linestyle (str): Style of the trend line.
+        text_position (float): Relative position (0-1) for the equation text.
+        show_equation (bool): Whether to display the equation on the plot.
+        show_r2 (bool): Whether to display the R² value on the plot.
+        kwargs: Additional keyword arguments forwarded to ``ax.plot``.
 
     Returns:
         Axes: The matplotlib axes with the trend line added.
 
     Raises:
-        ValueError: If the plot contains no visible lines, scatter points, or bar patches, or if
-            trend_type is not supported.
-
-    Examples:
-        Basic linear trend:
-        >>> ax = data.plot.scatter(x='price', y='demand')
-        >>> add_trend_line(ax)
-
-        Power law trend for price elasticity:
-        >>> add_trend_line(ax, trend_type="power")
-
-        Bar chart with trend line:
-        >>> ax = df.plot.bar(x='category', y='sales')
-        >>> add_trend_line(ax, trend_type="linear")
+        ValueError: If the plot contains no extractable data or trend_type is not supported.
     """
     trend_type = cast("TrendType", ensure_value_choice(trend_type, get_args(TrendType), "trend_type"))
 

@@ -1,7 +1,4 @@
-"""Color Palettes and helper functions.
-
-This module provides functions to create and retrieve color palettes.
-"""
+"""Color palettes and helper functions."""
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap
@@ -28,13 +25,13 @@ def get_color_list(name: str, starting_color_code: int = 50, ending_color_code: 
 
 
 def get_listed_cmap(name: str) -> ListedColormap:
-    """Returns a ListedColormap from the Tailwind color pallete of the given name.
+    """Returns a ListedColormap from the Tailwind color palette of the given name.
 
     Args:
-        name (str): The name of the color pallete.
+        name (str): The name of the color palette.
 
     Returns:
-        ListedColormap: The color pallete as a ListedColormap.
+        ListedColormap: The color palette as a ListedColormap.
     """
     return ListedColormap(get_color_list(name))
 
@@ -93,18 +90,13 @@ def get_base_cmap() -> ListedColormap:
 def get_plot_colors(num_series: int) -> list[str]:
     """Get appropriate colors for the given number of series.
 
-    Selection logic:
-        * 1 series → ``plot.color.primary`` (brand color).
-        * 2+ series → cycled multi-color palette.
-
-    Categorical series (e.g. product categories, retailers, segments) read best when each
-    has its own hue, which is what the multi-color palette gives.
+    1 series → ``plot.color.primary``; 2+ series → ``plot.color.multi_color_palette`` cycled.
 
     Args:
-        num_series: Number of series/groups being plotted
+        num_series: Number of series/groups being plotted.
 
     Returns:
-        List of hex color strings
+        List of hex color strings.
     """
     if num_series == 1:
         return [get_option("plot.color.primary")]

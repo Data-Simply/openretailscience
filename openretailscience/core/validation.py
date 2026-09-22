@@ -68,10 +68,6 @@ def ensure_columns(
 ) -> list[str]:
     """Normalize a column parameter to a list and validate it against a DataFrame/Table.
 
-    Combines the four steps every column parameter needs: accept either a single
-    string or a list of strings, normalize to a list, validate that all elements
-    are strings, and validate that every column exists in the input.
-
     Args:
         df (pd.DataFrame | ibis.Table): The data whose columns must contain the requested names.
         columns (str | list[str]): Column name or list of column names to validate.
@@ -151,10 +147,7 @@ def ensure_value_choice(
 
     Args:
         value (str): The value supplied by the caller.
-        choices (Iterable[str]): The full set of allowed values. Any iterable of
-            strings — list, tuple, dict (iteration yields keys), set, etc. —
-            is accepted; the iterable is materialized into a list once so a
-            one-shot iterator works as well.
+        choices (Iterable[str]): The full set of allowed values (any iterable of strings).
         param_name (str): The parameter name to surface in error messages.
 
     Returns:

@@ -1,38 +1,6 @@
-"""This module provides functionality to generate a waterfall chart.
+"""Waterfall chart from `amounts` and `labels` lists (not DataFrame-based).
 
-A visualization commonly used to illustrate how
-different positive and negative values contribute to a cumulative total.Waterfall charts are effective in showing
-the incremental impact of individual components, making them particularly useful for financial analysis,
-performance tracking, and visualizing changes over time.
-
-### Features
-
-- **Waterfall Chart Creation**: Displays how different positive and negative values affect a starting total.
-- **Data Label Formatting**: Supports custom formatting for data labels, including absolute
-  values, percentages, or both.
-- **Net Line and Bar Display**: Optionally includes a net line and net bar to show the overall
-  cumulative result.
-- **Customizable Plot Style**: Options to customize chart titles, axis labels, and remove zero
-  amounts for better clarity.
-- **Handling of Zero Amounts**: Allows removal of zero amounts from the plot to avoid cluttering the chart.
-- **Interactive Elements**: Supports custom annotations for the chart with source text.
-
-### Use Cases
-
-- **Financial Analysis**: Show the breakdown of profits and losses over multiple periods, or how
-  different cost categories affect overall margin.
-- **Revenue Tracking**: Track how revenue or other key metrics change over time, and visualize
-  the impact of individual contributing factors.
-- **Performance Visualization**: Highlight how various business or product categories affect
-  overall performance, such as sales, expenses, or growth metrics.
-- **Budget Breakdown**: Visualize how different spending categories contribute to a total budget over a period.
-
-### Functionality Details
-
-- **plot()**: Generates a waterfall chart from a list of amounts and labels. It supports
-  additional customization for display settings, labels, and source text.
-- **format_data_labels()**: A helper function used to format the data labels according to the
-  specified format (absolute, percentage, both).
+Each amount is rendered as a bar stacked on the running total, colored by sign.
 """
 
 import warnings
@@ -70,36 +38,35 @@ def plot(
     ax: Axes | None = None,
     **kwargs: Any,  # noqa: ANN401
 ) -> Axes:
-    """Generates a waterfall chart.
+    """Generate a waterfall chart from parallel `amounts` and `labels` lists.
 
-    Waterfall plots are particularly good for showing how different things add or subtract from a starting number. For
-    instance:
-    - Changes in sales figures from one period to another
-    - Breakdown of profit margins
-    - Impact of different product categories on overall revenue
-
-    They are often used to identify key drivers of financial performance, highlight areas for
-    improvement, and communicate complex data stories to stakeholders in an intuitive manner.
+    With remove_zero_amounts (default True) zero bars are dropped before the net total is
+    computed. data_label_format=None draws no data labels.
 
     Args:
         amounts (list[float]): The amounts to plot.
-        labels (list[str]): The labels for the amounts.
-        title (str, optional): The title of the chart. Defaults to None.
-        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-        y_label (str, optional): The y-axis label. Defaults to None.
-        x_label (str, optional): The x-axis label. Defaults to None.
-        source_text (str, optional): The source text to add to the plot. Defaults to None.
-        data_label_format (Literal["absolute", "percentage", "both", "none"], optional): The format of the data labels.
-            Defaults to "absolute".
-        display_net_bar (bool, optional): Whether to display a net bar. Defaults to False.
-        display_net_line (bool, optional): Whether to display a net line. Defaults to False.
-        remove_zero_amounts (bool, optional): Whether to remove zero amounts from the plot. Defaults to True
-        ax (Axes, optional): The matplotlib axes object to plot on. Defaults to None.
-        **kwargs: Additional keyword arguments to pass to the Pandas plot function.
+        labels (list[str]): The labels, one per amount.
+        title (str, optional): Chart title.
+        eyebrow (str, optional): Uppercase label rendered above the title.
+        subtitle (str, optional): Supporting copy rendered below the title.
+        y_label (str, optional): Y-axis label.
+        x_label (str, optional): X-axis label.
+        source_text (str, optional): Source attribution rendered at the bottom.
+        data_label_format ("absolute", "percentage", "both", optional): Format for the bar
+            data labels; None draws no labels.
+        display_net_bar (bool, optional): Append a "Net" bar for the total.
+        display_net_line (bool, optional): Draw a dashed line at the net total.
+        remove_zero_amounts (bool, optional): Drop zero amounts before the net is computed.
+        ax (Axes, optional): Axes to plot on.
+        **kwargs: Forwarded to df.plot.bar.
 
     Returns:
         Axes: The matplotlib axes object.
+
+    Raises:
+        ValueError: If len(amounts) != len(labels), or data_label_format is not one of
+            "absolute", "percentage", "both".
+
     """
     if len(amounts) != len(labels):
         raise ValueError("The lengths of amounts and labels must be the same")
@@ -189,16 +156,11 @@ def format_data_labels(
     label_format: str,
     decimals: int,
 ) -> list[str]:
-    """Format the data labels based on the specified format.
+    """Format the bar data labels for a waterfall chart.
 
-    Args:
-        amounts (pd.Series): The amounts to format.
-        total_change (float): The total change (sum of amounts) used for percentage calculations.
-        label_format (str): The format of the data labels ("absolute", "percentage", or "both").
-        decimals (int): The number of decimal places for formatting.
-
-    Returns:
-        list[str]: A list of formatted data label strings.
+    label_format is "absolute", "percentage", or "both"; percentages are a share of
+    total_change (not of the displayed sum). When total_change is 0 a UserWarning is raised
+    and the percentage is omitted ("both" falls back to absolute).
     """
     if label_format == "absolute":
         return amounts.apply(lambda x: gu.format_shorthand(x, decimals=decimals + 1)).tolist()

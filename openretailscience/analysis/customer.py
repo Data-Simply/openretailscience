@@ -1,42 +1,8 @@
-"""Customer Purchase Behavior Analysis for Retention and Value Optimization.
+"""Customer purchase-frequency analysis from transaction data.
 
-## Business Context
-
-Understanding customer purchase patterns is fundamental to retail success. Some customers
-make single purchases and never return, while others become loyal repeat buyers. This
-module analyzes the distribution of purchase frequency to identify customer behavior
-segments and inform retention strategies.
-
-## The Business Problem
-
-Retailers need to understand the relationship between customer purchase frequency and
-business performance:
-- What percentage of customers are one-time buyers versus repeat customers?
-- How does purchase frequency relate to customer lifetime value?
-- Which customer segments offer the greatest growth opportunities?
-
-Without this analysis, businesses may invest equally in all customers or fail to
-identify high-potential segments for targeted retention efforts.
-
-## Real-World Applications
-
-### Customer Retention Strategy
-- Identify the percentage of one-time buyers for targeted reactivation campaigns
-- Segment customers by purchase frequency for differentiated marketing approaches
-- Develop loyalty programs based on actual behavior patterns
-
-### Resource Allocation
-- Focus retention efforts on customers showing repeat purchase potential
-- Allocate customer service resources based on customer value segments
-- Optimize marketing spend by targeting high-frequency customer characteristics
-
-### Business Performance Monitoring
-- Track changes in purchase frequency distribution over time
-- Monitor the health of customer acquisition versus retention balance
-- Identify shifts in customer behavior that may indicate market changes
-
-This module computes purchase-frequency statistics that can be visualized with
-the plotting helpers in `openretailscience.plots`.
+`PurchasesPerCustomer` (distinct purchase counts), `DaysBetweenPurchases` (mean gap
+between a customer's purchase days), and `TransactionChurn` (retained/churned per
+purchase-day ordinal).
 """
 
 from __future__ import annotations
@@ -80,12 +46,10 @@ _TRANSACTION_NUMBER_COL = "transaction_number"
 def _distinct_customer_days(df: ibis.Table, customer_id_col: str, transaction_date_col: str) -> ibis.Table:
     """Project to (customer_id, transaction_day) and dedupe.
 
-    The day-level dedup defines what a "purchase day" means for this module — same-day
-    transactions collapse to a single purchase day. Both DaysBetweenPurchases and
-    TransactionChurn walk the customer history one row per purchase day.
-
-    The column names are passed in (resolved once by the caller) rather than re-read from
-    options here, so this function is pure and cannot drift from the caller's resolution.
+    The day-level dedup defines a "purchase day" for this module — same-day transactions
+    collapse to a single purchase day. Both DaysBetweenPurchases and TransactionChurn walk
+    the customer history one row per purchase day. Column names are passed in (resolved
+    once by the caller) so this stays a pure function of its arguments.
 
     Args:
         df (ibis.Table): Transaction-level data.
@@ -103,6 +67,9 @@ def _distinct_customer_days(df: ibis.Table, customer_id_col: str, transaction_da
 
 class PurchasesPerCustomer:
     """Computes the number of distinct purchases per customer.
+
+    A purchase is a distinct ``transaction_id`` (counts, not rows or days), unlike the
+    day-based siblings.
 
     Attributes:
         table (ibis.Table): One row per customer with columns ``customer_id``
@@ -187,7 +154,8 @@ class PurchasesPerCustomer:
 class DaysBetweenPurchases:
     """Computes the average number of days between purchases per customer.
 
-    Single-purchase-day customers are excluded.
+    "Purchases" here means purchase days — same-day transactions collapse to one (see
+    `_distinct_customer_days`). Single-purchase-day customers are excluded.
 
     Attributes:
         table (ibis.Table): One row per customer with columns ``customer_id``
@@ -268,17 +236,17 @@ class DaysBetweenPurchases:
 
 
 class TransactionChurn:
-    """Computes the churn rate by transaction number.
+    """Computes the churn rate per purchase-day ordinal.
 
-    A customer is "churned" at their N-th transaction if it is their final
-    transaction and occurred strictly before ``max(transaction_date) -
-    churn_period`` days.
+    A customer is "churned" at their N-th purchase day if it is their final purchase day
+    and occurred strictly before ``max(purchase_day) - churn_period``.
+    ``transaction_number`` is a row number over distinct (customer, purchase-day) rows —
+    same-day transactions collapse to one day.
 
-    Unlike PurchasesPerCustomer and DaysBetweenPurchases — whose queries stay lazy
-    until ``.df`` is accessed — construction eagerly runs one aggregate query against
-    the backend to read the distinct customer count and the latest purchase day (which
-    anchors the churn boundary). Apply any row filtering before constructing this class
-    when working with very large remote tables.
+    Unlike PurchasesPerCustomer and DaysBetweenPurchases (lazy until ``.df`` is
+    accessed), construction eagerly runs one aggregate query for the distinct customer
+    count and the latest purchase day, which anchors the churn boundary. Filter remote
+    tables before constructing.
 
     Attributes:
         table (ibis.Table): Per-``transaction_number`` ``retained``,
@@ -296,8 +264,7 @@ class TransactionChurn:
             df (pd.DataFrame | ibis.Table): Transaction data containing the
                 ``customer_id`` and ``transaction_date`` columns.
             churn_period (int): Whole number of days of inactivity after which a
-                customer is considered churned. Must be a positive integer; a
-                fractional value would place the boundary at a sub-day time.
+                customer is considered churned. Must be a positive integer.
 
         Raises:
             ValueError: If the required columns are missing, transaction_date is

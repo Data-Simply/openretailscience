@@ -1,21 +1,6 @@
-"""Gain loss analysis (switching analysis) on a DataFrame.
+"""Gain loss (switching) analysis of customer movement between a focus and a comparison group across two periods.
 
-Assesses customer movement between brands or products over time.
-
-Gain loss analysis, also known as switching analysis, is a marketing analytics technique used to
-assess customer movement between brands or products over time. It helps businesses understand the dynamics of customer
-acquisition and churn. Here's a concise definition: Gain loss analysis examines the flow of customers to and from a
-brand or product, quantifying:
-
-1. Gains: New customers acquired from competitors
-2. Losses: Existing customers lost to competitors
-3. Net change: The overall impact on market share
-
-This analysis helps marketers:
-
-- Identify trends in customer behavior
-- Evaluate the effectiveness of marketing strategies
-- Understand competitive dynamics in the market
+Pandas-only: all period/group selectors are boolean masks or lists aligned to ``df.index``.
 """
 
 from typing import Any
@@ -30,9 +15,12 @@ from openretailscience.plots.styles.colors import COLORS
 
 
 class GainLoss:
-    """Perform gain loss analysis on a DataFrame.
+    """Gain loss (switching) analysis between a focus group and a comparison group.
 
-    Assesses customer movement between brands or products over time.
+    All selectors are boolean masks or lists aligned to ``df.index`` (pandas-only).
+    Results are computed at initialization: ``gain_loss_df`` holds the per-customer
+    decomposition and ``gain_loss_table_df`` the aggregated table; there are no
+    ``df``/``table`` attributes.
     """
 
     def __init__(
@@ -48,19 +36,30 @@ class GainLoss:
         value_col: str = get_option("column.unit_spend"),
         agg_func: str = "sum",
     ) -> None:
-        """Calculate the gain loss table for a given DataFrame at the customer level.
+        """Calculate the gain loss decomposition at the customer level.
+
+        The four index arguments are boolean masks or lists aligned to ``df.index``.
+        The decomposition columns are ``new``, ``lost``, ``increased_focus``,
+        ``decreased_focus``, ``switch_from_comparison``, ``switch_to_comparison``.
 
         Args:
-            df (pd.DataFrame): The DataFrame to calculate the gain loss table from.
-            p1_index (list[bool]): The index for the first time period.
-            p2_index (list[bool]): The index for the second time period.
-            focus_group_index (list[bool]): The index for the focus group.
-            focus_group_name (str): The name of the focus group.
-            comparison_group_index (list[bool]): The index for the comparison group.
-            comparison_group_name (str): The name of the comparison group.
-            group_col (str | None, optional): The column to group by. Defaults to None.
-            value_col (str, optional): The column to calculate the gain loss from. Defaults to option column.unit_spend.
-            agg_func (str, optional): The aggregation function to use. Defaults to "sum".
+            df (pd.DataFrame): The data to analyze.
+            p1_index (list[bool] | pd.Series): Boolean mask selecting the first period rows.
+            p2_index (list[bool] | pd.Series): Boolean mask selecting the second period rows.
+            focus_group_index (list[bool] | pd.Series): Boolean mask selecting the focus group rows.
+            focus_group_name (str): Display name of the focus group.
+            comparison_group_index (list[bool] | pd.Series): Boolean mask selecting the comparison group rows.
+            comparison_group_name (str): Display name of the comparison group.
+            group_col (str | None): Optional column to break the analysis down by.
+            value_col (str): Value column to aggregate; defaults to option ``column.unit_spend``.
+            agg_func (str): Aggregation function; defaults to "sum".
+
+        Raises:
+            ValueError: If ``p1_index`` and ``p2_index`` overlap.
+            ValueError: If ``focus_group_index`` and ``comparison_group_index`` overlap.
+            ValueError: If the four index masks do not all have the same length.
+            ValueError: If the option-derived customer_id or ``value_col`` columns are missing,
+                or if a given ``group_col`` is not in ``df``.
         """
         # # Ensure no overlap between p1 and p2
         if not df[p1_index].index.intersection(df[p2_index].index).empty:
@@ -108,18 +107,25 @@ class GainLoss:
         focus_diff: float,
         comparison_diff: float,
     ) -> tuple[float, float, float, float, float, float]:
-        """Process the gain loss for a customer group.
+        """Decompose a group's focus-period change into the six gain loss components.
+
+        Returns ``(new, lost, increased_focus, decreased_focus, switch_from_comparison,
+        switch_to_comparison)`` in that order. ``new``, ``increased_focus``, and
+        ``switch_from_comparison`` are >= 0; ``lost``, ``decreased_focus``, and
+        ``switch_to_comparison`` are <= 0. When both groups are zero in p1 the entire
+        focus p2 value counts as ``new``; when both are zero in p2 the entire focus
+        p1 value counts as ``lost``.
 
         Args:
-            focus_p1 (float | int): The focus group total in the first time period.
-            comparison_p1 (float | int): The comparison group total in the first time period.
-            focus_p2 (float | int): The focus group total in the second time period.
-            comparison_p2 (float | int): The comparison group total in the second time period.
-            focus_diff (float | int): The difference in the focus group totals.
-            comparison_diff (float | int): The difference in the comparison group totals.
+            focus_p1 (float): Focus group value in period 1.
+            comparison_p1 (float): Comparison group value in period 1.
+            focus_p2 (float): Focus group value in period 2.
+            comparison_p2 (float): Comparison group value in period 2.
+            focus_diff (float): Focus group change, p2 - p1.
+            comparison_diff (float): Comparison group change, p2 - p1.
 
         Returns:
-            tuple[float, float, float, float, float, float]: The gain loss for the customer group.
+            tuple[float, float, float, float, float, float]: The six components, in the unpack order above.
         """
         if focus_p1 == 0 and comparison_p1 == 0:
             return focus_p2, 0, 0, 0, 0, 0
@@ -153,20 +159,14 @@ class GainLoss:
         value_col: str = get_option("column.unit_spend"),
         agg_func: str = "sum",
     ) -> pd.DataFrame:
-        """Calculate the gain loss table for a given DataFrame at the customer level.
-
-        Args:
-            df (pd.DataFrame): The DataFrame to calculate the gain loss table from.
-            p1_index (list[bool]): The index for the first time period.
-            p2_index (list[bool]): The index for the second time period.
-            focus_group_index (list[bool]): The index for the focus group.
-            comparison_group_index (list[bool]): The index for the comparison group.
-            group_col (str | None, optional): The column to group by. Defaults to None.
-            value_col (str, optional): The column to calculate the gain loss from. Defaults to option column.unit_spend.
-            agg_func (str, optional): The aggregation function to use. Defaults to "sum".
+        """Calculate the per-customer gain loss decomposition (argument semantics as in ``GainLoss.__init__``).
 
         Returns:
-            pd.DataFrame: The gain loss table.
+            pd.DataFrame: Indexed by customer, with ``group_col`` as the leading level when given.
+                Columns: ``focus_p1``/``focus_p2``, ``comparison_p1``/``comparison_p2``,
+                ``total_p1``/``total_p2``, ``focus_diff``, ``comparison_diff``, ``total_diff``
+                plus the six decomposition columns. Rows that are all zero after grouping
+                are dropped; missing periods are filled with 0.
         """
         cols = ColumnHelper()
         df = df[p1_index | p2_index].copy()
@@ -236,14 +236,14 @@ class GainLoss:
         gain_loss_df: pd.DataFrame,
         group_col: str | None = None,
     ) -> pd.DataFrame:
-        """Aggregates the gain loss table to show the total gains and losses across customers.
+        """Aggregate the per-customer gain loss table to total gains and losses.
 
         Args:
-            gain_loss_df (pd.DataFrame): The gain loss table at customer level to aggregate.
-            group_col (str | None, optional): The column to group by. Defaults to None.
+            gain_loss_df (pd.DataFrame): The per-customer gain loss table.
+            group_col (str | None): Grouping column, if any.
 
         Returns:
-            pd.DataFrame: The aggregated gain loss table
+            pd.DataFrame: A single-row frame when ``group_col`` is None, otherwise one row per group.
         """
         if group_col is None:
             return gain_loss_df.sum().to_frame("").T
@@ -262,21 +262,26 @@ class GainLoss:
         move_legend_outside: bool = False,
         **kwargs: Any,  # noqa: ANN401
     ) -> SubplotBase:
-        """Plot the gain loss table using the bar.plot wrapper.
+        """Plot the gain loss table as a stacked horizontal bar of the six decomposition columns.
+
+        Green segments are ``new`` / ``increased_focus`` / ``switch_from_comparison``; red
+        segments are ``lost`` / ``decreased_focus`` / ``switch_to_comparison``. Legend labels
+        use the focus and comparison group names. ``stacked`` and ``color`` kwargs are
+        silently popped and cannot be overridden.
 
         Args:
-            title (str | None, optional): The title of the plot. Defaults to None.
-            eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-            subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-            x_label (str | None, optional): The x-axis label. Defaults to None.
-            y_label (str | None, optional): The y-axis label. Defaults to None.
-            ax (Axes | None, optional): The axes to plot on. Defaults to None.
-            source_text (str | None, optional): The source text to add to the plot. Defaults to None.
-            move_legend_outside (bool, optional): Whether to move the legend outside the plot. Defaults to False.
-            kwargs (Any): Additional keyword arguments to pass to the plot.
+            title (str | None): Plot title; defaults to "Gain Loss from {focus} to {comparison}".
+            eyebrow (str | None): Small uppercase label rendered above the title.
+            subtitle (str | None): Supporting copy rendered below the title.
+            x_label (str | None): X-axis label; defaults to the value column name.
+            y_label (str | None): Y-axis label; defaults to the focus group name, or ``group_col`` when grouped.
+            ax (Axes | None): Axes to plot on.
+            source_text (str | None): Source annotation.
+            move_legend_outside (bool): Whether to move the legend outside the plot.
+            **kwargs (Any): Additional keyword arguments forwarded to the bar plot.
 
         Returns:
-            SubplotBase: The plot
+            SubplotBase: The plot axes.
         """
         increase_cols = ["new", "increased_focus", "switch_from_comparison"]
         decrease_cols = ["lost", "decreased_focus", "switch_to_comparison"]

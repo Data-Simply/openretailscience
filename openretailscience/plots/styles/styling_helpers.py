@@ -32,15 +32,12 @@ GridAxis = Literal["both", "x", "y", "none"]
 class _ZeroBlankingFormatter(Formatter):
     """Wrap an axis's major formatter, rendering the value ``0`` as an empty label.
 
-    Dropping the zero label by *value* on every draw — rather than by hiding the
-    tick artist at zero's index — is what fixes the leak: matplotlib reuses tick
+    Blanking is keyed to the value, not the tick index: matplotlib reuses tick
     artists by index, so an index-pinned flag would blank whatever value later
     lands on that index. All other calls delegate to the base formatter, so its
     numeric formatting and offset text (e.g. ``ScalarFormatter``'s ``1e6``) are
     preserved; a caller who sets their own formatter replaces the wrapper, which
-    stops the zero-drop. Any other attribute is delegated to the base as well
-    (see ``__getattr__``), so a caller's ``Axes.ticklabel_format`` still reaches
-    the real ``ScalarFormatter`` underneath instead of raising.
+    stops the zero-drop.
     """
 
     def __init__(self, base: Formatter) -> None:
@@ -63,12 +60,9 @@ class _ZeroBlankingFormatter(Formatter):
     def __getattr__(self, name: str) -> object:
         """Delegate any non-overridden attribute to the base formatter.
 
-        Keeps the wrapper a transparent stand-in for what it wraps: callers that
-        configure the axis via ``Axes.ticklabel_format`` — which calls
-        ``ScalarFormatter``-only setters (``set_scientific``, ``set_powerlimits``,
-        ``set_useOffset`` …) on the major formatter — reach the real formatter
-        instead of hitting ``AttributeError``. The return is whatever attribute
-        the base exposes, so ``object`` is the only honest annotation here.
+        Keeps the wrapper transparent for ``Axes.ticklabel_format``-style setters
+        on the wrapped ``ScalarFormatter``. The ``object`` return is deliberate:
+        the base can expose any attribute.
         """
         # __getattr__ only fires for names missing on the wrapper; guard ``_base``
         # itself so a half-built instance raises cleanly instead of recursing.
@@ -78,18 +72,12 @@ class _ZeroBlankingFormatter(Formatter):
 
 
 def _hide_zero_value_ticks(ax: Axes) -> None:
-    """Blank the ``0`` tick label on numeric axes (Economist editorial convention).
+    """Blank the ``0`` tick label on numeric axes (editorial convention).
 
-    The ``0`` tick sits in the bottom-left corner where the x and y spines meet,
-    crowding the orthogonal axis's first tick label. The spine itself implies
-    the baseline, so the editorial convention drops the redundant label.
-
-    Only acts on numeric continuous axes (``MaxNLocator`` / ``AutoLocator``);
-    categorical axes (``FixedLocator``) and date axes (``AutoDateLocator``) are
-    untouched, since their position-0 tick is a category index, not a data zero.
-
-    The blank is applied via a formatter wrapper (see ``_ZeroBlankingFormatter``)
-    so it is keyed to the tick value, not to a reused tick artist.
+    Only numeric continuous axes (``MaxNLocator`` / ``AutoLocator``) are touched;
+    categorical (``FixedLocator``) and date axes keep their tick-0, which is a
+    category index, not a data zero. Idempotent: a repeated styling pass does not
+    nest the wrapper. The blank is value-keyed via ``_ZeroBlankingFormatter``.
     """
     for axis in (ax.xaxis, ax.yaxis):
         if not isinstance(axis.get_major_locator(), MaxNLocator | AutoLocator):
@@ -135,14 +123,12 @@ def _resolve_end_of_line_legend_args(
     legend_title: str | None,
     move_legend_outside: bool,
 ) -> tuple[bool, str | None, bool]:
-    """Suppress box-legend args when ``legend_style="end_of_line"`` is requested.
+    """Neutralise box-legend args when ``legend_style="end_of_line"`` is requested.
 
-    Returns ``(show_legend, legend_title, move_legend_outside)`` so the box
-    legend is neutralised before ``apply_legend`` runs. Pure: never draws on
-    ``ax`` — label drawing is deferred until after chrome's ``tight_layout``
-    at the end of ``standard_graph_styles``. ``stacklevel=4`` puts the
-    conflict warning at user code: user → public ``plot()`` →
-    ``standard_graph_styles`` → this helper.
+    Returns the ``(show_legend, legend_title, move_legend_outside)`` triple so
+    the box legend is off before ``apply_legend`` runs. Emits ``UserWarning``
+    (stacklevel 4, pointing at user code, message ``END_OF_LINE_LEGEND_CONFLICT_MSG``)
+    when ``legend_title`` or ``move_legend_outside`` is combined with ``"end_of_line"``.
     """
     if legend_style != "end_of_line" or not show_legend:
         return show_legend, legend_title, move_legend_outside
@@ -154,14 +140,9 @@ def _resolve_end_of_line_legend_args(
 def _rewrap_text_to_width(text: Text, original: str, renderer: RendererBase) -> None:
     """Bake ``original`` into ``text`` as newlines wrapped to the figure's current width.
 
-    matplotlib's ``wrap=True`` re-wraps only during ``draw`` and ``get_window_extent`` ignores it,
-    so chrome bakes the wrap to measure a stable height. Pointing the text at the live ``renderer``
-    first makes the bake track the *current* width, so a post-call resize re-wraps instead of
-    freezing at the build-time width. ``original`` is passed in because the baked artist no longer
-    holds the unwrapped source.
-
-    Uses matplotlib internals (``_get_wrapped_text``, ``_renderer``); no public width-wrap API
-    exists. A rename fails loudly here, and the chrome line-count tests catch a silent change.
+    Baking is needed because ``get_window_extent`` ignores ``wrap=True``. Uses matplotlib
+    internals (``_get_wrapped_text``, ``_renderer``); no public width-wrap API exists, so a
+    rename fails loudly here.
     """
     text.set_text(original)
     text.set_wrap(True)
@@ -173,9 +154,8 @@ def _rewrap_text_to_width(text: Text, original: str, renderer: RendererBase) -> 
 def _active_renderer(fig: Figure) -> RendererBase:
     """Return the renderer for the figure's current draw, across backends.
 
-    The engine measures on every draw including ``savefig``, where matplotlib swaps in a vector
-    canvas (SVG/PDF) with no ``get_renderer``. ``fig._get_renderer()`` (used by matplotlib's own
-    layout engines) works on every backend; ``fig.canvas.get_renderer()`` is Agg-only.
+    ``fig._get_renderer()`` works on every backend, including ``savefig``'s vector canvas;
+    ``fig.canvas.get_renderer()`` is Agg-only.
     """
     return fig._get_renderer()
 
@@ -185,11 +165,11 @@ class _ChromeTextSpec:
     """A chrome text element plus the inputs needed to re-place it at any figure width.
 
     Attributes:
-        text: The figure-text artist. Its own content is the baked (newlined) form.
-        original: The unwrapped source string, re-wrapped to the current width on each draw.
-        gap_after_in: Absolute inch gap from this element's bottom to the next stacked element
-            (the trailing slot for the final / bottom-anchored element).
-        wrap: Whether the element re-wraps to the figure width. Eyebrows stay single-line.
+        text: Figure-text artist; holds the baked (newlined) form.
+        original: Unwrapped source string, re-wrapped to the current width on each draw.
+        gap_after_in: Inch gap from this element's bottom to the next element (the trailing
+            slot for the final element).
+        wrap: Whether the element re-wraps to the figure width; eyebrows stay single-line.
     """
 
     text: Text
@@ -207,9 +187,7 @@ def _layout_chrome_header(
 ) -> float:
     """Re-wrap and stack the top-anchored header elements; return the block's bottom offset in inches.
 
-    Each element is re-wrapped to the current width, positioned with its top ``top_in`` inches below
-    the figure top, then measured so the next element starts below its actual rendered height. The
-    returned bottom offset (inches from the figure top, including the final element's trailing gap)
+    The offset, in inches from the figure top and including the final element's trailing gap,
     anchors the axes top.
     """
     top_in = top_offset_in
@@ -240,23 +218,16 @@ def _layout_chrome_source(
 
 @dataclass
 class _ChromeLayout:
-    """One axes' chrome placement recipe, stored as resize-invariant inputs.
-
-    Text is sized in points, so the inch offsets and gaps are absolute; the engine re-derives the
-    figure-fraction positions from them on every draw, re-wrapping the header and source to the
-    current width so a post-call resize re-flows instead of freezing the wrap at the build-time
-    width. Horizontal placement stays in fractions, which keep the chrome aligned to the axes spine.
+    """One axes' chrome placement recipe: resize-invariant inch inputs re-derived on every draw.
 
     Attributes:
         ax: The axes whose box is reflowed beneath the header.
         header_top_offset_in: Inches from the figure top to the first header element's top.
         header: Top-anchored header elements (eyebrow/title/subtitle) in stacking order.
-        header_to_axes_gap_in: Inches from the header block's bottom to the axes top edge. Captured
-            from tight_layout, so it folds in the header-to-axes gap and any top-tick headroom.
+        header_to_axes_gap_in: Header block bottom to axes top; folds in top-tick headroom.
         source: The bottom-anchored source line, or None.
-        source_to_axes_gap_in: Inches from the source's top to the axes bottom edge.
-        axes_bottom_offset_in: Inches from the figure bottom to the axes bottom edge, used when
-            there is no source line.
+        source_to_axes_gap_in: Source top to axes bottom edge.
+        axes_bottom_offset_in: Figure bottom to axes bottom edge; used when there is no source.
         tab: ``(rectangle, top_offset_in, height_in, width_in)`` for the tab mark, or None.
     """
 
@@ -311,11 +282,10 @@ def _apply_chrome_layouts(fig: Figure) -> None:
 
 
 def _recompute_chrome_axes_gaps(layout: _ChromeLayout, fig: Figure, renderer: RendererBase) -> None:
-    """Set ``layout``'s header/source-to-axes gaps from the axes box's current position.
+    """Re-capture ``layout``'s header/source-to-axes gaps from the axes box's current position.
 
-    The engine derives the axes top/bottom from these gaps, so re-capture them after every reflow.
-    Re-wraps and repositions the header and source artists as a side effect, since the gaps are
-    measured against their fresh heights.
+    Re-wraps and repositions the header and source artists as a side effect, since the gaps
+    are measured against their fresh heights.
     """
     fig_h = fig.get_figheight()
     dpi = fig.dpi
@@ -347,10 +317,8 @@ def _refresh_chrome_axes_offsets(fig: Figure) -> None:
 class _ChromeLayoutEngine(LayoutEngine):
     """Re-applies chrome geometry before each draw so it tracks the figure's current size.
 
-    Matplotlib runs ``execute`` at the start of every draw (including ``savefig``), before
-    artists render, so repositioning lands in the same render even for a single headless save.
-    ``execute`` re-wraps the chrome text to the current width and measures it against the live
-    renderer, but never triggers a draw of its own, so it cannot recurse.
+    Matplotlib runs ``execute`` at the start of every draw (including headless ``savefig``),
+    before artists render; it never triggers a draw of its own, so it cannot recurse.
     """
 
     # Match tight_layout's flags: the chrome reflow runs through fig.tight_layout (gridspec
@@ -373,11 +341,8 @@ def _install_chrome_layout_engine(fig: Figure) -> None:
 def _resolve_chrome_left(fig: Figure, ax: Axes) -> float:
     """Discover the y-axis spine's x in figure coords via a provisional tight_layout.
 
-    Anchoring chrome to the spine keeps the title directly above the data
-    across charts whose y-tick labels vary in width (numeric "10" vs the
-    category labels of a horizontal bar). Falls back to the configured
-    margin if the provisional layout pass fails — e.g., for axes types
-    that ``tight_layout`` can't reflow.
+    Anchoring chrome to the spine keeps the title directly above the data. Falls back to
+    ``_CHROME_FALLBACK_LEFT_MARGIN`` when the provisional layout pass fails.
     """
     top = 1.0 - _CHROME_TOP_MARGIN_IN / fig.get_figheight()
     bottom = _CHROME_BOTTOM_MARGIN_IN / fig.get_figheight()
@@ -390,12 +355,11 @@ def _resolve_chrome_left(fig: Figure, ax: Axes) -> float:
 def _reflow_axes(fig: Figure, top: float, bottom: float) -> bool:
     """Reflow the axes into the chrome's vertical band. Returns False on failure.
 
-    ``pad=0`` is critical: tight_layout's default pad (1.08 * font size) adds
-    ~3% of figure height between the rect top and the axes top, doubling the
-    intended gap. With pad=0, ``_CHROME_GAP_HEADER_TO_AXES_IN`` is the *only*
-    whitespace between subtitle and plot. Failure happens when
-    ``constrained_layout`` is active or the rect is degenerate — callers
-    decide whether to fall back to ``subplots_adjust``.
+    ``pad=0`` is critical: tight_layout's default pad adds ~3% of figure height
+    between the rect top and the axes top, doubling the intended gap. Returns
+    False when ``constrained_layout`` is active or the rect is degenerate. The
+    chrome layout engine is detached and reinstalls around ``tight_layout``,
+    which would otherwise warn and replace it.
     """
     # fig.tight_layout warns and replaces a non-tight engine, so detach ours first (e.g. on
     # _auto_rotate's post-install reflow) and restore it in the finally.
@@ -421,11 +385,9 @@ def _reflow_axes(fig: Figure, top: float, bottom: float) -> bool:
 def _clear_prior_chrome(fig: Figure, chrome_gid: str) -> None:
     """Remove chrome artists left on ``fig`` by a previous call for this gid.
 
-    Iterative replotting (Jupyter, parametrized tests) otherwise stacks
-    duplicate text and tabs at the same figure coordinates. Texts come from
-    ``fig.text()`` and support ``.remove()``; the tab is appended to
-    ``fig.patches`` directly so it has no ``_remove_method`` and must be
-    popped off the list instead.
+    Prevents stacked duplicate chrome on iterative replotting (Jupyter, tests).
+    The tab is appended to ``fig.patches`` directly, so it must be popped rather
+    than removed.
     """
     for text in [t for t in fig.texts if t.get_gid() == chrome_gid]:
         text.remove()
@@ -436,10 +398,9 @@ def _clear_prior_chrome(fig: Figure, chrome_gid: str) -> None:
 def _track_chrome_axes(fig: Figure, ax: Axes, *, warn_stacklevel: int) -> None:
     """Record ``ax`` on ``fig._ors_chrome_axes`` and warn the first time a second axes appears.
 
-    Chrome is positioned in figure coordinates and is not subplot-aware, so
-    multiple chrome-bearing axes on the same figure can shift each other's
-    chrome out of alignment. The warning fires once, at the transition from
-    one tracked axes to two.
+    Chrome is positioned in figure coordinates and is not subplot-aware, so multiple
+    chrome-bearing axes on the same figure can shift each other's chrome out of
+    alignment. The warning fires once, at the 1→2 tracked-axes transition.
     """
     prior = getattr(fig, "_ors_chrome_axes", None)
     if prior is None:
@@ -470,35 +431,22 @@ def apply_chart_chrome(
 ) -> None:
     """Place the figure-level chrome (eyebrow, tab, title, subtitle, source) and reflow the axes.
 
-    Sequential layout: each header element is placed in turn so the next
-    starts directly below the previous one's measured bbox. Wrapped titles
-    therefore push subsequent elements down by their actual rendered height,
-    never their estimated height. After the header and source are placed,
-    ``tight_layout`` reflows the axes (with their tick and axis labels) into
-    the remaining vertical band.
-
-    The placement is stored as a resize-invariant recipe and re-derived on every
-    draw by ``_ChromeLayoutEngine``, so resizing the figure after this call (e.g.
-    ``fig.set_size_inches``) re-wraps and re-flows the chrome to the new size.
-
-    Each absent element collapses its slot, so a chart with only a title
-    takes only the vertical space the title needs.
+    Each header element is placed after the previous one's measured bbox, so wrapped
+    titles push later elements down by their rendered height; absent elements collapse
+    their slot. The placement is stored as a resize-invariant recipe and re-derived on
+    every draw by ``_ChromeLayoutEngine``, so a post-call ``set_size_inches`` re-flows
+    the chrome. The tab mark is controlled by the ``plot.style.show_tab`` option
+    (default True).
 
     Args:
-        ax: The plot axes (used to get the figure handle).
+        ax: The plot axes (provides the figure handle).
         eyebrow: Small uppercase label above the title.
-        title: Main headline. Wraps if it would exceed the figure width.
-        subtitle: Supporting copy below the title. Wraps.
+        title: Main headline; wraps if it would exceed the figure width.
+        subtitle: Supporting copy below the title; wraps.
         source_text: Footer text (rendered italic, muted).
-        warn_stacklevel: Stacklevel for the multi-axes chrome warning. Defaults to 4
-            so the warning points at user code when reached via
-            ``standard_graph_styles`` from a public ``*.plot`` function. Callers
-            that invoke ``apply_chart_chrome`` directly from a public entry point
-            (e.g. ``venn.plot``) should pass ``3``.
-
-    The small green tab mark above the title block is controlled by the
-    ``plot.style.show_tab`` option (default True). Set the option to False to
-    suppress it project-wide; use ``option_context`` to scope the change.
+        warn_stacklevel: Stacklevel for the multi-axes chrome warning; 4 points at user
+            code via ``standard_graph_styles``, direct public callers (e.g. ``venn.plot``)
+            pass 3.
     """
     style = PlotStyleHelper()
     fig = ax.figure
@@ -666,15 +614,14 @@ def apply_chart_chrome(
 def apply_base_styling(ax: Axes, grid_axis: GridAxis = "both", hide_spines: bool = False) -> None:
     """Apply base plot styling (spines, grid, background) using options.
 
+    Resets any pre-existing (pandas) grid before applying the styled one.
+
     Args:
         ax: The axes to style.
-        grid_axis: Which axis grid lines to draw. ``"both"`` draws horizontal and vertical
-            lines, ``"x"`` draws only vertical (helpful when reading off the x-axis, e.g.
-            horizontal bars), ``"y"`` draws only horizontal (the common case for line, area,
-            and vertical-bar charts), and ``"none"`` suppresses both.
-        hide_spines: If True, hide all four axis spines regardless of the per-spine style
-            options. Use for plots where cell colours or shapes already define the
-            boundaries (heatmap, cohort) and spines would only repeat that information.
+        grid_axis: ``"x"`` draws only vertical lines, ``"y"`` only horizontal,
+            ``"both"`` both, ``"none"`` off.
+        hide_spines: Hide all four spines, for plots whose cells define the boundaries
+            (heatmap, cohort).
     """
     style = PlotStyleHelper()
     ax.set_facecolor(style.background_color)
@@ -775,14 +722,13 @@ def _rotate_until_no_overlap(ax: Axes, fig: Figure) -> float:
 def _auto_rotate_categorical_x_ticks(ax: Axes) -> None:
     r"""Wrap or rotate categorical x-tick labels only when horizontal placement would overlap.
 
-    Pandas' ``df.plot(kind="bar")`` defaults to rot=90, which forces vertical
-    labels even for short category names like "North"/"South". We override that:
-    try 0° first; if neighbours overlap, wrap multi-word labels onto two lines
-    ("Camden High St" → "Camden\nHigh St") and re-test; then fall back to 45°
-    (right-anchored), and finally 90° only when none of the above fits.
+    Priority: 0° → wrap multi-word labels onto two lines → 45° → 90° (pandas defaults
+    bar labels to 90°). Only ``FixedLocator`` (categorical) axes are touched, and only
+    when the current rotation is a matplotlib/pandas default, so explicit choices (e.g.
+    heatmap's 45°) are respected. Re-reflows the chrome rect when the rotation changes.
 
-    Disable rotation via ``plot.style.auto_rotate_x_ticks``. Disable wrapping
-    independently via ``plot.style.auto_wrap_x_ticks``.
+    Disable rotation via ``plot.style.auto_rotate_x_ticks``; wrapping independently via
+    ``plot.style.auto_wrap_x_ticks``.
     """
     style = PlotStyleHelper()
     if style.auto_rotate_x_ticks is False:
@@ -885,14 +831,10 @@ def _style_legend(legend: Legend, title: str | None) -> None:
 
 
 def _fit_outside_legend(ax: Axes, title: str | None) -> None:
-    """Wrap an over-tall outside legend into columns so it stays beside the plot.
+    """Wrap an over-tall outside legend into columns, capped at half the figure width.
 
-    An outside legend is pinned to the axes top and grows downward, so more entries than the
-    plot band holds spill past the axes bottom, across the chrome's source line and eventually
-    off the figure. A legend still too tall at the width cap is left overflowing.
-
-    Runs after chrome, which settles the axes height and sets ``_ors_chrome_rect``; the chrome
-    reflow is repeated so ``tight_layout`` reserves the widened legend's slot.
+    Must run after chrome, which settles the axes height and sets ``_ors_chrome_rect``;
+    the chrome reflow is repeated so ``tight_layout`` reserves the widened legend's slot.
     """
     legend = ax.get_legend()
     fig = ax.figure
@@ -931,23 +873,21 @@ def apply_legend(
 ) -> None:
     """Apply legend styling using options.
 
-    Handles are read from ``ax`` via ``get_legend_handles_labels()`` so the legend
-    can be rebuilt with reversed order (stacked-area / stacked-bar visual stack)
-    or substituted labels (e.g. column ids → human-readable names) in a single
-    build. Calling this once from ``standard_graph_styles`` rather than after it
-    ensures chrome's ``tight_layout`` reserves the slot matching the final legend.
+    Handles are read from ``ax`` via ``get_legend_handles_labels()`` and rebuilt in one
+    pass, so reversed order (stacked-area / stacked-bar visual stack) and substituted
+    labels happen together; ``custom_labels`` is applied after ``reverse``. Must be
+    called from inside ``standard_graph_styles`` so chrome's ``tight_layout`` reserves
+    the final legend's slot.
 
     Args:
-        ax (Axes): The axes whose labelled artists drive the legend.
-        title (str | None): Legend title; ``None`` leaves it unset.
-        outside (bool): Anchor the legend outside the axes when ``True``.
-        reverse (bool): Reverse the handle and label order before rebuilding.
-        custom_labels (list[str] | None): Override the labels read off ``ax``.
-            Applied after ``reverse``, so the list is the final on-screen order.
+        ax: The axes whose labelled artists drive the legend.
+        title: Legend title; ``None`` leaves it unset.
+        outside: Anchor the legend outside the axes.
+        reverse: Reverse the handle and label order before rebuilding.
+        custom_labels: Override the labels read off ``ax``; the list is the final on-screen order.
 
     Raises:
-        ValueError: If ``custom_labels`` is provided and its length does not
-            match the number of legend handles on ``ax``.
+        ValueError: If ``custom_labels`` length does not match the number of legend handles on ``ax``.
     """
     handles, labels = ax.get_legend_handles_labels()
     if reverse:
@@ -985,41 +925,41 @@ def standard_graph_styles(  # noqa: PLR0913
     x_margin: float | None = None,
     hide_spines: bool = False,
 ) -> Axes:
-    """Apply standard styles to a Matplotlib graph using styling helpers.
+    """Apply standard styles (spines, grid, ticks, legend, chrome) to a Matplotlib graph.
+
+    With ``legend_style="end_of_line"`` the box legend is suppressed and inline labels are
+    drawn at each line's right endpoint after the chrome reflow; ``legend_title`` and
+    ``move_legend_outside`` are ignored under it (``UserWarning`` if set).
 
     Args:
-        ax (Axes): The graph to apply the styles to.
-        title (str, optional): The title of the graph. Defaults to None.
-        x_label (str, optional): The x-axis label. Defaults to None.
-        y_label (str, optional): The y-axis label. Defaults to None.
-        x_label_pad (int, optional): The padding below the x-axis label. Defaults to styling context default.
-        y_label_pad (int, optional): The padding to the left of the y-axis label. Defaults to styling context default.
-        legend_title (str, optional): The title of the legend. If None, no legend title is applied. Defaults to None.
-        move_legend_outside (bool, optional): Whether to move the legend outside the plot. Defaults to False.
-        show_legend (bool): Whether to display the legend or not.
-        legend_style (Literal["box", "end_of_line"], optional): When ``"end_of_line"``, suppress the box
-            legend and draw inline labels at each line's right endpoint after chrome reflow. ``"box"`` and
-            ``None`` leave the legend behaviour unchanged. ``legend_title`` and ``move_legend_outside`` are
-            ignored under ``"end_of_line"`` and emit a UserWarning if set. Defaults to None.
-        legend_reverse (bool, optional): Reverse handle and label order before building the legend.
-            Used by stacked area/bar plots where the column-order legend doesn't match the visual
-            stack (bottom-up). Defaults to False.
-        legend_labels (list[str] | None, optional): Override the labels read from labelled artists
-            (e.g. swap column ids for human-readable names). Applied after ``legend_reverse``.
-            Length must match the number of legend handles or ``ValueError`` is raised. Defaults to None.
-        eyebrow (str, optional): Small uppercase label rendered above the title. Defaults to None.
-        subtitle (str, optional): Supporting copy rendered below the title. Defaults to None.
-        source_text (str, optional): Footer text rendered italic and muted at the bottom-left of the figure.
-            The chrome layout engine reserves room for it.
-        grid_axis (Literal["both", "x", "y", "none"], optional): Which axis to draw gridlines on.
-            Defaults to ``"both"``.
-        x_margin (float, optional): If set, override matplotlib's default x-margin. Editorial line/area/time
-            charts pass ``0`` so the first data point sits on the spine and the last reaches the right edge.
-        hide_spines (bool, optional): If True, hide all four axis spines. Use for plots whose cell
-            colours or shapes already define their boundaries (heatmap, cohort). Defaults to False.
+        ax: The graph to apply the styles to.
+        title: Chart title.
+        x_label: X-axis label; when omitted, pandas' auto label is cleared.
+        y_label: Y-axis label; when omitted, pandas' auto label is cleared.
+        x_label_pad: Padding below the x-axis label.
+        y_label_pad: Padding to the left of the y-axis label.
+        legend_title: Legend title.
+        move_legend_outside: Anchor the legend outside the plot.
+        show_legend: Whether to display the legend.
+        legend_style: ``"end_of_line"`` suppresses the box legend for inline end labels.
+        legend_reverse: Reverse handle and label order before building the legend; used by
+            stacked area/bar plots where column order does not match the visual stack.
+        legend_labels: Override the labels read from labelled artists (applied after
+            ``legend_reverse``).
+        eyebrow: Small uppercase label rendered above the title.
+        subtitle: Supporting copy rendered below the title.
+        source_text: Footer text rendered italic and muted at the bottom-left of the figure.
+        grid_axis: Which axis to draw gridlines on.
+        x_margin: Override matplotlib's default x-margin; line/area/time/histogram/
+            period_on_period pass ``0`` so first/last points touch the spines.
+        hide_spines: Hide all four spines, for plots whose cells define the boundaries
+            (heatmap, cohort).
 
     Returns:
         Axes: The graph with the styles applied.
+
+    Raises:
+        ValueError: If ``legend_labels`` length does not match the number of legend handles.
     """
     # Suppress box-legend args before apply_legend runs; keep the pre-resolution
     # show_legend for the end-of-line draw call so single-series charts skip it.

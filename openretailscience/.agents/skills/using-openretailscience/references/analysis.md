@@ -22,6 +22,21 @@ from openretailscience.segmentation.segstats import SegTransactionStats, cube, r
 - `cube(*columns)` → all 2ⁿ grouping-set tuples; `rollup(*columns)` → n+1
   hierarchical tuples.
 
+`grouping_sets` worked examples (a set is a tuple of `segment_col` columns; `()` is the
+grand total):
+
+- `"rollup"` — SQL ROLLUP over `segment_col`: `[A,B,C], [A,B], [A], ()`.
+- `"cube"` — all 2ⁿ combinations of `segment_col`, including the `()` grand total.
+- `"total"` — the full `[A,B,C]` set plus the `()` grand total.
+- `[("region", "product"), ("product",), ()]` — custom list of tuples (`()` is the grand total).
+- `[(cube("store", "region"), "date")]` — nested spec: one `cube()`/`rollup()` result per
+  tuple plus str fixed columns, which are appended as a suffix to every set (produces
+  `[("store", "region", "date"), ("store", "date"), ("region", "date"), ("date",)]`).
+
+`calc_total`/`calc_rollup` are deprecated: a `FutureWarning` is emitted when
+`grouping_sets=None` and both are omitted. Legacy `calc_rollup=True` generates prefix AND
+suffix rollups, and suffix rollups are generated only when `calc_total=True`.
+
 Customer segments:
 
 ```python
@@ -36,9 +51,11 @@ from openretailscience.segmentation.nlr import NLRSegmentation
 - `HMLSegmentation(df, value_col=None, agg_func="sum", ...)` — Heavy/Medium/Light
   (fixed 50/80/100 spend cuts); subclass of `ThresholdSegmentation`.
 - `ThresholdSegmentation(df, thresholds, segments, value_col=None, ...)` — generic
-  percentile thresholds; `.df` has `segment_name`.
+  percentile thresholds; `.df` has `segment_name`. Zero-spend customers are handled
+  before percentile ranking.
 - `NLRSegmentation(df, period_col, p1_value, p2_value, ...)` — New / Lapsed /
-  Repeating across two periods.
+  Repeating across two periods. With `count`/`nunique` the positive-value rule measures
+  transaction presence, not spend.
 
 ## Analysis (`openretailscience.analysis`)
 
@@ -76,7 +93,8 @@ from openretailscience.analysis.haversine import haversine_distance
 - `TransactionChurn(df, churn_period)` — `.df` by transaction number (`retained`,
   `churned`, `churned_pct`), `.n_unique_customers`.
 - `CompositeRank(df, rank_cols, agg_func, ignore_ties=False, group_col=None)` —
-  `rank_cols` is a list of `(col, "asc"|"desc")`; `.df` ranked.
+  `rank_cols` is a list of `(col, "asc"|"desc")`; `.df` ranked. Ranks are 1-based,
+  1 = best per sort direction; lower `composite_rank` is better.
 - `haversine_distance(lat_col, lon_col, target_lat_col, target_lon_col, radius=6371.0)` —
   returns an Ibis Column expression (not materialized).
 
