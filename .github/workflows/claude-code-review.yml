@@ -35,6 +35,8 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      # claude-code-action skips itself unless this file is byte-identical to the copy on
+      # the default branch, so edits here cannot be exercised on a pull request.
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@9c5ddab2e6d17b83ea679153b31f1d5f023cf636 # v1.0.217
