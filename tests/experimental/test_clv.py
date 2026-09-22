@@ -106,6 +106,18 @@ class TestCLVStats:
         with pytest.raises(TypeError, match="date or datetime"):
             CLVStats(data)
 
+    def test_empty_data_raises_clear_error(self):
+        """Empty transaction data raises a clear ValueError, not a misleading date-coercion TypeError."""
+        empty = pd.DataFrame(
+            {
+                cols.customer_id: pd.Series([], dtype="int64"),
+                cols.transaction_date: pd.Series([], dtype="datetime64[ns]"),
+                cols.unit_spend: pd.Series([], dtype="float64"),
+            },
+        )
+        with pytest.raises(ValueError, match="no transactions"):
+            CLVStats(empty)
+
     def test_null_transaction_date_rows_are_dropped(self):
         """Rows with a NULL transaction_date are dropped.
 
@@ -171,16 +183,32 @@ class TestCLVStats:
         )
         assert_frame_equal(result, expected)
 
-    @pytest.mark.parametrize("bad_period", ["fortnight", "year", "quarter"])
-    def test_invalid_period_raises(self, bad_period):
-        """Periods outside day/week/month are rejected (year/quarter are real words but unsupported here)."""
-        with pytest.raises(ValueError, match="period"):
-            CLVStats(_transactions(), period=bad_period)
-
-    def test_observation_period_end_before_last_purchase_raises(self):
-        """An observation_period_end earlier than a customer's last purchase is rejected."""
-        with pytest.raises(ValueError, match="observation_period_end"):
-            CLVStats(_transactions(), observation_period_end="2023-01-10")
+    @pytest.mark.parametrize(
+        ("kwargs", "error", "match"),
+        [
+            # year/quarter are real period words, but unsupported here.
+            pytest.param({"period": "fortnight"}, ValueError, "period", id="period-not-a-word"),
+            pytest.param({"period": "year"}, ValueError, "period", id="period-year"),
+            pytest.param({"period": "quarter"}, ValueError, "period", id="period-quarter"),
+            # An end before a customer's last purchase would give them a negative age.
+            pytest.param(
+                {"observation_period_end": "2023-01-10"},
+                ValueError,
+                "observation_period_end",
+                id="obs-end-before-last-purchase",
+            ),
+            pytest.param(
+                {"observation_period_end": 20230129},
+                TypeError,
+                "observation_period_end",
+                id="obs-end-not-a-date",
+            ),
+        ],
+    )
+    def test_invalid_construction_argument_raises(self, kwargs, error, match):
+        """A period or observation_period_end outside its contract is rejected at construction."""
+        with pytest.raises(error, match=match):
+            CLVStats(_transactions(), **kwargs)
 
     def test_observation_period_end_equal_to_latest_is_allowed(self):
         """An observation_period_end exactly on the latest transaction is accepted (guard is strict <)."""
@@ -191,11 +219,6 @@ class TestCLVStats:
             explicit.sort_values(cols.customer_id).reset_index(drop=True),
             default.sort_values(cols.customer_id).reset_index(drop=True),
         )
-
-    def test_observation_period_end_invalid_type_raises(self):
-        """A non-date observation_period_end (e.g. an int) is rejected with TypeError."""
-        with pytest.raises(TypeError, match="observation_period_end"):
-            CLVStats(_transactions(), observation_period_end=20230129)
 
     def test_repeat_buyers_keeps_only_repeat_buyers(self):
         """repeat_buyers is the GammaGamma-ready subset: the repeat buyers (frequency > 0).
@@ -572,18 +595,6 @@ class TestCLVStatsCustomerAttributes:
         )
         assert_frame_equal(dummies, expected_dummies)
 
-    def test_empty_data_raises_clear_error(self):
-        """Empty transaction data raises a clear ValueError, not a misleading date-coercion TypeError."""
-        empty = pd.DataFrame(
-            {
-                cols.customer_id: pd.Series([], dtype="int64"),
-                cols.transaction_date: pd.Series([], dtype="datetime64[ns]"),
-                cols.unit_spend: pd.Series([], dtype="float64"),
-            },
-        )
-        with pytest.raises(ValueError, match="no transactions"):
-            CLVStats(empty)
-
     def test_duplicate_one_hot_col_is_deduplicated(self):
         """A repeated one_hot_col is de-duplicated, not encoded twice (which would drop-then-not-find it)."""
         transactions = pd.DataFrame(
@@ -718,3 +729,177 @@ class TestCLVStatsCustomerIdColumn:
             )
             with pytest.raises(ValueError, match="reserved BTYD"):
                 CLVStats(self._txns("shopper_id"), period="day", customer_attributes=attributes)
+
+
+# Share drawn and unbiasedness are only observable over a population, so these tests generate one
+# rather than reuse the hand-computed fixture above.
+SAMPLE_POPULATION = 1000
+SAMPLE_N = 250
+SAMPLE_FRAC = 0.25
+# Two independent draws overlap in ~SAMPLE_FRAC of either one; a near-0 or near-1 share would mean
+# random_state partitions the population rather than re-drawing from it.
+_MIN_CROSS_SEED_OVERLAP = 0.10
+_MAX_CROSS_SEED_OVERLAP = 0.45
+# Standard errors of tolerance for a sample statistic: wide enough that an unbiased draw never trips it
+# on a backend hash change, tight enough to fail on a systematically wrong share or a skewed draw.
+_SAMPLE_STAT_SIGMAS = 5
+# For tests that need only which customers were drawn, not the distribution of the draw.
+_SMALL_POPULATION = 200
+_SMALL_SAMPLE_N = 50
+_SMALL_SAMPLE_FRAC = 0.5
+# Purchase days per customer run 1.._MAX_PURCHASE_DAYS across the id range in _many_customers.
+_MAX_PURCHASE_DAYS = 6
+
+
+def _many_customers(n_customers: int = SAMPLE_POPULATION) -> pd.DataFrame:
+    """Transaction data for ``n_customers`` customers with 1-6 purchase days each.
+
+    Ids are issued in signup order and purchase count rises with tenure, so any draw biased toward one
+    end of the id range has a visibly different mean frequency than the population — which is what
+    ``test_sample_is_unbiased_with_respect_to_frequency`` relies on to have teeth.
+    """
+    rng = np.random.default_rng(42)
+    customer_ids = np.arange(10_001, 10_001 + n_customers)
+    purchase_days = 1 + np.arange(n_customers) * _MAX_PURCHASE_DAYS // n_customers
+    repeated_ids = np.repeat(customer_ids, purchase_days)
+    day_offsets = rng.integers(0, 180, size=repeated_ids.size)
+    return pd.DataFrame(
+        {
+            cols.customer_id: repeated_ids,
+            cols.transaction_date: pd.Timestamp("2023-01-01") + pd.to_timedelta(day_offsets, unit="D"),
+            cols.unit_spend: np.round(rng.uniform(10.0, 200.0, size=repeated_ids.size), 2),
+        },
+    )
+
+
+class TestCLVStatsSample:
+    """Tests for CLVStats.sample -- the fit-on-a-sample, score-on-everyone workflow."""
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def clv(cls) -> CLVStats:
+        """A CLVStats over SAMPLE_POPULATION customers; every test in the class only reads it."""
+        return CLVStats(_many_customers(), period="week")
+
+    @pytest.mark.parametrize("n", [1, SAMPLE_N], ids=["single-customer", "many-customers"])
+    def test_sample_n_returns_exactly_n_customers(self, clv, n):
+        """An n draw yields that exact number of customers, all of them from the full summary."""
+        sample = clv.sample(n=n)
+
+        assert len(sample.df) == n
+        assert set(sample.df["customer_id"]) <= set(clv.df["customer_id"])
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [{"n": SAMPLE_POPULATION * 5}, {"frac": 1.0}],
+        ids=["n-above-population", "frac-of-one"],
+    )
+    def test_a_selector_covering_the_population_returns_every_customer(self, clv, kwargs):
+        """An n above the population, or frac=1.0, yields the whole summary rather than an error."""
+        assert set(clv.sample(**kwargs).df["customer_id"]) == set(clv.df["customer_id"])
+
+    @pytest.mark.parametrize("frac", [0.1, SAMPLE_FRAC, 0.5])
+    def test_sample_frac_draws_approximately_the_requested_share(self, clv, frac):
+        """The drawn count tracks frac across its range, landing near frac * population, not on it."""
+        expected = frac * SAMPLE_POPULATION
+        tolerance = _SAMPLE_STAT_SIGMAS * np.sqrt(SAMPLE_POPULATION * frac * (1 - frac))
+
+        assert abs(len(clv.sample(frac=frac).df) - expected) <= tolerance
+
+    @pytest.mark.parametrize("kwargs", [{"n": SAMPLE_N}, {"frac": SAMPLE_FRAC}])
+    def test_sample_is_deterministic_for_a_given_random_state(self, clv, kwargs):
+        """Re-sampling with the same random_state draws exactly the same customers."""
+        assert set(clv.sample(**kwargs).df["customer_id"]) == set(clv.sample(**kwargs).df["customer_id"])
+
+    @pytest.mark.parametrize("kwargs", [{"n": SAMPLE_N}, {"frac": SAMPLE_FRAC}])
+    def test_different_random_state_draws_a_different_sample(self, clv, kwargs):
+        """A different random_state draws an independent sample, not an identical or disjoint one."""
+        first = set(clv.sample(random_state=1, **kwargs).df["customer_id"])
+        second = set(clv.sample(random_state=2, **kwargs).df["customer_id"])
+
+        assert _MIN_CROSS_SEED_OVERLAP <= len(first & second) / len(first) <= _MAX_CROSS_SEED_OVERLAP
+
+    def test_sampled_rows_are_the_unmodified_summary_rows(self, clv):
+        """Sampling selects customers; it never recomputes or alters a customer's summary."""
+        sample = clv.sample(n=SAMPLE_N).df.sort_values("customer_id").reset_index(drop=True)
+        expected = clv.df.set_index("customer_id").loc[sample["customer_id"]].reset_index()
+
+        assert_frame_equal(sample, expected)
+
+    def test_sample_is_unbiased_with_respect_to_frequency(self, clv):
+        """The draw is random rather than a slice of the id range: sampled frequency tracks the population."""
+        sample = clv.sample(frac=SAMPLE_FRAC).df
+        population = clv.df["frequency"]
+        # Frequency rises with customer_id in this fixture, so an id-ordered slice shifts the mean by
+        # ~2 purchases -- far outside a tolerance set at the sample mean's own standard error.
+        tolerance = _SAMPLE_STAT_SIGMAS * population.std() / np.sqrt(len(sample))
+
+        assert abs(sample["frequency"].mean() - population.mean()) < tolerance
+
+    def test_sample_returns_a_clvstats_carrying_period_and_repeat_buyers(self, clv):
+        """The sample is itself a CLVStats: same period, and repeat_buyers scoped to the sample."""
+        sample = clv.sample(n=SAMPLE_N)
+        repeat_buyers = sample.repeat_buyers
+
+        assert sample.period == clv.period
+        assert sample.pymc_time_unit == clv.pymc_time_unit
+        # A proper subset of the population's repeat buyers: fails if sample() handed back self.
+        assert set(repeat_buyers["customer_id"]) < set(clv.repeat_buyers["customer_id"])
+        assert_frame_equal(repeat_buyers, sample.df[sample.df["frequency"] > 0].reset_index(drop=True))
+
+    def test_sample_keeps_each_customers_covariate_values(self):
+        """Covariates attached to the full summary reach the sample unchanged, one-hot dummies included."""
+        transactions = _many_customers(_SMALL_POPULATION)
+        customer_ids = transactions[cols.customer_id].drop_duplicates().to_numpy()
+        attributes = pd.DataFrame(
+            {
+                cols.customer_id: customer_ids,
+                "stores_shopped": np.arange(len(customer_ids)) % 5 + 1,
+                "signup_channel": np.where(customer_ids % 2 == 0, "in_store", "online"),
+            },
+        )
+        clv = CLVStats(transactions, customer_attributes=attributes, one_hot_col="signup_channel")
+        sample = clv.sample(frac=_SMALL_SAMPLE_FRAC).df.sort_values("customer_id").reset_index(drop=True)
+        expected = clv.df.set_index("customer_id").loc[sample["customer_id"]].reset_index()
+
+        assert clv.covariate_cols == ["stores_shopped", "signup_channel_online"]
+        # Values, not just column names: a sample must carry each customer's covariates unchanged.
+        assert_frame_equal(sample, expected)
+
+    def test_sample_uses_the_configured_customer_id_column(self):
+        """An overridden customer_id option draws the same customers as the default one."""
+        transactions = _many_customers(_SMALL_POPULATION)
+        default_draw = set(CLVStats(transactions).sample(n=_SMALL_SAMPLE_N).df["customer_id"])
+        with option_context("column.customer_id", "cust"):
+            renamed = CLVStats(transactions.rename(columns={cols.customer_id: "cust"}))
+            sample = renamed.sample(n=_SMALL_SAMPLE_N)
+
+        # Equality (not subset) pins the draw to the id values: a positional limit would instead
+        # follow the frame's row order, which the rename does not change.
+        assert set(sample.df["customer_id"]) == default_draw
+        assert len(default_draw) == _SMALL_SAMPLE_N
+
+    @pytest.mark.parametrize(
+        ("kwargs", "error", "match"),
+        [
+            pytest.param({}, ValueError, "exactly one of n or frac", id="neither"),
+            pytest.param({"n": 10, "frac": 0.1}, ValueError, "exactly one of n or frac", id="both"),
+            pytest.param({"frac": 0.0}, ValueError, "frac must be positive", id="frac-zero"),
+            pytest.param({"frac": 1.5}, ValueError, "frac must be between 0 and 1", id="frac-above-one"),
+            pytest.param({"frac": 1e-7}, ValueError, "rounds to zero buckets", id="frac-below-resolution"),
+            pytest.param({"n": 0}, ValueError, "n must be positive", id="n-zero"),
+            pytest.param({"n": 10.5}, TypeError, "n must be an integer", id="n-float"),
+            pytest.param({"n": 10, "random_state": 1.5}, TypeError, "random_state must be an integer", id="seed-float"),
+        ],
+    )
+    def test_invalid_sample_arguments_raise(self, clv, kwargs, error, match):
+        """Bad selector or random_state arguments are rejected at the API boundary."""
+        with pytest.raises(error, match=match):
+            clv.sample(**kwargs)
+
+    @pytest.mark.parametrize("kwargs", [{"n": SAMPLE_N}, {"frac": SAMPLE_FRAC}])
+    def test_resampling_at_the_same_seed_nests_rather_than_narrows(self, clv, kwargs):
+        """A same-seed draw over a sample re-selects it whole, so chained calls do not compound."""
+        sample = clv.sample(**kwargs)
+
+        assert set(sample.sample(**kwargs).df["customer_id"]) == set(sample.df["customer_id"])
