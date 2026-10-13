@@ -238,6 +238,18 @@ class TestProductAssociations:
                 min_occurrences=0,
             )
 
+    @pytest.mark.parametrize("parameter", ["min_support", "min_confidence", "min_uplift"])
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_thresholds_raise_before_computing_rules(self, transactions_df, parameter, value):
+        """Reject non-finite thresholds rather than silently filtering retail rules."""
+        with pytest.raises(ValueError, match="must be finite"):
+            ProductAssociation(
+                df=transactions_df,
+                value_col="product",
+                group_col=cols.transaction_id,
+                **{parameter: value},
+            )
+
     def test_calc_association_invalid_min_cooccurrences(self, transactions_df):
         """Test calculating association rules with an invalid minimum cooccurrences value."""
         with pytest.raises(ValueError, match="Minimum cooccurrences must be at least 1"):

@@ -5,6 +5,7 @@ Rules are computed lazily in the Ibis engine: ``table`` is the lazy Ibis table a
 """
 
 import functools
+import math
 
 import ibis
 import pandas as pd
@@ -62,7 +63,7 @@ class ProductAssociation:
             min_uplift (float): Minimum uplift; must be >= 0. Defaults to 0.0.
 
         Raises:
-            ValueError: If any ``min_*`` value is out of range.
+            ValueError: If any ``min_*`` value is out of range, or a probability/uplift threshold is not finite.
             ValueError: If ``target_item`` is an empty list.
             TypeError: If ``target_item`` contains values that are not str or float.
             ValueError: If ``group_col`` or ``value_col`` columns are missing from the data.
@@ -102,8 +103,17 @@ class ProductAssociation:
                 legitimately exceed 1.
 
         Raises:
-            ValueError: If any parameter is outside its valid range.
+            ValueError: If any parameter is outside its valid range, or a probability/uplift threshold is not finite.
         """
+        for name, value in (
+            ("Minimum support", min_support),
+            ("Minimum confidence", min_confidence),
+            ("Minimum uplift", min_uplift),
+        ):
+            if not math.isfinite(value):
+                msg = f"{name} must be finite"
+                raise ValueError(msg)
+
         if min_occurrences < 1:
             raise ValueError("Minimum occurrences must be at least 1")
         if min_cooccurrences < 1:
