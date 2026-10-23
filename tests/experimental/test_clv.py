@@ -894,9 +894,16 @@ class TestCLVStatsSample:
         with pytest.raises(error, match=match):
             clv.sample(**kwargs)
 
-    @pytest.mark.parametrize("kwargs", [{"n": SAMPLE_N}, {"frac": SAMPLE_FRAC}])
-    def test_resampling_at_the_same_seed_nests_rather_than_narrows(self, clv, kwargs):
-        """A same-seed draw over a sample re-selects it whole, so chained calls do not compound."""
-        sample = clv.sample(**kwargs)
+    @pytest.mark.parametrize(
+        ("outer", "inner"),
+        [
+            pytest.param({"n": SAMPLE_N}, {"n": SAMPLE_N // 5}, id="n-within-n"),
+            pytest.param({"frac": 0.5}, {"frac": SAMPLE_FRAC}, id="frac-within-frac"),
+            pytest.param({"frac": SAMPLE_FRAC}, {"frac": SAMPLE_FRAC}, id="frac-repeated"),
+        ],
+    )
+    def test_resampling_at_the_same_seed_nests_rather_than_narrows(self, clv, outer, inner):
+        """A same-seed draw over a sample selects what that draw over the population would."""
+        resampled = clv.sample(**outer).sample(**inner)
 
-        assert set(sample.sample(**kwargs).df["customer_id"]) == set(sample.df["customer_id"])
+        assert set(resampled.df["customer_id"]) == set(clv.sample(**inner).df["customer_id"])
