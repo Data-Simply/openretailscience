@@ -43,12 +43,12 @@ class TestFilterAndLabelByPeriods:
 
         period_ranges = {
             "Q1": (
-                datetime.datetime(2023, 1, 1, tzinfo=datetime.timezone.utc),
-                datetime.datetime(2023, 3, 31, tzinfo=datetime.timezone.utc),
+                datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC),
+                datetime.datetime(2023, 3, 31, tzinfo=datetime.UTC),
             ),
             "Q2": (
-                datetime.datetime(2023, 4, 1, tzinfo=datetime.timezone.utc),
-                datetime.datetime(2023, 6, 30, tzinfo=datetime.timezone.utc),
+                datetime.datetime(2023, 4, 1, tzinfo=datetime.UTC),
+                datetime.datetime(2023, 6, 30, tzinfo=datetime.UTC),
             ),
         }
         result = filter_and_label_by_periods(sample_transactions_table, period_ranges)
@@ -336,7 +336,7 @@ class TestFindOverlappingPeriods:
 
     def test_aware_datetime_returns_aware_datetimes(self):
         """Test that tz-aware datetime inputs produce tz-aware datetime outputs."""
-        utc = datetime.timezone.utc
+        utc = datetime.UTC
         start_date = datetime.datetime(2021, 3, 1, tzinfo=utc)
         end_date = datetime.datetime(2023, 6, 15, tzinfo=utc)
         expected = [
@@ -364,10 +364,10 @@ class TestFindOverlappingPeriods:
     @pytest.mark.parametrize(
         ("start_date", "end_date"),
         [
-            ("2021-03-01", datetime.datetime(2023, 6, 15, tzinfo=datetime.timezone.utc)),
-            (datetime.datetime(2021, 3, 1, tzinfo=datetime.timezone.utc), "2023-06-15"),
-            (datetime.datetime(2021, 3, 1), datetime.datetime(2023, 6, 15, tzinfo=datetime.timezone.utc)),
-            (datetime.datetime(2021, 3, 1, tzinfo=datetime.timezone.utc), datetime.datetime(2023, 6, 15)),
+            ("2021-03-01", datetime.datetime(2023, 6, 15, tzinfo=datetime.UTC)),
+            (datetime.datetime(2021, 3, 1, tzinfo=datetime.UTC), "2023-06-15"),
+            (datetime.datetime(2021, 3, 1), datetime.datetime(2023, 6, 15, tzinfo=datetime.UTC)),
+            (datetime.datetime(2021, 3, 1, tzinfo=datetime.UTC), datetime.datetime(2023, 6, 15)),
         ],
         ids=["string_start_aware_end", "aware_start_string_end", "naive_start_aware_end", "aware_start_naive_end"],
     )

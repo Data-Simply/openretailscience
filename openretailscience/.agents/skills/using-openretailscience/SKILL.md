@@ -22,8 +22,12 @@ Databricks, PySpark, MSSQL, Oracle), so the same code runs on a laptop sample or
 a 1B–10B-row warehouse table. Prefer an **Ibis table** for large data so
 filtering and aggregation are pushed into the engine.
 
-There are **no top-level re-exports** — always import from the full module path,
-e.g. `from openretailscience.analysis.cross_shop import CrossShop`.
+`analysis`, `segmentation` and `utils` export their classes and functions, so
+`from openretailscience.analysis import CrossShop` works as well as the full path
+`from openretailscience.analysis.cross_shop import CrossShop`. `plots` exports chart modules
+(`from openretailscience.plots import bar`). `experimental` exports nothing: use
+`from openretailscience.experimental.clv import CLVStats`.
+`help(openretailscience.analysis)` (or `segmentation`, `plots`) maps questions to classes or chart modules.
 
 ## Core workflow
 

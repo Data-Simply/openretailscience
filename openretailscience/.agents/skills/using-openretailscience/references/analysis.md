@@ -51,8 +51,8 @@ from openretailscience.segmentation.nlr import NLRSegmentation
 - `HMLSegmentation(df, value_col=None, agg_func="sum", ...)` — Heavy/Medium/Light
   (fixed 50/80/100 spend cuts); subclass of `ThresholdSegmentation`.
 - `ThresholdSegmentation(df, thresholds, segments, value_col=None, ...)` — generic
-  percentile thresholds; `.df` has `segment_name`. Zero-spend customers are handled
-  before percentile ranking.
+  percentile thresholds, strictly ascending and ending at `1.0` (else `ValueError`);
+  `.df` has `segment_name`. Zero-spend customers are handled before percentile ranking.
 - `NLRSegmentation(df, period_col, p1_value, p2_value, ...)` — New / Lapsed /
   Repeating across two periods. With `count`/`nunique` the positive-value rule measures
   transaction presence, not spend.
