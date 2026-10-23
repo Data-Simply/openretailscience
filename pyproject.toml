@@ -2,7 +2,6 @@
 classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -27,7 +26,7 @@ description = "Retail Data Science Tools"
 license = "Elastic-2.0"
 name = "openretailscience"
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.11,<3.15"
 version = "0.48.1"
 [[project.authors]]
 email = "2493311+mvanwyk@users.noreply.github.com"
@@ -77,7 +76,7 @@ required-version = ">=0.10.0,<0.13.0"
 line-length    = 120
 show-fixes     = true
 src            = [ "openretailscience", "tests" ]
-target-version = "py310"
+target-version = "py311"
 # Bundled agent-skill example scripts are demo-style, not package source, and
 # are validated by execution in tests. force-exclude makes the pre-commit
 # hook (which passes explicit filenames) skip them too.
