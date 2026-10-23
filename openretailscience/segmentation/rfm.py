@@ -79,7 +79,7 @@ class RFMSegmentation:
         if isinstance(current_date, str):
             current_date = datetime.date.fromisoformat(current_date)
         elif current_date is None:
-            current_date = datetime.datetime.now(datetime.timezone.utc).date()
+            current_date = datetime.datetime.now(datetime.UTC).date()
         elif not isinstance(current_date, datetime.date):
             raise TypeError("current_date must be a string in 'YYYY-MM-DD' format, a datetime.date object, or None")
 

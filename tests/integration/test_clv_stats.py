@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 cols = ColumnHelper()
 
 _SUBSET_CUSTOMERS = 25
+_SAMPLE_CUSTOMERS = 10
 
 
 def _subset(transactions_table: Table) -> Table:
@@ -131,3 +132,31 @@ def test_clv_stats_customer_attributes_and_one_hot_integration(transactions_tabl
         pd.testing.assert_series_equal(result[dummy], (max_store == value).astype("int8"), check_names=False)
     # A row flags at most one dummy (its max store); reference-level customers flag none.
     assert (result[store_dummies].sum(axis=1) <= 1).all()
+
+
+def test_clv_stats_sample_integration(transactions_table):
+    """CLVStats.sample compiles to valid SQL and draws a stable customer subset on each backend.
+
+    The key compiles to a different hash per engine (``ORA_HASH``, ``CHECKSUM``, ``FARM_FINGERPRINT``,
+    ``HASH``); draw sizes and edge cases are covered by the unit tests.
+
+    Args:
+        transactions_table: Parameterized fixture providing the transactions table on each backend.
+    """
+    clv = CLVStats(_subset(transactions_table), period="week")
+    all_customers = set(clv.df[cols.customer_id])
+
+    sampled = clv.sample(n=_SAMPLE_CUSTOMERS)
+    sampled_ids = set(sampled.df[cols.customer_id])
+
+    assert len(sampled.df) == _SAMPLE_CUSTOMERS
+    assert sampled_ids <= all_customers
+    # A re-rolled random() predicate fails this.
+    assert set(clv.sample(n=_SAMPLE_CUSTOMERS).df[cols.customer_id]) == sampled_ids
+    # Not the lowest ids: a hash that compiled to a constant would still satisfy every assertion above,
+    # because the customer_id tiebreaker alone yields a stable subset.
+    assert sampled_ids != set(sorted(all_customers)[:_SAMPLE_CUSTOMERS])
+    # frac takes the filter path rather than order_by/limit. frac=1.0 alone cannot tell a working
+    # predicate from one that is always true, so a mid-range share must land strictly inside.
+    assert set() < set(clv.sample(frac=0.5).df[cols.customer_id]) < all_customers
+    assert set(clv.sample(frac=1.0).df[cols.customer_id]) == all_customers

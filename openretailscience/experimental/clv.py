@@ -31,7 +31,7 @@ from __future__ import annotations
 import datetime
 import functools
 import warnings
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import ibis
 import pandas as pd
@@ -40,10 +40,16 @@ from openretailscience.core.validation import (
     ensure_columns,
     ensure_data_has_columns,
     ensure_ibis_table,
+    ensure_integer,
     ensure_period,
+    ensure_positive,
     ensure_tznaive_datetime,
+    ensure_unit_interval,
 )
 from openretailscience.options import ColumnHelper
+
+if TYPE_CHECKING:
+    from typing import Self
 
 
 def _coerce_to_date(value: str | datetime.date) -> datetime.date:
@@ -133,13 +139,15 @@ class CLVStats:
     Aggregates transaction data into the ``frequency`` / ``recency`` / ``T`` /
     ``monetary_value`` summary that ``ParetoNBDModel`` and ``GammaGammaModel`` consume.
     Results are accessible via the ``table`` attribute (ibis Table) or the ``df`` property
-    (materialized pandas DataFrame). See the module docstring for column definitions.
+    (materialized pandas DataFrame); :meth:`sample` narrows the summary to a subset of customers to
+    fit on. See the module docstring for column definitions.
 
-    Constructing ``CLVStats`` runs one aggregate query against the backend to resolve and
-    validate the observation window (plus, when ``customer_attributes`` is given, one aggregate to
-    check its customer_id is unique and a single distinct-value query enumerating all ``one_hot_col``
-    categories); the full per-customer summary stays lazy and is materialized only on first
-    ``df`` access.
+    Constructing ``CLVStats`` from transactions runs one aggregate query against the backend to
+    resolve and validate the observation window (plus, when ``customer_attributes`` is given, one
+    aggregate to check its customer_id is unique and a single distinct-value query enumerating all
+    ``one_hot_col`` categories); the full per-customer summary stays lazy and is materialized only on
+    first ``df`` access. A :meth:`sample` result is built from an existing summary and queries nothing
+    until its own ``df`` is read.
 
     Args:
         data (pd.DataFrame | ibis.Table): Transaction data with the ``customer_id``,
@@ -189,6 +197,8 @@ class CLVStats:
     #: assumes the two are independent, and a stronger correlation biases its spend estimates (0.10-0.15
     #: is the practical "weak enough" band in BTYD guidance).
     _MONETARY_FREQUENCY_CORR_WARN: ClassVar[float] = 0.15
+    #: The per-customer sampling hash is folded into this many buckets, setting ``frac``'s resolution.
+    _SAMPLE_BUCKETS: ClassVar[int] = 1_000_000
     #: The base BTYD output columns (literal pymc-marketing names); anything else on the summary is a
     #: covariate attached via customer_attributes / one_hot_col. See ``covariate_cols``.
     _BASE_SUMMARY_COLUMNS: ClassVar[tuple[str, ...]] = ("customer_id", "frequency", "recency", "T", "monetary_value")
@@ -395,6 +405,74 @@ class CLVStats:
             "T",
             "monetary_value",
         )
+
+    def sample(self, *, n: int | None = None, frac: float | None = None, random_state: int = 42) -> Self:
+        """Draws a random sample of customers, as a new :class:`CLVStats` over the same summary.
+
+        Fit on ``clv.sample(n=50_000)``, score on ``clv.df``. Customers are selected by a deterministic
+        hash of ``customer_id`` salted with ``random_state``. Row order in the result is not meaningful.
+
+        - A draw repeats only on the same engine at the same version: the key is the backend's own hash,
+          and DuckDB's ``HASH`` changes between releases. Record the drawn ids, not the seed, to
+          reproduce a fit. Backends with no Ibis ``hash`` rule (SQLite, MySQL, Trino, Athena) raise
+          ``OperationNotDefinedError`` when :attr:`df` is read.
+        - Draws nest rather than partition: at one ``random_state``, ``sample(frac=0.2)`` is a subset of
+          ``sample(frac=0.8)`` and re-sampling a sample returns it unchanged. A different
+          ``random_state`` re-draws independently but still overlaps, so neither gives a disjoint
+          train/holdout split.
+
+        Args:
+            n (int | None, optional): Number of customers to draw; every customer if it exceeds the
+                population. Mutually exclusive with ``frac``. Defaults to ``None``.
+            frac (float | None, optional): Share of customers to draw, in (0, 1] and no finer than the
+                hash's bucket resolution. Decided per customer, so the count lands near ``frac`` *
+                population rather than on it; costs one predicate instead of ``n``'s sort. Mutually
+                exclusive with ``n``. Defaults to ``None``.
+            random_state (int, optional): Salt for the selection hash. Defaults to 42.
+
+        Returns:
+            Self: A ``CLVStats`` over the sampled customers, with the same ``period`` and covariates.
+
+        Raises:
+            TypeError: If ``n`` or ``random_state`` is not an integer, or ``frac`` is not a number.
+            ValueError: If both or neither of ``n`` and ``frac`` are given, if ``n`` is not positive,
+                or if ``frac`` is outside (0, 1] or finer than the bucket resolution.
+        """
+        if (n is None) == (frac is None):
+            msg = "sample requires exactly one of n or frac."
+            raise ValueError(msg)
+        ensure_integer(random_state, "random_state")
+        # The id column is the literal "customer_id" here (__init__ renames it); cast so the salt
+        # concatenates onto any id type.
+        key = (self.table["customer_id"].cast("string") + ibis.literal(f"::{random_state}")).hash()
+        # abs() after the modulo, not before: abs(-2**63) overflows int64.
+        # Select on the bucket, never the raw hash: SQL Server's CHECKSUM keeps the id's leading
+        # characters in its high bits, so ordering on the raw key returns a run of sequential ids. The
+        # low bits the modulo keeps are well mixed.
+        bucket = (key % self._SAMPLE_BUCKETS).abs()
+        if n is not None:
+            ensure_integer(n, "n")
+            ensure_positive(n, "n")
+            # The n smallest buckets: the frac predicate with the cut solved for n. customer_id breaks
+            # ties in the boundary bucket; without it ORDER BY ... LIMIT can differ per execution.
+            sampled = self.table.order_by([bucket, self.table["customer_id"]]).limit(n)
+        else:
+            ensure_positive(frac, "frac")
+            ensure_unit_interval(frac, "frac")
+            cut = int(frac * self._SAMPLE_BUCKETS)
+            if cut == 0:
+                msg = (
+                    f"frac must be at least {1 / self._SAMPLE_BUCKETS} (the sampling hash resolution); "
+                    f"{frac} rounds to zero buckets, which would draw no customers. Use n for a smaller share."
+                )
+                raise ValueError(msg)
+            sampled = self.table.filter(bucket < cut)
+        # Bypass __init__, which would re-run the observation-window and attribute queries against a
+        # table that no longer holds transactions. (period, table) is the whole state.
+        sample = object.__new__(type(self))
+        sample.period = self.period
+        sample.table = sampled
+        return sample
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
