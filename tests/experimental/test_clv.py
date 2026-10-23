@@ -907,3 +907,15 @@ class TestCLVStatsSample:
         resampled = clv.sample(**outer).sample(**inner)
 
         assert set(resampled.df["customer_id"]) == set(clv.sample(**inner).df["customer_id"])
+
+    @pytest.mark.parametrize(
+        "sample_kwargs",
+        [None, {"n": SAMPLE_N}, {"frac": SAMPLE_FRAC}],
+        ids=["full-summary", "n-sample", "frac-sample"],
+    )
+    def test_df_rows_come_back_in_customer_id_order(self, clv, sample_kwargs):
+        """.df is sorted by customer_id, so two reads of one summary line up row for row."""
+        summary = clv if sample_kwargs is None else clv.sample(**sample_kwargs)
+        result = summary.df
+
+        assert_frame_equal(result, result.sort_values("customer_id").reset_index(drop=True))

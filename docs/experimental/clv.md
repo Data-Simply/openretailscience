@@ -70,9 +70,8 @@ transactions = pd.DataFrame({
     "unit_spend": [100.0, 50.0, 70.0, 200.0, 50.0, 80.0],
 })
 
-# .df rows are one-per-customer in engine order; sort for a stable view.
 clv = CLVStats(transactions, period="week", observation_period_end="2023-01-29")
-print(clv.df.sort_values("customer_id").reset_index(drop=True))
+print(clv.df)
 #    customer_id  frequency  recency         T  monetary_value
 # 0          101          2      2.0  4.000000            60.0
 # 1          102          0      0.0  4.000000             NaN
@@ -139,7 +138,8 @@ A sampled row is exactly that customer's row in the full `.df`, so the fit and t
 Filtering transactions before constructing `CLVStats` is *not* the same thing: `T` is measured from
 `observation_period_end`, which defaults to the population's latest transaction, and one-hot
 reference levels come from the population's categories. Sampling makes the fit tractable, not the
-query: `clv.df` and `train.df` each run the full aggregation. Row order is not meaningful.
+query: `clv.df` and `train.df` each run the full aggregation. Every `.df` comes back sorted by
+`customer_id`.
 
 ## Extra columns and covariates
 
