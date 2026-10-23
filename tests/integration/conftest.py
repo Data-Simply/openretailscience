@@ -98,7 +98,7 @@ def _connect_with_retry(connect: Callable[[], BaseBackend]) -> BaseBackend:
     for _ in range(_CONNECT_MAX_ATTEMPTS):
         try:
             return connect()
-        except Exception as error:  # noqa: BLE001, PERF203 - retry loop; readiness raises driver-specific errors
+        except Exception as error:  # noqa: BLE001 - retry loop; readiness raises driver-specific errors
             last_error = error
             time.sleep(_CONNECT_RETRY_SECONDS)
     error_msg = f"Could not connect to backend within {_CONNECT_MAX_ATTEMPTS} attempts"

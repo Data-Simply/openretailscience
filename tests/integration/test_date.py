@@ -1,6 +1,6 @@
 """Unified integration tests for date utility functions with multiple database backends."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from openretailscience.utils.date import filter_and_label_by_periods
 
@@ -18,8 +18,8 @@ def test_filter_and_label_by_periods_integration(transactions_table):
     """
     limited_table = transactions_table.limit(1000)
     period_ranges = {
-        "Q1": (datetime(2023, 1, 1, tzinfo=timezone.utc), datetime(2023, 3, 31, tzinfo=timezone.utc)),
-        "Q2": (datetime(2023, 4, 1, tzinfo=timezone.utc), datetime(2023, 6, 30, tzinfo=timezone.utc)),
+        "Q1": (datetime(2023, 1, 1, tzinfo=UTC), datetime(2023, 3, 31, tzinfo=UTC)),
+        "Q2": (datetime(2023, 4, 1, tzinfo=UTC), datetime(2023, 6, 30, tzinfo=UTC)),
     }
 
     result = filter_and_label_by_periods(limited_table, period_ranges)

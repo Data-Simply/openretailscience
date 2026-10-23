@@ -79,7 +79,7 @@ dependencies are used.
 - Always create "conventional commit" commit messages
 - Do not stage files or commit unless asked to
 - Docstrings should specify argument and return types
-- Type annotations should use Python 3.10-compatible formats (e.g., use `from __future__ import annotations` and
+- Type annotations should use Python 3.11-compatible formats (e.g., use `from __future__ import annotations` and
   import newer typing constructs like `Self` inside `if TYPE_CHECKING:` blocks)
 - Remove unnecessary trailing whitespace
 - Assume datasets processed via Ibis could be in the 1B–10B row range. Avoid redundant operations (e.g., a `.nunique()`
