@@ -81,6 +81,7 @@ from openretailscience.analysis.haversine import haversine_distance
   `plots.cohort.plot`).
 - `ProductAssociation(df, value_col, group_col=None, target_item=None, min_support=0.0, ...)` —
   `.table` / `.df` with support, confidence, uplift.
+  Support, confidence, and uplift thresholds must be finite; NaN and infinity raise `ValueError` before building rules.
 - `RevenueTree(df, period_col, p1_value, p2_value, group_col=None)` — `.df` KPI
   table; `.draw_tree(row_index=0, ...)` → tree diagram. `calc_tree_kpis(df, p1_index, p2_index)`
   is the functional core returning a pandas DataFrame.
