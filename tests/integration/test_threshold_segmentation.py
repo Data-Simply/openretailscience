@@ -31,7 +31,7 @@ def test_threshold_segmentation_integration(
 
     threshold_segmentation = ThresholdSegmentation(
         df=limited_table,
-        thresholds=[0.33, 0.66],
+        thresholds=[0.5, 1.0],
         segments=["Low", "High"],
         value_col=cols.unit_spend,
         agg_func="mean",
