@@ -35,18 +35,6 @@ class TestThresholdSegmentation:
         assert result_df.loc[3, "segment_name"] == "High"
         assert result_df.loc[4, "segment_name"] == "High"
 
-    def test_single_customer(self):
-        """Test that the method correctly segments a DataFrame with only one customer."""
-        df = pd.DataFrame({get_option("column.customer_id"): [1], cols.unit_spend: [100]})
-        thresholds = [0.5, 1]
-        segments = ["Low"]
-        with pytest.raises(ValueError):
-            ThresholdSegmentation(
-                df=df,
-                thresholds=thresholds,
-                segments=segments,
-            )
-
     def test_correct_aggregation_function(self):
         """Test that the correct aggregation function is applied for product_id custom segmentation."""
         df = pd.DataFrame(
@@ -76,57 +64,54 @@ class TestThresholdSegmentation:
         )
         pd.testing.assert_frame_equal(my_seg.df.sort_values(cols.customer_id).reset_index(), expected_result)
 
-    def test_thresholds_not_unique(self):
-        """Test that the method raises an error when the thresholds are not unique."""
+    @pytest.mark.parametrize(
+        ("thresholds", "segments", "zero_value_customers", "match"),
+        [
+            ([0.5, 1.0], ["Low"], "separate_segment", "number of thresholds must match the number of segments"),
+            ([0.5, 1.0], ["Low", "Medium", "High"], "separate_segment", "number of thresholds must match"),
+            ([1.0, 0.5], ["Low", "High"], "separate_segment", "thresholds must be strictly ascending"),
+            ([0.9, 0.5, 1.0], ["Low", "Medium", "High"], "separate_segment", "thresholds must be strictly ascending"),
+            ([0.5, 0.5, 1.0], ["Low", "Medium", "High"], "separate_segment", "thresholds must be strictly ascending"),
+            ([0.5, 0.8], ["Low", "High"], "separate_segment", r"thresholds must lie in \(0, 1\] and end at 1.0"),
+            ([0.5, 1.5], ["Low", "High"], "separate_segment", r"thresholds must lie in \(0, 1\] and end at 1.0"),
+            ([-0.5, 1.0], ["Low", "High"], "separate_segment", r"thresholds must lie in \(0, 1\] and end at 1.0"),
+            ([0.0, 1.0], ["Low", "High"], "separate_segment", r"thresholds must lie in \(0, 1\] and end at 1.0"),
+            ([0.5, 1.0], ["Low", "High"], "include", "zero_value_customers must be one of"),
+        ],
+    )
+    def test_invalid_arguments_raise(self, thresholds, segments, zero_value_customers, match):
+        """Rejects inputs that would otherwise leave customers unsegmented or silently mis-segment them."""
+        df = pd.DataFrame({cols.customer_id: [1001, 1002, 1003], cols.unit_spend: [25.0, 50.0, 75.0]})
+        with pytest.raises(ValueError, match=match):
+            ThresholdSegmentation(
+                df,
+                thresholds=thresholds,
+                segments=segments,
+                zero_value_customers=zero_value_customers,
+            )
+
+    def test_zero_value_customers_is_case_insensitive(self):
+        """Mixed-case "Exclude" drops zero-spend customers rather than falling through to include_with_light."""
         df = pd.DataFrame(
             {
-                get_option("column.customer_id"): [1, 2, 3, 4, 5],
-                cols.unit_spend: [100, 200, 300, 400, 500],
+                cols.customer_id: [1001, 1002, 1003, 1004, 1005],
+                cols.unit_spend: [0.0, 25.0, 50.0, 75.0, 100.0],
             },
         )
-        thresholds = [0.5, 0.5, 0.8, 1]
-        segments = ["Low", "Medium", "High"]
-
-        with pytest.raises(ValueError):
-            ThresholdSegmentation(df, thresholds, segments)
-
-    def test_thresholds_too_few_segments(self):
-        """Test that the method raises an error when there are too few/many segments for the number of thresholds."""
-        df = pd.DataFrame(
+        seg = ThresholdSegmentation(
+            df,
+            thresholds=[0.5, 1.0],
+            segments=["Light", "Heavy"],
+            zero_value_customers="Exclude",
+        )
+        expected = pd.DataFrame(
             {
-                get_option("column.customer_id"): [1, 2, 3, 4, 5],
-                cols.unit_spend: [100, 200, 300, 400, 500],
+                cols.unit_spend: [25.0, 50.0, 75.0, 100.0],
+                "segment_name": ["Light", "Light", "Heavy", "Heavy"],
             },
+            index=pd.Index([1002, 1003, 1004, 1005], name=cols.customer_id),
         )
-        thresholds = [0.4, 0.6, 0.8, 1]
-        segments = ["Low", "High"]
-
-        with pytest.raises(ValueError):
-            ThresholdSegmentation(df, thresholds, segments)
-
-        segments = ["Low", "Medium", "High"]
-
-        with pytest.raises(ValueError):
-            ThresholdSegmentation(df, thresholds, segments)
-
-    def test_thresholds_too_too_few_thresholds(self):
-        """Test that the method raises an error when there are too few/many thresholds for the number of segments."""
-        df = pd.DataFrame(
-            {
-                get_option("column.customer_id"): [1, 2, 3, 4, 5],
-                cols.unit_spend: [100, 200, 300, 400, 500],
-            },
-        )
-        thresholds = [0.4, 1]
-        segments = ["Low", "Medium", "High"]
-
-        with pytest.raises(ValueError):
-            ThresholdSegmentation(df, thresholds, segments)
-
-        thresholds = [0.2, 0.5, 0.6, 0.8, 1]
-
-        with pytest.raises(ValueError):
-            ThresholdSegmentation(df, thresholds, segments)
+        pd.testing.assert_frame_equal(seg.df.sort_index(), expected)
 
     def test_with_custom_column_names(self):
         """Test ThresholdSegmentation with custom column names."""

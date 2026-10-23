@@ -5,12 +5,18 @@ names beyond the fixed HML cuts.
 """
 
 import functools
+from itertools import pairwise
 from typing import Literal
 
 import ibis
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
+from openretailscience.core.validation import (
+    ensure_columns,
+    ensure_data_has_columns,
+    ensure_ibis_table,
+    ensure_value_choice,
+)
 from openretailscience.options import ColumnHelper
 
 
@@ -40,8 +46,8 @@ class ThresholdSegmentation:
         Args:
             df (pd.DataFrame | ibis.Table): A dataframe with the transaction data. The dataframe must contain a
                 customer_id column.
-            thresholds (list[float]): The percentile thresholds for segmentation; must be unique
-                and match the number of segments.
+            thresholds (list[float]): The percentile thresholds for segmentation, one per segment;
+                strictly ascending in (0, 1] and ending at 1.0 so every customer gets a segment.
             segments (list[str]): A list of segment names, one per threshold.
             value_col (str, optional): The column to use for the segmentation. Defaults to
                 ColumnHelper().unit_spend.
@@ -49,21 +55,32 @@ class ThresholdSegmentation:
             zero_segment_name (str, optional): The name of the zero-value segment (used with
                 "separate_segment"). Defaults to "Zero".
             zero_value_customers (Literal["separate_segment", "exclude", "include_with_light"], optional):
-                How to handle zero-value customers. Defaults to "separate_segment".
+                How to handle zero-value customers (case-insensitive). Defaults to "separate_segment".
             group_col (str | list[str] | None, optional): Column(s) to group by when calculating segments. When
                 specified, percentiles are computed within each group. Defaults to None.
 
         Raises:
             ValueError: If the dataframe is missing the customer_id or value_col columns, the
-                thresholds are not unique, or the number of thresholds does not match the
-                number of segments.
+                thresholds break the contract above or do not match the number of segments, or
+                zero_value_customers is not one of its allowed values.
         """
         self._group_col: list[str] | None = None
-        if len(thresholds) != len(set(thresholds)):
-            raise ValueError("The thresholds must be unique")
-
         if len(thresholds) != len(segments):
             raise ValueError("The number of thresholds must match the number of segments")
+
+        if any(lower >= upper for lower, upper in pairwise(thresholds)):
+            msg = f"thresholds must be strictly ascending. Got {thresholds}."
+            raise ValueError(msg)
+
+        if len(thresholds) == 0 or thresholds[0] <= 0 or thresholds[-1] != 1.0:
+            msg = f"thresholds must lie in (0, 1] and end at 1.0. Got {thresholds}."
+            raise ValueError(msg)
+
+        zero_value_customers = ensure_value_choice(
+            zero_value_customers,
+            ["separate_segment", "exclude", "include_with_light"],
+            "zero_value_customers",
+        )
 
         # Initialize column helper
         cols = ColumnHelper()
