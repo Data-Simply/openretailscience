@@ -410,7 +410,7 @@ class CLVStats:
         """Draws a random sample of customers, as a new :class:`CLVStats` over the same summary.
 
         Fit on ``clv.sample(n=50_000)``, score on ``clv.df``. Customers are selected by a deterministic
-        hash of ``customer_id`` salted with ``random_state``. Row order in the result is not meaningful.
+        hash of ``customer_id`` salted with ``random_state``.
 
         - A draw repeats only on the same engine at the same version: the key is the backend's own hash,
           and DuckDB's ``HASH`` changes between releases. Record the drawn ids, not the seed, to
@@ -482,16 +482,18 @@ class CLVStats:
         to ``ParetoNBDModel`` / ``GammaGammaModel``, which expect it as a column.
 
         Returns:
-            pd.DataFrame: One row per customer with columns ``customer_id``, ``frequency``,
-                ``recency``, ``T``, and ``monetary_value``, followed by any ``customer_attributes``
-                and one-hot columns requested at construction.
+            pd.DataFrame: One row per customer, sorted by ``customer_id``, with columns ``customer_id``,
+                ``frequency``, ``recency``, ``T``, and ``monetary_value``, followed by any
+                ``customer_attributes`` and one-hot columns requested at construction.
 
         Raises:
             ValueError: If a covariate column is NULL for any customer (a customer missing from
                 ``customer_attributes``, or a NULL attribute value). NULL covariates silently break
                 ``ParetoNBDModel``'s fit, which does not validate for them.
         """
-        result = self.table.execute()
+        # Sorted here rather than on ``table``: a grouped or filtered expression has no row order, so two
+        # reads of one summary could otherwise interleave differently.
+        result = self.table.order_by("customer_id").execute()
         # Checking one-hot dummies too is safe: a NULL *source* value became the reference level (0), so a
         # dummy reads NULL only for a customer missing from the join -- exactly the case worth rejecting.
         null_covariates = [col for col in self.covariate_cols if result[col].isna().any()]

@@ -148,7 +148,8 @@ A sampled row is the row that customer has in the full `.df`, so the fit and the
 is **not** the same as filtering transactions before constructing `CLVStats`: `T` is measured from
 `observation_period_end`, which defaults to the population's latest transaction, and one-hot
 reference levels come from the population's categories. Sampling makes the fit tractable, not the
-query: `clv.df` and `train.df` each run the full aggregation. Row order is not meaningful.
+query: `clv.df` and `train.df` each run the full aggregation. Every `.df` comes back sorted by
+`customer_id`.
 
 ## Caveat: truncated history
 
