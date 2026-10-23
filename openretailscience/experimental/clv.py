@@ -409,31 +409,26 @@ class CLVStats:
     def sample(self, *, n: int | None = None, frac: float | None = None, random_state: int = 42) -> Self:
         """Draws a random sample of customers, as a new :class:`CLVStats` over the same summary.
 
-        For fitting a model on a tractable subset and scoring the full population: fit on
-        ``clv.sample(n=50_000)``, predict on ``clv.df``. Customers are selected by a deterministic hash
-        of ``customer_id`` salted with ``random_state``. Row order in the result is not meaningful.
+        Fit on ``clv.sample(n=50_000)``, score on ``clv.df``. Customers are selected by a deterministic
+        hash of ``customer_id`` salted with ``random_state``. Row order in the result is not meaningful.
 
-        Two properties the workflow depends on:
-
-        - The key is the *backend's* hash, so a draw repeats only for the same engine at the same
-          version (DuckDB's ``HASH`` output changes between releases). Record the drawn ids, not the
-          seed, when a fit has to be reproduced later. A backend with no Ibis ``hash`` rule (SQLite,
-          MySQL, Trino, Athena) raises ``OperationNotDefinedError`` on :attr:`df`, not here, because
-          the sample is a lazy expression.
+        - A draw repeats only on the same engine at the same version: the key is the backend's own hash,
+          and DuckDB's ``HASH`` changes between releases. Record the drawn ids, not the seed, to
+          reproduce a fit. Backends with no Ibis ``hash`` rule (SQLite, MySQL, Trino, Athena) raise
+          ``OperationNotDefinedError`` when :attr:`df` is read.
         - Draws nest rather than partition: at one ``random_state``, ``sample(frac=0.2)`` is a subset of
           ``sample(frac=0.8)`` and re-sampling a sample returns it unchanged. A different
-          ``random_state`` re-draws independently, which still overlaps, so neither argument yields a
-          disjoint train/holdout split.
+          ``random_state`` re-draws independently but still overlaps, so neither gives a disjoint
+          train/holdout split.
 
         Args:
-            n (int | None, optional): Number of customers to draw. Yields every customer if it exceeds
-                the population. Mutually exclusive with ``frac``. Defaults to ``None``.
-            frac (float | None, optional): Share of customers to draw, in (0, 1]; a share finer than
-                the sampling hash's bucket resolution is rejected rather than silently drawing nothing.
-                Drawn per customer, so the count lands near ``frac`` * population rather than on it,
-                and it costs a single predicate instead of ``n``'s sort. Mutually exclusive with ``n``.
-                Defaults to ``None``.
-            random_state (int, optional): Seed for reproducible sampling. Defaults to 42.
+            n (int | None, optional): Number of customers to draw; every customer if it exceeds the
+                population. Mutually exclusive with ``frac``. Defaults to ``None``.
+            frac (float | None, optional): Share of customers to draw, in (0, 1] and no finer than the
+                hash's bucket resolution. Decided per customer, so the count lands near ``frac`` *
+                population rather than on it; costs one predicate instead of ``n``'s sort. Mutually
+                exclusive with ``n``. Defaults to ``None``.
+            random_state (int, optional): Salt for the selection hash. Defaults to 42.
 
         Returns:
             Self: A ``CLVStats`` over the sampled customers, with the same ``period`` and covariates.
@@ -450,18 +445,16 @@ class CLVStats:
         # The id column is the literal "customer_id" here (__init__ renames it); cast so the salt
         # concatenates onto any id type.
         key = (self.table["customer_id"].cast("string") + ibis.literal(f"::{random_state}")).hash()
-        # abs() after the modulo, not before: abs(-2**63) overflows int64. Both selectors rank on the
-        # bucket rather than the raw hash: SQL Server compiles ``hash`` to CHECKSUM, a rotate-xor whose
-        # high bits track the id's leading characters, so ordering on the raw key returns a contiguous
-        # block of sequential ids -- one signup cohort, not a sample. The modulo keeps only the low
-        # bits, which are well mixed even there.
+        # abs() after the modulo, not before: abs(-2**63) overflows int64.
+        # Select on the bucket, never the raw hash: SQL Server's CHECKSUM keeps the id's leading
+        # characters in its high bits, so ordering on the raw key returns a run of sequential ids. The
+        # low bits the modulo keeps are well mixed.
         bucket = (key % self._SAMPLE_BUCKETS).abs()
         if n is not None:
             ensure_integer(n, "n")
             ensure_positive(n, "n")
-            # Taking the n smallest buckets is the frac predicate with the cut solved for n. customer_id
-            # makes the order total: the boundary bucket holds population/_SAMPLE_BUCKETS customers, and
-            # an untied ORDER BY would return a different n per execution.
+            # The n smallest buckets: the frac predicate with the cut solved for n. customer_id breaks
+            # ties in the boundary bucket; without it ORDER BY ... LIMIT can differ per execution.
             sampled = self.table.order_by([bucket, self.table["customer_id"]]).limit(n)
         else:
             ensure_positive(frac, "frac")

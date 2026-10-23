@@ -88,8 +88,8 @@ separate Gamma-Gamma per channel.
 
 ## Feeding pymc-marketing
 
-Fit on a sample of customers, score all of them. `.sample(n=...)` returns **another `CLVStats`**, so the
-sample keeps `.df`, `.repeat_buyers`, `.covariate_cols`, and `.pymc_time_unit`.
+Fit on a sample of customers, score all of them. `.sample(n=...)` returns **another `CLVStats`**, with
+the same `.df`, `.repeat_buyers`, `.covariate_cols`, and `.pymc_time_unit`.
 
 ```python
 from openretailscience.experimental.clv import CLVStats
@@ -126,12 +126,11 @@ computes it with no month conversion and no `time_unit`.
 
 ### sample() arguments
 
-- `n` — exact number of customers; yields every customer if it exceeds the population (no error).
-  Costs a backend top-N sort.
-- `frac` — share in `(0, 1]`, decided per customer, so the count lands *near* `frac` * population, not
+- `n`: exact number of customers; every customer if it exceeds the population (no error). Costs a
+  backend top-N sort.
+- `frac`: share in `(0, 1]`, decided per customer, so the count lands *near* `frac` * population, not
   on it. One predicate, no sort; **raises** below the hash's `1e-6` bucket resolution.
-- `random_state` — defaults to `42`. Customers are selected by a deterministic hash of `customer_id`
-  salted with it.
+- `random_state`: salts the deterministic hash of `customer_id` that selects customers. Defaults to `42`.
 
 **Reproducibility is per engine and per version.** The key compiles to the backend's own hash, and
 DuckDB's `HASH` output changes between releases, so record the drawn ids rather than the seed when a
@@ -149,7 +148,7 @@ A sampled row is the row that customer has in the full `.df`, so the fit and the
 is **not** the same as filtering transactions before constructing `CLVStats`: `T` is measured from
 `observation_period_end`, which defaults to the population's latest transaction, and one-hot
 reference levels come from the population's categories. Sampling makes the fit tractable, not the
-query — `clv.df` and `train.df` each run the full aggregation. Row order is not meaningful.
+query: `clv.df` and `train.df` each run the full aggregation. Row order is not meaningful.
 
 ## Caveat: truncated history
 

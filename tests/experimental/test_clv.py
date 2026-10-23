@@ -754,9 +754,8 @@ _MAX_PURCHASE_DAYS = 6
 def _many_customers(n_customers: int = SAMPLE_POPULATION) -> pd.DataFrame:
     """Transaction data for ``n_customers`` customers with 1-6 purchase days each.
 
-    Ids are issued in signup order and purchase count rises with tenure, so any draw biased toward one
-    end of the id range has a visibly different mean frequency than the population — which is what
-    ``test_sample_is_unbiased_with_respect_to_frequency`` relies on to have teeth.
+    Purchase count rises with customer_id, so a draw biased toward either end of the id range shifts the
+    mean frequency; ``test_sample_is_unbiased_with_respect_to_frequency`` relies on that.
     """
     rng = np.random.default_rng(42)
     customer_ids = np.arange(10_001, 10_001 + n_customers)
@@ -773,7 +772,7 @@ def _many_customers(n_customers: int = SAMPLE_POPULATION) -> pd.DataFrame:
 
 
 class TestCLVStatsSample:
-    """Tests for CLVStats.sample -- the fit-on-a-sample, score-on-everyone workflow."""
+    """Tests for CLVStats.sample."""
 
     @pytest.fixture(scope="class")
     @classmethod
@@ -830,8 +829,7 @@ class TestCLVStatsSample:
         """The draw is random rather than a slice of the id range: sampled frequency tracks the population."""
         sample = clv.sample(frac=SAMPLE_FRAC).df
         population = clv.df["frequency"]
-        # Frequency rises with customer_id in this fixture, so an id-ordered slice shifts the mean by
-        # ~2 purchases -- far outside a tolerance set at the sample mean's own standard error.
+        # An id-ordered slice shifts the mean by ~2 purchases, far outside this tolerance.
         tolerance = _SAMPLE_STAT_SIGMAS * population.std() / np.sqrt(len(sample))
 
         assert abs(sample["frequency"].mean() - population.mean()) < tolerance
@@ -863,7 +861,6 @@ class TestCLVStatsSample:
         expected = clv.df.set_index("customer_id").loc[sample["customer_id"]].reset_index()
 
         assert clv.covariate_cols == ["stores_shopped", "signup_channel_online"]
-        # Values, not just column names: a sample must carry each customer's covariates unchanged.
         assert_frame_equal(sample, expected)
 
     def test_sample_uses_the_configured_customer_id_column(self):

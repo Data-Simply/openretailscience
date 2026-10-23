@@ -13,9 +13,8 @@ from openretailscience.experimental.clv import CLVStats
 rng = np.random.default_rng(42)
 
 # ~600 customers shopping across 2023. Each starts on a random day in the first ~200 days
-# and makes 1-11 purchases; one-time buyers arise naturally and get frequency 0. Keep the population
-# large enough that the sampled subset below still has a stable frequency/monetary correlation:
-# repeat_buyers checks it against a fixed threshold that a small sample crosses on noise alone.
+# and makes 1-11 purchases; one-time buyers arise naturally and get frequency 0. Not fewer: repeat_buyers
+# warns past a fixed frequency/monetary correlation, which the smaller sample below crosses on noise alone.
 n_customers = 600
 epoch = np.datetime64("2023-01-01")
 last_day_offset = 364  # 2023-12-31
@@ -58,7 +57,7 @@ summary_asof = CLVStats(transactions, period="week", observation_period_end="202
 train = clv.sample(n=150)
 train_repeat_buyers = train.repeat_buyers  # frequency > 0: the GammaGammaModel fitting input
 
-# The same property over the full population: the frame fitted spend is scored on.
+# Full-population repeat buyers: the frame the fitted GammaGammaModel scores.
 repeat_buyers = clv.repeat_buyers
 
 # pymc_time_unit ("W" here) is the time_unit for expected_customer_lifetime_value; its default "D"

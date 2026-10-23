@@ -79,18 +79,17 @@ print(clv.df.sort_values("customer_id").reset_index(drop=True))
 # 2          103          1      2.0  2.714286            80.0
 ```
 
-The summary feeds pymc-marketing directly (install it separately). Fitting a Pareto/NBD on a large
-customer base is expensive, so the usual shape is to fit on a sample of customers and score all of
-them: `clv.sample(n=...)` returns **another `CLVStats`**, so the sample keeps `.df`, `.repeat_buyers`,
-`.covariate_cols`, and `.pymc_time_unit`.
+The summary feeds pymc-marketing directly (install it separately). On a large customer base, fit on a
+sample and score everyone: `clv.sample(n=...)` returns **another `CLVStats`**, with the same `.df`,
+`.repeat_buyers`, `.covariate_cols`, and `.pymc_time_unit`.
 
 ```python
 from pymc_marketing.clv import ParetoNBDModel, GammaGammaModel
 
 clv = CLVStats(transactions, period="week", observation_period_end="2023-01-29")
-# Shape only -- on the three-customer frame above, n=50_000 exceeds the population and train is clv.
+# On the three-customer frame above, n=50_000 exceeds the population, so train holds every customer.
 # Drop this line and fit on clv.df / clv.repeat_buyers when the whole base is tractable.
-train = clv.sample(n=50_000) # or frac=0.1 -- exactly one of the two
+train = clv.sample(n=50_000) # or frac=0.1; exactly one of the two
 
 pareto = ParetoNBDModel(data=train.df) # frequency, recency, T
 pareto.fit()
@@ -98,7 +97,7 @@ pareto.fit()
 gamma_gamma = GammaGammaModel(data=train.repeat_buyers) # frequency > 0
 gamma_gamma.fit()
 
-# Score every customer from the models fitted on the sample.
+# Score the full population.
 expected_purchases = pareto.expected_purchases(data=clv.df, future_t=52)
 ```
 
@@ -122,10 +121,10 @@ expected_purchases = pareto.expected_purchases(data=clv.df, future_t=52)
 
 ## Sampling customers
 
-`n` draws an exact number of customers, and yields every customer if it exceeds the population
-rather than raising. `frac` is a share in `(0, 1]` decided per customer, so the row count lands
-*near* `frac` x population rather than exactly on it; it costs a single predicate instead of `n`'s
-sort, and is rejected below the hash's `1e-6` bucket resolution.
+`n` draws an exact number of customers, and every customer if it exceeds the population. `frac` is a
+share in `(0, 1]` decided per customer, so the row count lands *near* `frac` x population rather than
+on it; it costs one predicate instead of `n`'s sort, and is rejected below the hash's `1e-6` bucket
+resolution.
 
 Customers are selected by a deterministic hash of `customer_id` salted with `random_state` (default
 `42`). The hash is the backend's own: a draw repeats for one engine at one version (DuckDB's `HASH`
@@ -137,7 +136,7 @@ Draws nest rather than partition: at one `random_state`, `sample(frac=0.2)` is a
 independently, which still overlaps. Neither gives a disjoint train/holdout split.
 
 A sampled row is exactly that customer's row in the full `.df`, so the fit and the scoring agree.
-Filtering transactions before constructing `CLVStats` is *not* the same thing — `T` is measured from
+Filtering transactions before constructing `CLVStats` is *not* the same thing: `T` is measured from
 `observation_period_end`, which defaults to the population's latest transaction, and one-hot
 reference levels come from the population's categories. Sampling makes the fit tractable, not the
 query: `clv.df` and `train.df` each run the full aggregation. Row order is not meaningful.
