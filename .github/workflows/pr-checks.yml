@@ -1,0 +1,31 @@
+name: PR Checks
+on:
+  pull_request:
+    # synchronize: a required check must report on every new head commit, not just when the title or labels change.
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+permissions:
+  contents: read
+jobs:
+  release-notes:
+    name: Release Notes Labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Check PR title is a conventional commit
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: .github/scripts/release_labels.sh "$PR_TITLE"
+      - name: Check PR has exactly one of major-change or minor-change
+        env:
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          count="$(jq '[.[] | select(. == "major-change" or . == "minor-change")] | length' <<< "$PR_LABELS")"
+          if [[ "$count" -ne 1 ]]; then
+            echo "Add exactly one of the major-change or minor-change labels. Current labels: $PR_LABELS" >&2
+            exit 1
+          fi
