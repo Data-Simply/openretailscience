@@ -1,0 +1,27 @@
+# Release-note sections for `gh release create --generate-notes`. A PR is listed under the first category whose
+# labels it carries. The release workflow derives type:* labels from PR titles via .github/scripts/release_labels.sh;
+# pr-checks.yml requires every PR to carry major-change or minor-change.
+changelog:
+  categories:
+    - title: Breaking Changes
+      labels:
+        - type:breaking
+    - title: Major Changes
+      labels:
+        - major-change
+    - title: New Features
+      labels:
+        - type:feature
+    - title: Bug Fixes
+      labels:
+        - type:bug
+    - title: Documentation
+      labels:
+        - type:docs
+    - title: Maintenance
+      labels:
+        - type:maintenance
+        - dependencies
+    - title: Other Changes
+      labels:
+        - "*"
