@@ -81,9 +81,12 @@ from openretailscience.analysis.haversine import haversine_distance
   `plots.cohort.plot`).
 - `ProductAssociation(df, value_col, group_col=None, target_item=None, min_support=0.0, ...)` —
   `.table` / `.df` with support, confidence, uplift.
-- `RevenueTree(df, period_col, p1_value, p2_value, group_col=None)` — `.df` KPI
-  table; `.draw_tree(row_index=0, ...)` → tree diagram. `calc_tree_kpis(df, p1_index, p2_index)`
-  is the functional core returning a pandas DataFrame.
+- `RevenueTree(df, period_col, p1_value, p2_value, group_col=None)` — `period_col` holds a
+  caller-assigned period label per row (not a raw date); both values must exist and differ. `.df` is the
+  KPI table, one row per group (`_pct_diff` columns are fractions); `.draw_tree(row_index=0, ...)` → tree
+  diagram. `calc_tree_kpis(p1_df, p2_df)` computes the same table from pre-aggregated per-period frames
+  (customers/transactions/spend[/units] columns, one row per group), pairing rows by index label; for an
+  ungrouped comparison give both one row labelled 0.
 - `CustomerDecisionHierarchy(df, product_col, method="yules_q", ...)` —
   `.pairs_df`, `.distances`; `.plot(...)` → dendrogram.
 - `PurchasesPerCustomer(df)` — `.df` (`purchase_count`); `.purchases_percentile(0.5)`,

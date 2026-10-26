@@ -6,11 +6,11 @@
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
     <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
-    <dc:date>2025-10-27T10:59:40.860241</dc:date>
+    <dc:date>2026-10-25T13:29:40.736052</dc:date>
     <dc:format>image/svg+xml</dc:format>
     <dc:creator>
      <cc:Agent>
-      <dc:title>Matplotlib v3.9.1.post1, https://matplotlib.org/</dc:title>
+      <dc:title>Matplotlib v3.10.9, https://matplotlib.org/</dc:title>
      </cc:Agent>
     </dc:creator>
    </cc:Work>
@@ -54,7 +54,7 @@ L 147.204773 12.67176
 L 146.827159 14.071942
 L 146.7 15.516
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #22c55e; stroke: #22c55e; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #6b7280; stroke: #6b7280; stroke-linejoin: miter"/>
    </g>
    <g id="patch_3">
     <path d="M 146.7 137.484
@@ -80,7 +80,7 @@ L 342 137.484
 L 342 41.85
 L 146.7 41.85
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
    </g>
    <g id="patch_4">
     <path d="M 7.2 213.714
@@ -106,7 +106,7 @@ L 7.704773 184.53576
 L 7.327159 185.935942
 L 7.2 187.38
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ef4444; stroke: #ef4444; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #22c55e; stroke: #22c55e; stroke-linejoin: miter"/>
    </g>
    <g id="patch_5">
     <path d="M 7.2 309.348
@@ -132,7 +132,7 @@ L 202.5 309.348
 L 202.5 213.714
 L 7.2 213.714
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
    </g>
    <g id="patch_6">
     <path d="M 286.2 213.714
@@ -158,7 +158,7 @@ L 286.704773 184.53576
 L 286.327159 185.935942
 L 286.2 187.38
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #22c55e; stroke: #22c55e; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ef4444; stroke: #ef4444; stroke-linejoin: miter"/>
    </g>
    <g id="patch_7">
     <path d="M 286.2 309.348
@@ -184,7 +184,7 @@ L 481.5 309.348
 L 481.5 213.714
 L 286.2 213.714
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
    </g>
    <g id="patch_8">
     <path d="M 146.7 385.578
@@ -210,7 +210,7 @@ L 147.204773 356.39976
 L 146.827159 357.799942
 L 146.7 359.244
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #22c55e; stroke: #22c55e; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #22c55e; stroke: #22c55e; stroke-linejoin: miter"/>
    </g>
    <g id="patch_9">
     <path d="M 146.7 481.212
@@ -236,7 +236,7 @@ L 342 481.212
 L 342 385.578
 L 146.7 385.578
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
    </g>
    <g id="patch_10">
     <path d="M 425.7 385.578
@@ -262,7 +262,7 @@ L 426.204773 356.39976
 L 425.827159 357.799942
 L 425.7 359.244
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ef4444; stroke: #ef4444; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ef4444; stroke: #ef4444; stroke-linejoin: miter"/>
    </g>
    <g id="patch_11">
     <path d="M 425.7 481.212
@@ -288,7 +288,7 @@ L 621 481.212
 L 621 385.578
 L 425.7 385.578
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
    </g>
    <g id="patch_12">
     <path d="M 286.2 557.442
@@ -314,7 +314,7 @@ L 286.704773 528.26376
 L 286.327159 529.663942
 L 286.2 531.108
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #6b7280; stroke: #6b7280; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ef4444; stroke: #ef4444; stroke-linejoin: miter"/>
    </g>
    <g id="patch_13">
     <path d="M 286.2 653.076
@@ -340,7 +340,7 @@ L 481.5 653.076
 L 481.5 557.442
 L 286.2 557.442
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
    </g>
    <g id="patch_14">
     <path d="M 565.2 557.442
@@ -366,7 +366,7 @@ L 565.704773 528.26376
 L 565.327159 529.663942
 L 565.2 531.108
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ef4444; stroke: #ef4444; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ef4444; stroke: #ef4444; stroke-linejoin: miter"/>
    </g>
    <g id="patch_15">
     <path d="M 565.2 653.076
@@ -392,7 +392,7 @@ L 760.5 653.076
 L 760.5 557.442
 L 565.2 557.442
 z
-" clip-path="url(#p4795c63ffa)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: #ffffff; stroke: #e5e7eb; stroke-linejoin: miter"/>
    </g>
    <g id="patch_16">
     <path d="M 244.35 145.8
@@ -401,7 +401,7 @@ Q 244.35 162.432 235.98 162.432
 L 113.22 162.432
 Q 104.85 162.432 104.85 170.748
 L 104.85 179.064
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
    <g id="patch_17">
     <path d="M 244.35 145.8
@@ -410,7 +410,7 @@ Q 244.35 162.432 252.72 162.432
 L 375.48 162.432
 Q 383.85 162.432 383.85 170.748
 L 383.85 179.064
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
    <g id="patch_18">
     <path d="M 383.85 317.664
@@ -419,7 +419,7 @@ Q 383.85 334.296 375.48 334.296
 L 252.72 334.296
 Q 244.35 334.296 244.35 342.612
 L 244.35 350.928
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
    <g id="patch_19">
     <path d="M 383.85 317.664
@@ -428,7 +428,7 @@ Q 383.85 334.296 392.22 334.296
 L 514.98 334.296
 Q 523.35 334.296 523.35 342.612
 L 523.35 350.928
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
    <g id="patch_20">
     <path d="M 523.35 489.528
@@ -437,7 +437,7 @@ Q 523.35 506.16 514.98 506.16
 L 392.22 506.16
 Q 383.85 506.16 383.85 514.476
 L 383.85 522.792
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
    <g id="patch_21">
     <path d="M 523.35 489.528
@@ -446,7 +446,7 @@ Q 523.35 506.16 531.72 506.16
 L 654.48 506.16
 Q 662.85 506.16 662.85 514.476
 L 662.85 522.792
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #000000; stroke-width: 2; stroke-linejoin: miter"/>
    </g>
    <g id="text_1">
     <!-- Revenue -->
@@ -555,12 +555,12 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-SemiBold-52"/>
-     <use xlink:href="#Poppins-SemiBold-65" x="64.099991"/>
-     <use xlink:href="#Poppins-SemiBold-76" x="125.799988"/>
-     <use xlink:href="#Poppins-SemiBold-65" x="185.699982"/>
-     <use xlink:href="#Poppins-SemiBold-6e" x="247.399979"/>
-     <use xlink:href="#Poppins-SemiBold-75" x="313.499969"/>
-     <use xlink:href="#Poppins-SemiBold-65" x="379.59996"/>
+     <use xlink:href="#Poppins-SemiBold-65" transform="translate(64.099991 0)"/>
+     <use xlink:href="#Poppins-SemiBold-76" transform="translate(125.799988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-65" transform="translate(185.699982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6e" transform="translate(247.399979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-75" transform="translate(313.499969 0)"/>
+     <use xlink:href="#Poppins-SemiBold-65" transform="translate(379.59996 0)"/>
     </g>
    </g>
    <g id="text_2">
@@ -795,52 +795,65 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-75" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-72" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-72" x="178.499954"/>
-     <use xlink:href="#Poppins-Regular-65" x="215.799942"/>
-     <use xlink:href="#Poppins-Regular-6e" x="277.799927"/>
-     <use xlink:href="#Poppins-Regular-74" x="341.799911"/>
-     <use xlink:href="#Poppins-Regular-20" x="378.199905"/>
-     <use xlink:href="#Poppins-Regular-50" x="404.899902"/>
-     <use xlink:href="#Poppins-Regular-65" x="462.799896"/>
-     <use xlink:href="#Poppins-Regular-72" x="524.799881"/>
-     <use xlink:href="#Poppins-Regular-69" x="562.099869"/>
-     <use xlink:href="#Poppins-Regular-6f" x="586.69986"/>
-     <use xlink:href="#Poppins-Regular-64" x="650.699844"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(178.499954 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(215.799942 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(277.799927 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(341.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(378.199905 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(404.899902 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(462.799896 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(524.799881 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(562.099869 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(586.69986 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(650.699844 0)"/>
     </g>
    </g>
    <g id="text_3">
-    <!-- 47.7M -->
+    <!-- 8.29M -->
     <g style="fill: #4b5563" transform="translate(157.86 69.653625) scale(0.12 -0.12)">
      <defs>
-      <path id="Poppins-SemiBold-34" d="M 301 909
-L 301 1613
-L 2394 4608
-L 3437 4608
-L 3437 1690
-L 4000 1690
-L 4000 909
-L 3437 909
-L 3437 0
-L 2541 0
-L 2541 909
-L 301 909
+      <path id="Poppins-SemiBold-38" d="M 1120 2470
+Q 480 2803 480 3501
+Q 480 3846 656 4131
+Q 832 4416 1187 4585
+Q 1542 4755 2054 4755
+Q 2566 4755 2921 4585
+Q 3277 4416 3453 4131
+Q 3629 3846 3629 3501
+Q 3629 3149 3456 2883
+Q 3283 2618 2995 2470
+Q 3347 2317 3545 2022
+Q 3744 1728 3744 1325
+Q 3744 890 3523 566
+Q 3302 243 2918 70
+Q 2534 -102 2054 -102
+Q 1574 -102 1193 70
+Q 813 243 592 566
+Q 371 890 371 1325
+Q 371 1728 569 2025
+Q 768 2323 1120 2470
 z
-M 2598 3648
-L 1286 1690
-L 2598 1690
-L 2598 3648
+M 2758 3373
+Q 2758 3686 2569 3859
+Q 2381 4032 2054 4032
+Q 1734 4032 1545 3859
+Q 1357 3686 1357 3366
+Q 1357 3078 1552 2905
+Q 1747 2733 2054 2733
+Q 2362 2733 2560 2909
+Q 2758 3085 2758 3373
 z
-" transform="scale(0.015625)"/>
-      <path id="Poppins-SemiBold-37" d="M 3309 3987
-L 1606 0
-L 698 0
-L 2413 3885
-L 224 3885
-L 224 4653
-L 3309 4653
-L 3309 3987
+M 2054 2080
+Q 1690 2080 1462 1894
+Q 1235 1709 1235 1363
+Q 1235 1043 1456 841
+Q 1677 640 2054 640
+Q 2432 640 2649 845
+Q 2867 1050 2867 1363
+Q 2867 1702 2643 1891
+Q 2419 2080 2054 2080
 z
 " transform="scale(0.015625)"/>
       <path id="Poppins-SemiBold-2e" d="M 838 -45
@@ -852,6 +865,62 @@ Q 1075 1005 1228 854
 Q 1382 704 1382 480
 Q 1382 256 1228 105
 Q 1075 -45 838 -45
+z
+" transform="scale(0.015625)"/>
+      <path id="Poppins-SemiBold-32" d="M 621 1011
+Q 1235 1523 1600 1865
+Q 1965 2208 2208 2579
+Q 2451 2950 2451 3309
+Q 2451 3635 2297 3820
+Q 2144 4006 1824 4006
+Q 1504 4006 1331 3792
+Q 1158 3578 1152 3206
+L 282 3206
+Q 307 3974 739 4371
+Q 1171 4768 1837 4768
+Q 2566 4768 2956 4381
+Q 3347 3994 3347 3360
+Q 3347 2861 3078 2406
+Q 2810 1952 2464 1616
+Q 2118 1280 1562 806
+L 3450 806
+L 3450 64
+L 288 64
+L 288 730
+L 621 1011
+z
+" transform="scale(0.015625)"/>
+      <path id="Poppins-SemiBold-39" d="M 1376 1312
+Q 1427 1030 1609 880
+Q 1792 730 2099 730
+Q 2496 730 2675 1059
+Q 2854 1389 2854 2170
+Q 2707 1965 2441 1849
+Q 2176 1734 1869 1734
+Q 1459 1734 1129 1904
+Q 800 2074 608 2410
+Q 416 2746 416 3226
+Q 416 3936 838 4355
+Q 1261 4774 1990 4774
+Q 2899 4774 3273 4192
+Q 3648 3610 3648 2438
+Q 3648 1606 3504 1075
+Q 3360 544 3011 269
+Q 2662 -6 2061 -6
+Q 1587 -6 1254 176
+Q 922 358 746 656
+Q 570 954 544 1312
+L 1376 1312
+z
+M 2054 2464
+Q 2387 2464 2579 2669
+Q 2771 2874 2771 3219
+Q 2771 3597 2569 3805
+Q 2368 4013 2022 4013
+Q 1677 4013 1475 3798
+Q 1274 3584 1274 3232
+Q 1274 2893 1469 2678
+Q 1664 2464 2054 2464
 z
 " transform="scale(0.015625)"/>
       <path id="Poppins-SemiBold-4d" d="M 5312 4467
@@ -871,11 +940,11 @@ L 5312 4467
 z
 " transform="scale(0.015625)"/>
      </defs>
-     <use xlink:href="#Poppins-SemiBold-34"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="66.099991"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="120.899979"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="146.899963"/>
-     <use xlink:href="#Poppins-SemiBold-4d" x="201.699951"/>
+     <use xlink:href="#Poppins-SemiBold-38"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(64.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(90.299973 0)"/>
+     <use xlink:href="#Poppins-SemiBold-39" transform="translate(147.699966 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4d" transform="translate(210.299957 0)"/>
     </g>
    </g>
    <g id="text_4">
@@ -929,35 +998,26 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-72" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-65" x="95.199982"/>
-     <use xlink:href="#Poppins-Regular-76" x="157.199966"/>
-     <use xlink:href="#Poppins-Regular-69" x="213.299957"/>
-     <use xlink:href="#Poppins-Regular-6f" x="237.899948"/>
-     <use xlink:href="#Poppins-Regular-75" x="301.899933"/>
-     <use xlink:href="#Poppins-Regular-73" x="365.899918"/>
-     <use xlink:href="#Poppins-Regular-20" x="418.099915"/>
-     <use xlink:href="#Poppins-Regular-50" x="444.799911"/>
-     <use xlink:href="#Poppins-Regular-65" x="502.699905"/>
-     <use xlink:href="#Poppins-Regular-72" x="564.69989"/>
-     <use xlink:href="#Poppins-Regular-69" x="601.999878"/>
-     <use xlink:href="#Poppins-Regular-6f" x="626.599869"/>
-     <use xlink:href="#Poppins-Regular-64" x="690.599854"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(95.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-76" transform="translate(157.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(213.299957 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(237.899948 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(301.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-73" transform="translate(365.899918 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(418.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(444.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(502.699905 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(564.69989 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(601.999878 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(626.599869 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(690.599854 0)"/>
     </g>
    </g>
    <g id="text_5">
-    <!-- 41.39M -->
+    <!-- 8.31M -->
     <g style="fill: #4b5563" transform="translate(255.51 69.653625) scale(0.12 -0.12)">
      <defs>
-      <path id="Poppins-SemiBold-31" d="M 230 3840
-L 230 4666
-L 1773 4666
-L 1773 0
-L 851 0
-L 851 3840
-L 230 3840
-z
-" transform="scale(0.015625)"/>
       <path id="Poppins-SemiBold-33" d="M 352 3437
 Q 384 4077 803 4425
 Q 1222 4774 1907 4774
@@ -992,46 +1052,21 @@ Q 1254 3686 1229 3437
 L 352 3437
 z
 " transform="scale(0.015625)"/>
-      <path id="Poppins-SemiBold-39" d="M 1376 1312
-Q 1427 1030 1609 880
-Q 1792 730 2099 730
-Q 2496 730 2675 1059
-Q 2854 1389 2854 2170
-Q 2707 1965 2441 1849
-Q 2176 1734 1869 1734
-Q 1459 1734 1129 1904
-Q 800 2074 608 2410
-Q 416 2746 416 3226
-Q 416 3936 838 4355
-Q 1261 4774 1990 4774
-Q 2899 4774 3273 4192
-Q 3648 3610 3648 2438
-Q 3648 1606 3504 1075
-Q 3360 544 3011 269
-Q 2662 -6 2061 -6
-Q 1587 -6 1254 176
-Q 922 358 746 656
-Q 570 954 544 1312
-L 1376 1312
-z
-M 2054 2464
-Q 2387 2464 2579 2669
-Q 2771 2874 2771 3219
-Q 2771 3597 2569 3805
-Q 2368 4013 2022 4013
-Q 1677 4013 1475 3798
-Q 1274 3584 1274 3232
-Q 1274 2893 1469 2678
-Q 1664 2464 2054 2464
+      <path id="Poppins-SemiBold-31" d="M 230 3840
+L 230 4666
+L 1773 4666
+L 1773 0
+L 851 0
+L 851 3840
+L 230 3840
 z
 " transform="scale(0.015625)"/>
      </defs>
-     <use xlink:href="#Poppins-SemiBold-34"/>
-     <use xlink:href="#Poppins-SemiBold-31" x="66.099991"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="102.299988"/>
-     <use xlink:href="#Poppins-SemiBold-33" x="128.299973"/>
-     <use xlink:href="#Poppins-SemiBold-39" x="188.199966"/>
-     <use xlink:href="#Poppins-SemiBold-4d" x="250.799957"/>
+     <use xlink:href="#Poppins-SemiBold-38"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(64.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-33" transform="translate(90.299973 0)"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(150.199966 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4d" transform="translate(186.399963 0)"/>
     </g>
    </g>
    <g id="text_6">
@@ -1080,15 +1115,22 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-Regular-44"/>
-     <use xlink:href="#Poppins-Regular-69" x="70.699982"/>
-     <use xlink:href="#Poppins-Regular-66" x="95.299973"/>
-     <use xlink:href="#Poppins-Regular-66" x="128.199966"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(70.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(95.299973 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(128.199966 0)"/>
     </g>
    </g>
    <g id="text_7">
-    <!-- 6.3M -->
-    <g style="fill: #4b5563" transform="translate(306.85875 96.551187) scale(0.1 -0.1)">
+    <!-- -19.66K -->
+    <g style="fill: #4b5563" transform="translate(293.100938 96.551187) scale(0.1 -0.1)">
      <defs>
+      <path id="Poppins-SemiBold-2d" d="M 3168 2662
+L 3168 1907
+L 454 1907
+L 454 2662
+L 3168 2662
+z
+" transform="scale(0.015625)"/>
       <path id="Poppins-SemiBold-36" d="M 2758 3501
 Q 2694 3770 2537 3904
 Q 2381 4038 2086 4038
@@ -1122,11 +1164,28 @@ Q 2874 1901 2678 2118
 Q 2483 2336 2106 2336
 z
 " transform="scale(0.015625)"/>
+      <path id="Poppins-SemiBold-4b" d="M 2963 0
+L 1338 1990
+L 1338 0
+L 442 0
+L 442 4467
+L 1338 4467
+L 1338 2464
+L 2963 4467
+L 4045 4467
+L 2202 2253
+L 4096 0
+L 2963 0
+z
+" transform="scale(0.015625)"/>
      </defs>
-     <use xlink:href="#Poppins-SemiBold-36"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="63.999985"/>
-     <use xlink:href="#Poppins-SemiBold-33" x="89.999969"/>
-     <use xlink:href="#Poppins-SemiBold-4d" x="149.899963"/>
+     <use xlink:href="#Poppins-SemiBold-2d"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-39" transform="translate(94.499985 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(157.099976 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(183.09996 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(247.099945 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(311.09993 0)"/>
     </g>
    </g>
    <g id="text_8">
@@ -1158,67 +1217,42 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-63" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-74" x="118.599991"/>
-     <use xlink:href="#Poppins-Regular-20" x="154.999985"/>
-     <use xlink:href="#Poppins-Regular-44" x="181.699982"/>
-     <use xlink:href="#Poppins-Regular-69" x="252.399963"/>
-     <use xlink:href="#Poppins-Regular-66" x="276.999954"/>
-     <use xlink:href="#Poppins-Regular-66" x="309.899948"/>
+     <use xlink:href="#Poppins-Regular-63" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(118.599991 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(154.999985 0)"/>
+     <use xlink:href="#Poppins-Regular-44" transform="translate(181.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(252.399963 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(276.999954 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(309.899948 0)"/>
     </g>
    </g>
    <g id="text_9">
-    <!-- 15.2% -->
-    <g style="fill: #4b5563" transform="translate(304.147813 116.417187) scale(0.1 -0.1)">
+    <!-- -0.2% -->
+    <g style="fill: #4b5563" transform="translate(301.919688 116.417187) scale(0.1 -0.1)">
      <defs>
-      <path id="Poppins-SemiBold-35" d="M 3475 3891
-L 1402 3891
-L 1402 2797
-Q 1536 2963 1785 3068
-Q 2035 3174 2317 3174
-Q 2829 3174 3155 2950
-Q 3482 2726 3629 2377
-Q 3776 2029 3776 1632
-Q 3776 896 3357 448
-Q 2938 0 2163 0
-Q 1434 0 998 365
-Q 563 730 506 1318
-L 1376 1318
-Q 1434 1062 1635 908
-Q 1837 755 2150 755
-Q 2528 755 2720 992
-Q 2912 1229 2912 1619
-Q 2912 2016 2717 2224
-Q 2522 2432 2144 2432
-Q 1875 2432 1696 2297
-Q 1517 2163 1440 1939
-L 582 1939
-L 582 4678
-L 3475 4678
-L 3475 3891
+      <path id="Poppins-SemiBold-30" d="M 339 2394
+Q 339 3501 739 4128
+Q 1139 4755 2067 4755
+Q 2995 4755 3395 4128
+Q 3795 3501 3795 2394
+Q 3795 1280 3395 646
+Q 2995 13 2067 13
+Q 1139 13 739 646
+Q 339 1280 339 2394
 z
-" transform="scale(0.015625)"/>
-      <path id="Poppins-SemiBold-32" d="M 621 1011
-Q 1235 1523 1600 1865
-Q 1965 2208 2208 2579
-Q 2451 2950 2451 3309
-Q 2451 3635 2297 3820
-Q 2144 4006 1824 4006
-Q 1504 4006 1331 3792
-Q 1158 3578 1152 3206
-L 282 3206
-Q 307 3974 739 4371
-Q 1171 4768 1837 4768
-Q 2566 4768 2956 4381
-Q 3347 3994 3347 3360
-Q 3347 2861 3078 2406
-Q 2810 1952 2464 1616
-Q 2118 1280 1562 806
-L 3450 806
-L 3450 64
-L 288 64
-L 288 730
-L 621 1011
+M 2912 2394
+Q 2912 2867 2851 3190
+Q 2790 3514 2608 3718
+Q 2426 3923 2067 3923
+Q 1709 3923 1526 3718
+Q 1344 3514 1283 3190
+Q 1222 2867 1222 2394
+Q 1222 1907 1280 1577
+Q 1338 1248 1523 1046
+Q 1709 845 2067 845
+Q 2426 845 2611 1046
+Q 2797 1248 2854 1577
+Q 2912 1907 2912 2394
 z
 " transform="scale(0.015625)"/>
       <path id="Poppins-SemiBold-25" d="M 237 3520
@@ -1262,11 +1296,11 @@ Q 4416 1466 4058 1466
 z
 " transform="scale(0.015625)"/>
      </defs>
-     <use xlink:href="#Poppins-SemiBold-31"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="36.199997"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="100.599991"/>
-     <use xlink:href="#Poppins-SemiBold-32" x="126.599976"/>
-     <use xlink:href="#Poppins-SemiBold-25" x="183.999969"/>
+     <use xlink:href="#Poppins-SemiBold-2d"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(122.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(148.899963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-25" transform="translate(206.299957 0)"/>
     </g>
    </g>
    <g id="text_10">
@@ -1424,163 +1458,132 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-SemiBold-43"/>
-     <use xlink:href="#Poppins-SemiBold-75" x="76.799988"/>
-     <use xlink:href="#Poppins-SemiBold-73" x="142.899979"/>
-     <use xlink:href="#Poppins-SemiBold-74" x="197.399963"/>
-     <use xlink:href="#Poppins-SemiBold-6f" x="236.199951"/>
-     <use xlink:href="#Poppins-SemiBold-6d" x="299.999939"/>
-     <use xlink:href="#Poppins-SemiBold-65" x="404.799927"/>
-     <use xlink:href="#Poppins-SemiBold-72" x="466.499924"/>
-     <use xlink:href="#Poppins-SemiBold-73" x="506.899918"/>
+     <use xlink:href="#Poppins-SemiBold-75" transform="translate(76.799988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-73" transform="translate(142.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-74" transform="translate(197.399963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6f" transform="translate(236.199951 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6d" transform="translate(299.999939 0)"/>
+     <use xlink:href="#Poppins-SemiBold-65" transform="translate(404.799927 0)"/>
+     <use xlink:href="#Poppins-SemiBold-72" transform="translate(466.499924 0)"/>
+     <use xlink:href="#Poppins-SemiBold-73" transform="translate(506.899918 0)"/>
     </g>
    </g>
    <g id="text_11">
     <!-- Current Period -->
     <g style="fill: #6b7280" transform="translate(18.36 227.202) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-75" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-72" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-72" x="178.499954"/>
-     <use xlink:href="#Poppins-Regular-65" x="215.799942"/>
-     <use xlink:href="#Poppins-Regular-6e" x="277.799927"/>
-     <use xlink:href="#Poppins-Regular-74" x="341.799911"/>
-     <use xlink:href="#Poppins-Regular-20" x="378.199905"/>
-     <use xlink:href="#Poppins-Regular-50" x="404.899902"/>
-     <use xlink:href="#Poppins-Regular-65" x="462.799896"/>
-     <use xlink:href="#Poppins-Regular-72" x="524.799881"/>
-     <use xlink:href="#Poppins-Regular-69" x="562.099869"/>
-     <use xlink:href="#Poppins-Regular-6f" x="586.69986"/>
-     <use xlink:href="#Poppins-Regular-64" x="650.699844"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(178.499954 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(215.799942 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(277.799927 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(341.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(378.199905 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(404.899902 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(462.799896 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(524.799881 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(562.099869 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(586.69986 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(650.699844 0)"/>
     </g>
    </g>
    <g id="text_12">
-    <!-- 3.04K -->
+    <!-- 2.24K -->
     <g style="fill: #4b5563" transform="translate(18.36 241.517625) scale(0.12 -0.12)">
      <defs>
-      <path id="Poppins-SemiBold-30" d="M 339 2394
-Q 339 3501 739 4128
-Q 1139 4755 2067 4755
-Q 2995 4755 3395 4128
-Q 3795 3501 3795 2394
-Q 3795 1280 3395 646
-Q 2995 13 2067 13
-Q 1139 13 739 646
-Q 339 1280 339 2394
+      <path id="Poppins-SemiBold-34" d="M 301 909
+L 301 1613
+L 2394 4608
+L 3437 4608
+L 3437 1690
+L 4000 1690
+L 4000 909
+L 3437 909
+L 3437 0
+L 2541 0
+L 2541 909
+L 301 909
 z
-M 2912 2394
-Q 2912 2867 2851 3190
-Q 2790 3514 2608 3718
-Q 2426 3923 2067 3923
-Q 1709 3923 1526 3718
-Q 1344 3514 1283 3190
-Q 1222 2867 1222 2394
-Q 1222 1907 1280 1577
-Q 1338 1248 1523 1046
-Q 1709 845 2067 845
-Q 2426 845 2611 1046
-Q 2797 1248 2854 1577
-Q 2912 1907 2912 2394
-z
-" transform="scale(0.015625)"/>
-      <path id="Poppins-SemiBold-4b" d="M 2963 0
-L 1338 1990
-L 1338 0
-L 442 0
-L 442 4467
-L 1338 4467
-L 1338 2464
-L 2963 4467
-L 4045 4467
-L 2202 2253
-L 4096 0
-L 2963 0
+M 2598 3648
+L 1286 1690
+L 2598 1690
+L 2598 3648
 z
 " transform="scale(0.015625)"/>
      </defs>
-     <use xlink:href="#Poppins-SemiBold-33"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="59.899994"/>
-     <use xlink:href="#Poppins-SemiBold-30" x="85.899979"/>
-     <use xlink:href="#Poppins-SemiBold-34" x="150.499969"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="216.59996"/>
+     <use xlink:href="#Poppins-SemiBold-32"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(57.399994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(83.399979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-34" transform="translate(140.799973 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(206.899963 0)"/>
     </g>
    </g>
    <g id="text_13">
     <!-- Previous Period -->
     <g style="fill: #6b7280" transform="translate(116.01 227.202) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-72" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-65" x="95.199982"/>
-     <use xlink:href="#Poppins-Regular-76" x="157.199966"/>
-     <use xlink:href="#Poppins-Regular-69" x="213.299957"/>
-     <use xlink:href="#Poppins-Regular-6f" x="237.899948"/>
-     <use xlink:href="#Poppins-Regular-75" x="301.899933"/>
-     <use xlink:href="#Poppins-Regular-73" x="365.899918"/>
-     <use xlink:href="#Poppins-Regular-20" x="418.099915"/>
-     <use xlink:href="#Poppins-Regular-50" x="444.799911"/>
-     <use xlink:href="#Poppins-Regular-65" x="502.699905"/>
-     <use xlink:href="#Poppins-Regular-72" x="564.69989"/>
-     <use xlink:href="#Poppins-Regular-69" x="601.999878"/>
-     <use xlink:href="#Poppins-Regular-6f" x="626.599869"/>
-     <use xlink:href="#Poppins-Regular-64" x="690.599854"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(95.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-76" transform="translate(157.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(213.299957 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(237.899948 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(301.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-73" transform="translate(365.899918 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(418.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(444.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(502.699905 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(564.69989 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(601.999878 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(626.599869 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(690.599854 0)"/>
     </g>
    </g>
    <g id="text_14">
-    <!-- 3.2K -->
+    <!-- 2.22K -->
     <g style="fill: #4b5563" transform="translate(116.01 241.517625) scale(0.12 -0.12)">
-     <use xlink:href="#Poppins-SemiBold-33"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="59.899994"/>
-     <use xlink:href="#Poppins-SemiBold-32" x="85.899979"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="143.299973"/>
+     <use xlink:href="#Poppins-SemiBold-32"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(57.399994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(83.399979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(140.799973 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(198.199966 0)"/>
     </g>
    </g>
    <g id="text_15">
     <!-- Diff -->
     <g style="fill: #6b7280" transform="translate(18.36 268.4355) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-44"/>
-     <use xlink:href="#Poppins-Regular-69" x="70.699982"/>
-     <use xlink:href="#Poppins-Regular-66" x="95.299973"/>
-     <use xlink:href="#Poppins-Regular-66" x="128.199966"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(70.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(95.299973 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(128.199966 0)"/>
     </g>
    </g>
    <g id="text_16">
-    <!-- -166 -->
-    <g style="fill: #4b5563" transform="translate(169.09 268.415188) scale(0.1 -0.1)">
-     <defs>
-      <path id="Poppins-SemiBold-2d" d="M 3168 2662
-L 3168 1907
-L 454 1907
-L 454 2662
-L 3168 2662
-z
-" transform="scale(0.015625)"/>
-     </defs>
-     <use xlink:href="#Poppins-SemiBold-2d"/>
-     <use xlink:href="#Poppins-SemiBold-31" x="58.299988"/>
-     <use xlink:href="#Poppins-SemiBold-36" x="94.499985"/>
-     <use xlink:href="#Poppins-SemiBold-36" x="158.499969"/>
+    <!-- 24 -->
+    <g style="fill: #4b5563" transform="translate(178.99 268.415188) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-32"/>
+     <use xlink:href="#Poppins-SemiBold-34" transform="translate(57.399994 0)"/>
     </g>
    </g>
    <g id="text_17">
     <!-- Pct Diff -->
     <g style="fill: #6b7280" transform="translate(18.36 288.3015) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-63" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-74" x="118.599991"/>
-     <use xlink:href="#Poppins-Regular-20" x="154.999985"/>
-     <use xlink:href="#Poppins-Regular-44" x="181.699982"/>
-     <use xlink:href="#Poppins-Regular-69" x="252.399963"/>
-     <use xlink:href="#Poppins-Regular-66" x="276.999954"/>
-     <use xlink:href="#Poppins-Regular-66" x="309.899948"/>
+     <use xlink:href="#Poppins-Regular-63" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(118.599991 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(154.999985 0)"/>
+     <use xlink:href="#Poppins-Regular-44" transform="translate(181.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(252.399963 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(276.999954 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(309.899948 0)"/>
     </g>
    </g>
    <g id="text_18">
-    <!-- -5.2% -->
-    <g style="fill: #4b5563" transform="translate(162.438438 288.281188) scale(0.1 -0.1)">
-     <use xlink:href="#Poppins-SemiBold-2d"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="58.299988"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="122.699982"/>
-     <use xlink:href="#Poppins-SemiBold-32" x="148.699966"/>
-     <use xlink:href="#Poppins-SemiBold-25" x="206.09996"/>
+    <!-- 1.1% -->
+    <g style="fill: #4b5563" transform="translate(173.20875 288.281188) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-31"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(36.199997 0)"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(62.199982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-25" transform="translate(98.399979 0)"/>
     </g>
    </g>
    <g id="text_19">
@@ -1621,72 +1624,28 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-6f" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-6e" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-74" x="205.199951"/>
-     <use xlink:href="#Poppins-Regular-72" x="241.599945"/>
-     <use xlink:href="#Poppins-Regular-69" x="278.899933"/>
-     <use xlink:href="#Poppins-Regular-62" x="303.499924"/>
-     <use xlink:href="#Poppins-Regular-75" x="371.099915"/>
-     <use xlink:href="#Poppins-Regular-74" x="435.099899"/>
-     <use xlink:href="#Poppins-Regular-69" x="471.499893"/>
-     <use xlink:href="#Poppins-Regular-6f" x="496.099884"/>
-     <use xlink:href="#Poppins-Regular-6e" x="560.099869"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(205.199951 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(241.599945 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(278.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-62" transform="translate(303.499924 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(371.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(435.099899 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(471.499893 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(496.099884 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(560.099869 0)"/>
     </g>
    </g>
    <g id="text_20">
-    <!-- -2.38M -->
-    <g style="fill: #4b5563" transform="translate(155.75875 308.147188) scale(0.1 -0.1)">
-     <defs>
-      <path id="Poppins-SemiBold-38" d="M 1120 2470
-Q 480 2803 480 3501
-Q 480 3846 656 4131
-Q 832 4416 1187 4585
-Q 1542 4755 2054 4755
-Q 2566 4755 2921 4585
-Q 3277 4416 3453 4131
-Q 3629 3846 3629 3501
-Q 3629 3149 3456 2883
-Q 3283 2618 2995 2470
-Q 3347 2317 3545 2022
-Q 3744 1728 3744 1325
-Q 3744 890 3523 566
-Q 3302 243 2918 70
-Q 2534 -102 2054 -102
-Q 1574 -102 1193 70
-Q 813 243 592 566
-Q 371 890 371 1325
-Q 371 1728 569 2025
-Q 768 2323 1120 2470
-z
-M 2758 3373
-Q 2758 3686 2569 3859
-Q 2381 4032 2054 4032
-Q 1734 4032 1545 3859
-Q 1357 3686 1357 3366
-Q 1357 3078 1552 2905
-Q 1747 2733 2054 2733
-Q 2362 2733 2560 2909
-Q 2758 3085 2758 3373
-z
-M 2054 2080
-Q 1690 2080 1462 1894
-Q 1235 1709 1235 1363
-Q 1235 1043 1456 841
-Q 1677 640 2054 640
-Q 2432 640 2649 845
-Q 2867 1050 2867 1363
-Q 2867 1702 2643 1891
-Q 2419 2080 2054 2080
-z
-" transform="scale(0.015625)"/>
-     </defs>
-     <use xlink:href="#Poppins-SemiBold-2d"/>
-     <use xlink:href="#Poppins-SemiBold-32" x="58.299988"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="115.699982"/>
-     <use xlink:href="#Poppins-SemiBold-33" x="141.699966"/>
-     <use xlink:href="#Poppins-SemiBold-38" x="201.59996"/>
-     <use xlink:href="#Poppins-SemiBold-4d" x="265.899948"/>
+    <!-- 89.24K -->
+    <g style="fill: #4b5563" transform="translate(157.07125 308.147188) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-38"/>
+     <use xlink:href="#Poppins-SemiBold-39" transform="translate(64.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(126.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(152.899963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-34" transform="translate(210.299957 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(276.399948 0)"/>
     </g>
    </g>
    <g id="text_21">
@@ -1803,150 +1762,164 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-SemiBold-53"/>
-     <use xlink:href="#Poppins-SemiBold-70" x="60.899994"/>
-     <use xlink:href="#Poppins-SemiBold-65" x="128.699982"/>
-     <use xlink:href="#Poppins-SemiBold-6e" x="190.399979"/>
-     <use xlink:href="#Poppins-SemiBold-64" x="256.499969"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="324.299957"/>
-     <use xlink:href="#Poppins-SemiBold-2f" x="348.099945"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="396.699936"/>
-     <use xlink:href="#Poppins-SemiBold-43" x="420.499924"/>
-     <use xlink:href="#Poppins-SemiBold-75" x="497.299911"/>
-     <use xlink:href="#Poppins-SemiBold-73" x="563.399902"/>
-     <use xlink:href="#Poppins-SemiBold-74" x="617.899887"/>
-     <use xlink:href="#Poppins-SemiBold-6f" x="656.699875"/>
-     <use xlink:href="#Poppins-SemiBold-6d" x="720.499863"/>
-     <use xlink:href="#Poppins-SemiBold-65" x="825.29985"/>
-     <use xlink:href="#Poppins-SemiBold-72" x="886.999847"/>
+     <use xlink:href="#Poppins-SemiBold-70" transform="translate(60.899994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-65" transform="translate(128.699982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6e" transform="translate(190.399979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-64" transform="translate(256.499969 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(324.299957 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2f" transform="translate(348.099945 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(396.699936 0)"/>
+     <use xlink:href="#Poppins-SemiBold-43" transform="translate(420.499924 0)"/>
+     <use xlink:href="#Poppins-SemiBold-75" transform="translate(497.299911 0)"/>
+     <use xlink:href="#Poppins-SemiBold-73" transform="translate(563.399902 0)"/>
+     <use xlink:href="#Poppins-SemiBold-74" transform="translate(617.899887 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6f" transform="translate(656.699875 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6d" transform="translate(720.499863 0)"/>
+     <use xlink:href="#Poppins-SemiBold-65" transform="translate(825.29985 0)"/>
+     <use xlink:href="#Poppins-SemiBold-72" transform="translate(886.999847 0)"/>
     </g>
    </g>
    <g id="text_22">
     <!-- Current Period -->
     <g style="fill: #6b7280" transform="translate(297.36 227.202) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-75" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-72" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-72" x="178.499954"/>
-     <use xlink:href="#Poppins-Regular-65" x="215.799942"/>
-     <use xlink:href="#Poppins-Regular-6e" x="277.799927"/>
-     <use xlink:href="#Poppins-Regular-74" x="341.799911"/>
-     <use xlink:href="#Poppins-Regular-20" x="378.199905"/>
-     <use xlink:href="#Poppins-Regular-50" x="404.899902"/>
-     <use xlink:href="#Poppins-Regular-65" x="462.799896"/>
-     <use xlink:href="#Poppins-Regular-72" x="524.799881"/>
-     <use xlink:href="#Poppins-Regular-69" x="562.099869"/>
-     <use xlink:href="#Poppins-Regular-6f" x="586.69986"/>
-     <use xlink:href="#Poppins-Regular-64" x="650.699844"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(178.499954 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(215.799942 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(277.799927 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(341.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(378.199905 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(404.899902 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(462.799896 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(524.799881 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(562.099869 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(586.69986 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(650.699844 0)"/>
     </g>
    </g>
    <g id="text_23">
-    <!-- 15.7K -->
+    <!-- 3.69K -->
     <g style="fill: #4b5563" transform="translate(297.36 241.517625) scale(0.12 -0.12)">
-     <use xlink:href="#Poppins-SemiBold-31"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="36.199997"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="100.599991"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="126.599976"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="181.399963"/>
+     <use xlink:href="#Poppins-SemiBold-33"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(59.899994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(85.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-39" transform="translate(149.899963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(212.499954 0)"/>
     </g>
    </g>
    <g id="text_24">
     <!-- Previous Period -->
     <g style="fill: #6b7280" transform="translate(395.01 227.202) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-72" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-65" x="95.199982"/>
-     <use xlink:href="#Poppins-Regular-76" x="157.199966"/>
-     <use xlink:href="#Poppins-Regular-69" x="213.299957"/>
-     <use xlink:href="#Poppins-Regular-6f" x="237.899948"/>
-     <use xlink:href="#Poppins-Regular-75" x="301.899933"/>
-     <use xlink:href="#Poppins-Regular-73" x="365.899918"/>
-     <use xlink:href="#Poppins-Regular-20" x="418.099915"/>
-     <use xlink:href="#Poppins-Regular-50" x="444.799911"/>
-     <use xlink:href="#Poppins-Regular-65" x="502.699905"/>
-     <use xlink:href="#Poppins-Regular-72" x="564.69989"/>
-     <use xlink:href="#Poppins-Regular-69" x="601.999878"/>
-     <use xlink:href="#Poppins-Regular-6f" x="626.599869"/>
-     <use xlink:href="#Poppins-Regular-64" x="690.599854"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(95.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-76" transform="translate(157.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(213.299957 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(237.899948 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(301.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-73" transform="translate(365.899918 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(418.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(444.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(502.699905 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(564.69989 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(601.999878 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(626.599869 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(690.599854 0)"/>
     </g>
    </g>
    <g id="text_25">
-    <!-- 12.92K -->
+    <!-- 3.74K -->
     <g style="fill: #4b5563" transform="translate(395.01 241.517625) scale(0.12 -0.12)">
-     <use xlink:href="#Poppins-SemiBold-31"/>
-     <use xlink:href="#Poppins-SemiBold-32" x="36.199997"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="93.599991"/>
-     <use xlink:href="#Poppins-SemiBold-39" x="119.599976"/>
-     <use xlink:href="#Poppins-SemiBold-32" x="182.199966"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="239.59996"/>
+     <defs>
+      <path id="Poppins-SemiBold-37" d="M 3309 3987
+L 1606 0
+L 698 0
+L 2413 3885
+L 224 3885
+L 224 4653
+L 3309 4653
+L 3309 3987
+z
+" transform="scale(0.015625)"/>
+     </defs>
+     <use xlink:href="#Poppins-SemiBold-33"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(59.899994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-37" transform="translate(85.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-34" transform="translate(140.699966 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(206.799957 0)"/>
     </g>
    </g>
    <g id="text_26">
     <!-- Diff -->
     <g style="fill: #6b7280" transform="translate(297.36 268.4355) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-44"/>
-     <use xlink:href="#Poppins-Regular-69" x="70.699982"/>
-     <use xlink:href="#Poppins-Regular-66" x="95.299973"/>
-     <use xlink:href="#Poppins-Regular-66" x="128.199966"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(70.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(95.299973 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(128.199966 0)"/>
     </g>
    </g>
    <g id="text_27">
-    <!-- 2.78K -->
-    <g style="fill: #4b5563" transform="translate(443.460313 268.415188) scale(0.1 -0.1)">
-     <use xlink:href="#Poppins-SemiBold-32"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="57.399994"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="83.399979"/>
-     <use xlink:href="#Poppins-SemiBold-38" x="138.199966"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="202.499954"/>
+    <!-- -48.81 -->
+    <g style="fill: #4b5563" transform="translate(438.82125 268.415188) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-2d"/>
+     <use xlink:href="#Poppins-SemiBold-34" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-38" transform="translate(124.399979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(188.699966 0)"/>
+     <use xlink:href="#Poppins-SemiBold-38" transform="translate(214.699951 0)"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(278.999939 0)"/>
     </g>
    </g>
    <g id="text_28">
     <!-- Pct Diff -->
     <g style="fill: #6b7280" transform="translate(297.36 288.3015) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-63" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-74" x="118.599991"/>
-     <use xlink:href="#Poppins-Regular-20" x="154.999985"/>
-     <use xlink:href="#Poppins-Regular-44" x="181.699982"/>
-     <use xlink:href="#Poppins-Regular-69" x="252.399963"/>
-     <use xlink:href="#Poppins-Regular-66" x="276.999954"/>
-     <use xlink:href="#Poppins-Regular-66" x="309.899948"/>
+     <use xlink:href="#Poppins-Regular-63" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(118.599991 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(154.999985 0)"/>
+     <use xlink:href="#Poppins-Regular-44" transform="translate(181.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(252.399963 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(276.999954 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(309.899948 0)"/>
     </g>
    </g>
    <g id="text_29">
-    <!-- 21.5% -->
-    <g style="fill: #4b5563" transform="translate(443.647813 288.281188) scale(0.1 -0.1)">
-     <use xlink:href="#Poppins-SemiBold-32"/>
-     <use xlink:href="#Poppins-SemiBold-31" x="57.399994"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="93.599991"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="119.599976"/>
-     <use xlink:href="#Poppins-SemiBold-25" x="183.999969"/>
+    <!-- -1.3% -->
+    <g style="fill: #4b5563" transform="translate(444.00875 288.281188) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-2d"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(94.499985 0)"/>
+     <use xlink:href="#Poppins-SemiBold-33" transform="translate(120.499969 0)"/>
+     <use xlink:href="#Poppins-SemiBold-25" transform="translate(180.399963 0)"/>
     </g>
    </g>
    <g id="text_30">
     <!-- Contribution -->
     <g style="fill: #6b7280" transform="translate(297.36 308.1675) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-6f" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-6e" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-74" x="205.199951"/>
-     <use xlink:href="#Poppins-Regular-72" x="241.599945"/>
-     <use xlink:href="#Poppins-Regular-69" x="278.899933"/>
-     <use xlink:href="#Poppins-Regular-62" x="303.499924"/>
-     <use xlink:href="#Poppins-Regular-75" x="371.099915"/>
-     <use xlink:href="#Poppins-Regular-74" x="435.099899"/>
-     <use xlink:href="#Poppins-Regular-69" x="471.499893"/>
-     <use xlink:href="#Poppins-Regular-6f" x="496.099884"/>
-     <use xlink:href="#Poppins-Regular-6e" x="560.099869"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(205.199951 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(241.599945 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(278.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-62" transform="translate(303.499924 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(371.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(435.099899 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(471.499893 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(496.099884 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(560.099869 0)"/>
     </g>
    </g>
    <g id="text_31">
-    <!-- 8.68M -->
-    <g style="fill: #4b5563" transform="translate(439.49 308.147188) scale(0.1 -0.1)">
-     <use xlink:href="#Poppins-SemiBold-38"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="64.299988"/>
-     <use xlink:href="#Poppins-SemiBold-36" x="90.299973"/>
-     <use xlink:href="#Poppins-SemiBold-38" x="154.299957"/>
-     <use xlink:href="#Poppins-SemiBold-4d" x="218.599945"/>
+    <!-- -108.9K -->
+    <g style="fill: #4b5563" transform="translate(432.511875 308.147188) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-2d"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(94.499985 0)"/>
+     <use xlink:href="#Poppins-SemiBold-38" transform="translate(159.099976 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(223.399963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-39" transform="translate(249.399948 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(311.999939 0)"/>
     </g>
    </g>
    <g id="text_32">
@@ -1982,297 +1955,327 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-SemiBold-56"/>
-     <use xlink:href="#Poppins-SemiBold-69" x="71.099991"/>
-     <use xlink:href="#Poppins-SemiBold-73" x="98.899979"/>
-     <use xlink:href="#Poppins-SemiBold-69" x="153.399963"/>
-     <use xlink:href="#Poppins-SemiBold-74" x="181.199951"/>
-     <use xlink:href="#Poppins-SemiBold-73" x="219.999939"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="274.499924"/>
-     <use xlink:href="#Poppins-SemiBold-2f" x="298.299911"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="346.899902"/>
-     <use xlink:href="#Poppins-SemiBold-43" x="370.69989"/>
-     <use xlink:href="#Poppins-SemiBold-75" x="447.499878"/>
-     <use xlink:href="#Poppins-SemiBold-73" x="513.599869"/>
-     <use xlink:href="#Poppins-SemiBold-74" x="568.099854"/>
-     <use xlink:href="#Poppins-SemiBold-6f" x="606.899841"/>
-     <use xlink:href="#Poppins-SemiBold-6d" x="670.699829"/>
-     <use xlink:href="#Poppins-SemiBold-65" x="775.499817"/>
-     <use xlink:href="#Poppins-SemiBold-72" x="837.199814"/>
+     <use xlink:href="#Poppins-SemiBold-69" transform="translate(71.099991 0)"/>
+     <use xlink:href="#Poppins-SemiBold-73" transform="translate(98.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-69" transform="translate(153.399963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-74" transform="translate(181.199951 0)"/>
+     <use xlink:href="#Poppins-SemiBold-73" transform="translate(219.999939 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(274.499924 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2f" transform="translate(298.299911 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(346.899902 0)"/>
+     <use xlink:href="#Poppins-SemiBold-43" transform="translate(370.69989 0)"/>
+     <use xlink:href="#Poppins-SemiBold-75" transform="translate(447.499878 0)"/>
+     <use xlink:href="#Poppins-SemiBold-73" transform="translate(513.599869 0)"/>
+     <use xlink:href="#Poppins-SemiBold-74" transform="translate(568.099854 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6f" transform="translate(606.899841 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6d" transform="translate(670.699829 0)"/>
+     <use xlink:href="#Poppins-SemiBold-65" transform="translate(775.499817 0)"/>
+     <use xlink:href="#Poppins-SemiBold-72" transform="translate(837.199814 0)"/>
     </g>
    </g>
    <g id="text_33">
     <!-- Current Period -->
     <g style="fill: #6b7280" transform="translate(157.86 399.066) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-75" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-72" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-72" x="178.499954"/>
-     <use xlink:href="#Poppins-Regular-65" x="215.799942"/>
-     <use xlink:href="#Poppins-Regular-6e" x="277.799927"/>
-     <use xlink:href="#Poppins-Regular-74" x="341.799911"/>
-     <use xlink:href="#Poppins-Regular-20" x="378.199905"/>
-     <use xlink:href="#Poppins-Regular-50" x="404.899902"/>
-     <use xlink:href="#Poppins-Regular-65" x="462.799896"/>
-     <use xlink:href="#Poppins-Regular-72" x="524.799881"/>
-     <use xlink:href="#Poppins-Regular-69" x="562.099869"/>
-     <use xlink:href="#Poppins-Regular-6f" x="586.69986"/>
-     <use xlink:href="#Poppins-Regular-64" x="650.699844"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(178.499954 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(215.799942 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(277.799927 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(341.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(378.199905 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(404.899902 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(462.799896 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(524.799881 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(562.099869 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(586.69986 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(650.699844 0)"/>
     </g>
    </g>
    <g id="text_34">
-    <!-- 4.53 -->
+    <!-- 1.07 -->
     <g style="fill: #4b5563" transform="translate(157.86 413.381625) scale(0.12 -0.12)">
-     <use xlink:href="#Poppins-SemiBold-34"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="66.099991"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="92.099976"/>
-     <use xlink:href="#Poppins-SemiBold-33" x="156.499969"/>
+     <use xlink:href="#Poppins-SemiBold-31"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(36.199997 0)"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(62.199982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-37" transform="translate(126.799973 0)"/>
     </g>
    </g>
    <g id="text_35">
     <!-- Previous Period -->
     <g style="fill: #6b7280" transform="translate(255.51 399.066) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-72" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-65" x="95.199982"/>
-     <use xlink:href="#Poppins-Regular-76" x="157.199966"/>
-     <use xlink:href="#Poppins-Regular-69" x="213.299957"/>
-     <use xlink:href="#Poppins-Regular-6f" x="237.899948"/>
-     <use xlink:href="#Poppins-Regular-75" x="301.899933"/>
-     <use xlink:href="#Poppins-Regular-73" x="365.899918"/>
-     <use xlink:href="#Poppins-Regular-20" x="418.099915"/>
-     <use xlink:href="#Poppins-Regular-50" x="444.799911"/>
-     <use xlink:href="#Poppins-Regular-65" x="502.699905"/>
-     <use xlink:href="#Poppins-Regular-72" x="564.69989"/>
-     <use xlink:href="#Poppins-Regular-69" x="601.999878"/>
-     <use xlink:href="#Poppins-Regular-6f" x="626.599869"/>
-     <use xlink:href="#Poppins-Regular-64" x="690.599854"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(95.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-76" transform="translate(157.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(213.299957 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(237.899948 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(301.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-73" transform="translate(365.899918 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(418.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(444.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(502.699905 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(564.69989 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(601.999878 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(626.599869 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(690.599854 0)"/>
     </g>
    </g>
    <g id="text_36">
-    <!-- 3.67 -->
+    <!-- 1.03 -->
     <g style="fill: #4b5563" transform="translate(255.51 413.381625) scale(0.12 -0.12)">
-     <use xlink:href="#Poppins-SemiBold-33"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="59.899994"/>
-     <use xlink:href="#Poppins-SemiBold-36" x="85.899979"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="149.899963"/>
+     <use xlink:href="#Poppins-SemiBold-31"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(36.199997 0)"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(62.199982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-33" transform="translate(126.799973 0)"/>
     </g>
    </g>
    <g id="text_37">
     <!-- Diff -->
     <g style="fill: #6b7280" transform="translate(157.86 440.2995) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-44"/>
-     <use xlink:href="#Poppins-Regular-69" x="70.699982"/>
-     <use xlink:href="#Poppins-Regular-66" x="95.299973"/>
-     <use xlink:href="#Poppins-Regular-66" x="128.199966"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(70.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(95.299973 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(128.199966 0)"/>
     </g>
    </g>
    <g id="text_38">
-    <!-- 0.86 -->
-    <g style="fill: #4b5563" transform="translate(308.950938 440.279187) scale(0.1 -0.1)">
+    <!-- 0.03 -->
+    <g style="fill: #4b5563" transform="translate(309.330625 440.279187) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-SemiBold-30"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="64.599991"/>
-     <use xlink:href="#Poppins-SemiBold-38" x="90.599976"/>
-     <use xlink:href="#Poppins-SemiBold-36" x="154.899963"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(64.599991 0)"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(90.599976 0)"/>
+     <use xlink:href="#Poppins-SemiBold-33" transform="translate(155.199966 0)"/>
     </g>
    </g>
    <g id="text_39">
     <!-- Pct Diff -->
     <g style="fill: #6b7280" transform="translate(157.86 460.1655) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-63" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-74" x="118.599991"/>
-     <use xlink:href="#Poppins-Regular-20" x="154.999985"/>
-     <use xlink:href="#Poppins-Regular-44" x="181.699982"/>
-     <use xlink:href="#Poppins-Regular-69" x="252.399963"/>
-     <use xlink:href="#Poppins-Regular-66" x="276.999954"/>
-     <use xlink:href="#Poppins-Regular-66" x="309.899948"/>
+     <use xlink:href="#Poppins-Regular-63" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(118.599991 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(154.999985 0)"/>
+     <use xlink:href="#Poppins-Regular-44" transform="translate(181.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(252.399963 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(276.999954 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(309.899948 0)"/>
     </g>
    </g>
    <g id="text_40">
-    <!-- 23.5% -->
-    <g style="fill: #4b5563" transform="translate(301.7775 460.145187) scale(0.1 -0.1)">
-     <use xlink:href="#Poppins-SemiBold-32"/>
-     <use xlink:href="#Poppins-SemiBold-33" x="57.399994"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="117.299988"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="143.299973"/>
-     <use xlink:href="#Poppins-SemiBold-25" x="207.699966"/>
+    <!-- 3.3% -->
+    <g style="fill: #4b5563" transform="translate(307.968125 460.145187) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-33"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(59.899994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-33" transform="translate(85.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-25" transform="translate(145.799973 0)"/>
     </g>
    </g>
    <g id="text_41">
     <!-- Contribution -->
     <g style="fill: #6b7280" transform="translate(157.86 480.0315) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-6f" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-6e" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-74" x="205.199951"/>
-     <use xlink:href="#Poppins-Regular-72" x="241.599945"/>
-     <use xlink:href="#Poppins-Regular-69" x="278.899933"/>
-     <use xlink:href="#Poppins-Regular-62" x="303.499924"/>
-     <use xlink:href="#Poppins-Regular-75" x="371.099915"/>
-     <use xlink:href="#Poppins-Regular-74" x="435.099899"/>
-     <use xlink:href="#Poppins-Regular-69" x="471.499893"/>
-     <use xlink:href="#Poppins-Regular-6f" x="496.099884"/>
-     <use xlink:href="#Poppins-Regular-6e" x="560.099869"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(205.199951 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(241.599945 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(278.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-62" transform="translate(303.499924 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(371.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(435.099899 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(471.499893 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(496.099884 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(560.099869 0)"/>
     </g>
    </g>
    <g id="text_42">
-    <!-- 9.28M -->
-    <g style="fill: #4b5563" transform="translate(300.819688 480.011188) scale(0.1 -0.1)">
-     <use xlink:href="#Poppins-SemiBold-39"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="62.599991"/>
-     <use xlink:href="#Poppins-SemiBold-32" x="88.599976"/>
-     <use xlink:href="#Poppins-SemiBold-38" x="145.999969"/>
-     <use xlink:href="#Poppins-SemiBold-4d" x="210.299957"/>
+    <!-- 272.04K -->
+    <g style="fill: #4b5563" transform="translate(291.580625 480.011188) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-32"/>
+     <use xlink:href="#Poppins-SemiBold-37" transform="translate(57.399994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(112.199982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(169.599976 0)"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(195.59996 0)"/>
+     <use xlink:href="#Poppins-SemiBold-34" transform="translate(260.199951 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(326.299942 0)"/>
     </g>
    </g>
    <g id="text_43">
     <!-- Spend / Visit -->
     <g style="fill: #ffffff" transform="translate(436.86 372.350813) scale(0.12 -0.12)">
      <use xlink:href="#Poppins-SemiBold-53"/>
-     <use xlink:href="#Poppins-SemiBold-70" x="60.899994"/>
-     <use xlink:href="#Poppins-SemiBold-65" x="128.699982"/>
-     <use xlink:href="#Poppins-SemiBold-6e" x="190.399979"/>
-     <use xlink:href="#Poppins-SemiBold-64" x="256.499969"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="324.299957"/>
-     <use xlink:href="#Poppins-SemiBold-2f" x="348.099945"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="396.699936"/>
-     <use xlink:href="#Poppins-SemiBold-56" x="420.499924"/>
-     <use xlink:href="#Poppins-SemiBold-69" x="491.599915"/>
-     <use xlink:href="#Poppins-SemiBold-73" x="519.399902"/>
-     <use xlink:href="#Poppins-SemiBold-69" x="573.899887"/>
-     <use xlink:href="#Poppins-SemiBold-74" x="601.699875"/>
+     <use xlink:href="#Poppins-SemiBold-70" transform="translate(60.899994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-65" transform="translate(128.699982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6e" transform="translate(190.399979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-64" transform="translate(256.499969 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(324.299957 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2f" transform="translate(348.099945 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(396.699936 0)"/>
+     <use xlink:href="#Poppins-SemiBold-56" transform="translate(420.499924 0)"/>
+     <use xlink:href="#Poppins-SemiBold-69" transform="translate(491.599915 0)"/>
+     <use xlink:href="#Poppins-SemiBold-73" transform="translate(519.399902 0)"/>
+     <use xlink:href="#Poppins-SemiBold-69" transform="translate(573.899887 0)"/>
+     <use xlink:href="#Poppins-SemiBold-74" transform="translate(601.699875 0)"/>
     </g>
    </g>
    <g id="text_44">
     <!-- Current Period -->
     <g style="fill: #6b7280" transform="translate(436.86 399.066) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-75" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-72" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-72" x="178.499954"/>
-     <use xlink:href="#Poppins-Regular-65" x="215.799942"/>
-     <use xlink:href="#Poppins-Regular-6e" x="277.799927"/>
-     <use xlink:href="#Poppins-Regular-74" x="341.799911"/>
-     <use xlink:href="#Poppins-Regular-20" x="378.199905"/>
-     <use xlink:href="#Poppins-Regular-50" x="404.899902"/>
-     <use xlink:href="#Poppins-Regular-65" x="462.799896"/>
-     <use xlink:href="#Poppins-Regular-72" x="524.799881"/>
-     <use xlink:href="#Poppins-Regular-69" x="562.099869"/>
-     <use xlink:href="#Poppins-Regular-6f" x="586.69986"/>
-     <use xlink:href="#Poppins-Regular-64" x="650.699844"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(178.499954 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(215.799942 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(277.799927 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(341.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(378.199905 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(404.899902 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(462.799896 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(524.799881 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(562.099869 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(586.69986 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(650.699844 0)"/>
     </g>
    </g>
    <g id="text_45">
-    <!-- 3.47K -->
+    <!-- 3.46K -->
     <g style="fill: #4b5563" transform="translate(436.86 413.381625) scale(0.12 -0.12)">
      <use xlink:href="#Poppins-SemiBold-33"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="59.899994"/>
-     <use xlink:href="#Poppins-SemiBold-34" x="85.899979"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="151.999969"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="206.799957"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(59.899994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-34" transform="translate(85.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(151.999969 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(215.999954 0)"/>
     </g>
    </g>
    <g id="text_46">
     <!-- Previous Period -->
     <g style="fill: #6b7280" transform="translate(534.51 399.066) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-72" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-65" x="95.199982"/>
-     <use xlink:href="#Poppins-Regular-76" x="157.199966"/>
-     <use xlink:href="#Poppins-Regular-69" x="213.299957"/>
-     <use xlink:href="#Poppins-Regular-6f" x="237.899948"/>
-     <use xlink:href="#Poppins-Regular-75" x="301.899933"/>
-     <use xlink:href="#Poppins-Regular-73" x="365.899918"/>
-     <use xlink:href="#Poppins-Regular-20" x="418.099915"/>
-     <use xlink:href="#Poppins-Regular-50" x="444.799911"/>
-     <use xlink:href="#Poppins-Regular-65" x="502.699905"/>
-     <use xlink:href="#Poppins-Regular-72" x="564.69989"/>
-     <use xlink:href="#Poppins-Regular-69" x="601.999878"/>
-     <use xlink:href="#Poppins-Regular-6f" x="626.599869"/>
-     <use xlink:href="#Poppins-Regular-64" x="690.599854"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(95.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-76" transform="translate(157.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(213.299957 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(237.899948 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(301.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-73" transform="translate(365.899918 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(418.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(444.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(502.699905 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(564.69989 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(601.999878 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(626.599869 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(690.599854 0)"/>
     </g>
    </g>
    <g id="text_47">
-    <!-- 3.53K -->
+    <!-- 3.62K -->
     <g style="fill: #4b5563" transform="translate(534.51 413.381625) scale(0.12 -0.12)">
      <use xlink:href="#Poppins-SemiBold-33"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="59.899994"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="85.899979"/>
-     <use xlink:href="#Poppins-SemiBold-33" x="150.299973"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="210.199966"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(59.899994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(85.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(149.899963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(207.299957 0)"/>
     </g>
    </g>
    <g id="text_48">
     <!-- Diff -->
     <g style="fill: #6b7280" transform="translate(436.86 440.2995) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-44"/>
-     <use xlink:href="#Poppins-Regular-69" x="70.699982"/>
-     <use xlink:href="#Poppins-Regular-66" x="95.299973"/>
-     <use xlink:href="#Poppins-Regular-66" x="128.199966"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(70.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(95.299973 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(128.199966 0)"/>
     </g>
    </g>
    <g id="text_49">
-    <!-- -57.48 -->
-    <g style="fill: #4b5563" transform="translate(576.450938 440.279187) scale(0.1 -0.1)">
+    <!-- -162.6 -->
+    <g style="fill: #4b5563" transform="translate(579.249375 440.279187) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-SemiBold-2d"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="58.299988"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="122.699982"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="177.499969"/>
-     <use xlink:href="#Poppins-SemiBold-34" x="203.499954"/>
-     <use xlink:href="#Poppins-SemiBold-38" x="269.599945"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(94.499985 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(158.499969 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(215.899963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(241.899948 0)"/>
     </g>
    </g>
    <g id="text_50">
     <!-- Pct Diff -->
     <g style="fill: #6b7280" transform="translate(436.86 460.1655) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-63" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-74" x="118.599991"/>
-     <use xlink:href="#Poppins-Regular-20" x="154.999985"/>
-     <use xlink:href="#Poppins-Regular-44" x="181.699982"/>
-     <use xlink:href="#Poppins-Regular-69" x="252.399963"/>
-     <use xlink:href="#Poppins-Regular-66" x="276.999954"/>
-     <use xlink:href="#Poppins-Regular-66" x="309.899948"/>
+     <use xlink:href="#Poppins-Regular-63" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(118.599991 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(154.999985 0)"/>
+     <use xlink:href="#Poppins-Regular-44" transform="translate(181.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(252.399963 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(276.999954 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(309.899948 0)"/>
     </g>
    </g>
    <g id="text_51">
-    <!-- -1.6% -->
-    <g style="fill: #4b5563" transform="translate(583.099375 460.145187) scale(0.1 -0.1)">
+    <!-- -4.5% -->
+    <g style="fill: #4b5563" transform="translate(580.069688 460.145187) scale(0.1 -0.1)">
+     <defs>
+      <path id="Poppins-SemiBold-35" d="M 3475 3891
+L 1402 3891
+L 1402 2797
+Q 1536 2963 1785 3068
+Q 2035 3174 2317 3174
+Q 2829 3174 3155 2950
+Q 3482 2726 3629 2377
+Q 3776 2029 3776 1632
+Q 3776 896 3357 448
+Q 2938 0 2163 0
+Q 1434 0 998 365
+Q 563 730 506 1318
+L 1376 1318
+Q 1434 1062 1635 908
+Q 1837 755 2150 755
+Q 2528 755 2720 992
+Q 2912 1229 2912 1619
+Q 2912 2016 2717 2224
+Q 2522 2432 2144 2432
+Q 1875 2432 1696 2297
+Q 1517 2163 1440 1939
+L 582 1939
+L 582 4678
+L 3475 4678
+L 3475 3891
+z
+" transform="scale(0.015625)"/>
+     </defs>
      <use xlink:href="#Poppins-SemiBold-2d"/>
-     <use xlink:href="#Poppins-SemiBold-31" x="58.299988"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="94.499985"/>
-     <use xlink:href="#Poppins-SemiBold-36" x="120.499969"/>
-     <use xlink:href="#Poppins-SemiBold-25" x="184.499954"/>
+     <use xlink:href="#Poppins-SemiBold-34" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(124.399979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-35" transform="translate(150.399963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-25" transform="translate(214.799957 0)"/>
     </g>
    </g>
    <g id="text_52">
     <!-- Contribution -->
     <g style="fill: #6b7280" transform="translate(436.86 480.0315) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-6f" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-6e" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-74" x="205.199951"/>
-     <use xlink:href="#Poppins-Regular-72" x="241.599945"/>
-     <use xlink:href="#Poppins-Regular-69" x="278.899933"/>
-     <use xlink:href="#Poppins-Regular-62" x="303.499924"/>
-     <use xlink:href="#Poppins-Regular-75" x="371.099915"/>
-     <use xlink:href="#Poppins-Regular-74" x="435.099899"/>
-     <use xlink:href="#Poppins-Regular-69" x="471.499893"/>
-     <use xlink:href="#Poppins-Regular-6f" x="496.099884"/>
-     <use xlink:href="#Poppins-Regular-6e" x="560.099869"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(205.199951 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(241.599945 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(278.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-62" transform="translate(303.499924 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(371.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(435.099899 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(471.499893 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(496.099884 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(560.099869 0)"/>
     </g>
    </g>
    <g id="text_53">
-    <!-- -599.63K -->
-    <g style="fill: #4b5563" transform="translate(563.430625 480.011188) scale(0.1 -0.1)">
+    <!-- -380.94K -->
+    <g style="fill: #4b5563" transform="translate(563.032188 480.011188) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-SemiBold-2d"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="58.299988"/>
-     <use xlink:href="#Poppins-SemiBold-39" x="122.699982"/>
-     <use xlink:href="#Poppins-SemiBold-39" x="185.299973"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="247.899963"/>
-     <use xlink:href="#Poppins-SemiBold-36" x="273.899948"/>
-     <use xlink:href="#Poppins-SemiBold-33" x="337.899933"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="397.799927"/>
+     <use xlink:href="#Poppins-SemiBold-33" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-38" transform="translate(118.199982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(182.499969 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(247.09996 0)"/>
+     <use xlink:href="#Poppins-SemiBold-39" transform="translate(273.099945 0)"/>
+     <use xlink:href="#Poppins-SemiBold-34" transform="translate(335.699936 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(401.799927 0)"/>
     </g>
    </g>
    <g id="text_54">
@@ -2300,141 +2303,146 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-SemiBold-55"/>
-     <use xlink:href="#Poppins-SemiBold-6e" x="69.699982"/>
-     <use xlink:href="#Poppins-SemiBold-69" x="135.799973"/>
-     <use xlink:href="#Poppins-SemiBold-74" x="163.59996"/>
-     <use xlink:href="#Poppins-SemiBold-73" x="202.399948"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="256.899933"/>
-     <use xlink:href="#Poppins-SemiBold-2f" x="280.699921"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="329.299911"/>
-     <use xlink:href="#Poppins-SemiBold-56" x="353.099899"/>
-     <use xlink:href="#Poppins-SemiBold-69" x="424.19989"/>
-     <use xlink:href="#Poppins-SemiBold-73" x="451.999878"/>
-     <use xlink:href="#Poppins-SemiBold-69" x="506.499863"/>
-     <use xlink:href="#Poppins-SemiBold-74" x="534.29985"/>
+     <use xlink:href="#Poppins-SemiBold-6e" transform="translate(69.699982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-69" transform="translate(135.799973 0)"/>
+     <use xlink:href="#Poppins-SemiBold-74" transform="translate(163.59996 0)"/>
+     <use xlink:href="#Poppins-SemiBold-73" transform="translate(202.399948 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(256.899933 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2f" transform="translate(280.699921 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(329.299911 0)"/>
+     <use xlink:href="#Poppins-SemiBold-56" transform="translate(353.099899 0)"/>
+     <use xlink:href="#Poppins-SemiBold-69" transform="translate(424.19989 0)"/>
+     <use xlink:href="#Poppins-SemiBold-73" transform="translate(451.999878 0)"/>
+     <use xlink:href="#Poppins-SemiBold-69" transform="translate(506.499863 0)"/>
+     <use xlink:href="#Poppins-SemiBold-74" transform="translate(534.29985 0)"/>
     </g>
    </g>
    <g id="text_55">
     <!-- Current Period -->
     <g style="fill: #6b7280" transform="translate(297.36 570.93) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-75" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-72" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-72" x="178.499954"/>
-     <use xlink:href="#Poppins-Regular-65" x="215.799942"/>
-     <use xlink:href="#Poppins-Regular-6e" x="277.799927"/>
-     <use xlink:href="#Poppins-Regular-74" x="341.799911"/>
-     <use xlink:href="#Poppins-Regular-20" x="378.199905"/>
-     <use xlink:href="#Poppins-Regular-50" x="404.899902"/>
-     <use xlink:href="#Poppins-Regular-65" x="462.799896"/>
-     <use xlink:href="#Poppins-Regular-72" x="524.799881"/>
-     <use xlink:href="#Poppins-Regular-69" x="562.099869"/>
-     <use xlink:href="#Poppins-Regular-6f" x="586.69986"/>
-     <use xlink:href="#Poppins-Regular-64" x="650.699844"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(178.499954 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(215.799942 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(277.799927 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(341.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(378.199905 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(404.899902 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(462.799896 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(524.799881 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(562.099869 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(586.69986 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(650.699844 0)"/>
     </g>
    </g>
    <g id="text_56">
-    <!-- 8.79 -->
+    <!-- 8.7 -->
     <g style="fill: #4b5563" transform="translate(297.36 585.245625) scale(0.12 -0.12)">
      <use xlink:href="#Poppins-SemiBold-38"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="64.299988"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="90.299973"/>
-     <use xlink:href="#Poppins-SemiBold-39" x="145.09996"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(64.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-37" transform="translate(90.299973 0)"/>
     </g>
    </g>
    <g id="text_57">
     <!-- Previous Period -->
     <g style="fill: #6b7280" transform="translate(395.01 570.93) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-72" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-65" x="95.199982"/>
-     <use xlink:href="#Poppins-Regular-76" x="157.199966"/>
-     <use xlink:href="#Poppins-Regular-69" x="213.299957"/>
-     <use xlink:href="#Poppins-Regular-6f" x="237.899948"/>
-     <use xlink:href="#Poppins-Regular-75" x="301.899933"/>
-     <use xlink:href="#Poppins-Regular-73" x="365.899918"/>
-     <use xlink:href="#Poppins-Regular-20" x="418.099915"/>
-     <use xlink:href="#Poppins-Regular-50" x="444.799911"/>
-     <use xlink:href="#Poppins-Regular-65" x="502.699905"/>
-     <use xlink:href="#Poppins-Regular-72" x="564.69989"/>
-     <use xlink:href="#Poppins-Regular-69" x="601.999878"/>
-     <use xlink:href="#Poppins-Regular-6f" x="626.599869"/>
-     <use xlink:href="#Poppins-Regular-64" x="690.599854"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(95.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-76" transform="translate(157.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(213.299957 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(237.899948 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(301.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-73" transform="translate(365.899918 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(418.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(444.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(502.699905 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(564.69989 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(601.999878 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(626.599869 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(690.599854 0)"/>
     </g>
    </g>
    <g id="text_58">
-    <!-- 8.78 -->
+    <!-- 8.86 -->
     <g style="fill: #4b5563" transform="translate(395.01 585.245625) scale(0.12 -0.12)">
      <use xlink:href="#Poppins-SemiBold-38"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="64.299988"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="90.299973"/>
-     <use xlink:href="#Poppins-SemiBold-38" x="145.09996"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(64.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-38" transform="translate(90.299973 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(154.59996 0)"/>
     </g>
    </g>
    <g id="text_59">
     <!-- Diff -->
     <g style="fill: #6b7280" transform="translate(297.36 612.1635) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-44"/>
-     <use xlink:href="#Poppins-Regular-69" x="70.699982"/>
-     <use xlink:href="#Poppins-Regular-66" x="95.299973"/>
-     <use xlink:href="#Poppins-Regular-66" x="128.199966"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(70.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(95.299973 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(128.199966 0)"/>
     </g>
    </g>
    <g id="text_60">
-    <!-- 0 -->
-    <g style="fill: #4b5563" transform="translate(463.880625 612.143187) scale(0.1 -0.1)">
-     <use xlink:href="#Poppins-SemiBold-30"/>
+    <!-- -0.16 -->
+    <g style="fill: #4b5563" transform="translate(445.430625 612.143187) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-2d"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(122.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(148.899963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(185.09996 0)"/>
     </g>
    </g>
    <g id="text_61">
     <!-- Pct Diff -->
     <g style="fill: #6b7280" transform="translate(297.36 632.0295) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-63" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-74" x="118.599991"/>
-     <use xlink:href="#Poppins-Regular-20" x="154.999985"/>
-     <use xlink:href="#Poppins-Regular-44" x="181.699982"/>
-     <use xlink:href="#Poppins-Regular-69" x="252.399963"/>
-     <use xlink:href="#Poppins-Regular-66" x="276.999954"/>
-     <use xlink:href="#Poppins-Regular-66" x="309.899948"/>
+     <use xlink:href="#Poppins-Regular-63" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(118.599991 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(154.999985 0)"/>
+     <use xlink:href="#Poppins-Regular-44" transform="translate(181.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(252.399963 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(276.999954 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(309.899948 0)"/>
     </g>
    </g>
    <g id="text_62">
-    <!-- 0.0% -->
-    <g style="fill: #4b5563" transform="translate(446.530625 632.009187) scale(0.1 -0.1)">
-     <use xlink:href="#Poppins-SemiBold-30"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="64.599991"/>
-     <use xlink:href="#Poppins-SemiBold-30" x="90.599976"/>
-     <use xlink:href="#Poppins-SemiBold-25" x="155.199966"/>
+    <!-- -1.8% -->
+    <g style="fill: #4b5563" transform="translate(443.569688 632.009187) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-2d"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(94.499985 0)"/>
+     <use xlink:href="#Poppins-SemiBold-38" transform="translate(120.499969 0)"/>
+     <use xlink:href="#Poppins-SemiBold-25" transform="translate(184.799957 0)"/>
     </g>
    </g>
    <g id="text_63">
     <!-- Contribution -->
     <g style="fill: #6b7280" transform="translate(297.36 651.8955) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-6f" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-6e" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-74" x="205.199951"/>
-     <use xlink:href="#Poppins-Regular-72" x="241.599945"/>
-     <use xlink:href="#Poppins-Regular-69" x="278.899933"/>
-     <use xlink:href="#Poppins-Regular-62" x="303.499924"/>
-     <use xlink:href="#Poppins-Regular-75" x="371.099915"/>
-     <use xlink:href="#Poppins-Regular-74" x="435.099899"/>
-     <use xlink:href="#Poppins-Regular-69" x="471.499893"/>
-     <use xlink:href="#Poppins-Regular-6f" x="496.099884"/>
-     <use xlink:href="#Poppins-Regular-6e" x="560.099869"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(205.199951 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(241.599945 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(278.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-62" transform="translate(303.499924 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(371.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(435.099899 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(471.499893 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(496.099884 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(560.099869 0)"/>
     </g>
    </g>
    <g id="text_64">
-    <!-- 108.77K -->
-    <g style="fill: #4b5563" transform="translate(433.641563 651.875188) scale(0.1 -0.1)">
-     <use xlink:href="#Poppins-SemiBold-31"/>
-     <use xlink:href="#Poppins-SemiBold-30" x="36.199997"/>
-     <use xlink:href="#Poppins-SemiBold-38" x="100.799988"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="165.099976"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="191.09996"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="245.899948"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="300.699936"/>
+    <!-- -152.26K -->
+    <g style="fill: #4b5563" transform="translate(427.338438 651.875188) scale(0.1 -0.1)">
+     <use xlink:href="#Poppins-SemiBold-2d"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-35" transform="translate(94.499985 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(158.899979 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(216.299973 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(242.299957 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(299.699951 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(363.699936 0)"/>
     </g>
    </g>
    <g id="text_65">
@@ -2487,225 +2495,227 @@ z
 " transform="scale(0.015625)"/>
      </defs>
      <use xlink:href="#Poppins-SemiBold-50"/>
-     <use xlink:href="#Poppins-SemiBold-72" x="60.799988"/>
-     <use xlink:href="#Poppins-SemiBold-69" x="101.199982"/>
-     <use xlink:href="#Poppins-SemiBold-63" x="128.999969"/>
-     <use xlink:href="#Poppins-SemiBold-65" x="189.199966"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="250.899963"/>
-     <use xlink:href="#Poppins-SemiBold-2f" x="274.699951"/>
-     <use xlink:href="#Poppins-SemiBold-20" x="323.299942"/>
-     <use xlink:href="#Poppins-SemiBold-55" x="347.09993"/>
-     <use xlink:href="#Poppins-SemiBold-6e" x="416.799911"/>
-     <use xlink:href="#Poppins-SemiBold-69" x="482.899902"/>
-     <use xlink:href="#Poppins-SemiBold-74" x="510.69989"/>
+     <use xlink:href="#Poppins-SemiBold-72" transform="translate(60.799988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-69" transform="translate(101.199982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-63" transform="translate(128.999969 0)"/>
+     <use xlink:href="#Poppins-SemiBold-65" transform="translate(189.199966 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(250.899963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2f" transform="translate(274.699951 0)"/>
+     <use xlink:href="#Poppins-SemiBold-20" transform="translate(323.299942 0)"/>
+     <use xlink:href="#Poppins-SemiBold-55" transform="translate(347.09993 0)"/>
+     <use xlink:href="#Poppins-SemiBold-6e" transform="translate(416.799911 0)"/>
+     <use xlink:href="#Poppins-SemiBold-69" transform="translate(482.899902 0)"/>
+     <use xlink:href="#Poppins-SemiBold-74" transform="translate(510.69989 0)"/>
     </g>
    </g>
    <g id="text_66">
     <!-- Current Period -->
     <g style="fill: #6b7280" transform="translate(576.36 570.93) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-75" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-72" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-72" x="178.499954"/>
-     <use xlink:href="#Poppins-Regular-65" x="215.799942"/>
-     <use xlink:href="#Poppins-Regular-6e" x="277.799927"/>
-     <use xlink:href="#Poppins-Regular-74" x="341.799911"/>
-     <use xlink:href="#Poppins-Regular-20" x="378.199905"/>
-     <use xlink:href="#Poppins-Regular-50" x="404.899902"/>
-     <use xlink:href="#Poppins-Regular-65" x="462.799896"/>
-     <use xlink:href="#Poppins-Regular-72" x="524.799881"/>
-     <use xlink:href="#Poppins-Regular-69" x="562.099869"/>
-     <use xlink:href="#Poppins-Regular-6f" x="586.69986"/>
-     <use xlink:href="#Poppins-Regular-64" x="650.699844"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(178.499954 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(215.799942 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(277.799927 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(341.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(378.199905 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(404.899902 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(462.799896 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(524.799881 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(562.099869 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(586.69986 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(650.699844 0)"/>
     </g>
    </g>
    <g id="text_67">
-    <!-- 394.74 -->
+    <!-- 397.91 -->
     <g style="fill: #4b5563" transform="translate(576.36 585.245625) scale(0.12 -0.12)">
      <use xlink:href="#Poppins-SemiBold-33"/>
-     <use xlink:href="#Poppins-SemiBold-39" x="59.899994"/>
-     <use xlink:href="#Poppins-SemiBold-34" x="122.499985"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="188.599976"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="214.59996"/>
-     <use xlink:href="#Poppins-SemiBold-34" x="269.399948"/>
+     <use xlink:href="#Poppins-SemiBold-39" transform="translate(59.899994 0)"/>
+     <use xlink:href="#Poppins-SemiBold-37" transform="translate(122.499985 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(177.299973 0)"/>
+     <use xlink:href="#Poppins-SemiBold-39" transform="translate(203.299957 0)"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(265.899948 0)"/>
     </g>
    </g>
    <g id="text_68">
     <!-- Previous Period -->
     <g style="fill: #6b7280" transform="translate(674.01 570.93) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-72" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-65" x="95.199982"/>
-     <use xlink:href="#Poppins-Regular-76" x="157.199966"/>
-     <use xlink:href="#Poppins-Regular-69" x="213.299957"/>
-     <use xlink:href="#Poppins-Regular-6f" x="237.899948"/>
-     <use xlink:href="#Poppins-Regular-75" x="301.899933"/>
-     <use xlink:href="#Poppins-Regular-73" x="365.899918"/>
-     <use xlink:href="#Poppins-Regular-20" x="418.099915"/>
-     <use xlink:href="#Poppins-Regular-50" x="444.799911"/>
-     <use xlink:href="#Poppins-Regular-65" x="502.699905"/>
-     <use xlink:href="#Poppins-Regular-72" x="564.69989"/>
-     <use xlink:href="#Poppins-Regular-69" x="601.999878"/>
-     <use xlink:href="#Poppins-Regular-6f" x="626.599869"/>
-     <use xlink:href="#Poppins-Regular-64" x="690.599854"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(95.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-76" transform="translate(157.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(213.299957 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(237.899948 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(301.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-73" transform="translate(365.899918 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(418.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-50" transform="translate(444.799911 0)"/>
+     <use xlink:href="#Poppins-Regular-65" transform="translate(502.699905 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(564.69989 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(601.999878 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(626.599869 0)"/>
+     <use xlink:href="#Poppins-Regular-64" transform="translate(690.599854 0)"/>
     </g>
    </g>
    <g id="text_69">
-    <!-- 401.39 -->
+    <!-- 409.03 -->
     <g style="fill: #4b5563" transform="translate(674.01 585.245625) scale(0.12 -0.12)">
      <use xlink:href="#Poppins-SemiBold-34"/>
-     <use xlink:href="#Poppins-SemiBold-30" x="66.099991"/>
-     <use xlink:href="#Poppins-SemiBold-31" x="130.699982"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="166.899979"/>
-     <use xlink:href="#Poppins-SemiBold-33" x="192.899963"/>
-     <use xlink:href="#Poppins-SemiBold-39" x="252.799957"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(66.099991 0)"/>
+     <use xlink:href="#Poppins-SemiBold-39" transform="translate(130.699982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(193.299973 0)"/>
+     <use xlink:href="#Poppins-SemiBold-30" transform="translate(219.299957 0)"/>
+     <use xlink:href="#Poppins-SemiBold-33" transform="translate(283.899948 0)"/>
     </g>
    </g>
    <g id="text_70">
     <!-- Diff -->
     <g style="fill: #6b7280" transform="translate(576.36 612.1635) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-44"/>
-     <use xlink:href="#Poppins-Regular-69" x="70.699982"/>
-     <use xlink:href="#Poppins-Regular-66" x="95.299973"/>
-     <use xlink:href="#Poppins-Regular-66" x="128.199966"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(70.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(95.299973 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(128.199966 0)"/>
     </g>
    </g>
    <g id="text_71">
-    <!-- -6.65 -->
-    <g style="fill: #4b5563" transform="translate(721.669688 612.143187) scale(0.1 -0.1)">
+    <!-- -11.12 -->
+    <g style="fill: #4b5563" transform="translate(724.30875 612.143187) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-SemiBold-2d"/>
-     <use xlink:href="#Poppins-SemiBold-36" x="58.299988"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="122.299973"/>
-     <use xlink:href="#Poppins-SemiBold-36" x="148.299957"/>
-     <use xlink:href="#Poppins-SemiBold-35" x="212.299942"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(94.499985 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(130.699982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-31" transform="translate(156.699966 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(192.899963 0)"/>
     </g>
    </g>
    <g id="text_72">
     <!-- Pct Diff -->
     <g style="fill: #6b7280" transform="translate(576.36 632.0295) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-50"/>
-     <use xlink:href="#Poppins-Regular-63" x="57.899994"/>
-     <use xlink:href="#Poppins-Regular-74" x="118.599991"/>
-     <use xlink:href="#Poppins-Regular-20" x="154.999985"/>
-     <use xlink:href="#Poppins-Regular-44" x="181.699982"/>
-     <use xlink:href="#Poppins-Regular-69" x="252.399963"/>
-     <use xlink:href="#Poppins-Regular-66" x="276.999954"/>
-     <use xlink:href="#Poppins-Regular-66" x="309.899948"/>
+     <use xlink:href="#Poppins-Regular-63" transform="translate(57.899994 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(118.599991 0)"/>
+     <use xlink:href="#Poppins-Regular-20" transform="translate(154.999985 0)"/>
+     <use xlink:href="#Poppins-Regular-44" transform="translate(181.699982 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(252.399963 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(276.999954 0)"/>
+     <use xlink:href="#Poppins-Regular-66" transform="translate(309.899948 0)"/>
     </g>
    </g>
    <g id="text_73">
-    <!-- -1.7% -->
-    <g style="fill: #4b5563" transform="translate(723.519688 632.009187) scale(0.1 -0.1)">
+    <!-- -2.7% -->
+    <g style="fill: #4b5563" transform="translate(721.399375 632.009187) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-SemiBold-2d"/>
-     <use xlink:href="#Poppins-SemiBold-31" x="58.299988"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="94.499985"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="120.499969"/>
-     <use xlink:href="#Poppins-SemiBold-25" x="175.299957"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(115.699982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-37" transform="translate(141.699966 0)"/>
+     <use xlink:href="#Poppins-SemiBold-25" transform="translate(196.499954 0)"/>
     </g>
    </g>
    <g id="text_74">
     <!-- Contribution -->
     <g style="fill: #6b7280" transform="translate(576.36 651.8955) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-Regular-43"/>
-     <use xlink:href="#Poppins-Regular-6f" x="77.199982"/>
-     <use xlink:href="#Poppins-Regular-6e" x="141.199966"/>
-     <use xlink:href="#Poppins-Regular-74" x="205.199951"/>
-     <use xlink:href="#Poppins-Regular-72" x="241.599945"/>
-     <use xlink:href="#Poppins-Regular-69" x="278.899933"/>
-     <use xlink:href="#Poppins-Regular-62" x="303.499924"/>
-     <use xlink:href="#Poppins-Regular-75" x="371.099915"/>
-     <use xlink:href="#Poppins-Regular-74" x="435.099899"/>
-     <use xlink:href="#Poppins-Regular-69" x="471.499893"/>
-     <use xlink:href="#Poppins-Regular-6f" x="496.099884"/>
-     <use xlink:href="#Poppins-Regular-6e" x="560.099869"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(77.199982 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(141.199966 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(205.199951 0)"/>
+     <use xlink:href="#Poppins-Regular-72" transform="translate(241.599945 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(278.899933 0)"/>
+     <use xlink:href="#Poppins-Regular-62" transform="translate(303.499924 0)"/>
+     <use xlink:href="#Poppins-Regular-75" transform="translate(371.099915 0)"/>
+     <use xlink:href="#Poppins-Regular-74" transform="translate(435.099899 0)"/>
+     <use xlink:href="#Poppins-Regular-69" transform="translate(471.499893 0)"/>
+     <use xlink:href="#Poppins-Regular-6f" transform="translate(496.099884 0)"/>
+     <use xlink:href="#Poppins-Regular-6e" transform="translate(560.099869 0)"/>
     </g>
    </g>
    <g id="text_75">
-    <!-- -708.4K -->
-    <g style="fill: #4b5563" transform="translate(709.3025 651.875188) scale(0.1 -0.1)">
+    <!-- -228.68K -->
+    <g style="fill: #4b5563" transform="translate(703.54 651.875188) scale(0.1 -0.1)">
      <use xlink:href="#Poppins-SemiBold-2d"/>
-     <use xlink:href="#Poppins-SemiBold-37" x="58.299988"/>
-     <use xlink:href="#Poppins-SemiBold-30" x="113.099976"/>
-     <use xlink:href="#Poppins-SemiBold-38" x="177.699966"/>
-     <use xlink:href="#Poppins-SemiBold-2e" x="241.999954"/>
-     <use xlink:href="#Poppins-SemiBold-34" x="267.999939"/>
-     <use xlink:href="#Poppins-SemiBold-4b" x="334.09993"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(58.299988 0)"/>
+     <use xlink:href="#Poppins-SemiBold-32" transform="translate(115.699982 0)"/>
+     <use xlink:href="#Poppins-SemiBold-38" transform="translate(173.099976 0)"/>
+     <use xlink:href="#Poppins-SemiBold-2e" transform="translate(237.399963 0)"/>
+     <use xlink:href="#Poppins-SemiBold-36" transform="translate(263.399948 0)"/>
+     <use xlink:href="#Poppins-SemiBold-38" transform="translate(327.399933 0)"/>
+     <use xlink:href="#Poppins-SemiBold-4b" transform="translate(391.699921 0)"/>
     </g>
    </g>
    <g id="line2d_1">
     <path d="M 146.7 41.85
 L 342 41.85
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
    </g>
    <g id="line2d_2">
     <path d="M 157.86 79.272
 L 330.84 79.272
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
    </g>
    <g id="line2d_3">
     <path d="M 7.2 213.714
 L 202.5 213.714
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
    </g>
    <g id="line2d_4">
     <path d="M 18.36 251.136
 L 191.34 251.136
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
    </g>
    <g id="line2d_5">
     <path d="M 286.2 213.714
 L 481.5 213.714
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
    </g>
    <g id="line2d_6">
     <path d="M 297.36 251.136
 L 470.34 251.136
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
    </g>
    <g id="line2d_7">
     <path d="M 146.7 385.578
 L 342 385.578
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
    </g>
    <g id="line2d_8">
     <path d="M 157.86 423
 L 330.84 423
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
    </g>
    <g id="line2d_9">
     <path d="M 425.7 385.578
 L 621 385.578
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
    </g>
    <g id="line2d_10">
     <path d="M 436.86 423
 L 609.84 423
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
    </g>
    <g id="line2d_11">
     <path d="M 286.2 557.442
 L 481.5 557.442
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
    </g>
    <g id="line2d_12">
     <path d="M 297.36 594.864
 L 470.34 594.864
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
    </g>
    <g id="line2d_13">
     <path d="M 565.2 557.442
 L 760.5 557.442
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-width: 1.5; stroke-linecap: square"/>
    </g>
    <g id="line2d_14">
     <path d="M 576.36 594.864
 L 749.34 594.864
-" clip-path="url(#p4795c63ffa)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
+" clip-path="url(#p5b6201310d)" style="fill: none; stroke: #e5e7eb; stroke-linecap: square"/>
    </g>
   </g>
  </g>
  <defs>
-  <clipPath id="p4795c63ffa">
+  <clipPath id="p5b6201310d">
    <rect x="7.2" y="7.2" width="753.3" height="654.192"/>
   </clipPath>
  </defs>
