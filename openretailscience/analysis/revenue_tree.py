@@ -6,277 +6,270 @@ spend per transaction, extended with units per transaction x price per unit when
 Provides ``RevenueTree`` (with ``.draw_tree()``) and ``calc_tree_kpis``.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import ibis
 import numpy as np
 import pandas as pd
-from matplotlib.axes import Axes
 
 from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles import graph_utils as gu
 from openretailscience.plots.tree_diagram import DetailedTreeNode, TreeGrid
 
+if TYPE_CHECKING:
+    from datetime import date
 
-def calc_tree_kpis(
-    df: pd.DataFrame,
-    p1_index: list[bool] | pd.Series,
-    p2_index: list[bool] | pd.Series,
-) -> pd.DataFrame:
-    """Calculate the revenue-tree KPIs from a pre-aggregated frame.
+    from matplotlib.axes import Axes
 
-    Input contract: the frame built by ``RevenueTree._agg_data`` — one row per
-    (group, period) with the option-derived columns ``column.agg.customer_id``,
-    ``column.agg.transaction_id``, ``column.agg.unit_spend``, and optionally
-    ``column.agg.unit_quantity`` (only when units were in the input). ``p1_index``
-    and ``p2_index`` are boolean row selectors for the two period rows.
+MAX_PERIODS_SHOWN = 10  # period values listed in a "p1_value/p2_value not found" error
+
+
+def _contribution_ratio(df: pd.DataFrame, ratio: str, numerator: str, denominator: str) -> tuple[pd.Series, pd.Series]:
+    """Return a ratio's (p1, p2) values for the contribution split.
+
+    A 0 / 0 period takes the other period's value; a non-zero amount over a zero count stays NaN.
+
+    Args:
+        df (pd.DataFrame): Frame holding the period-suffixed ratio, numerator and denominator columns.
+        ratio (str): Unsuffixed ratio column name.
+        numerator (str): Unsuffixed numerator column name.
+        denominator (str): Unsuffixed denominator column name.
+
+    Returns:
+        tuple[pd.Series, pd.Series]: The period 1 and period 2 ratio values.
+    """
+    p1, p2 = get_option("column.suffix.period_1"), get_option("column.suffix.period_2")
+    empty_p1 = (df[f"{numerator}_{p1}"] == 0) & (df[f"{denominator}_{p1}"] == 0)
+    empty_p2 = (df[f"{numerator}_{p2}"] == 0) & (df[f"{denominator}_{p2}"] == 0)
+    ratio_p1, ratio_p2 = df[f"{ratio}_{p1}"], df[f"{ratio}_{p2}"]
+    return ratio_p1.mask(empty_p1, ratio_p2), ratio_p2.mask(empty_p2, ratio_p1)
+
+
+def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame) -> pd.DataFrame:
+    """Calculate the revenue-tree KPIs from per-period aggregates.
+
+    Each frame has one row per group with the option-derived columns ``column.agg.customer_id``,
+    ``column.agg.transaction_id``, ``column.agg.unit_spend`` and, optionally,
+    ``column.agg.unit_quantity``. Rows are paired across periods by index label; a group
+    missing from one frame gets 0 counts for that period. For an ungrouped comparison, pass
+    one row per period with the same label (e.g. both indexed ``0``).
 
     Output columns are ``{metric}_p1`` / ``_p2`` / ``_diff`` / ``_pct_diff`` (suffixes
     from the ``column.suffix.*`` options) plus ``{metric}_contrib`` contribution
-    columns (quantity/price columns present only when units were) and the two
-    elasticity columns. ``pct_diff = diff / p1``, with p1 = 0 giving NaN. The
-    elasticity columns use ARC (midpoint) percentage changes: price = %delta units /
-    %delta price per unit, frequency = %delta transactions per customer / %delta
-    spend per customer.
+    columns (quantity/price columns present only when units were) and the elasticity
+    columns (``price_elasticity`` only with units). ``pct_diff = diff / p1``, with p1 = 0
+    giving NaN. The elasticity columns use ARC (midpoint) percentage changes: price =
+    %delta units / %delta price per unit, frequency = %delta transactions per customer /
+    %delta spend per customer.
+
+    Each ``_contrib`` is in spend units: the factor's change times the period midpoints
+    of its sibling and of each ancestor's sibling. With C = customers, S = spend per customer,
+    T = transactions per customer, A = spend per transaction, U = units per
+    transaction, P = price per unit, dX = X_p2 - X_p1 and mX = (X_p1 + X_p2) / 2:
+
+        customers                  dC * mS
+        spend_per_customer         dS * mC
+        transactions_per_customer  dT * mA * mC
+        spend_per_transaction      dA * mT * mC
+        units_per_transaction      dU * mP * mT * mC
+        price_per_unit             dP * mU * mT * mC
+
+    Siblings sum exactly to their parent's contribution (the top pair to ``spend_diff``)
+    and an unchanged factor contributes 0. This is a level-by-level split, not the
+    three-factor Shapley value of C x T x A.
+
+    When a count is zero, the ratio inputs (S, T, A, U, P) change:
+
+    - The ``_p1`` / ``_p2`` columns show a ratio over a zero count as NaN.
+    - A period with nothing in it (0 / 0, e.g. a group that opened or closed) takes the
+      other period's ratio, so that ratio's change is 0 and the group's whole change lands
+      on ``customers``.
+    - A non-zero amount over a zero count (spend with no units, or with no customers because
+      every customer_id is null) can't be split into those factors, so the contributions of
+      that ratio, its sibling and every factor below them are NaN.
 
     Args:
-        df (pd.DataFrame): Pre-aggregated frame as described above.
-        p1_index (list[bool] | pd.Series): Boolean row selector for the period 1 rows.
-        p2_index (list[bool] | pd.Series): Boolean row selector for the period 2 rows.
+        p1_df (pd.DataFrame): Period 1 aggregates, one row per group.
+        p2_df (pd.DataFrame): Period 2 aggregates, one row per group.
 
     Returns:
-        pd.DataFrame: One row per (group) with the period, difference, percent-difference,
-            and contribution columns described above.
+        pd.DataFrame: One row per group, sorted by group, with the period, difference,
+            percent-difference, and contribution columns described above.
+
+    Raises:
+        TypeError: If ``p1_df`` or ``p2_df`` is not a DataFrame.
+        ValueError: If a required column is missing, a frame repeats an index label, or only one
+            frame has ``column.agg.unit_quantity``.
     """
     cols = ColumnHelper()
     required_cols = [cols.agg.customer_id, cols.agg.transaction_id, cols.agg.unit_spend]
+    for name, frame in (("p1_df", p1_df), ("p2_df", p2_df)):
+        if not isinstance(frame, pd.DataFrame):
+            msg = f"{name} must be a pandas DataFrame, got {type(frame).__name__}."
+            raise TypeError(msg)
+        ensure_data_has_columns(frame, required_cols)
+        if not frame.index.is_unique:
+            msg = f"{name} has repeated index labels; each group needs at most one row per period."
+            raise ValueError(msg)
 
-    if cols.agg.unit_qty in df.columns:
+    ratio_parts = {
+        cols.calc.spend_per_cust: (cols.agg.unit_spend, cols.agg.customer_id),
+        cols.calc.trans_per_cust: (cols.agg.transaction_id, cols.agg.customer_id),
+        cols.calc.spend_per_trans: (cols.agg.unit_spend, cols.agg.transaction_id),
+    }
+    metric_cols = [*required_cols, *ratio_parts]
+    has_quantity = cols.agg.unit_qty in p1_df.columns
+    if has_quantity != (cols.agg.unit_qty in p2_df.columns):
+        msg = f"p1_df and p2_df must both have {cols.agg.unit_qty!r} or neither."
+        raise ValueError(msg)
+    if has_quantity:
         required_cols.append(cols.agg.unit_qty)
+        ratio_parts[cols.calc.units_per_trans] = (cols.agg.unit_qty, cols.agg.transaction_id)
+        ratio_parts[cols.calc.price_per_unit] = (cols.agg.unit_spend, cols.agg.unit_qty)
+        metric_cols += [cols.agg.unit_qty, cols.calc.units_per_trans, cols.calc.price_per_unit]
+    p1, p2 = get_option("column.suffix.period_1"), get_option("column.suffix.period_2")
 
-    df = df[required_cols].copy()
-    df_cols = df.columns
+    # A group missing from a period gets 0 counts; sort=True keeps P2-only groups in group order, not appended last
+    df = pd.concat(
+        [p1_df[required_cols].add_suffix(f"_{p1}"), p2_df[required_cols].add_suffix(f"_{p2}")], axis=1, sort=True
+    ).fillna(0)
 
-    if cols.agg.unit_qty in df_cols:
-        df[cols.calc.units_per_trans] = df[cols.agg.unit_qty] / df[cols.agg.transaction_id]
-        df[cols.calc.price_per_unit] = df[cols.agg.unit_spend] / df[cols.agg.unit_qty]
+    for ratio, (numerator, denominator) in ratio_parts.items():
+        for period in (p1, p2):
+            df[f"{ratio}_{period}"] = df[f"{numerator}_{period}"] / df[f"{denominator}_{period}"].replace(0, np.nan)
 
-    df[cols.calc.spend_per_cust] = df[cols.agg.unit_spend] / df[cols.agg.customer_id]
-    df[cols.calc.spend_per_trans] = df[cols.agg.unit_spend] / df[cols.agg.transaction_id]
-    df[cols.calc.trans_per_cust] = df[cols.agg.transaction_id] / df[cols.agg.customer_id]
+    diff, pct_diff = get_option("column.suffix.difference"), get_option("column.suffix.percent_difference")
+    for col in metric_cols:
+        df[f"{col}_{diff}"] = df[f"{col}_{p2}"] - df[f"{col}_{p1}"]
+        df[f"{col}_{pct_diff}"] = df[f"{col}_{diff}"] / df[f"{col}_{p1}"].replace(0, np.nan)
 
-    p1_df = df[p1_index]
-    p1_df.columns = [col + "_" + get_option("column.suffix.period_1") for col in p1_df.columns]
-    p2_df = df[p2_index]
-    p2_df.columns = [col + "_" + get_option("column.suffix.period_2") for col in p2_df.columns]
+    cust_mid = (df[cols.agg.customer_id_p1] + df[cols.agg.customer_id_p2]) / 2
+    trans_per_cust_mid = (df[cols.calc.trans_per_cust_p1] + df[cols.calc.trans_per_cust_p2]) / 2
+    spend_per_cust_mid = (df[cols.calc.spend_per_cust_p1] + df[cols.calc.spend_per_cust_p2]) / 2
 
-    # When df only contains two periods than the indexes should be dropped for proper concatenation
-    period_count = 2
-    if len(df.index) == period_count:
-        p1_df = p1_df.reset_index(drop=True)
-        p2_df = p2_df.reset_index(drop=True)
-
-    # fillna with 0 to handle cases when one time period isn't present
-    df = pd.concat([p1_df, p2_df], axis=1).fillna(0)
-
-    for col in [
-        cols.agg.customer_id,
-        cols.agg.transaction_id,
-        cols.agg.unit_spend,
-        cols.calc.spend_per_trans,
-        cols.calc.trans_per_cust,
-        cols.calc.spend_per_cust,
-    ]:
-        # Difference calculations
-        df[col + "_" + get_option("column.suffix.difference")] = (
-            df[col + "_" + get_option("column.suffix.period_2")] - df[col + "_" + get_option("column.suffix.period_1")]
-        )
-
-        # Percentage change calculations
-        p1_col = df[col + "_" + get_option("column.suffix.period_1")]
-        df[col + "_" + get_option("column.suffix.percent_difference")] = df[
-            col + "_" + get_option("column.suffix.difference")
-        ] / p1_col.replace(0, np.nan)
-
-    # Calculate price elasticity
-    if cols.agg.unit_qty in df_cols:
-        qty_avg = ((df[cols.agg.unit_qty_p2] + df[cols.agg.unit_qty_p1]) / 2).replace(0, np.nan)
-        qty_pct_change = (df[cols.agg.unit_qty_p2] - df[cols.agg.unit_qty_p1]) / qty_avg
-
-        price_avg = ((df[cols.calc.price_per_unit_p2] + df[cols.calc.price_per_unit_p1]) / 2).replace(0, np.nan)
-        price_pct_change = (df[cols.calc.price_per_unit_p2] - df[cols.calc.price_per_unit_p1]) / price_avg
-
-        df[cols.calc.price_elasticity] = qty_pct_change / price_pct_change.replace(0, np.nan)
-
-    # Calculate frequency elasticity
-    freq_avg = ((df[cols.calc.trans_per_cust_p2] + df[cols.calc.trans_per_cust_p1]) / 2).replace(0, np.nan)
-    freq_pct_change = (df[cols.calc.trans_per_cust_p2] - df[cols.calc.trans_per_cust_p1]) / freq_avg
-
-    spend_avg = ((df[cols.calc.spend_per_cust_p2] + df[cols.calc.spend_per_cust_p1]) / 2).replace(0, np.nan)
-    spend_pct_change = (df[cols.calc.spend_per_cust_p2] - df[cols.calc.spend_per_cust_p1]) / spend_avg
-
+    freq_pct_change = df[cols.calc.trans_per_cust_diff] / trans_per_cust_mid.replace(0, np.nan)
+    spend_pct_change = df[cols.calc.spend_per_cust_diff] / spend_per_cust_mid.replace(0, np.nan)
     df[cols.calc.frequency_elasticity] = freq_pct_change / spend_pct_change.replace(0, np.nan)
 
-    # Contribution calculations
-    df[cols.agg.customer_id_contrib] = (
-        df[cols.agg.unit_spend_p2]
-        - (df[cols.agg.customer_id_p1] * df[cols.calc.spend_per_cust_p2])
-        - ((df[cols.agg.customer_id_diff] * df[cols.calc.spend_per_cust_diff]) / 2)
-    )
-    df[cols.calc.spend_per_cust_contrib] = (
-        df[cols.agg.unit_spend_p2]
-        - (df[cols.calc.spend_per_cust_p1] * df[cols.agg.customer_id_p2])
-        - ((df[cols.agg.customer_id_diff] * df[cols.calc.spend_per_cust_diff]) / 2)
-    )
+    s1, s2 = _contribution_ratio(df, cols.calc.spend_per_cust, *ratio_parts[cols.calc.spend_per_cust])
+    t1, t2 = _contribution_ratio(df, cols.calc.trans_per_cust, *ratio_parts[cols.calc.trans_per_cust])
+    a1, a2 = _contribution_ratio(df, cols.calc.spend_per_trans, *ratio_parts[cols.calc.spend_per_trans])
+    df[cols.agg.customer_id_contrib] = df[cols.agg.customer_id_diff] * (s1 + s2) / 2
+    df[cols.calc.spend_per_cust_contrib] = (s2 - s1) * cust_mid
+    df[cols.calc.trans_per_cust_contrib] = (t2 - t1) * (a1 + a2) / 2 * cust_mid
+    df[cols.calc.spend_per_trans_contrib] = (a2 - a1) * (t1 + t2) / 2 * cust_mid
 
-    df[cols.calc.trans_per_cust_contrib] = (
-        (
-            df[cols.calc.spend_per_cust_p2]
-            - (df[cols.calc.trans_per_cust_p1] * df[cols.calc.spend_per_trans_p2])
-            - ((df[cols.calc.trans_per_cust_diff] * df[cols.calc.spend_per_trans_diff]) / 2)
-        )
-        * df[cols.agg.customer_id_p2]
-    ) - ((df[cols.agg.customer_id_diff] * df[cols.calc.spend_per_cust_diff]) / 4)
+    if has_quantity:
+        qty_mid = (df[cols.agg.unit_qty_p1] + df[cols.agg.unit_qty_p2]) / 2
+        price_per_unit_mid = (df[cols.calc.price_per_unit_p1] + df[cols.calc.price_per_unit_p2]) / 2
 
-    df[cols.calc.spend_per_trans_contrib] = (
-        (
-            df[cols.calc.spend_per_cust_p2]
-            - (df[cols.calc.spend_per_trans_p1] * df[cols.calc.trans_per_cust_p2])
-            - ((df[cols.calc.trans_per_cust_diff] * df[cols.calc.spend_per_trans_diff]) / 2)
-        )
-        * df[cols.agg.customer_id_p2]
-    ) - ((df[cols.agg.customer_id_diff] * df[cols.calc.spend_per_cust_diff]) / 4)
+        qty_pct_change = df[cols.agg.unit_qty_diff] / qty_mid.replace(0, np.nan)
+        price_pct_change = df[cols.calc.price_per_unit_diff] / price_per_unit_mid.replace(0, np.nan)
+        df[cols.calc.price_elasticity] = qty_pct_change / price_pct_change.replace(0, np.nan)
 
-    if cols.agg.unit_qty in df_cols:
-        # Difference calculations
-        for col in [
-            cols.agg.unit_qty,
-            cols.calc.units_per_trans,
-            cols.calc.price_per_unit,
-        ]:
-            df[col + "_" + get_option("column.suffix.difference")] = (
-                df[col + "_" + get_option("column.suffix.period_2")]
-                - df[col + "_" + get_option("column.suffix.period_1")]
-            )
+        u1, u2 = _contribution_ratio(df, cols.calc.units_per_trans, *ratio_parts[cols.calc.units_per_trans])
+        pr1, pr2 = _contribution_ratio(df, cols.calc.price_per_unit, *ratio_parts[cols.calc.price_per_unit])
+        trans_per_cust_weight = (t1 + t2) / 2 * cust_mid
+        df[cols.calc.units_per_trans_contrib] = (u2 - u1) * (pr1 + pr2) / 2 * trans_per_cust_weight
+        df[cols.calc.price_per_unit_contrib] = (pr2 - pr1) * (u1 + u2) / 2 * trans_per_cust_weight
 
-        for col in [
-            cols.agg.unit_qty,
-            cols.calc.units_per_trans,
-            cols.calc.price_per_unit,
-        ]:
-            p1_col = df[col + "_" + get_option("column.suffix.period_1")]
-            df[col + "_" + get_option("column.suffix.percent_difference")] = df[
-                col + "_" + get_option("column.suffix.difference")
-            ] / p1_col.replace(0, np.nan)
-
-        df[cols.calc.price_per_unit_contrib] = (
-            (
-                (
-                    df[cols.calc.spend_per_trans_p2]
-                    - (df[cols.calc.price_per_unit_p1] * df[cols.calc.units_per_trans_p2])
-                    - ((df[cols.calc.units_per_trans_diff] * df[cols.calc.price_per_unit_diff]) / 2)
-                )
-                * df[cols.calc.trans_per_cust_p2]
-            )
-            - ((df[cols.calc.trans_per_cust_diff] * df[cols.calc.spend_per_trans_diff]) / 4)
-        ) * df[cols.agg.customer_id_p2] - ((df[cols.agg.customer_id_diff] * df[cols.calc.spend_per_cust_diff]) / 8)
-
-        df[cols.calc.units_per_trans_contrib] = (
-            (
-                (
-                    df[cols.calc.spend_per_trans_p2]
-                    - (df[cols.calc.units_per_trans_p1] * df[cols.calc.price_per_unit_p2])
-                    - ((df[cols.calc.units_per_trans_diff] * df[cols.calc.price_per_unit_diff]) / 2)
-                )
-                * df[cols.calc.trans_per_cust_p2]
-            )
-            - ((df[cols.calc.trans_per_cust_diff] * df[cols.calc.spend_per_trans_diff]) / 4)
-        ) * df[cols.agg.customer_id_p2] - ((df[cols.agg.customer_id_diff] * df[cols.calc.spend_per_cust_diff]) / 8)
-
-    cols = RevenueTree._get_final_col_order(include_quantity=cols.agg.unit_qty in df_cols)
-
-    return df[cols]
+    return df[RevenueTree._get_final_col_order(include_quantity=has_quantity)]
 
 
 class RevenueTree:
     """Period-over-period revenue decomposition with per-factor contributions.
 
-    Accepts pandas or Ibis input; the period aggregation runs in the Ibis engine via
-    ``_agg_data``. The result is in ``df`` (pandas); ``draw_tree()`` renders the
-    decomposition diagram.
+    ``df`` (pandas) has one row per group: a single row labelled 0 when ungrouped, a
+    ``CategoricalIndex`` for one ``group_col`` and a ``MultiIndex`` for several. A group
+    missing from one period has 0 customers, transactions and spend for it. Columns are
+    ``{metric}_p1`` / ``_p2`` / ``_diff`` / ``_pct_diff`` for ``customers``, ``transactions``,
+    ``spend``, ``spend_per_customer``, ``transactions_per_customer`` and
+    ``spend_per_transaction`` (plus ``units``, ``units_per_transaction`` and
+    ``price_per_unit`` with quantity data), ``{metric}_contrib`` for the tree's factors, and
+    ``frequency_elasticity`` / ``price_elasticity``. ``_pct_diff`` is a fraction (0.1 = +10%).
+    See `calc_tree_kpis` for the formulas. ``draw_tree()`` renders one row as a diagram.
     """
 
     def __init__(
         self,
         df: pd.DataFrame | ibis.Table,
         period_col: str,
-        p1_value: str,
-        p2_value: str,
+        p1_value: str | int | date,
+        p2_value: str | int | date,
         group_col: str | list[str] | None = None,
     ) -> None:
         """Initialize the Revenue Tree and compute the KPI table immediately.
 
         If the input contains the option-derived ``column.unit_quantity`` column,
-        units/price/price-elasticity metrics are added. ``p1_value`` / ``p2_value``
-        are matched by equality against ``period_col``; rows for any other period
-        are silently dropped.
+        units/price/price-elasticity metrics are added.
 
         Args:
             df (pd.DataFrame | ibis.Table): Transaction data with the option-derived
                 customer_id, transaction_id, unit_spend, and (optional) unit_quantity columns.
-            period_col (str): Column identifying the period.
-            p1_value (str): Value representing the first period.
-            p2_value (str): Value representing the second period.
+            period_col (str): Column holding a caller-assigned period label per row (e.g.
+                ``"2024Q1"``), not a raw transaction date: labels are matched exactly and rows
+                of any other period are dropped.
+            p1_value (str | int | date): Label of the first (base) period.
+            p2_value (str | int | date): Label of the second period.
             group_col (str | list[str] | None): Column(s) to break the analysis down by.
 
         Raises:
-            ValueError: If the required columns are not present in the data.
+            ValueError: If the required columns are not present in the data, if
+                ``p1_value`` equals ``p2_value``, or if either matches no rows of ``period_col``.
+            ibis.common.exceptions.IbisTypeError: If ``p1_value`` or ``p2_value`` can't be compared
+                with ``period_col`` (e.g. a str label on an int column).
         """
         cols = ColumnHelper()
 
+        if p1_value == p2_value:
+            msg = f"p1_value and p2_value must be different, got {p1_value!r} for both."
+            raise ValueError(msg)
         if group_col is not None:
             group_col = ensure_columns(df, group_col, "group_col")
 
-        required_cols = [cols.customer_id, cols.transaction_id, cols.unit_spend]
+        required_cols = [cols.customer_id, cols.transaction_id, cols.unit_spend, period_col]
         if cols.unit_qty in df.columns:
             required_cols.append(cols.unit_qty)
         # group_col is already validated above; only the function's hard-coded requirements remain.
         ensure_data_has_columns(df, required_cols)
 
-        df, p1_index, p2_index = self._agg_data(df, period_col, p1_value, p2_value, group_col)
-
-        self.df = calc_tree_kpis(
-            df=df,
-            p1_index=p1_index,
-            p2_index=p2_index,
-        )
+        self.df = calc_tree_kpis(*self._agg_data(df, period_col, p1_value, p2_value, group_col))
 
     @staticmethod
     def _agg_data(
         df: pd.DataFrame | ibis.Table,
         period_col: str,
-        p1_value: str,
-        p2_value: str,
+        p1_value: str | int | date,
+        p2_value: str | int | date,
         group_col: list[str] | None = None,
-    ) -> tuple[pd.DataFrame, list[bool], list[bool]]:
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Aggregate data by period and optional grouping columns in the Ibis engine.
 
         Args:
             df (pd.DataFrame | ibis.Table): Input data.
             period_col (str): Column name for the period.
-            p1_value (str): Value representing period 1.
-            p2_value (str): Value representing period 2.
+            p1_value (str | int | date): Value representing period 1.
+            p2_value (str | int | date): Value representing period 2.
             group_col (list[str] | None): List of column names to group by.
 
         Returns:
-            tuple[pd.DataFrame, list[bool], list[bool]]: Materialized frame (one row per
-                (group, period), p1 rows first, sorted by ``group_col``) plus boolean masks
-                selecting the p1 and p2 rows. The frame index is ``["p1", "p2"]`` when
-                ungrouped, else the group index (categorical for a single column,
-                MultiIndex for multiple).
+            tuple[pd.DataFrame, pd.DataFrame]: The period 1 and period 2 aggregates, one row per
+                group present in that period, sorted by group. Ungrouped, each is one row labelled
+                0; one group column gives a ``CategoricalIndex`` with the same categories in both
+                periods, several give a ``MultiIndex``.
         """
         cols = ColumnHelper()
 
-        df = ensure_ibis_table(df)
+        table = ensure_ibis_table(df)
+        p1, p2 = get_option("column.suffix.period_1"), get_option("column.suffix.period_2")
+        # Relabel in the backend, whose comparison the filter used: pandas may read the values back as another
+        # type (a date column returns Timestamps, which never equal a date)
+        df = table.filter(table[period_col].isin([p1_value, p2_value])).mutate(
+            **{period_col: (ibis._[period_col] == p1_value).ifelse(p1, p2)},
+        )
 
         aggs = {
             cols.agg.customer_id: df[cols.customer_id].nunique(),
@@ -288,26 +281,35 @@ class RevenueTree:
 
         group_by_cols = [*group_col, period_col] if group_col else [period_col]
         df = pd.DataFrame(df.group_by(group_by_cols).aggregate(**aggs).execute())
-        p1_df = df[df[period_col] == p1_value].drop(columns=[period_col])
-        p2_df = df[df[period_col] == p2_value].drop(columns=[period_col])
-
-        if group_col is not None:
-            p1_df = p1_df.sort_values(by=group_col)
-            p2_df = p2_df.sort_values(by=group_col)
-
-        new_p1_index = [True] * len(p1_df) + [False] * len(p2_df)
-        new_p2_index = [not i for i in new_p1_index]
-
-        result_df = pd.concat([p1_df, p2_df], ignore_index=True)
+        p1_df = df[df[period_col] == p1].drop(columns=[period_col])
+        p2_df = df[df[period_col] == p2].drop(columns=[period_col])
+        for name, value, period_df in (("p1_value", p1_value, p1_df), ("p2_value", p2_value, p2_df)):
+            if len(period_df) == 0:
+                # Sorted and capped in the backend: a mistaken raw timestamp column has millions of distinct values.
+                # Nulls sort last, so one can only take a slot when there are too few values to need it.
+                present = (
+                    table.select(period_col)
+                    .distinct()
+                    .order_by(period_col)
+                    .limit(MAX_PERIODS_SHOWN + 1)
+                    .execute()[period_col]
+                    .dropna()
+                    .tolist()
+                )
+                shown = f"{present[:MAX_PERIODS_SHOWN]}" + (" ..." if len(present) > MAX_PERIODS_SHOWN else "")
+                msg = f"{name} {value!r} does not appear in period column {period_col!r}, which has {shown}."
+                raise ValueError(msg)
 
         if group_col is None:
-            result_df.index = ["p1", "p2"]
-        else:
-            result_df = result_df.set_index(group_col)
-            if len(group_col) == 1:
-                result_df.index = pd.CategoricalIndex(result_df.index)
-            # else: MultiIndex created automatically by set_index
-        return result_df, new_p1_index, new_p2_index
+            return p1_df.reset_index(drop=True), p2_df.reset_index(drop=True)
+
+        p1_df, p2_df = p1_df.set_index(group_col).sort_index(), p2_df.set_index(group_col).sort_index()
+        if len(group_col) == 1:
+            # Categories can't be null; a missing group value stays a NaN label
+            categories = p1_df.index.union(p2_df.index).dropna().rename(None)
+            p1_df.index = pd.CategoricalIndex(p1_df.index, categories=categories, name=group_col[0])
+            p2_df.index = pd.CategoricalIndex(p2_df.index, categories=categories, name=group_col[0])
+        return p1_df, p2_df
 
     @staticmethod
     def _get_final_col_order(include_quantity: bool) -> list[str]:
