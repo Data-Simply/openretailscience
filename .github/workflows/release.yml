@@ -175,7 +175,10 @@ jobs:
           gh pr list --state merged --base main --search "merged:>$since" --limit 500 --json number,title \
             | jq -r '.[] | [.number, .title] | @tsv' \
             | while IFS=$'\t' read -r number title; do
-                labels="$(.github/scripts/release_labels.sh "$title")" || continue
+                if ! labels="$(.github/scripts/release_labels.sh "$title" 2> /dev/null)"; then
+                  echo "::warning::#$number has a non-conventional title, so it goes under Other Changes: $title"
+                  continue
+                fi
                 for label in $labels; do
                   gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$number/labels" -f "labels[]=$label" > /dev/null
                 done
