@@ -41,7 +41,6 @@ dev = [
     "pytest-mock>=3.14.0,<4",
     "pytest>=9.0.3,<10",
     "ruff>=0.9,<1",
-    "tomlkit>=0.12,<1",
     "tox>=4.0.0,<5",
 ]
 docs = [

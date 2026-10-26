@@ -2342,7 +2342,6 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "ruff" },
-    { name = "tomlkit" },
     { name = "tox" },
 ]
 docs = [
@@ -2387,7 +2386,6 @@ dev = [
     { name = "pytest-cov", specifier = ">=4.1.0,<8" },
     { name = "pytest-mock", specifier = ">=3.14.0,<4" },
     { name = "ruff", specifier = ">=0.9,<1" },
-    { name = "tomlkit", specifier = ">=0.12,<1" },
     { name = "tox", specifier = ">=4.0.0,<5" },
 ]
 docs = [
