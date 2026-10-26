@@ -27,6 +27,8 @@ quarterly_data = filter_and_label_by_periods(table, quarters)
 quarterly_result = quarterly_data.execute()
 
 # Example 2: Period ranges as datetime objects instead of date strings
+# A datetime end is an exact instant: datetime(2023, 6, 30) drops sales after midnight on Jun 30 when
+# transaction_date has a time part. Use "2023-06-30" to include the whole end day.
 campaigns = {
     "Summer_Sale": (datetime(2023, 6, 1), datetime(2023, 6, 30)),
     "Back_to_School": (datetime(2023, 8, 1), datetime(2023, 8, 31)),
