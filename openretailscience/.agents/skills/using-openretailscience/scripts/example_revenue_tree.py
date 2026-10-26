@@ -39,9 +39,10 @@ def generate_sample_data():
 # Example 1: Basic Period Comparison
 df = generate_sample_data()
 revenue_tree = RevenueTree(df=df, period_col="period", p1_value="2023-Q1", p2_value="2023-Q2")
-# revenue_tree.df has *_p1/_p2/_diff/_pct_diff columns per driver, plus *_contrib columns showing
-# each driver's share of the total spend_diff. unit_quantity in the input also unlocks price/volume
-# metrics (price_per_unit, price_elasticity, units_per_transaction, frequency_elasticity).
+# revenue_tree.df has *_p1/_p2/_diff/_pct_diff columns per driver, plus *_contrib columns giving each
+# driver's spend contribution; sibling drivers sum to their parent, the top pair to spend_diff.
+# frequency_elasticity is always present; unit_quantity in the input adds units, units_per_transaction,
+# price_per_unit, and price_elasticity.
 
 # Example 2: Category-Level Analysis
 categories = ["Electronics", "Clothing", "Home & Garden"]

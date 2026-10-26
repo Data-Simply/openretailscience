@@ -1,11 +1,25 @@
 """Utility functions for time-related operations in retail analysis."""
 
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 
 import ibis
 
 from openretailscience.options import get_option
+
+
+def _period_end(end_date: datetime | str) -> datetime:
+    """Return a period's inclusive end: a date-only string covers that whole day, not its first instant.
+
+    Args:
+        end_date (datetime | str): A datetime, or a ``YYYY-MM-DD`` string.
+
+    Returns:
+        datetime: ``end_date`` itself, or the string's day at 23:59:59.999999.
+    """
+    if isinstance(end_date, str):
+        return datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time.max)  # noqa: DTZ007
+    return end_date
 
 
 def _normalize_datetime(date_val: datetime | str) -> datetime:
@@ -71,7 +85,7 @@ def _validate_and_normalize_periods(
         start_date, end_date = date_range
 
         start_dt = _normalize_datetime(start_date)
-        end_dt = _normalize_datetime(end_date)
+        end_dt = _normalize_datetime(_period_end(end_date))
 
         if start_dt > end_dt:
             msg = f"Period '{period_name}': start date ({start_date}) must be <= end date ({end_date})"
@@ -93,21 +107,35 @@ def _validate_and_normalize_periods(
     return normalized
 
 
+def _date_to_str(value: datetime | date | str) -> datetime | str:
+    """Return a ``date`` as its ``"YYYY-MM-DD"`` string, which it behaves exactly like; other values unchanged.
+
+    Args:
+        value (datetime | date | str): A period bound.
+
+    Returns:
+        datetime | str: The bound, with a ``date`` (not a ``datetime``) converted to a string.
+    """
+    return value.isoformat() if isinstance(value, date) and not isinstance(value, datetime) else value
+
+
 def filter_and_label_by_periods(
     transactions: ibis.Table,
-    period_ranges: dict[str, tuple[datetime, datetime] | tuple[str, str]],
+    period_ranges: Mapping[str, tuple[datetime | date | str, datetime | date | str]],
     period_col: str = "period_name",
 ) -> ibis.Table:
     """Filter transactions to named time periods and label each row with its period.
 
     Rows outside every period are dropped. The date column is read from the
-    ``column.transaction_date`` option; string dates in ``period_ranges`` are
-    parsed as ``%Y-%m-%d`` and localized to UTC.
+    ``column.transaction_date`` option.
 
     Args:
         transactions (ibis.Table): Table containing the transaction date column.
-        period_ranges (dict[str, tuple[datetime, datetime] | tuple[str, str]]): Period names
-            mapped to ``(start_date, end_date)`` tuples.
+        period_ranges (Mapping[str, tuple[datetime | date | str, datetime | date | str]]): Period
+            names mapped to inclusive ``(start_date, end_date)`` tuples. A ``date`` or
+            ``"YYYY-MM-DD"`` string end includes that whole day. A datetime end is an exact instant
+            on a timestamp column; on a date column it is cast to its day, so that whole day is
+            included.
         period_col (str): Name of the label column to add. Defaults to ``"period_name"``.
 
     Returns:
@@ -117,7 +145,10 @@ def filter_and_label_by_periods(
         ValueError: If a period value is not a ``(start, end)`` tuple, if a start date is
             after its end date, or if two periods overlap.
     """
-    # Validate periods first
+    period_ranges = {
+        name: tuple(map(_date_to_str, bounds)) if isinstance(bounds, tuple) else bounds
+        for name, bounds in period_ranges.items()
+    }
     _validate_and_normalize_periods(period_ranges)
 
     branches = []
@@ -128,10 +159,19 @@ def filter_and_label_by_periods(
     for period_name, date_range in period_ranges.items():
         start_date, end_date = date_range
 
-        period_condition = date_column.between(
-            ibis.literal(start_date, type=date_col_dtype),
-            ibis.literal(end_date, type=date_col_dtype),
-        )
+        if isinstance(start_date, str):
+            # Zero-pad, like the end below: a string column compares as text, so "2023-3-1" sorts after "2023-03-31"
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y-%m-%d")  # noqa: DTZ007
+        start = ibis.literal(start_date, type=date_col_dtype)
+        if isinstance(end_date, str):
+            # "< next day" rather than <= 23:59:59.999999, which a millisecond backend (e.g. Postgres
+            # TIMESTAMP(3)) rounds up to the next midnight. Date-only, so a string column's next-day rows
+            # don't sort under "YYYY-MM-DD 00:00:00".
+            next_day = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)  # noqa: DTZ007
+            end = ibis.literal(next_day.strftime("%Y-%m-%d"), type=date_col_dtype)
+            period_condition = (date_column >= start) & (date_column < end)
+        else:
+            period_condition = date_column.between(start, ibis.literal(end_date, type=date_col_dtype))
         branches.append((period_condition, ibis.literal(period_name)))
 
     conditions = ibis.or_(*[condition[0] for condition in branches])

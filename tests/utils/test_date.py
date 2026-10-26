@@ -7,7 +7,7 @@ import ibis
 import pandas as pd
 import pytest
 
-from openretailscience.options import option_context
+from openretailscience.options import ColumnHelper, option_context
 from openretailscience.utils.date import filter_and_label_by_periods, find_overlapping_periods
 
 
@@ -143,8 +143,12 @@ class TestFilterAndLabelByPeriods:
                 {"Invalid_Mixed": (dt.datetime(2023, 6, 30), "2023-04-01")},
                 r"Period 'Invalid_Mixed': start date \(2023-06-30 00:00:00\) must be <= end date \(2023-04-01\)",
             ),
+            (
+                {"Invalid_Q1": (dt.date(2023, 3, 31), dt.date(2023, 1, 1))},
+                r"Period 'Invalid_Q1': start date \(2023-03-31\) must be <= end date \(2023-01-01\)",
+            ),
         ],
-        ids=["string_dates", "datetime_objects", "mixed_types"],
+        ids=["string_dates", "datetime_objects", "mixed_types", "date_objects"],
     )
     def test_invalid_date_order_raises(self, sample_transactions_table, period_ranges, match):
         """Test that start date > end date raises ValueError for various date types."""
@@ -162,6 +166,46 @@ class TestFilterAndLabelByPeriods:
 
         assert len(result_df) == 1
         assert result_df.iloc[0]["transaction_id"] == 1
+
+    @pytest.mark.parametrize(
+        ("q1_start", "q1_end", "transaction_dates"),
+        [
+            ("2023-01-01", "2023-03-31", pd.to_datetime(["2023-03-31 00:00", "2023-03-31 18:45", "2023-04-01 09:00"])),
+            ("2023-01-01", "2023-3-31", pd.to_datetime(["2023-03-31 00:00", "2023-03-31 18:45", "2023-04-01 09:00"])),
+            # ISO strings compare as text: the next day's "2023-04-01" must not sort under the bound
+            ("2023-01-01", "2023-03-31", ["2023-03-31", "2023-03-31 18:45", "2023-04-01"]),
+            # Unpadded, "2023-3-31" sorts after every "2023-03-..." string, so the start must be padded too
+            ("2023-3-31", "2023-3-31", ["2023-03-31", "2023-03-31 18:45", "2023-04-01"]),
+            (
+                dt.date(2023, 1, 1),
+                dt.date(2023, 3, 31),
+                pd.to_datetime(["2023-03-31 00:00", "2023-03-31 18:45", "2023-04-01 00:00"]),
+            ),
+            (
+                dt.date(2023, 1, 1),
+                dt.date(2023, 3, 31),
+                [dt.date(2023, 3, 31), dt.date(2023, 3, 31), dt.date(2023, 4, 1)],
+            ),
+        ],
+        ids=["padded", "unpadded_end", "string_column", "unpadded_start", "date_objects", "date_column"],
+    )
+    def test_date_only_bounds_cover_whole_days(self, q1_start, q1_end, transaction_dates):
+        """Date-only bounds (strings, padded or not, or date objects) keep every sale on the end day."""
+        cols = ColumnHelper()
+        transactions = ibis.memtable(
+            pd.DataFrame({cols.transaction_id: [101, 102, 103], cols.transaction_date: transaction_dates}),
+        )
+
+        result = filter_and_label_by_periods(transactions, {"Q1": (q1_start, q1_end)}).execute()
+
+        assert sorted(result[cols.transaction_id]) == [101, 102]
+
+    def test_datetime_start_inside_a_string_end_day_overlaps(self, sample_transactions_table):
+        """A date-only end covers its whole day, so a period starting at noon that day overlaps it."""
+        period_ranges = {"Q1": ("2023-01-01", "2023-03-31"), "Q2": (dt.datetime(2023, 3, 31, 12), "2023-06-30")}
+
+        with pytest.raises(ValueError, match="overlap"):
+            filter_and_label_by_periods(sample_transactions_table, period_ranges)
 
     @pytest.mark.parametrize(
         ("period_ranges", "match"),

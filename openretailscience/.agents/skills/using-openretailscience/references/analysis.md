@@ -97,9 +97,12 @@ from openretailscience.analysis.haversine import haversine_distance
 - `ProductAssociation(df, value_col, group_col=None, target_item=None, min_support=0.0, ...)` —
   `.table` / `.df` with support, confidence, uplift. `group_col` is the basket: the default `customer_id`
   pools all of a customer's purchases; pass `group_col="transaction_id"` for per-transaction baskets.
-- `RevenueTree(df, period_col, p1_value, p2_value, group_col=None)` — `.df` KPI
-  table; `.draw_tree(row_index=0, ...)` → tree diagram. `calc_tree_kpis(df, p1_index, p2_index)`
-  is the functional core returning a pandas DataFrame.
+- `RevenueTree(df, period_col, p1_value, p2_value, group_col=None)` — `period_col` holds a
+  caller-assigned period label per row (not a raw date); both values must exist and differ. `.df` is the
+  KPI table, one row per group (`_pct_diff` columns are fractions); `.draw_tree(row_index=0, ...)` → tree
+  diagram. `calc_tree_kpis(p1_df, p2_df)` computes the same table from pre-aggregated per-period frames
+  (customers/transactions/spend[/units] columns, one row per group), pairing rows by index label; for an
+  ungrouped comparison give both one row labelled 0.
 - `CustomerDecisionHierarchy(df, product_col, method="yules_q", ...)` —
   `.pairs_df`, `.distances` ([0, 1], ordered by `pairs_df[product_col].cat.categories`; 0 = every buyer of
   one also buys the other, 1 = never the same buyer, or no customer bought neither; by default near =
@@ -127,8 +130,9 @@ from openretailscience.utils.label import label_by_condition
 ```
 
 - `filter_and_label_by_periods(transactions, period_ranges, period_col="period_name")` —
-  filter an Ibis table to named `{name: (start, end)}` ranges and tag each row;
-  validates non-overlap.
+  filter an Ibis table to named inclusive `{name: (start, end)}` ranges and tag each row;
+  validates non-overlap. A `"YYYY-MM-DD"` string or `date` end includes that whole day; on a timestamp column a
+  datetime end is an exact instant, so `datetime(2023, 3, 31)` drops sales later on Mar 31.
 - `find_overlapping_periods(start_date, end_date, return_str=True)` — split a range
   into year-aligned `(start, end)` tuples for `plots.period_on_period.plot`.
 - `filter_and_label_by_condition(table, conditions, label_col="label")` — keep rows
