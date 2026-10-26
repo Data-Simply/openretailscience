@@ -1,10 +1,11 @@
 """Gain loss (switching) analysis of customer movement between a focus and a comparison group across two periods.
 
-Pandas-only: all period/group selectors are boolean masks or lists aligned to ``df.index``.
+Pandas-only; period and group selectors are positional boolean masks.
 """
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
@@ -13,65 +14,92 @@ from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots import bar
 from openretailscience.plots.styles.colors import COLORS
 
+Mask = list[bool] | np.ndarray | pd.Series
+
 
 class GainLoss:
     """Gain loss (switching) analysis between a focus group and a comparison group.
 
-    All selectors are boolean masks or lists aligned to ``df.index`` (pandas-only).
-    Results are computed at initialization: ``gain_loss_df`` holds the per-customer
-    decomposition and ``gain_loss_table_df`` the aggregated table; there are no
-    ``df``/``table`` attributes.
+    Results are computed at initialization; there are no ``df``/``table`` attributes.
+
+    ``gain_loss_df`` has one row per customer, indexed by ``customer_id`` (by
+    ``(group_col, customer_id)`` when grouped), so ``customer_id`` is not a column. Its 15
+    columns are ``focus``/``comparison``/``total`` for ``_p1``, ``_p2`` and ``_diff``, then the
+    six components ``new``, ``lost``, ``increased_focus``, ``decreased_focus``,
+    ``switch_from_comparison`` and ``switch_to_comparison``, which sum to ``focus_diff``.
+    Customers whose values are all 0 are dropped.
+
+    ``gain_loss_table_df`` has the same columns summed over customers: one row when
+    ungrouped, one row per ``group_col`` value otherwise.
     """
 
     def __init__(
         self,
         df: pd.DataFrame,
-        p1_index: list[bool] | pd.Series,
-        p2_index: list[bool] | pd.Series,
-        focus_group_index: list[bool] | pd.Series,
+        p1_index: Mask,
+        p2_index: Mask,
+        focus_group_index: Mask,
         focus_group_name: str,
-        comparison_group_index: list[bool] | pd.Series,
+        comparison_group_index: Mask,
         comparison_group_name: str,
         group_col: str | None = None,
-        value_col: str = get_option("column.unit_spend"),
+        value_col: str | None = None,
         agg_func: str = "sum",
     ) -> None:
         """Calculate the gain loss decomposition at the customer level.
 
-        The four index arguments are boolean masks or lists aligned to ``df.index``.
-        The decomposition columns are ``new``, ``lost``, ``increased_focus``,
-        ``decreased_focus``, ``switch_from_comparison``, ``switch_to_comparison``.
+        The four masks have one entry per row of ``df`` and are matched by position, so ``df``
+        may repeat index labels.
 
         Args:
-            df (pd.DataFrame): The data to analyze.
-            p1_index (list[bool] | pd.Series): Boolean mask selecting the first period rows.
-            p2_index (list[bool] | pd.Series): Boolean mask selecting the second period rows.
-            focus_group_index (list[bool] | pd.Series): Boolean mask selecting the focus group rows.
+            df (pd.DataFrame): Transactions with the option-derived customer_id column and ``value_col``.
+            p1_index (list[bool] | np.ndarray | pd.Series): Rows in the first period.
+            p2_index (list[bool] | np.ndarray | pd.Series): Rows in the second period.
+            focus_group_index (list[bool] | np.ndarray | pd.Series): Rows in the focus group.
             focus_group_name (str): Display name of the focus group.
-            comparison_group_index (list[bool] | pd.Series): Boolean mask selecting the comparison group rows.
+            comparison_group_index (list[bool] | np.ndarray | pd.Series): Rows in the comparison group.
             comparison_group_name (str): Display name of the comparison group.
             group_col (str | None): Optional column to break the analysis down by.
-            value_col (str): Value column to aggregate; defaults to option ``column.unit_spend``.
-            agg_func (str): Aggregation function; defaults to "sum".
+            value_col (str | None): Value column to aggregate; defaults to option ``column.unit_spend``.
+            agg_func (str): A pandas groupby aggregation name, such as "sum", "mean" or "nunique"
+                (case-sensitive). Defaults to "sum".
 
         Raises:
+            TypeError: If a mask is not boolean.
             ValueError: If ``p1_index`` and ``p2_index`` overlap.
             ValueError: If ``focus_group_index`` and ``comparison_group_index`` overlap.
-            ValueError: If the four index masks do not all have the same length.
+            ValueError: If a mask does not have one entry per row of ``df``, or is a Series whose
+                index differs from ``df.index``.
             ValueError: If the option-derived customer_id or ``value_col`` columns are missing,
                 or if a given ``group_col`` is not in ``df``.
         """
-        # # Ensure no overlap between p1 and p2
-        if not df[p1_index].index.intersection(df[p2_index].index).empty:
+        value_col = get_option("column.unit_spend") if value_col is None else value_col
+        if not len(df) == len(p1_index) == len(p2_index) == len(focus_group_index) == len(comparison_group_index):
+            raise ValueError(
+                "p1_index, p2_index, focus_group_index, and comparison_group_index must each have one entry per row "
+                "of df",
+            )
+        raw_masks = (p1_index, p2_index, focus_group_index, comparison_group_index)
+        if any(isinstance(mask, pd.Series) and not mask.index.equals(df.index) for mask in raw_masks):
+            raise ValueError("A Series mask's index must match df.index; build the masks from df itself")
+        # Positional masks, so a df index with repeated labels (e.g. customer_id) can't misalign them.
+        # infer_objects accepts an object Series of plain bools but, unlike pd.array, keeps a None/NaN hole non-boolean
+        masks = tuple(pd.Series(mask).infer_objects().array for mask in raw_masks)
+        if not all(pd.api.types.is_bool_dtype(mask.dtype) for mask in masks):
+            raise TypeError(
+                "p1_index, p2_index, focus_group_index, and comparison_group_index must be boolean; a mask with "
+                'missing values needs the nullable "boolean" dtype, where <NA> selects nothing'
+            )
+        # A nullable mask's <NA> (e.g. a comparison against a missing brand) selects nothing, as in pandas indexing
+        p1_index, p2_index, focus_group_index, comparison_group_index = (
+            mask.to_numpy(dtype=bool, na_value=False) for mask in masks
+        )
+
+        if (p1_index & p2_index).any():
             raise ValueError("p1_index and p2_index should not overlap")
 
-        if not df[focus_group_index].index.intersection(df[comparison_group_index].index).empty:
+        if (focus_group_index & comparison_group_index).any():
             raise ValueError("focus_group_index and comparison_group_index should not overlap")
-
-        if not len(p1_index) == len(p2_index) == len(focus_group_index) == len(comparison_group_index):
-            raise ValueError(
-                "p1_index, p2_index, focus_group_index, and comparison_group_index should have the same length",
-            )
 
         if group_col is not None:
             # group_col is typed str | None here, so unpack the single-element list back to a string.
@@ -151,25 +179,35 @@ class GainLoss:
     @staticmethod
     def _calc_gain_loss(
         df: pd.DataFrame,
-        p1_index: list[bool],
-        p2_index: list[bool],
-        focus_group_index: list[bool],
-        comparison_group_index: list,
-        group_col: str | None = None,
-        value_col: str = get_option("column.unit_spend"),
-        agg_func: str = "sum",
+        p1_index: np.ndarray,
+        p2_index: np.ndarray,
+        focus_group_index: np.ndarray,
+        comparison_group_index: np.ndarray,
+        group_col: str | None,
+        value_col: str,
+        agg_func: str,
     ) -> pd.DataFrame:
-        """Calculate the per-customer gain loss decomposition (argument semantics as in ``GainLoss.__init__``).
+        """Build ``gain_loss_df`` (described on the class) from positional boolean masks.
+
+        Args:
+            df (pd.DataFrame): The transactions.
+            p1_index (np.ndarray): Rows in the first period.
+            p2_index (np.ndarray): Rows in the second period.
+            focus_group_index (np.ndarray): Rows in the focus group.
+            comparison_group_index (np.ndarray): Rows in the comparison group.
+            group_col (str | None): Column to break the analysis down by, if any.
+            value_col (str): Value column to aggregate.
+            agg_func (str): pandas groupby aggregation name.
 
         Returns:
-            pd.DataFrame: Indexed by customer, with ``group_col`` as the leading level when given.
-                Columns: ``focus_p1``/``focus_p2``, ``comparison_p1``/``comparison_p2``,
-                ``total_p1``/``total_p2``, ``focus_diff``, ``comparison_diff``, ``total_diff``
-                plus the six decomposition columns. Rows that are all zero after grouping
-                are dropped; missing periods are filled with 0.
+            pd.DataFrame: The ``gain_loss_df``.
         """
         cols = ColumnHelper()
-        df = df[p1_index | p2_index].copy()
+        in_periods = p1_index | p2_index
+        df = df[in_periods].copy()
+        p1_index, p2_index, focus_group_index, comparison_group_index = (
+            mask[in_periods] for mask in (p1_index, p2_index, focus_group_index, comparison_group_index)
+        )
         df[cols.customer_id] = df[cols.customer_id].astype("category")
 
         grp_cols = [cols.customer_id] if group_col is None else [group_col, cols.customer_id]
@@ -206,6 +244,12 @@ class GainLoss:
         gl_df["focus_diff"] = gl_df["focus_p2"] - gl_df["focus_p1"]
         gl_df["comparison_diff"] = gl_df["comparison_p2"] - gl_df["comparison_p1"]
         gl_df["total_diff"] = gl_df["total_p2"] - gl_df["total_p1"]
+
+        if len(gl_df) == 0:
+            # The zip below has no rows to unpack
+            return gl_df.assign(
+                new=0, lost=0, increased_focus=0, decreased_focus=0, switch_from_comparison=0, switch_to_comparison=0
+            )
 
         (
             gl_df["new"],
@@ -267,7 +311,7 @@ class GainLoss:
         Green segments are ``new`` / ``increased_focus`` / ``switch_from_comparison``; red
         segments are ``lost`` / ``decreased_focus`` / ``switch_to_comparison``. Legend labels
         use the focus and comparison group names. ``stacked`` and ``color`` kwargs are
-        silently popped and cannot be overridden.
+        silently ignored.
 
         Args:
             title (str | None): Plot title; defaults to "Gain Loss from {focus} to {comparison}".

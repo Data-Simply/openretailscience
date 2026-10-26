@@ -36,7 +36,7 @@ def plot(
 ) -> SubplotBase:
     """Plot a histogram of ``value_col``, optionally split by ``group_col``.
 
-    With ``group_col``, one histogram is drawn per unique group value (via a pivot); a list
+    With ``group_col``, one histogram is drawn per unique group value; a list
     ``value_col`` cannot be combined with it. When ``df`` is a Series, ``value_col`` (if given)
     becomes the single column name and the Series' own ``name`` is discarded; ``group_col``
     cannot be used with a Series and will error.
@@ -48,8 +48,8 @@ def plot(
         title (str, optional): The title of the plot.
         eyebrow (str, optional): Small uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
-        x_label (str, optional): The x-axis label.
-        y_label (str, optional): The y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         legend_title (str, optional): The title of the legend.
         ax (Axes, optional): Matplotlib axes object to plot on.
         source_text (str, optional): The source text to add to the plot.

@@ -1,6 +1,6 @@
 """Tests for the Cohort Analysis module."""
 
-import datetime
+import datetime as dt
 
 import pandas as pd
 import pandas.testing as pdt
@@ -22,18 +22,18 @@ class TestCohortAnalysis:
                 "customer_id": [1, 2, 3, 1, 2, 3, 1, 2, 3, 4, 5, 4],
                 "unit_spend": [3.23, 3.35, 6.00, 4.50, 5.10, 7.20, 3.80, 4.90, 6.50, 2.10, 8.00, 3.50],
                 "transaction_date": [
-                    datetime.date(2023, 1, 15),
-                    datetime.date(2023, 1, 20),
-                    datetime.date(2023, 2, 5),
-                    datetime.date(2023, 2, 10),
-                    datetime.date(2023, 3, 1),
-                    datetime.date(2023, 3, 15),
-                    datetime.date(2023, 3, 20),
-                    datetime.date(2023, 4, 10),
-                    datetime.date(2023, 4, 25),
-                    datetime.date(2023, 5, 5),
-                    datetime.date(2023, 5, 20),
-                    datetime.date(2023, 6, 10),
+                    dt.date(2023, 1, 15),
+                    dt.date(2023, 1, 20),
+                    dt.date(2023, 2, 5),
+                    dt.date(2023, 2, 10),
+                    dt.date(2023, 3, 1),
+                    dt.date(2023, 3, 15),
+                    dt.date(2023, 3, 20),
+                    dt.date(2023, 4, 10),
+                    dt.date(2023, 4, 25),
+                    dt.date(2023, 5, 5),
+                    dt.date(2023, 5, 20),
+                    dt.date(2023, 6, 10),
                 ],
             },
         )
@@ -80,9 +80,9 @@ class TestCohortAnalysis:
                 "customer_id": [1, 1, 2],
                 "unit_spend": [10.0, 12.0, 8.0],
                 "transaction_date": [
-                    datetime.date(2023, 1, 2),  # Monday
-                    datetime.date(2023, 1, 9),  # Monday
-                    datetime.date(2023, 1, 9),  # Monday
+                    dt.date(2023, 1, 2),  # Monday
+                    dt.date(2023, 1, 9),  # Monday
+                    dt.date(2023, 1, 9),  # Monday
                 ],
             },
         )
@@ -172,11 +172,11 @@ class TestCohortAnalysis:
                 "customer_id": [1, 2, 1, 3, 3],
                 "unit_spend": [10.0, 20.0, 5.0, 0.0, 15.0],
                 "transaction_date": [
-                    datetime.date(2023, 1, 15),  # Customer 1, cohort Jan
-                    datetime.date(2023, 1, 20),  # Customer 2, cohort Jan
-                    datetime.date(2023, 2, 10),  # Customer 1, period 1
-                    datetime.date(2023, 2, 5),  # Customer 3, cohort Feb (zero spend)
-                    datetime.date(2023, 3, 1),  # Customer 3, period 1
+                    dt.date(2023, 1, 15),  # Customer 1, cohort Jan
+                    dt.date(2023, 1, 20),  # Customer 2, cohort Jan
+                    dt.date(2023, 2, 10),  # Customer 1, period 1
+                    dt.date(2023, 2, 5),  # Customer 3, cohort Feb (zero spend)
+                    dt.date(2023, 3, 1),  # Customer 3, period 1
                 ],
             },
         )

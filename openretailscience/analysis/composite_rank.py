@@ -20,11 +20,13 @@ class CompositeRank:
     """Creates composite rankings by aggregating per-metric ranks.
 
     Ranks are 1-based with rank 1 = best in the given sort direction, so a lower
-    `composite_rank` is better overall. `composite_rank` aggregates the per-column
-    ranks, not the raw values: mean = average rank, sum = total rank, min = `ibis.least`
-    (best single-metric rank dominates), max = `ibis.greatest` (worst single-metric rank
-    dominates). `.table` is a lazy ibis Table; `.df` materializes on first access and is
-    cached.
+    `composite_rank` is better overall. Tied values share the lowest rank (1, 2, 2, 4). Nulls
+    rank last, except in an "asc" column on BigQuery, which ranks them first (best).
+    `composite_rank` aggregates the per-column ranks, not the raw values:
+    mean = average rank (a float), sum = total rank, min = best single-metric rank, max =
+    worst single-metric rank. Rows come back in no particular order; sort on
+    `composite_rank` yourself. `.table` is a lazy ibis Table; `.df` materializes on first
+    access and is cached.
     """
 
     def __init__(
@@ -43,11 +45,9 @@ class CompositeRank:
                 direction. Each entry is a column name (defaults to "asc") or a
                 (column, sort_order) tuple; sort_order is "asc", "ascending", "desc", or
                 "descending" (case-insensitive).
-            agg_func (str): How to combine the per-column ranks (not raw values):
-                "mean" = average rank, "sum" = total rank, "min" = `ibis.least`,
-                "max" = `ibis.greatest`.
-            ignore_ties (bool, optional): False (default) uses `ibis.rank` — tied values
-                share a rank. True uses `ibis.row_number` — every row gets a unique rank.
+            agg_func (str): How to combine the per-column ranks: "mean", "sum", "min" or "max".
+            ignore_ties (bool, optional): If True, every row gets a unique rank and ties are
+                broken arbitrarily, so tied rows can swap between runs. Defaults to False.
             group_col (str | list[str], optional): Column(s) to partition the ranking by.
                 None (default) ranks globally; otherwise ranks are computed independently
                 within each group.

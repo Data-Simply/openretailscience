@@ -40,8 +40,8 @@ def plot(
 ) -> Axes:
     """Generate a waterfall chart from parallel `amounts` and `labels` lists.
 
-    With remove_zero_amounts (default True) zero bars are dropped before the net total is
-    computed. data_label_format=None draws no data labels.
+    "percentage" labels are each bar's share of the net total, so they can exceed 100% or be
+    negative when bars have mixed signs.
 
     Args:
         amounts (list[float]): The amounts to plot.
@@ -49,16 +49,17 @@ def plot(
         title (str, optional): Chart title.
         eyebrow (str, optional): Uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
-        y_label (str, optional): Y-axis label.
-        x_label (str, optional): X-axis label.
+        y_label (str, optional): Y-axis label; omitted means no label.
+        x_label (str, optional): X-axis label; omitted means no label.
         source_text (str, optional): Source attribution rendered at the bottom.
         data_label_format ("absolute", "percentage", "both", optional): Format for the bar
             data labels; None draws no labels.
         display_net_bar (bool, optional): Append a "Net" bar for the total.
         display_net_line (bool, optional): Draw a dashed line at the net total.
-        remove_zero_amounts (bool, optional): Drop zero amounts before the net is computed.
+        remove_zero_amounts (bool, optional): Hide zero-amount bars and their labels.
         ax (Axes, optional): Axes to plot on.
-        **kwargs: Forwarded to df.plot.bar.
+        **kwargs: Forwarded to pandas' ``DataFrame.plot.bar``; ``width`` defaults to 0.8 and
+            ``color`` to the per-bar sign colors.
 
     Returns:
         Axes: The matplotlib axes object.

@@ -34,7 +34,7 @@ line.plot(
     source_text="Source: OpenRetailScience - 2024",
 )
 
-# Example 3: Grouped lines from long-format data (each group_col value becomes a line; pivoted internally)
+# Example 3: Grouped lines from long-format data (each group_col value becomes a line)
 grouped_df = pd.DataFrame({
     "week": [1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4],
     "product_category": ["Electronics"] * 4 + ["Clothing"] * 4 + ["Home"] * 4,
@@ -52,7 +52,7 @@ line.plot(
     legend_title="Category",
     source_text="Source: OpenRetailScience - 2024",
     move_legend_outside=True,
-    fill_na_value=0,  # fill missing values after pivot
+    fill_na_value=0,  # plotted where a group has no value at an x (group_col only)
 )
 
 # Example 4: Highlight a single group value (other groups render muted behind it)

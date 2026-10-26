@@ -65,14 +65,14 @@ def plot(
 ) -> SubplotBase:
     """Create a generic heatmap: index → y-axis, columns → x-axis, cell values as text.
 
-    NaN cells are skipped (no patch or text).
+    NaN cells are left blank (no fill or text).
 
     Args:
         df (pd.DataFrame): Frame to visualize; the index becomes the y-axis and the
             columns the x-axis.
         cbar_label (str): Colorbar label.
-        x_label (str, optional): X-axis label.
-        y_label (str, optional): Y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         title (str, optional): Plot title.
         eyebrow (str, optional): Uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.

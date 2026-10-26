@@ -429,17 +429,14 @@ def apply_chart_chrome(
     source_text: str | None = None,
     warn_stacklevel: int = 4,
 ) -> None:
-    """Place the figure-level chrome (eyebrow, tab, title, subtitle, source) and reflow the axes.
+    """Add the header (tab, eyebrow, title, subtitle) above the axes and the source below it.
 
-    Each header element is placed after the previous one's measured bbox, so wrapped
-    titles push later elements down by their rendered height; absent elements collapse
-    their slot. The placement is stored as a resize-invariant recipe and re-derived on
-    every draw by ``_ChromeLayoutEngine``, so a post-call ``set_size_inches`` re-flows
-    the chrome. The tab mark is controlled by the ``plot.style.show_tab`` option
-    (default True).
+    The axes shrink to make room; an omitted element takes no space. The layout survives a
+    later figure resize, and calling this again on the same axes replaces its chrome. The tab
+    mark follows the ``plot.style.show_tab`` option (default True).
 
     Args:
-        ax: The plot axes (provides the figure handle).
+        ax: The plot axes; the chrome is drawn on its figure.
         eyebrow: Small uppercase label above the title.
         title: Main headline; wraps if it would exceed the figure width.
         subtitle: Supporting copy below the title; wraps.
@@ -873,17 +870,14 @@ def apply_legend(
 ) -> None:
     """Apply legend styling using options.
 
-    Handles are read from ``ax`` via ``get_legend_handles_labels()`` and rebuilt in one
-    pass, so reversed order (stacked-area / stacked-bar visual stack) and substituted
-    labels happen together; ``custom_labels`` is applied after ``reverse``. Must be
-    called from inside ``standard_graph_styles`` so chrome's ``tight_layout`` reserves
-    the final legend's slot.
+    Call it before ``apply_chart_chrome`` (``standard_graph_styles`` does) so the chrome
+    leaves room for the legend.
 
     Args:
         ax: The axes whose labelled artists drive the legend.
         title: Legend title; ``None`` leaves it unset.
         outside: Anchor the legend outside the axes.
-        reverse: Reverse the handle and label order before rebuilding.
+        reverse: Reverse the legend entry order.
         custom_labels: Override the labels read off ``ax``; the list is the final on-screen order.
 
     Raises:
@@ -905,7 +899,7 @@ def apply_legend(
     _style_legend(legend, title)
 
 
-def standard_graph_styles(  # noqa: PLR0913
+def standard_graph_styles(  # noqa: PLR0913, PLR0917
     ax: Axes,
     title: str | None = None,
     x_label: str | None = None,
@@ -928,23 +922,23 @@ def standard_graph_styles(  # noqa: PLR0913
     """Apply standard styles (spines, grid, ticks, legend, chrome) to a Matplotlib graph.
 
     With ``legend_style="end_of_line"`` the box legend is suppressed and inline labels are
-    drawn at each line's right endpoint after the chrome reflow; ``legend_title`` and
+    drawn at each line's right endpoint; ``legend_title`` and
     ``move_legend_outside`` are ignored under it (``UserWarning`` if set).
 
     Args:
         ax: The graph to apply the styles to.
         title: Chart title.
-        x_label: X-axis label; when omitted, pandas' auto label is cleared.
-        y_label: Y-axis label; when omitted, pandas' auto label is cleared.
+        x_label: X-axis label; when omitted, any existing label (e.g. pandas' column name) is cleared.
+        y_label: Y-axis label; when omitted, any existing label (e.g. pandas' column name) is cleared.
         x_label_pad: Padding below the x-axis label.
         y_label_pad: Padding to the left of the y-axis label.
         legend_title: Legend title.
         move_legend_outside: Anchor the legend outside the plot.
         show_legend: Whether to display the legend.
         legend_style: ``"end_of_line"`` suppresses the box legend for inline end labels.
-        legend_reverse: Reverse handle and label order before building the legend; used by
+        legend_reverse: Reverse the legend entry order; used by
             stacked area/bar plots where column order does not match the visual stack.
-        legend_labels: Override the labels read from labelled artists (applied after
+        legend_labels: Override the legend labels, given in final on-screen order (after
             ``legend_reverse``).
         eyebrow: Small uppercase label rendered above the title.
         subtitle: Supporting copy rendered below the title.

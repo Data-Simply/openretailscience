@@ -46,15 +46,17 @@ def test_plot_single_column(sample_dataframe):
     assert len(result_ax.collections) == 1
 
 
-def test_plot_with_group_col(sample_dataframe):
-    """Test the plot function with a group column (stacked area chart)."""
+@pytest.mark.parametrize("x_from_index", [False, True])
+def test_plot_with_group_col(sample_dataframe, x_from_index):
+    """A group column gives one stacked area per category, with x from a column or (x_col=None) the index."""
+    df = sample_dataframe.set_index("transaction_date") if x_from_index else sample_dataframe
     result_ax = area.plot(
-        df=sample_dataframe,
+        df=df,
         value_col="unit_spend",
         x_label="Transaction Date",
         y_label="Sales",
         title="Sales by Category",
-        x_col="transaction_date",
+        x_col=None if x_from_index else "transaction_date",
         group_col="category",
     )
 

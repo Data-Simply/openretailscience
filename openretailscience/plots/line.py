@@ -2,7 +2,7 @@
 
 For x-axes that are relative or sequential values ("days since an event", "months since a
 competitor opened"), use ``line.plot``. For an actual datetime x-axis use ``plots.time``, which
-resamples and aggregates; this module does not aggregate and only pivots its input.
+resamples and aggregates; this module does not aggregate, so pass one row per x value per line.
 """
 
 from typing import Any, Literal
@@ -163,7 +163,7 @@ def _render_plot(
     )
 
 
-def plot(  # noqa: PLR0913
+def plot(  # noqa: PLR0913, PLR0917
     df: pd.DataFrame | pd.Series,
     value_col: str | list[str] | None = None,
     x_label: str | None = None,
@@ -192,8 +192,8 @@ def plot(  # noqa: PLR0913
         df (pd.DataFrame | pd.Series): The dataframe or series to plot.
         value_col (str | list[str], optional): The column(s) to plot; a list renders one line per
             column. Required when ``df`` is a DataFrame.
-        x_label (str, optional): The x-axis label.
-        y_label (str, optional): The y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         title (str, optional): The title of the plot.
         eyebrow (str, optional): Small uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
@@ -206,17 +206,17 @@ def plot(  # noqa: PLR0913
         legend_style (Literal["box", "end_of_line"], optional): How series are labelled. ``"box"``
             (default when None) renders the standard matplotlib legend. ``"end_of_line"`` suppresses
             the legend and places a colored series label at the right end of each line; it is a no-op
-            on single-line plots. When a legend would show, ``move_legend_outside`` and
-            ``legend_title`` are ignored and a UserWarning is emitted if either is supplied.
-        fill_na_value (float, optional): Value to fill NaNs with after pivoting. Applied only when
-            ``group_col`` is set; silently ignored otherwise.
+            on single-line plots. On multi-line plots with ``"end_of_line"``, ``move_legend_outside``
+            and ``legend_title`` are ignored and a UserWarning is emitted if either is supplied.
+        fill_na_value (float, optional): Value for missing points, including x values a group has no
+            row for. Applied only when ``group_col`` is set; silently ignored otherwise.
         highlight (str | list[str], optional): Line(s) to emphasize; only for multi-line plots. With
             ``group_col`` these are group values; with a list of ``value_col`` these are column
             names. Highlighted lines use the ``linewidth`` kwarg (default 3) and the ``color`` kwarg
             (default palette colors); non-highlighted context lines are rendered behind them in the
             ``plot.color.context`` color (default #d1d5db, option-configurable) with a 1.0 linewidth.
-        **kwargs: Additional keyword arguments for pandas' ``plot`` function. ``linewidth`` and
-            ``color`` are consumed by the highlighted lines and do not apply to context lines.
+        **kwargs: Additional keyword arguments for pandas' ``plot`` function. ``linewidth``,
+            ``color``, and ``alpha`` apply to highlighted lines only, not context lines.
 
     Returns:
         SubplotBase: The matplotlib axes object.

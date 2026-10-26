@@ -203,7 +203,7 @@ def _add_point_labels(
         )
 
 
-def plot(  # noqa: PLR0913
+def plot(  # noqa: PLR0913, PLR0917
     df: pd.DataFrame | pd.Series,
     value_col: str | list[str],
     x_label: str | None = None,
@@ -232,8 +232,8 @@ def plot(  # noqa: PLR0913
     Args:
         df (pd.DataFrame or pd.Series): Frame to plot; a Series is converted to a single-column frame.
         value_col (str or list[str]): Column(s) to plot.
-        x_label (str, optional): X-axis label.
-        y_label (str, optional): Y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         title (str, optional): Plot title.
         eyebrow (str, optional): Uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.

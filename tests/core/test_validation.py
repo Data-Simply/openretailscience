@@ -1,6 +1,6 @@
 """Tests for openretailscience.core.validation."""
 
-import datetime
+import datetime as dt
 
 import ibis
 import pandas as pd
@@ -312,7 +312,7 @@ class TestEnsureTznaiveDatetime:
     def test_accepts_date_column(self):
         """A plain date column passes without raising."""
         table = ibis.memtable(
-            pd.DataFrame({"transaction_date": [datetime.date(2024, 1, 1), datetime.date(2024, 1, 2)]}),
+            pd.DataFrame({"transaction_date": [dt.date(2024, 1, 1), dt.date(2024, 1, 2)]}),
         )
         assert ensure_tznaive_datetime(table, "transaction_date") is None
 

@@ -25,10 +25,10 @@ _TEMP_TOTAL_STORES = "__prs_temp_total_stores__"
 class PctOfStores:
     """Calculates the unweighted percentage of stores selling each product.
 
-    Results are accessible via the ``table`` attribute (ibis Table) or the ``df`` property
-    (materialized pandas DataFrame). Columns: the product and group columns, ``stores``
-    (``column.agg.store_id``), and ``stores_pct`` (the store_id aggregate joined with the
-    ``column.suffix.percent`` suffix).
+    ``table`` (ibis) and ``df`` (pandas) have one row per product (and group), in no particular
+    order, with the product and group columns as ordinary columns (RangeIndex), ``stores``
+    (``column.agg.store_id``) and ``stores_pct`` (``column.agg.store_id`` + ``column.suffix.percent``).
+    ``stores_pct`` is on a 0-100 scale (distribution points), not a fraction.
 
     Args:
         df (pd.DataFrame | ibis.Table): Transaction-level data containing at least

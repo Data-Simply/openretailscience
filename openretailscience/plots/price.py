@@ -136,7 +136,8 @@ def plot(
     """Plot a price-band bubble chart: categories on x, price bands on y.
 
     Bubble area is proportional to the absolute share of each group's products in a band,
-    so sizes stay comparable across groups. Y tick labels read "left - right".
+    so sizes stay comparable across groups. Y tick labels show each band as "lower - upper" to one
+    decimal.
 
     Args:
         df (pd.DataFrame): Product-level frame (one row per product).
@@ -146,8 +147,8 @@ def plot(
         title (str, optional): Plot title.
         eyebrow (str, optional): Uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
-        x_label (str, optional): X-axis label.
-        y_label (str, optional): Y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         legend_title (str, optional): Legend title.
         figsize (tuple[int, int], optional): Figure size, used only when ax is None.
         ax (Axes, optional): Axes to plot on.
@@ -157,8 +158,8 @@ def plot(
             edgecolor defaults to black.
 
     Raises:
-        ValueError: If df is empty, value_col is not numeric, no rows remain after dropna,
-            or no data falls within the bins.
+        ValueError: If df is empty, value_col is not numeric, every row is missing value_col or
+            group_col, or no data falls within the bins.
         KeyError: If value_col or group_col is not a column of df.
         TypeError: If bins is neither an int nor a list.
 

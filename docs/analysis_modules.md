@@ -66,11 +66,11 @@ cohort.df.head()
 
 | min_period_shopped |    0 |    1 |    2 |    3 |
 |:-------------------|-----:|-----:|-----:|-----:|
-| 2023-01-01         | 1.00 | 1.00 | 1.00 | 1.00 |
-| 2023-02-01         | 0.80 | 1.75 | 0.76 | 0.00 |
+| 2023-01-01         | 1.00 | 0.48 | 1.16 | 0.68 |
+| 2023-02-01         | 1.00 | 1.05 | 1.10 | 0.00 |
 | 2023-03-01         | 0.00 | 0.00 | 0.00 | 0.00 |
 | 2023-04-01         | 0.00 | 0.00 | 0.00 | 0.00 |
-| 2023-05-01         | 1.28 | 1.92 | 0.00 | 0.00 |
+| 2023-05-01         | 1.00 | 0.72 | 0.00 | 0.00 |
 
 ### Product Association Rules
 
@@ -224,8 +224,8 @@ df = pd.DataFrame({
 
 gain_loss = GainLoss(
     df=df,
-    p1_index= df["period"] == "p1",
-    p2_index= df["period"] == "p2",
+    p1_index=df["period"] == "p1",
+    p2_index=df["period"] == "p2",
     focus_group_index=df["brand"] == "Brand A",
     focus_group_name="Brand A",
     comparison_group_index=df["brand"] == "Brand B",

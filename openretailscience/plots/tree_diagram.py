@@ -171,7 +171,7 @@ class SimpleTreeNode(TreeNode):
 
     Required data keys:
         header (str): The header text
-        percent (float): Percentage change value
+        percent (float): Percentage change in points (12.5 = +12.5%), not a fraction
         value1 (str): First value text
         value2 (str): Second value text
     """
@@ -330,9 +330,10 @@ class TreeGrid:
             num_rows: Number of grid rows (must be positive).
             num_cols: Number of grid columns (must be positive).
             node_class: TreeNode subclass used to render nodes.
-            vertical_spacing: Gap between rows; if None, node_height + 0.6.
-            horizontal_spacing: Gap between columns; if None, node_width - 1.0
-                (columns overlap for a compact layout).
+            vertical_spacing: Distance between the bottoms of adjacent rows; if None,
+                node_height + 0.6 (a 0.6 gap).
+            horizontal_spacing: Distance between the left edges of adjacent columns; if None,
+                node_width - 1.0 (columns overlap by 1.0 for a compact layout).
 
         Raises:
             ValueError: If grid dimensions are non-positive, tree_structure is empty,
@@ -523,7 +524,8 @@ class DetailedTreeNode(TreeNode):
 
     Required data keys:
         header: str - Node header text
-        percent: float - Percentage change; also drives the "Pct Diff" row and header color
+        percent: float - Percentage change in points (12.5 = +12.5%), not a fraction; also drives
+            the "Pct Diff" row and header color
         current_period: str - Current period value text
         previous_period: str - Previous period value text
         diff: str - Absolute difference text

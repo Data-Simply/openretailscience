@@ -1,6 +1,6 @@
 """Tests for the RFMSegmentation class."""
 
-import datetime
+import datetime as dt
 
 import ibis
 import pandas as pd
@@ -86,7 +86,7 @@ class TestRFMSegmentation:
         ]
         return pd.DataFrame(data)
 
-    @pytest.mark.parametrize("current_date", ["2025-03-17", datetime.date(2025, 3, 17)])
+    @pytest.mark.parametrize("current_date", ["2025-03-17", dt.date(2025, 3, 17)])
     def test_correct_rfm_segmentation(self, base_df, expected_df, current_date):
         """Test that string and datetime.date current_date inputs yield identical scores and segments."""
         rfm_segmentation = RFMSegmentation(df=base_df, current_date=current_date)

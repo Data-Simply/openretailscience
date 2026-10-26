@@ -59,9 +59,13 @@ def _periods_between(start: pd.Series, end: pd.Series, period: str) -> pd.Series
 class CohortAnalysis:
     """Computes a cohort retention matrix from transaction data.
 
-    Materialized eagerly at construction (``.execute()``); ``.df`` is the pandas result
-    (index = cohort start period, integer columns = period index since start, missing
-    cells 0). There is no ``.table``; pair with `plots.cohort.plot` for rendering.
+    Customers are grouped into cohorts by the period of their first purchase. ``.df``
+    (pandas) has one row per period from the first cohort to the last (index
+    ``min_period_shopped``, the period's start) and integer columns ``period_since`` from 0
+    to the longest gap observed, so it need not be square. Each cell is ``agg_func`` of
+    ``aggregation_column`` over that cohort's transactions in that period. Cells with no
+    transactions, including cohorts with no customers and periods past the end of the data,
+    are 0, the same as a genuine 0. The query runs at construction; there is no ``.table``.
     """
 
     VALID_PERIODS: ClassVar[tuple[str, ...]] = ("year", "quarter", "month", "week", "day")
@@ -76,16 +80,18 @@ class CohortAnalysis:
     ) -> None:
         """Initialize the CohortAnalysis object.
 
-        Construction runs the aggregate query (eager ``.execute()``); filter large
-        remote tables before constructing.
-
         Args:
-            df (pd.DataFrame | ibis.Table): The dataset containing transaction data.
-            aggregation_column (str): The column to apply the aggregation function on (e.g., 'unit_spend').
-            agg_func (str, optional): Aggregation function (e.g., "nunique", "sum", "mean"). Defaults to "nunique".
+            df (pd.DataFrame | ibis.Table): Transaction data. ``transaction_date`` must be a
+                date or datetime column; strings are not parsed.
+            aggregation_column (str): The column to aggregate. For customer retention use
+                ``customer_id`` with ``agg_func="nunique"``.
+            agg_func (str, optional): Ibis column aggregation name, case-sensitive (e.g.
+                "nunique", "count", "sum", "mean", "min", "max"). "nunique" on ``unit_spend``
+                counts distinct prices, not customers. Defaults to "nunique".
             period (str): Period for cohort analysis: "year", "quarter", "month", "week", or "day"
                 (case-insensitive; short forms like "m"/"d" accepted).
-            percentage (bool): If True, converts cohort values into retention percentages relative to the first period.
+            percentage (bool): If True, each row is divided by its period-0 value, giving
+                fractions (1.0 = 100%) rounded to 2 decimals. A cohort with 0 in period 0 is all 0.
 
         Raises:
             TypeError: If `df` is not a pandas DataFrame or an Ibis Table.
@@ -151,20 +157,17 @@ class CohortAnalysis:
         period: str = "month",
         percentage: bool = False,
     ) -> pd.DataFrame:
-        """Computes a cohort analysis table based on transaction data.
+        """Computes the cohort matrix described on the class.
 
         Args:
             df (pd.DataFrame | ibis.Table): The dataset containing transaction data.
-            aggregation_column (str): The column to apply the aggregation function on (e.g., 'unit_spend').
-            agg_func (str, optional): Aggregation function (e.g., "nunique", "sum", "mean"). Defaults to "nunique".
+            aggregation_column (str): The column to aggregate.
+            agg_func (str, optional): Ibis aggregation name. Defaults to "nunique".
             period (str): Period for cohort analysis: "year", "quarter", "month", "week", or "day".
-            percentage (bool): If True, converts cohort values into retention percentages relative to the first period.
+            percentage (bool): If True, divide each row by its period-0 value.
 
         Returns:
-            pd.DataFrame: Pivot with index = cohort start period (`min_period_shopped`) and
-                integer columns = period index since start (`period_since`); values are the
-                aggregated `aggregation_column`, missing cells 0. With `percentage=True`,
-                each row is divided by its first-period value (rounded to 2), NaN filled with 0.
+            pd.DataFrame: The cohort matrix.
         """
         cols = ColumnHelper()
 

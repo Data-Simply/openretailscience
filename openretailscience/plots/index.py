@@ -56,9 +56,8 @@ def filter_by_value_thresholds(
 ) -> pd.DataFrame:
     """Filter a dataframe by index value thresholds.
 
-    The ``index`` column is in delta-from-baseline form (raw index minus 100); thresholds are in
-    raw-index units, so the baseline is re-added before comparing (``filter_above=120`` keeps rows
-    whose raw index exceeds 120).
+    Expects the ``index`` column in delta-from-baseline form (raw index minus 100), as ``plot`` uses;
+    thresholds are in raw-index units (``filter_above=120`` keeps rows whose raw index exceeds 120).
 
     Args:
         df (pd.DataFrame): The dataframe to filter.
@@ -147,7 +146,7 @@ def filter_top_bottom_n(df: pd.DataFrame, top_n: int | None = None, bottom_n: in
     return selected_rows
 
 
-def plot(  # noqa: C901, PLR0913
+def plot(  # noqa: C901, PLR0913, PLR0917
     df: pd.DataFrame,
     value_col: str,
     group_col: str,
@@ -191,19 +190,19 @@ def plot(  # noqa: C901, PLR0913
         group_col (str): The column to group the data by.
         index_col (str): The column to calculate the index on (e.g., "category").
         value_to_index (str): The baseline category or value to index against (e.g., "A").
-        agg_func (str, optional): The aggregation function to apply to ``value_col``.
+        agg_func (str, optional): How to aggregate ``value_col``: "sum", "mean", "max", "min" or "nunique".
         series_col (str, optional): The column to use as the series; when set, a legend is rendered
             and each series value gets its own bar per group. ``top_n``, ``bottom_n``,
             ``filter_above``, ``filter_below``, and ``color_by_threshold`` cannot be combined with it.
         title (str, optional): The title of the plot.
         eyebrow (str, optional): Small uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
-        x_label (str, optional): The x-axis label.
-        y_label (str, optional): The y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         legend_title (str, optional): The title of the legend.
         move_legend_outside (bool, optional): Whether to move the legend outside the plot area.
         highlight_range (Literal["default"] | tuple[float, float] | None, optional): The range to
-            highlight with a shaded span and vlines at the bounds. "default" means (80, 120);
+            highlight with a shaded span and vertical lines at the bounds. "default" means (80, 120);
             None disables it.
         sort_by (Literal["group", "value"] | None, optional): "group" sorts by ``group_col`` (and by
             ``series_col`` as a second key when it is set); "value" sorts by the index column; None
@@ -231,14 +230,16 @@ def plot(  # noqa: C901, PLR0913
         **kwargs: Additional keyword arguments, normally passed to pandas' ``barh``. When
             ``color_by_threshold`` is True they are passed to matplotlib's ``Axes.barh()`` instead,
             excluding the pandas-only kwargs (``figsize``, ``stacked``, ``legend``, ``subplots``,
-            ``layout``). ``figsize`` still sizes the figure when ``ax`` is None. ``width`` (default
-            0.8) and ``color`` are popped and consumed.
+            ``layout``). ``figsize`` still sizes the figure when ``ax`` is None. ``width`` defaults to
+            0.8. ``color`` defaults to the primary color (a palette with ``series_col``) and is ignored
+            when ``color_by_threshold`` is True.
 
     Returns:
         SubplotBase: The matplotlib axes object.
 
     Raises:
         ValueError: If sort_by is not "group", "value", or None.
+        ValueError: If agg_func is not one of "sum", "mean", "max", "min", or "nunique".
         ValueError: If sort_by is "value" and series_col is provided.
         ValueError: If sort_order is not one of "asc", "ascending", "desc", or "descending".
         ValueError: If exclude_groups and include_only_groups are used together.

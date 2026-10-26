@@ -15,10 +15,8 @@ first purchase and observed until ``observation_period_end``:
 - ``monetary_value`` — mean spend across the *repeat* purchases (excludes the first, per the
    Gamma-Gamma assumption). ``NaN`` for one-time buyers (excluded by ``repeat_buyers``).
 
-``recency`` and ``T`` are expressed in ``period`` units (``"day"``, ``"week"``, or ``"month"``;
-a month is a fixed 365.25/12-day unit) and are fractional (e.g. 2.5 weeks). The elapsed time is
-measured in whole days and then divided by the days-per-period, because the Oracle backend supports
-only day-granularity date deltas (see ``openretailscience.analysis.cohort`` for the same constraint).
+``recency`` and ``T`` are whole calendar days converted to fractional ``period`` units (``"day"``,
+``"week"``, or ``"month"``; a month is a fixed 365.25/12 days), so 10 days is 1.43 weeks.
 
 The first purchase is always the earliest transaction *in the supplied data*, exactly as
 `pymc_marketing.clv.rfm_summary` treats it. A customer who was already active before the
@@ -28,7 +26,7 @@ truncated observation period, not something this adapter corrects.
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import functools
 import warnings
 from typing import TYPE_CHECKING, ClassVar
@@ -52,7 +50,7 @@ if TYPE_CHECKING:
     from typing import Self
 
 
-def _coerce_to_date(value: str | datetime.date) -> datetime.date:
+def _coerce_to_date(value: str | dt.date) -> dt.date:
     """Normalize a date-like value to a ``datetime.date``.
 
     Args:
@@ -66,11 +64,11 @@ def _coerce_to_date(value: str | datetime.date) -> datetime.date:
         TypeError: If ``value`` is not a string or ``datetime.date``.
     """
     if isinstance(value, str):
-        return datetime.date.fromisoformat(value)
+        return dt.date.fromisoformat(value)
     # ``datetime.datetime`` is a ``datetime.date`` subclass; take its date part explicitly.
-    if isinstance(value, datetime.datetime):
+    if isinstance(value, dt.datetime):
         return value.date()
-    if isinstance(value, datetime.date):
+    if isinstance(value, dt.date):
         return value
     msg = "observation_period_end must be an ISO-8601 date string, a datetime.date, or None."
     raise TypeError(msg)
@@ -142,12 +140,9 @@ class CLVStats:
     (materialized pandas DataFrame); :meth:`sample` narrows the summary to a subset of customers to
     fit on. See the module docstring for column definitions.
 
-    Constructing ``CLVStats`` from transactions runs one aggregate query against the backend to
-    resolve and validate the observation window (plus, when ``customer_attributes`` is given, one
-    aggregate to check its customer_id is unique and a single distinct-value query enumerating all
-    ``one_hot_col`` categories); the full per-customer summary stays lazy and is materialized only on
-    first ``df`` access. A :meth:`sample` result is built from an existing summary and queries nothing
-    until its own ``df`` is read.
+    Construction runs a few small validation queries; the per-customer summary stays lazy until
+    ``df`` is first read, then is cached. A :meth:`sample` result runs no queries until its own
+    ``df`` is read.
 
     Args:
         data (pd.DataFrame | ibis.Table): Transaction data with the ``customer_id``,
@@ -208,7 +203,7 @@ class CLVStats:
         data: pd.DataFrame | ibis.Table,
         *,
         period: str = "week",
-        observation_period_end: str | datetime.date | None = None,
+        observation_period_end: str | dt.date | None = None,
         customer_attributes: pd.DataFrame | ibis.Table | None = None,
         one_hot_col: str | list[str] | None = None,
     ) -> None:
@@ -352,7 +347,7 @@ class CLVStats:
         cls,
         data: ibis.Table,
         period: str,
-        observation_period_end: datetime.date,
+        observation_period_end: dt.date,
     ) -> ibis.Table:
         """Computes the BTYD summary table.
 
@@ -424,10 +419,9 @@ class CLVStats:
         Args:
             n (int | None, optional): Number of customers to draw; every customer if it exceeds the
                 population. Mutually exclusive with ``frac``. Defaults to ``None``.
-            frac (float | None, optional): Share of customers to draw, in (0, 1] and no finer than the
-                hash's bucket resolution. Decided per customer, so the count lands near ``frac`` *
-                population rather than on it; costs one predicate instead of ``n``'s sort. Mutually
-                exclusive with ``n``. Defaults to ``None``.
+            frac (float | None, optional): Share of customers to draw, in [1e-6, 1]. Decided per
+                customer, so the count lands near ``frac`` * population rather than on it; costs a
+                single filter instead of ``n``'s sort. Mutually exclusive with ``n``. Defaults to ``None``.
             random_state (int, optional): Salt for the selection hash. Defaults to 42.
 
         Returns:
@@ -436,7 +430,7 @@ class CLVStats:
         Raises:
             TypeError: If ``n`` or ``random_state`` is not an integer, or ``frac`` is not a number.
             ValueError: If both or neither of ``n`` and ``frac`` are given, if ``n`` is not positive,
-                or if ``frac`` is outside (0, 1] or finer than the bucket resolution.
+                or if ``frac`` is outside [1e-6, 1].
         """
         if (n is None) == (frac is None):
             msg = "sample requires exactly one of n or frac."
@@ -513,8 +507,8 @@ class CLVStats:
 
         One-time buyers (``NaN`` monetary_value) are excluded; ``GammaGammaModel`` cannot fit them. No
         spend filter is needed because ``monetary_value`` is always positive here. Warns (``UserWarning``)
-        if ``|Pearson r|`` between ``frequency`` and ``monetary_value`` exceeds
-        ``_MONETARY_FREQUENCY_CORR_WARN``, breaking GammaGamma's independence assumption.
+        if ``|Pearson r|`` between ``frequency`` and ``monetary_value`` exceeds 0.15, breaking
+        GammaGamma's independence assumption.
 
         Returns:
             pd.DataFrame: The ``frequency > 0`` rows of :attr:`df`, index reset.
@@ -553,9 +547,9 @@ class CLVStats:
     def pymc_time_unit(self) -> str:
         """The pymc-marketing ``time_unit`` matching this summary's ``period`` (``"D"``/``"W"``/``"M"``).
 
-        Pass as the ``time_unit`` of ``GammaGammaModel.expected_customer_lifetime_value``, whose ``future_t``
-        is in months and defaults to ``"D"``, silently wrong for a weekly summary (horizon off ~7x) or a
-        monthly one (~30x).
+        Pass as the ``time_unit`` of ``GammaGammaModel.expected_customer_lifetime_value``: its ``future_t``
+        is in months, but ``time_unit`` (the unit of ``recency`` and ``T``) defaults to ``"D"``, so omitting
+        it for a weekly or monthly summary silently misreads the horizon by ~7x or ~30x.
 
         Returns:
             str: ``"D"`` for ``period="day"``, ``"W"`` for ``"week"``, ``"M"`` for ``"month"``.

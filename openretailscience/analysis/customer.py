@@ -7,7 +7,7 @@ purchase-day ordinal).
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import functools
 import operator
 from typing import TYPE_CHECKING
@@ -154,8 +154,8 @@ class PurchasesPerCustomer:
 class DaysBetweenPurchases:
     """Computes the average number of days between purchases per customer.
 
-    "Purchases" here means purchase days — same-day transactions collapse to one (see
-    `_distinct_customer_days`). Single-purchase-day customers are excluded.
+    "Purchases" here means purchase days: same-day transactions count once. Customers with
+    a single purchase day are excluded.
 
     Attributes:
         table (ibis.Table): One row per customer with columns ``customer_id``
@@ -238,15 +238,14 @@ class DaysBetweenPurchases:
 class TransactionChurn:
     """Computes the churn rate per purchase-day ordinal.
 
-    A customer is "churned" at their N-th purchase day if it is their final purchase day
-    and occurred strictly before ``max(purchase_day) - churn_period``.
-    ``transaction_number`` is a row number over distinct (customer, purchase-day) rows —
-    same-day transactions collapse to one day.
+    ``transaction_number`` N (1-based) is a customer's N-th distinct purchase day; same-day
+    transactions count once. Row N covers customers whose N-th purchase day is more than
+    ``churn_period`` days before the latest purchase day in the data; later ones have not had
+    ``churn_period`` days to be followed up. Of those, ``churned`` made no later purchase and ``retained`` did;
+    ``churned_pct`` = churned / (churned + retained), a fraction.
 
-    Unlike PurchasesPerCustomer and DaysBetweenPurchases (lazy until ``.df`` is
-    accessed), construction eagerly runs one aggregate query for the distinct customer
-    count and the latest purchase day, which anchors the churn boundary. Filter remote
-    tables before constructing.
+    Construction runs one query for the customer count and latest purchase day; ``table``
+    stays lazy.
 
     Attributes:
         table (ibis.Table): Per-``transaction_number`` ``retained``,
@@ -290,7 +289,7 @@ class TransactionChurn:
         self.n_unique_customers = int(stats["n_unique_customers"].iloc[0])
         # Empty input: max_day is NaT, so churn_boundary is NaT — harmless, because _calculate
         # then operates on zero rows and returns an empty churn table (see the empty-input test).
-        churn_boundary = stats["max_day"].iloc[0] - datetime.timedelta(days=churn_period)
+        churn_boundary = stats["max_day"].iloc[0] - dt.timedelta(days=churn_period)
         self.table = self._calculate(df, cols.customer_id, cols.transaction_date, churn_boundary)
 
     @functools.cached_property
@@ -303,7 +302,7 @@ class TransactionChurn:
         df: ibis.Table,
         customer_id_col: str,
         transaction_date_col: str,
-        churn_boundary: datetime.date | pd.Timestamp,
+        churn_boundary: dt.date | pd.Timestamp,
     ) -> ibis.Table:
         """Compute retained/churned counts and the churn rate per transaction number.
 

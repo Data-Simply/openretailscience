@@ -67,7 +67,12 @@ def cleanup_figures():
         # Beyond the predefined suffixes, the number keeps growing under the "P" suffix.
         (10**18, 0, "", "1000P"),
         (10**19, 0, "", "10000P"),
+        (10**20, 0, "", "100000P"),
         (-(10**18), 0, "", "-1000P"),
+        # Non-finite values render as-is, without a suffix; dividing inf by the magnitude base never ends.
+        (float("inf"), 0, "", "inf"),
+        (float("-inf"), 2, "$", "$-inf"),
+        (float("nan"), 2, "", "nan"),
     ],
 )
 def test_format_shorthand(num, decimals, prefix, expected):

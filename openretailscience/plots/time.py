@@ -37,9 +37,9 @@ def plot(
     """Plot ``value_col`` over time, aggregated by ``period``.
 
     ``df`` must contain the configured transaction-date column (``column.transaction_date``) as a
-    datetime column. Data is aggregated here via ``groupby(to_period(period)).agg(agg_func)``;
-    ``line.plot`` does not aggregate. With ``group_col`` the result is a pivoted multi-line plot
-    with a legend; without it, a single line with no legend.
+    datetime column. ``value_col`` is aggregated here with ``agg_func`` per ``period``; ``line.plot``
+    does not aggregate. With ``group_col`` the result is one line per group value with a legend;
+    without it, a single line with no legend.
 
     Args:
         df (pd.DataFrame): The dataframe to plot.
@@ -51,20 +51,19 @@ def plot(
         title (str, optional): The title of the plot.
         eyebrow (str, optional): Small uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
-        x_label (str, optional): The x-axis label.
-        y_label (str, optional): The y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         legend_title (str, optional): The title of the legend.
         ax (Axes, optional): The matplotlib axes object to plot on.
         source_text (str, optional): The source text to add to the plot.
         move_legend_outside (bool, optional): Whether to move the legend outside the plot.
         legend_style (Literal["box", "end_of_line"], optional): How series are labelled. ``"box"``
             (default when None) renders the standard legend; ``"end_of_line"`` suppresses the
-            legend and places a colored series label at the right end of each line. When
-            ``"end_of_line"``, ``move_legend_outside`` and ``legend_title`` are ignored and a
-            warning is emitted if either is supplied.
-        **kwargs: Additional keyword arguments for pandas' ``plot`` function. ``linewidth``
-            (default 3) and ``color`` (default the primary color, or the palette with
-            ``group_col``) are popped and consumed.
+            legend and places a colored series label at the right end of each line; it is a no-op
+            without ``group_col``. With ``group_col`` and ``"end_of_line"``, ``move_legend_outside``
+            and ``legend_title`` are ignored and a UserWarning is emitted if either is supplied.
+        **kwargs: Additional keyword arguments for pandas' ``plot`` function. ``linewidth`` defaults
+            to 3 and ``color`` to the primary color, or the palette with ``group_col``.
 
     Returns:
         SubplotBase: The matplotlib axes object.
@@ -76,17 +75,15 @@ def plot(
         msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"
         raise ValueError(msg)
 
-    df["transaction_period"] = df[get_option("column.transaction_date")].dt.to_period(
-        period,
-    )
+    periods = df[get_option("column.transaction_date")].dt.to_period(period).rename("transaction_period")
 
     if group_col is None:
         default_colors = get_named_color("primary")
-        df = df.groupby("transaction_period")[value_col].agg(agg_func)
+        df = df.groupby(periods)[value_col].agg(agg_func)
         show_legend = False
     else:
         df = (
-            df.groupby([group_col, "transaction_period"])[value_col]
+            df.groupby([group_col, periods])[value_col]
             .agg(agg_func)
             .reset_index()
             .pivot(index="transaction_period", columns=group_col, values=value_col)

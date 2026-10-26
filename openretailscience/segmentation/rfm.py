@@ -1,11 +1,6 @@
-"""Customer segmentation via RFM (Recency, Frequency, Monetary) scoring.
+"""Customer segmentation via RFM (Recency, Frequency, Monetary) scoring."""
 
-Each dimension is binned with NTILE (default 10) or custom percentile cut points (score
-0..n for n cut points); a higher score marks a better customer, with recency inverted so
-fewer days since the last purchase score higher. The composite segment is R*100 + F*10 + M.
-"""
-
-import datetime
+import datetime as dt
 import functools
 
 import ibis
@@ -23,15 +18,15 @@ class RFMSegmentation:
     - Frequency (F): number of unique transactions (higher is better).
     - Monetary (M): total amount spent (higher is better).
 
-    Each metric is binned via NTILE or custom cut points; the highest score marks the top
-    percentile of customers. The composite `rfm_segment` is R*100 + F*10 + M; with 0-based
-    scores (custom cut points, or NTILE on the pandas backend) it is a 3-digit number 0-999.
+    Scores are 0-based on every backend: 0..n-1 for n bins, 0..k for k cut points, with
+    the highest score marking the top percentile of customers. The composite `rfm_segment` is
+    R*100 + F*10 + M, so 0-999.
     """
 
     def __init__(
         self,
         df: pd.DataFrame | ibis.Table,
-        current_date: str | datetime.date | None = None,
+        current_date: str | dt.date | None = None,
         r_segments: int | list[float] = 10,
         f_segments: int | list[float] = 10,
         m_segments: int | list[float] = 10,
@@ -47,8 +42,8 @@ class RFMSegmentation:
                 transaction_date, unit_spend and transaction_id columns.
             current_date (str | datetime.date | None): Reference date for recency, as a
                 "YYYY-MM-DD" string, a date, or None (today, UTC).
-            r_segments (int | list[float]): Number of NTILE bins (1-10) or 1-9 custom percentile
-                cut points in (0, 1), unique and ascending.
+            r_segments (int | list[float]): Number of equal-count bins (1-10), scored 0..n-1, or 1-9
+                custom percentile cut points in (0, 1), unique and ascending, scored 0..k.
             f_segments (int | list[float]): As r_segments, for frequency.
             m_segments (int | list[float]): As r_segments, for monetary.
             min_monetary (float | None): Minimum total spend to include a customer.
@@ -77,10 +72,10 @@ class RFMSegmentation:
         ensure_data_has_columns(df, required_cols)
 
         if isinstance(current_date, str):
-            current_date = datetime.date.fromisoformat(current_date)
+            current_date = dt.date.fromisoformat(current_date)
         elif current_date is None:
-            current_date = datetime.datetime.now(datetime.UTC).date()
-        elif not isinstance(current_date, datetime.date):
+            current_date = dt.datetime.now(dt.UTC).date()
+        elif not isinstance(current_date, dt.date):
             raise TypeError("current_date must be a string in 'YYYY-MM-DD' format, a datetime.date object, or None")
 
         self._validate_segments(r_segments, "r_segments")
@@ -188,7 +183,7 @@ class RFMSegmentation:
         if min_frequency is not None and max_frequency is not None and min_frequency > max_frequency:
             raise ValueError("min_frequency must be less than or equal to max_frequency")
 
-    def _compute_rfm(self, df: ibis.Table, current_date: datetime.date) -> ibis.Table:
+    def _compute_rfm(self, df: ibis.Table, current_date: dt.date) -> ibis.Table:
         """Computes the RFM metrics and scores customers accordingly.
 
         Args:
@@ -300,5 +295,9 @@ class RFMSegmentation:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Returns the dataframe with the segment names, indexed by customer_id."""
+        """Per-customer RFM table, indexed by customer_id.
+
+        Columns: recency_days, frequency, monetary, r_score, f_score, m_score, rfm_segment
+        and fm_segment (F*10 + M).
+        """
         return self.table.execute().set_index(get_option("column.customer_id"))

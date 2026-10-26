@@ -53,9 +53,9 @@ def plot(
 ) -> SubplotBase:
     """Plot data availability as horizontal bars per category, with gaps for missing periods.
 
-    Values are aggregated per period (groupby category + period, then agg_func on value_col)
-    before plotting. The date column is not a parameter; it is read from the
-    ``column.transaction_date`` option and must be present in df.
+    ``value_col`` is aggregated with ``agg_func`` per category and period before plotting. The date
+    column is not a parameter; it is read from the ``column.transaction_date`` option and must be
+    present in df.
 
     Args:
         df (pd.DataFrame): Input frame; must include the ``column.transaction_date`` column.
@@ -64,15 +64,15 @@ def plot(
         title (str, optional): Plot title.
         eyebrow (str, optional): Uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
-        x_label (str, optional): X-axis label.
-        y_label (str, optional): Y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         ax (Axes, optional): Axes to plot on.
         source_text (str, optional): Source attribution rendered at the bottom.
         period (str, optional): Aggregation period; "D"/"day" or "W"/"week" (case-insensitive).
         agg_func (str, optional): Aggregation applied to value_col within each period.
         threshold_value (float, optional): Rows below this value are dropped before period
-            aggregation; a period that still has data above the threshold gets a shorter bar,
-            not a gap.
+            aggregation. Bars always span whole periods, so a period left with no rows shows as
+            a gap.
         bar_height (float, optional): Bar thickness as a fraction of the available row space.
         figsize (tuple[int, int], optional): Figure size, used only when ax is None.
         **kwargs: Forwarded to matplotlib broken_barh.

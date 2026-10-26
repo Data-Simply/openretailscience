@@ -196,6 +196,11 @@ class SegTransactionStats:
     Standard metrics: spend, transactions, customers (only when customer_id is present),
     units (only when unit_quantity is present), and derived ratios. Results are a lazy
     ibis Table (`.table`), materialized via `.df`.
+
+    `.df` has a RangeIndex, with the segment columns as ordinary columns. Each grouping set
+    contributes one row per segment combination present in the data; a segment column the
+    set leaves out holds that column's `rollup_value`. Row order is unspecified unless
+    `sort_by=True`. A ratio whose denominator is 0 is null.
     """
 
     def __init__(
@@ -224,11 +229,11 @@ class SegTransactionStats:
                 calc_total and calc_rollup are omitted. Use grouping_sets='total' instead.
             extra_aggs (dict[str, tuple[str, str]], optional): Additional aggregations. Keys are
                 output column names; values are (column_name, aggregation_function) tuples, e.g.
-                {"stores": ("store_id", "nunique")} counts unique store_ids.
+                {"stores": ("store_id", "nunique")} counts unique store_ids. The function is any
+                no-argument Ibis column aggregation, case-sensitive ("sum", "mean", "count", "max", ...).
             calc_rollup (bool | None, optional): Whether to add subtotal rows. Defaults to False
                 when grouping_sets is None. Unlike grouping_sets='rollup' (prefix rollups only),
                 True generates prefix and suffix rollups; suffix rollups only when calc_total=True.
-                Adds O(n) extra aggregation passes for n segment columns.
                 Cannot be used with grouping_sets.
                 Deprecated: a FutureWarning is emitted when grouping_sets is None and both
                 calc_total and calc_rollup are omitted. Use grouping_sets='rollup' instead.
@@ -237,9 +242,11 @@ class SegTransactionStats:
                 each cast to the corresponding column's type. Defaults to "Total".
             unknown_customer_value (int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None, optional):
                 Value, ibis literal, or boolean expression identifying unknown customers
-                (requires the customer_id column). When set, metrics are split into identified,
-                `_unknown`, and `_total` variants, with suffixes from the options
-                column.suffix.unknown_customer / column.suffix.total (defaults "unknown"/"total").
+                (requires the customer_id column). When set, the plain metrics cover identified
+                customers only; spend, transactions, units, their per-transaction and per-unit
+                ratios, and each extra_aggs column also get `_unknown` and `_total` variants
+                (suffixes from the options column.suffix.unknown_customer / column.suffix.total).
+                Customers and the per-customer ratios have no variants.
             grouping_sets (Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None, optional):
                 Grouping sets mode, mutually exclusive with calc_total/calc_rollup:
                 - "rollup": SQL ROLLUP — [A,B,C], [A,B], [A], ().
@@ -250,8 +257,8 @@ class SegTransactionStats:
                   (order not preserved); every segment_col column must appear in at least one set
                   and every set column must be in segment_col.
                 - None: use calc_total/calc_rollup behavior.
-            sort_by (bool, optional): When True, sort the output rows ascending by segment_col
-                using ibis .order_by() so the sort runs at the backend. Defaults to False.
+            sort_by (bool, optional): When True, sort the output rows ascending by segment_col.
+                Defaults to False.
 
         Raises:
             ValueError: If grouping_sets is used with explicit calc_total or calc_rollup; if
@@ -795,8 +802,8 @@ class SegTransactionStats:
     ) -> dict[str, Any]:
         """Build aggregations with unknown customer tracking.
 
-        Every metric (including suffixed extra_aggs) gets identified, `_unknown`, and `_total`
-        variants. coalesce(0/0.0) forces int vs float types when a segment has no rows.
+        Spend, transactions, units and each extra_aggs column get identified, `_unknown`, and
+        `_total` variants; customers get only the identified count.
 
         Args:
             data (ibis.Table): The data table.

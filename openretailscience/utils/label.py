@@ -5,6 +5,7 @@ from typing import Literal
 import ibis
 from ibis import _
 
+from openretailscience.core.validation import ensure_value_choice
 from openretailscience.options import get_option
 
 
@@ -36,8 +37,12 @@ def label_by_condition(
         mixed_label (str | ibis.Value): Label for mixed (extended strategy only).
 
     Returns:
-        ibis.Table: One row per group, with the added label column.
+        ibis.Table: One row per group, with only the ``label_col`` and ``return_col`` columns.
+
+    Raises:
+        ValueError: If ``labeling_strategy`` is not "binary" or "extended" (case-insensitive).
     """
+    labeling_strategy = ensure_value_choice(labeling_strategy, ["binary", "extended"], "labeling_strategy")
     if label_col is None:
         label_col = get_option("column.customer_id")
 

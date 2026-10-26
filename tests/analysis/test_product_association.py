@@ -1,5 +1,6 @@
 """Tests for the ProductAssociation module."""
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -340,14 +341,37 @@ class TestProductAssociations:
                 target_item=[],
             )
 
-    def test_calc_association_target_item_invalid_type(self, transactions_df):
-        """Test that invalid types in target item list raise TypeError."""
-        with pytest.raises(TypeError, match="target_item must contain only str or float values"):
+    @pytest.mark.parametrize("target_item", [1001, [1001], np.int64(1001)])
+    def test_integer_product_ids_accepted_as_target_item(self, transactions_df, target_item):
+        """Integer SKUs work as target_item and give the same rules as the matching product names."""
+        skus = {"milk": 1001, "bread": 1002, "fruit": 1003, "butter": 1004, "eggs": 1005, "beer": 1006, "diapers": 1007}
+        by_name = ProductAssociation(
+            df=transactions_df, value_col="product", group_col=cols.transaction_id, target_item="milk"
+        ).df
+        by_sku = ProductAssociation(
+            df=transactions_df.assign(product=transactions_df["product"].map(skus)),
+            value_col="product",
+            group_col=cols.transaction_id,
+            target_item=target_item,
+        ).df
+
+        expected = by_name.assign(product_1=by_name["product_1"].map(skus), product_2=by_name["product_2"].map(skus))
+        pd.testing.assert_frame_equal(
+            by_sku.sort_values("product_2", ignore_index=True), expected.sort_values("product_2", ignore_index=True)
+        )
+
+    @pytest.mark.parametrize(
+        "target_item",
+        [["milk", {"invalid": "dict"}], 1001.0, [np.float32(1001)], True],
+    )
+    def test_calc_association_target_item_invalid_type(self, transactions_df, target_item):
+        """Non-str, non-integer target items raise; floats are rejected because float IDs compare inexactly."""
+        with pytest.raises(TypeError, match="target_item must contain only str or integer values"):
             ProductAssociation(
                 df=transactions_df,
                 value_col="product",
                 group_col=cols.transaction_id,
-                target_item=["milk", {"invalid": "dict"}],
+                target_item=target_item,
             )
 
     def test_with_custom_column_names(self, transactions_df):
