@@ -86,7 +86,10 @@ class GainLoss:
         # infer_objects accepts an object Series of plain bools but, unlike pd.array, keeps a None/NaN hole non-boolean
         masks = tuple(pd.Series(mask).infer_objects().array for mask in raw_masks)
         if not all(pd.api.types.is_bool_dtype(mask.dtype) for mask in masks):
-            raise TypeError("p1_index, p2_index, focus_group_index, and comparison_group_index must be boolean")
+            raise TypeError(
+                "p1_index, p2_index, focus_group_index, and comparison_group_index must be boolean; a mask with "
+                'missing values needs the nullable "boolean" dtype, where <NA> selects nothing'
+            )
         # A nullable mask's <NA> (e.g. a comparison against a missing brand) selects nothing, as in pandas indexing
         p1_index, p2_index, focus_group_index, comparison_group_index = (
             mask.to_numpy(dtype=bool, na_value=False) for mask in masks

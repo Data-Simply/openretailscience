@@ -271,8 +271,8 @@ def test_rows_in_neither_period_are_ignored(sample_df: pd.DataFrame) -> None:
 def test_non_boolean_mask_raises(
     sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series], make_focus_mask: Callable
 ) -> None:
-    """A mask that is not boolean raises instead of having its values coerced to True/False."""
-    with pytest.raises(TypeError, match="must be boolean"):
+    """A mask that is not boolean raises, pointing at the nullable dtype, instead of being coerced to True/False."""
+    with pytest.raises(TypeError, match=r'must be boolean; .* nullable "boolean" dtype'):
         GainLoss(
             df=sample_df,
             **{**brand_masks, "focus_group_index": make_focus_mask(sample_df)},
