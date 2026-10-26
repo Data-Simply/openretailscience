@@ -1,10 +1,15 @@
 name: PR Checks
 on:
   pull_request:
-    # synchronize: a required check must report on every new head commit, not just when the title or labels change.
+    # synchronize: a required check must report on every head commit.
     types: [opened, edited, reopened, synchronize, labeled, unlabeled]
 permissions:
   contents: read
+  pull-requests: read
+# Dependabot labels a PR just after opening it; cancel the superseded run so its failure doesn't linger.
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 jobs:
   release-notes:
     name: Release Notes Labels
@@ -21,11 +26,16 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: .github/scripts/release_labels.sh "$PR_TITLE"
       - name: Check PR has exactly one of major-change or minor-change
+        # Runs even after a title failure, so both problems are reported in one pass.
+        if: ${{ !cancelled() }}
         env:
-          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
-          count="$(jq '[.[] | select(. == "major-change" or . == "minor-change")] | length' <<< "$PR_LABELS")"
+          # Not the event payload's labels: they go stale when labels land after the event, and re-runs replay them.
+          labels="$(gh pr view "$PR_URL" --json labels --jq '[.labels[].name]')"
+          count="$(jq '[.[] | select(. == "major-change" or . == "minor-change")] | length' <<< "$labels")"
           if [[ "$count" -ne 1 ]]; then
-            echo "Add exactly one of the major-change or minor-change labels. Current labels: $PR_LABELS" >&2
+            echo "Add exactly one of the major-change or minor-change labels. Current labels: $labels" >&2
             exit 1
           fi

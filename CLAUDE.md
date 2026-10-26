@@ -77,9 +77,8 @@ dependencies are used.
 - When checking for None values use `if my_var is not None` rather than `if my_var:`
 - When checking for empty lists values use `if len(my_list) > 0` rather than `if my_list:`
 - Always create "conventional commit" commit messages
-- PR titles must also be conventional commits, and every PR needs exactly one of the `major-change` (a headline
-  item in the release notes) or `minor-change` labels. `.github/workflows/pr-checks.yml` enforces both, and the
-  title decides the PR's release-notes section.
+- PR titles must also be conventional commits, and every PR needs exactly one of the `major-change` (a release-notes
+  headline) or `minor-change` labels
 - Do not stage files or commit unless asked to
 - Docstrings should specify argument and return types
 - Type annotations should use Python 3.11-compatible formats (e.g., use `from __future__ import annotations` and

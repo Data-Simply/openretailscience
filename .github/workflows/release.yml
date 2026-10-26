@@ -1,6 +1,15 @@
 name: PyPi Package Deploy
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        type: choice
+        description: Select Release Type
+        default: "minor"
+        options:
+          - major
+          - minor
+          - patch
 permissions:
   contents: read
 concurrency:
@@ -126,8 +135,6 @@ jobs:
       id-token: write
       attestations: write
       pull-requests: write
-    env:
-      CI_COMMIT_MESSAGE: Continuous Integration Version Bump
     steps:
       # zizmor: ignore[artipacked] this job pushes the version-bump commit and
       # tag, so it requires the GITHUB_TOKEN persisted by actions/checkout. Only
@@ -135,7 +142,7 @@ jobs:
       - name: Checkout # zizmor: ignore[artipacked]
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Full history and tags: the version bump and release notes both read existing tags.
+          # PR labelling reads the previous release's commit date.
           fetch-depth: 0
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -145,32 +152,35 @@ jobs:
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
-      - name: Install Dependencies
-        run: uv sync --locked --group dev
       - name: Bump Version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TYPE: ${{ inputs.release }}
         run: |
-          echo "PREVIOUS_TAG=$(git describe --tags --abbrev=0)" >> "$GITHUB_ENV"
-          uv run python - <<'EOF'
-          import datetime
-          import os
-          import subprocess
-          from tomlkit.toml_file import TOMLFile
-          today = datetime.datetime.now(datetime.UTC).date()
-          # yyyy.m.d.patch without zero padding: PEP 440 strips leading zeros, so a padded tag wouldn't match PyPI.
-          date_prefix = f"{today.year}.{today.month}.{today.day}."
-          tags = subprocess.run(
-              ["git", "tag", "--list", f"{date_prefix}*"], capture_output=True, text=True, check=True
-          ).stdout.split()
-          patch = max(int(tag.removeprefix(date_prefix)) for tag in tags) + 1 if len(tags) > 0 else 0
-          new_version = f"{date_prefix}{patch}"
-          file = TOMLFile("pyproject.toml")
-          doc = file.read()
-          doc["project"]["version"] = new_version
-          file.write(doc)
-          with open(os.environ["GITHUB_ENV"], "a") as env_file:
-              env_file.write(f"RELEASE_TAG={new_version}\n")
-          print(f"New Version: {new_version}")
-          EOF
+          # The last published release, not the nearest tag: a run that tagged but failed to release must not
+          # become the starting point, or its PRs drop out of every release's notes.
+          previous_tag="$(gh release view --json tagName --jq .tagName)"
+          echo "PREVIOUS_TAG=$previous_tag" >> "$GITHUB_ENV"
+          # Also updates uv.lock, which pins this project's version; a stale lock fails `uv sync --locked`.
+          release_tag="$(uv version --bump "$RELEASE_TYPE" --no-sync --short)"
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+      # Before building and tagging, so a failure aborts before a version is attested or minted.
+      - name: Label PRs for release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Adds pipefail; under the default shell a failed `gh pr list` labels nothing and passes.
+        shell: bash
+        run: |
+          since="$(git log -1 --format=%cI "$PREVIOUS_TAG")"
+          gh pr list --state merged --base main --search "merged:>$since" --limit 500 --json number,title \
+            | jq -r '.[] | [.number, .title] | @tsv' \
+            | while IFS=$'\t' read -r number title; do
+                labels="$(.github/scripts/release_labels.sh "$title")" || continue
+                for label in $labels; do
+                  gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$number/labels" -f "labels[]=$label" > /dev/null
+                done
+                echo "#$number" $labels ": $title"
+              done
       - name: Build package
         run: uv build
       - name: Attest build provenance
@@ -186,28 +196,11 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add pyproject.toml
-          git commit -m "$CI_COMMIT_MESSAGE"
-          git push
-          echo "Tagging new version: $RELEASE_TAG"
+          git add pyproject.toml uv.lock
+          git commit -m "chore(release): $RELEASE_TAG"
           git tag -a "$RELEASE_TAG" -m "Auto-generated tag"
-          git push origin "$RELEASE_TAG"
-      # .github/release.yml sorts release notes by label, so label each PR merged since the previous release from its
-      # conventional-commit title. Labels are only added, never removed.
-      - name: Label PRs for release notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          since="$(git log -1 --format=%cI "$PREVIOUS_TAG")"
-          gh pr list --state merged --base main --search "merged:>$since" --limit 500 --json number,title \
-            | jq -r '.[] | [.number, .title] | @tsv' \
-            | while IFS=$'\t' read -r number title; do
-                labels="$(.github/scripts/release_labels.sh "$title")" || continue
-                for label in $labels; do
-                  gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$number/labels" -f "labels[]=$label" > /dev/null
-                done
-                echo "#$number" $labels ": $title"
-              done
+          # Atomic: a bump commit landing without its tag would leave main on a version that was never released.
+          git push --atomic origin HEAD "$RELEASE_TAG"
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
