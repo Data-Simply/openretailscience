@@ -121,8 +121,8 @@ def get_sequential_cmap() -> ListedColormap | LinearSegmentedColormap:
     """Resolve the magnitude-ordered colormap (heatmap, cohort, period-on-period).
 
     Reads ``plot.color.sequential``: a Tailwind hue name (``"green"``, ``"blue"``)
-    yields a discrete ``ListedColormap`` over the hue's shades; a matplotlib
-    colormap name (``"viridis"``, ``"Greens"``) is handed to ``plt.get_cmap``.
+    yields a discrete ``ListedColormap`` over the hue's shades; any other name is
+    looked up as a matplotlib colormap (``"viridis"``, ``"Greens"``).
 
     Returns:
         ListedColormap | LinearSegmentedColormap: The resolved colormap.

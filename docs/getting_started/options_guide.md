@@ -292,12 +292,10 @@ cols.calc.price_per_unit        # "price_per_unit"
 cols.calc.spend_per_cust_contrib # "spend_per_customer_contrib"
 ```
 
-#### How ColumnHelper Works Internally
+#### How ColumnHelper Resolves Names
 
-1. Reads option values on initialization
-2. Creates nested `AggColumns` and `CalcColumns` objects for organized access
-3. Combines base names with suffixes using `join_options()`
-4. Provides consistent naming across all modules
+A `ColumnHelper` reads the option values when it is created, so create it inside any `option_context()` whose names
+it should reflect. Suffixed names join the configured base name and suffix with `_` (`spend` + `p1` → `spend_p1`).
 
 The nested structure mirrors the configuration hierarchy:
 

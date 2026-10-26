@@ -11,12 +11,13 @@ from openretailscience.plots import time, period_on_period, broken_timeline, pri
 
 Most `plot()` functions share these chrome keywords: `title`, `eyebrow`,
 `subtitle`, `source_text`, `x_label`, `y_label`, `ax`, `legend_title`,
-`move_legend_outside`. An outside legend too tall for the plot wraps into columns,
+`move_legend_outside`. Omitting `x_label`/`y_label` leaves the axis unlabelled (not the column
+name). An outside legend too tall for the plot wraps into columns,
 up to half the figure width; past that it overflows, so prefer a taller figure — or,
 on the charts that take it, `legend_style="end_of_line"`. Pass `ax=` to draw onto one
 axes you manage. The chrome
-(title/eyebrow/subtitle/source) is figure-level (`fig.text` plus
-`fig.subplots_adjust`), so it does not compose with a `plt.subplots` grid: give
+(title/eyebrow/subtitle/source) is placed on the figure and shrinks the axes to
+make room, so it does not compose with a `plt.subplots` grid: give
 each chart its own figure rather than tiling several into one. Only the
 distinctive arguments are listed below; see each function's docstring for the rest.
 
@@ -35,10 +36,12 @@ distinctive arguments are listed below; see each function's docstring for the re
 - `waterfall.plot(amounts, labels, data_label_format=None, display_net_bar=False, ...)` —
   waterfall; also exposes `waterfall.format_data_labels(...)`.
 - `venn.plot(df, labels, vary_size=False, subset_label_formatter=None, ...)` — 2/3-set
-  Venn (df needs `groups` + `percent`). Usually reached via `CrossShop.plot`.
+  Venn (df needs `groups`, a tuple of 0/1 flags in `labels` order, + `percent`, shown unscaled). Usually
+  reached via `CrossShop.plot`.
 - `heatmap.plot(df, cbar_label, colormap_style="discrete", ...)` — generic heatmap.
 - `cohort.plot(df, cbar_label, percentage=True, ...)` — cohort heatmap (wraps
-  `heatmap.plot`); feed it `CohortAnalysis(...).df`.
+  `heatmap.plot`); feed it `CohortAnalysis(..., percentage=True).df`, or pass `percentage=False` for
+  counts (a count of 25 would otherwise render as "2500%").
 - `time.plot(df, value_col, period="D", agg_func="sum", group_col=None, ...)` — resampled
   time series.
 - `period_on_period.plot(df, x_col, value_col, periods, ...)` — overlay periods aligned to

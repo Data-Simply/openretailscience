@@ -48,7 +48,7 @@ def _validate_bar_inputs(
     return orientation, sort_order, data_label_format
 
 
-def plot(  # noqa: PLR0913
+def plot(  # noqa: PLR0913, PLR0917
     df: pd.DataFrame | pd.Series,
     value_col: str | list[str] | None = None,
     x_col: str | None = None,
@@ -85,28 +85,27 @@ def plot(  # noqa: PLR0913
         title (str, optional): The title of the plot.
         eyebrow (str, optional): Small uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
-        x_label (str, optional): The label for the x-axis.
-        y_label (str, optional): The label for the y-axis.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         legend_title (str, optional): The title for the legend.
         legend_labels (list[str], optional): Override the legend labels read from the plotted series
             (e.g. swap column ids for human-readable names). Length must match the number of legend
-            handles or a ``ValueError`` is raised.
+            entries or a ``ValueError`` is raised.
         ax (Axes, optional): The Matplotlib Axes object to plot on.
         source_text (str, optional): Text to be displayed as a source at the bottom of the plot.
         move_legend_outside (bool, optional): Whether to move the legend outside the plot area.
         orientation (Literal["horizontal", "h", "vertical", "v"], optional): Orientation of the bars.
             Accepts short or long forms, case-insensitive.
         sort_order (Literal["asc", "ascending", "desc", "descending"] | None, optional): Sorting order
-            for the bars. Accepts short or long forms, case-insensitive.
+            for the bars, by the first ``value_col`` only. Accepts short or long forms, case-insensitive.
         data_label_format (Literal["absolute", "percentage_by_bar_group", "percentage_by_series"] | None, optional):
             Format for the data labels. "absolute" shows the raw value of each bar;
             "percentage_by_bar_group" shows each bar's share of its x-axis group;
             "percentage_by_series" shows each bar's share of its value-column series.
         use_hatch (bool, optional): Whether to apply hatch patterns to the bars.
         num_digits (int, optional): The number of digits to display in the data labels.
-        **kwargs: Additional keyword arguments for pandas' ``plot`` function. ``width`` (default 0.8),
-            ``color`` (default a per-column palette), and ``legend`` (default True for grouped bars)
-            are popped and consumed.
+        **kwargs: Additional keyword arguments for pandas' ``plot`` function. ``width`` defaults to 0.8,
+            ``color`` to a per-column palette, and ``legend`` to True for grouped bars only.
 
     Returns:
         SubplotBase: The Matplotlib Axes object with the generated plot.
@@ -115,7 +114,7 @@ def plot(  # noqa: PLR0913
         ValueError: If df is empty.
         ValueError: If df is a Series and x_col is provided.
         ValueError: If orientation, sort_order, or data_label_format is not an accepted value.
-        ValueError: If legend_labels is provided and its length does not match the number of legend handles.
+        ValueError: If legend_labels is provided and its length does not match the number of legend entries.
     """
     orientation, sort_order, data_label_format = _validate_bar_inputs(
         df,
@@ -171,7 +170,6 @@ def plot(  # noqa: PLR0913
             value_col=value_col,
             df=df,
             data_label_format=data_label_format,
-            x_col=x_col if x_col is not None else df.index,
             is_stacked=kwargs.get("stacked", False),
             num_digits=num_digits,
         )
@@ -202,13 +200,13 @@ def _generate_bar_labels(
         "percentage_by_bar_group",
         "percentage_by_series",
     ],
-    x_col: str | pd.Index,
     is_stacked: bool,
     num_digits: int = 3,
 ) -> None:
     """Adds bar labels to the bar plot containers."""
     division_by_zero_list = []  # A list to track occurrences of division by zero
     total_sum_per_column = df[value_col].sum()  # Series with a total for each column
+    group_totals = df[value_col].sum(axis=1)  # one bar group per row, in plotted order
 
     for container, column in zip(ax.containers, value_col, strict=False):
         if not isinstance(container, BarContainer):
@@ -217,7 +215,6 @@ def _generate_bar_labels(
         if data_label_format == "absolute":
             container_labels = _generate_absolute_labels(container, plot_kind, num_digits)
         elif data_label_format == "percentage_by_bar_group":
-            group_totals = df.groupby(x_col)[value_col].sum().sum(axis=1)
             container_labels = _generate_percentage_labels(
                 container,
                 group_totals,

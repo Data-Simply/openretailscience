@@ -150,6 +150,25 @@ class TestCustomerDecisionHierarchy:
 
         assert pairs_df.equals(expected_pairs_df)
 
+    def test_categorical_input_drops_excluded_products_and_customers(self):
+        """Categorical columns give the same pairs and distances as plain ones, so excluded values don't linger."""
+        # Coke, Pepsi and Fanta are only bought in multi-item baskets; customer 2 is left with no pairs at all
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [1, 1, 1, 2, 2, 2, 3, 3, 4],
+                cols.transaction_id: [1, 1, 2, 3, 3, 4, 5, 6, 7],
+                "product_name": ["Coke", "Pepsi", "Sprite", "Fanta", "Tonic", "Tonic", "Tonic", "Tonic", "Sprite"],
+            },
+        )
+        expected = rp.CustomerDecisionHierarchy(df, product_col="product_name")
+
+        result = rp.CustomerDecisionHierarchy(
+            df.astype({cols.customer_id: "category", "product_name": "category"}), product_col="product_name"
+        )
+
+        pd.testing.assert_frame_equal(result.pairs_df, expected.pairs_df)
+        np.testing.assert_array_equal(result.distances, expected.distances)
+
     def test_with_custom_column_names(self):
         """Test CustomerDecisionHierarchy with custom column names to ensure column overrides work correctly."""
         # fmt: off

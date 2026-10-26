@@ -1,6 +1,6 @@
 """Unified integration tests for RFM Segmentation with multiple database backends."""
 
-import datetime
+import datetime as dt
 
 import pytest
 
@@ -21,7 +21,7 @@ from openretailscience.segmentation.rfm import RFMSegmentation
     [
         (None, 10, 10, 10, None, None, None, None),
         ("2023-12-31", 5, 5, 5, 0.0, 1000.0, 1, 50),
-        (datetime.date(2023, 6, 30), [0.2, 0.4, 0.6, 0.8], [0.3, 0.6], [0.1, 0.5, 0.9], 10.0, 5000.0, 2, 100),
+        (dt.date(2023, 6, 30), [0.2, 0.4, 0.6, 0.8], [0.3, 0.6], [0.1, 0.5, 0.9], 10.0, 5000.0, 2, 100),
     ],
 )
 def test_rfm_segmentation_integration(

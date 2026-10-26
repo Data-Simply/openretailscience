@@ -7,6 +7,7 @@ Rules are computed lazily in the Ibis engine: ``table`` is the lazy Ibis table a
 import functools
 
 import ibis
+import numpy as np
 import pandas as pd
 from ibis import _
 
@@ -25,11 +26,13 @@ class ProductAssociation:
     - ``support = cooccurrences / total``, where ``total`` is the count of distinct
       ``group_col`` values over the ENTIRE input — not just groups containing either product.
     - ``confidence = cooccurrences / occurrences_1`` = P(product_2 | product_1) — asymmetric.
-    - ``uplift = support / (prob_1 * prob_2)`` — may legitimately exceed 1.
+    - ``uplift = support / ((occurrences_1 / total) * (occurrences_2 / total))``; 1 means the
+      pair co-occurs as often as chance, above 1 more often.
 
     With ``target_item=None`` both directions (a, b) and (b, a) are emitted, each with its
     own confidence; with a given ``target_item`` only rows with the target as product_1 are
-    emitted. ``min_confidence`` filters both directions after the union.
+    emitted. ``min_confidence`` applies to each direction separately, so (a, b) can be kept
+    while (b, a) is dropped.
 
     ``table`` is the lazy Ibis result; ``df`` materializes it.
     """
@@ -39,7 +42,7 @@ class ProductAssociation:
         df: pd.DataFrame | ibis.Table,
         value_col: str,
         group_col: str | None = None,
-        target_item: str | None = None,
+        target_item: str | int | list[str | int] | None = None,
         min_occurrences: int = 1,
         min_cooccurrences: int = 1,
         min_support: float = 0.0,
@@ -51,10 +54,12 @@ class ProductAssociation:
         Args:
             df (pd.DataFrame | ibis.Table): Transaction data with one row per (group, product) occurrence.
             value_col (str): Column containing the product identifiers.
-            group_col (str | None): Column identifying unique transactions or customers; defaults to
-                option ``column.customer_id``.
-            target_item (str | float | list[str | float] | None): Product(s) to focus the analysis on;
-                if None, associations for all products are calculated.
+            group_col (str | None): Column defining a basket. The default, option
+                ``column.customer_id``, pools everything a customer ever bought into one basket;
+                pass the transaction id column for per-transaction market baskets.
+            target_item (str | int | list[str | int] | None): Product(s) to focus the analysis on;
+                if None, associations for all products are calculated. Floats are rejected: an ID
+                compared as a float matches only when its stored value is bit-for-bit equal.
             min_occurrences (int): Minimum distinct-group count per product; must be >= 1. Defaults to 1.
             min_cooccurrences (int): Minimum distinct-group count per pair; must be >= 1. Defaults to 1.
             min_support (float): Minimum support; must be in [0, 1]. Defaults to 0.0.
@@ -64,7 +69,7 @@ class ProductAssociation:
         Raises:
             ValueError: If any ``min_*`` value is out of range.
             ValueError: If ``target_item`` is an empty list.
-            TypeError: If ``target_item`` contains values that are not str or float.
+            TypeError: If ``target_item`` contains values that are not str or integer.
             ValueError: If ``group_col`` or ``value_col`` columns are missing from the data.
         """
         group_col = group_col or get_option("column.customer_id")
@@ -119,8 +124,8 @@ class ProductAssociation:
     def _calc_association(
         df: pd.DataFrame | ibis.Table,
         value_col: str,
-        group_col: str = get_option("column.customer_id"),
-        target_item: str | float | list[str | float] | None = None,
+        group_col: str,
+        target_item: str | int | list[str | int] | None = None,
         min_occurrences: int = 1,
         min_cooccurrences: int = 1,
         min_support: float = 0.0,
@@ -141,7 +146,7 @@ class ProductAssociation:
         Raises:
             ValueError: Out-of-range ``min_*`` values (see ``_validate_minimum_values``) or
                 an empty ``target_item`` list.
-            TypeError: If ``target_item`` items are not str or float.
+            TypeError: If ``target_item`` items are not str or integer.
         """
         ProductAssociation._validate_minimum_values(
             min_occurrences=min_occurrences,
@@ -151,18 +156,15 @@ class ProductAssociation:
             min_uplift=min_uplift,
         )
 
-        # Normalize target_item to a list for consistent processing
         if target_item is not None:
             if not isinstance(target_item, list):
                 target_item = [target_item]
 
-            # Validate that all items in target_item are of supported types
             for item in target_item:
-                if not isinstance(item, str | float):
-                    msg = f"target_item must contain only str or float values. Got {type(item)}"
+                if isinstance(item, bool) or not isinstance(item, str | int | np.integer):
+                    msg = f"target_item must contain only str or integer values. Got {type(item)}"
                     raise TypeError(msg)
 
-            # Ensure target_item is not empty
             if len(target_item) == 0:
                 raise ValueError("target_item cannot be an empty list")
 

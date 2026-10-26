@@ -23,16 +23,18 @@ from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 class CustomerDecisionHierarchy:
     """Identifies which products customers treat as substitutes versus complements.
 
-    Substitutes are rarely co-bought; complements are often co-bought. Input is
-    transaction-level rows with the option-derived customer_id and transaction_id
-    columns plus a product column (``product_col``); with the default
-    ``exclude_same_transaction_products=True``, (customer, product) pairs bought
-    together in the same transaction are excluded.
+    Products are compared by which customers buy them. With the default
+    ``exclude_same_transaction_products=True`` only (customer, product) pairs never bought in
+    a multi-item transaction count, so products close together are ones the same customers
+    switch between (substitutes). A product left with no pairs is absent from the results.
 
     Results, available after initialization:
 
-    - ``pairs_df``: the deduplicated (customer, product) pairs used.
-    - ``distances``: square product-distance matrix.
+    - ``pairs_df``: the deduplicated (customer, product) pairs used, as categoricals.
+    - ``distances``: square matrix in [0, 1], rows and columns ordered by
+      ``pairs_df[product_col].cat.categories``. 0 = every buyer of one product also buys
+      the other, 0.5 = no association, 1 = never bought by the same customer, or no customer
+      bought neither (Yule's Q of -1 either way).
     - ``plot()``: dendrogram of the ward hierarchical clustering.
     """
 
@@ -50,11 +52,10 @@ class CustomerDecisionHierarchy:
             df (pd.DataFrame): Transaction-level rows; must contain the option-derived
                 customer_id and transaction_id columns and ``product_col``.
             product_col (str): Column with the product identifiers to analyze.
-            exclude_same_transaction_products (bool): When True (default), (customer,
-                product) pairs bought together in the same transaction are dropped.
+            exclude_same_transaction_products (bool): When True (default), drop each
+                (customer, product) pair the customer ever bought in a multi-item transaction.
             method (Literal["yules_q"]): Distance method; only "yules_q" is accepted.
-            random_state (int): Stored but never used; ward linkage on the deterministic
-                distance matrix is already reproducible.
+            random_state (int): Stored but has no effect; results are already deterministic.
 
         Raises:
             ValueError: If the required columns are missing from the dataframe.
@@ -83,11 +84,8 @@ class CustomerDecisionHierarchy:
         cols = ColumnHelper()
         if exclude_same_transaction_products:
             pairs_df = df[[cols.customer_id, cols.transaction_id, product_col]].drop_duplicates()
-            pairs_to_exclude_df = (
-                pairs_df.groupby(cols.transaction_id)
-                .filter(lambda x: len(x) > 1)[[cols.customer_id, product_col]]
-                .drop_duplicates()
-            )
+            multi_item = pairs_df.groupby(cols.transaction_id, observed=True)[product_col].transform("size") > 1
+            pairs_to_exclude_df = pairs_df.loc[multi_item, [cols.customer_id, product_col]].drop_duplicates()
             # Drop all rows from pairs_df where customer_id and product_name are in pairs_to_exclude_df
             pairs_df = pairs_df.merge(
                 pairs_to_exclude_df,
@@ -99,7 +97,9 @@ class CustomerDecisionHierarchy:
         else:
             pairs_df = df[[cols.customer_id, product_col]].drop_duplicates()
 
-        return pairs_df.reset_index(drop=True).astype("category")
+        # astype keeps an already-categorical column's categories; an excluded product or customer would
+        # then linger as a phantom row in the distance matrix
+        return pairs_df.reset_index(drop=True).astype("category").apply(lambda col: col.cat.remove_unused_categories())
 
     @staticmethod
     def _calculate_yules_q(bought_product_1: np.array, bought_product_2: np.array) -> float:
@@ -143,12 +143,7 @@ class CustomerDecisionHierarchy:
         return (a * d - b * c) / denominator
 
     def _get_yules_q_distances(self) -> np.ndarray:
-        """Calculate the square product-distance matrix.
-
-        Distance is (1 - Yule's Q) / 2, rescaled from [0, 2] into [0, 1] so the
-        result is a valid distance matrix. Rows and columns are ordered by
-        ``pairs_df[product_col].cat.categories``, so ``distances[i, j]`` aligns
-        with that category list (the order ``plot()`` uses for its labels).
+        """Calculate the square product-distance matrix, (1 - Yule's Q) / 2.
 
         Returns:
             np.ndarray: Square matrix of pairwise product distances in [0, 1].

@@ -40,7 +40,7 @@ area.plot(
     move_legend_outside=True,
 )
 
-# Example 3: Using group_col for automatic pivoting
+# Example 3: Long-format data, one area per group_col value
 df_long = df.melt(id_vars=["month"], var_name="category", value_name="sales")
 
 area.plot(

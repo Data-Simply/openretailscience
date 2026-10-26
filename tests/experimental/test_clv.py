@@ -1,6 +1,6 @@
 """Tests for openretailscience.experimental.clv."""
 
-import datetime
+import datetime as dt
 import warnings
 
 import ibis
@@ -59,7 +59,7 @@ class TestCLVStats:
             # Weekly: recency/T are fractional weeks (elapsed days / 7). End given as an ISO string.
             pytest.param("week", "2023-01-29", [14 / 7, 0.0, 14 / 7], [28 / 7, 28 / 7, 19 / 7], id="weekly"),
             # Daily: recency/T are whole days. End given as a datetime.date object.
-            pytest.param("day", datetime.date(2023, 1, 29), [14.0, 0.0, 14.0], [28.0, 28.0, 19.0], id="daily"),
+            pytest.param("day", dt.date(2023, 1, 29), [14.0, 0.0, 14.0], [28.0, 28.0, 19.0], id="daily"),
             # Default end resolves to the global latest transaction, 2023-01-24 (101/102 age 23, 103 age 14).
             pytest.param("day", None, [14.0, 0.0, 14.0], [23.0, 23.0, 14.0], id="daily-default-obs-end"),
             # Monthly: recency/T are elapsed days divided by the fixed average-Gregorian-month length.

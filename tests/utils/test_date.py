@@ -1,7 +1,7 @@
 """Tests for the time_utils module."""
 
 # flake8: noqa: DTZ001
-import datetime
+import datetime as dt
 
 import ibis
 import pandas as pd
@@ -43,12 +43,12 @@ class TestFilterAndLabelByPeriods:
 
         period_ranges = {
             "Q1": (
-                datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC),
-                datetime.datetime(2023, 3, 31, tzinfo=datetime.UTC),
+                dt.datetime(2023, 1, 1, tzinfo=dt.UTC),
+                dt.datetime(2023, 3, 31, tzinfo=dt.UTC),
             ),
             "Q2": (
-                datetime.datetime(2023, 4, 1, tzinfo=datetime.UTC),
-                datetime.datetime(2023, 6, 30, tzinfo=datetime.UTC),
+                dt.datetime(2023, 4, 1, tzinfo=dt.UTC),
+                dt.datetime(2023, 6, 30, tzinfo=dt.UTC),
             ),
         }
         result = filter_and_label_by_periods(sample_transactions_table, period_ranges)
@@ -136,11 +136,11 @@ class TestFilterAndLabelByPeriods:
                 r"Period 'Invalid_Q1': start date \(2023-03-31\) must be <= end date \(2023-01-01\)",
             ),
             (
-                {"Invalid_Q1": (datetime.datetime(2023, 3, 31), datetime.datetime(2023, 1, 1))},
+                {"Invalid_Q1": (dt.datetime(2023, 3, 31), dt.datetime(2023, 1, 1))},
                 r"Period 'Invalid_Q1': start date \(2023-03-31 00:00:00\) must be <= end date \(2023-01-01 00:00:00\)",
             ),
             (
-                {"Invalid_Mixed": (datetime.datetime(2023, 6, 30), "2023-04-01")},
+                {"Invalid_Mixed": (dt.datetime(2023, 6, 30), "2023-04-01")},
                 r"Period 'Invalid_Mixed': start date \(2023-06-30 00:00:00\) must be <= end date \(2023-04-01\)",
             ),
         ],
@@ -188,8 +188,8 @@ class TestFilterAndLabelByPeriods:
             ),
             (
                 {
-                    "Period_A": (datetime.datetime(2023, 1, 1), datetime.datetime(2023, 3, 31)),
-                    "Period_B": (datetime.datetime(2023, 3, 15), datetime.datetime(2023, 6, 30)),
+                    "Period_A": (dt.datetime(2023, 1, 1), dt.datetime(2023, 3, 31)),
+                    "Period_B": (dt.datetime(2023, 3, 15), dt.datetime(2023, 6, 30)),
                 },
                 r"Periods 'Period_A' \(2023-01-01-2023-03-31\) and 'Period_B' \(2023-03-15-2023-06-30\) overlap",
             ),
@@ -248,16 +248,16 @@ class TestFindOverlappingPeriods:
 
     def test_valid_range_same_year(self):
         """Test case where the start and end dates are in the same year."""
-        start_date = datetime.datetime(2024, 1, 1)
-        end_date = datetime.datetime(2024, 12, 31)
+        start_date = dt.datetime(2024, 1, 1)
+        end_date = dt.datetime(2024, 12, 31)
         expected = []
         result = find_overlapping_periods(start_date, end_date)
         assert result == expected
 
     def test_valid_range_multiple_years(self):
         """Test case where the start and end dates span multiple years."""
-        start_date = datetime.datetime(2022, 6, 15)
-        end_date = datetime.datetime(2025, 3, 10)
+        start_date = dt.datetime(2022, 6, 15)
+        end_date = dt.datetime(2025, 3, 10)
         expected = [
             ("2022-06-15", "2023-03-10"),
             ("2023-06-15", "2024-03-10"),
@@ -268,8 +268,8 @@ class TestFindOverlappingPeriods:
 
     def test_valid_range_full_years(self):
         """Test case with a date range spanning full years."""
-        start_date = datetime.datetime(2020, 1, 1)
-        end_date = datetime.datetime(2023, 12, 31)
+        start_date = dt.datetime(2020, 1, 1)
+        end_date = dt.datetime(2023, 12, 31)
         expected = [
             ("2020-01-01", "2021-12-31"),
             ("2021-01-01", "2022-12-31"),
@@ -280,23 +280,23 @@ class TestFindOverlappingPeriods:
 
     def test_invalid_date_range(self):
         """Test case where the start date is after the end date."""
-        start_date = datetime.datetime(2024, 12, 31)
-        end_date = datetime.datetime(2024, 1, 1)
+        start_date = dt.datetime(2024, 12, 31)
+        end_date = dt.datetime(2024, 1, 1)
         with pytest.raises(ValueError, match="Start date must be before end date"):
             find_overlapping_periods(start_date, end_date)
 
     def test_same_start_and_end_date(self):
         """Test case where the start and end dates are the same."""
-        start_date = datetime.datetime(2024, 6, 1)
-        end_date = datetime.datetime(2024, 6, 1)
+        start_date = dt.datetime(2024, 6, 1)
+        end_date = dt.datetime(2024, 6, 1)
         expected = []
         result = find_overlapping_periods(start_date, end_date)
         assert result == expected
 
     def test_large_date_range(self):
         """Test case with a very large date range spanning many years."""
-        start_date = datetime.datetime(2000, 1, 1)
-        end_date = datetime.datetime(2025, 12, 31)
+        start_date = dt.datetime(2000, 1, 1)
+        end_date = dt.datetime(2025, 12, 31)
         expected = [(f"{year}-01-01", f"{year + 1}-12-31") for year in range(2000, 2025)]
         result = find_overlapping_periods(start_date, end_date)
         assert result == expected
@@ -304,7 +304,7 @@ class TestFindOverlappingPeriods:
     @pytest.mark.parametrize(
         ("start_date", "end_date"),
         [
-            (datetime.datetime(2021, 5, 10), datetime.datetime(2024, 8, 20)),
+            (dt.datetime(2021, 5, 10), dt.datetime(2024, 8, 20)),
             ("2021-05-10", "2024-08-20"),
         ],
         ids=["datetime_input", "string_input"],
@@ -312,9 +312,9 @@ class TestFindOverlappingPeriods:
     def test_valid_range_multiple_years_return_datetime(self, start_date, end_date):
         """Test return_str=False with datetime and string inputs returns datetime tuples."""
         expected = [
-            (datetime.datetime(2021, 5, 10), datetime.datetime(2022, 8, 20)),
-            (datetime.datetime(2022, 5, 10), datetime.datetime(2023, 8, 20)),
-            (datetime.datetime(2023, 5, 10), datetime.datetime(2024, 8, 20)),
+            (dt.datetime(2021, 5, 10), dt.datetime(2022, 8, 20)),
+            (dt.datetime(2022, 5, 10), dt.datetime(2023, 8, 20)),
+            (dt.datetime(2023, 5, 10), dt.datetime(2024, 8, 20)),
         ]
         result = find_overlapping_periods(start_date, end_date, return_str=False)
         assert result == expected
@@ -322,7 +322,7 @@ class TestFindOverlappingPeriods:
     @pytest.mark.parametrize(
         ("start_date", "end_date"),
         [
-            (datetime.datetime(2021, 3, 1), datetime.datetime(2023, 6, 15)),
+            (dt.datetime(2021, 3, 1), dt.datetime(2023, 6, 15)),
             ("2021-03-01", "2023-06-15"),
         ],
         ids=["naive_datetime", "string_input"],
@@ -336,12 +336,12 @@ class TestFindOverlappingPeriods:
 
     def test_aware_datetime_returns_aware_datetimes(self):
         """Test that tz-aware datetime inputs produce tz-aware datetime outputs."""
-        utc = datetime.UTC
-        start_date = datetime.datetime(2021, 3, 1, tzinfo=utc)
-        end_date = datetime.datetime(2023, 6, 15, tzinfo=utc)
+        utc = dt.UTC
+        start_date = dt.datetime(2021, 3, 1, tzinfo=utc)
+        end_date = dt.datetime(2023, 6, 15, tzinfo=utc)
         expected = [
-            (datetime.datetime(2021, 3, 1, tzinfo=utc), datetime.datetime(2022, 6, 15, tzinfo=utc)),
-            (datetime.datetime(2022, 3, 1, tzinfo=utc), datetime.datetime(2023, 6, 15, tzinfo=utc)),
+            (dt.datetime(2021, 3, 1, tzinfo=utc), dt.datetime(2022, 6, 15, tzinfo=utc)),
+            (dt.datetime(2022, 3, 1, tzinfo=utc), dt.datetime(2023, 6, 15, tzinfo=utc)),
         ]
         result = find_overlapping_periods(start_date, end_date, return_str=False)
         assert result == expected
@@ -351,12 +351,12 @@ class TestFindOverlappingPeriods:
 
     def test_non_utc_aware_datetime_preserves_timezone(self):
         """Test that non-UTC tz-aware inputs preserve the original timezone in outputs."""
-        est = datetime.timezone(datetime.timedelta(hours=-5))
-        start_date = datetime.datetime(2021, 3, 1, tzinfo=est)
-        end_date = datetime.datetime(2023, 6, 15, tzinfo=est)
+        est = dt.timezone(dt.timedelta(hours=-5))
+        start_date = dt.datetime(2021, 3, 1, tzinfo=est)
+        end_date = dt.datetime(2023, 6, 15, tzinfo=est)
         expected = [
-            (datetime.datetime(2021, 3, 1, tzinfo=est), datetime.datetime(2022, 6, 15, tzinfo=est)),
-            (datetime.datetime(2022, 3, 1, tzinfo=est), datetime.datetime(2023, 6, 15, tzinfo=est)),
+            (dt.datetime(2021, 3, 1, tzinfo=est), dt.datetime(2022, 6, 15, tzinfo=est)),
+            (dt.datetime(2022, 3, 1, tzinfo=est), dt.datetime(2023, 6, 15, tzinfo=est)),
         ]
         result = find_overlapping_periods(start_date, end_date, return_str=False)
         assert result == expected
@@ -364,10 +364,10 @@ class TestFindOverlappingPeriods:
     @pytest.mark.parametrize(
         ("start_date", "end_date"),
         [
-            ("2021-03-01", datetime.datetime(2023, 6, 15, tzinfo=datetime.UTC)),
-            (datetime.datetime(2021, 3, 1, tzinfo=datetime.UTC), "2023-06-15"),
-            (datetime.datetime(2021, 3, 1), datetime.datetime(2023, 6, 15, tzinfo=datetime.UTC)),
-            (datetime.datetime(2021, 3, 1, tzinfo=datetime.UTC), datetime.datetime(2023, 6, 15)),
+            ("2021-03-01", dt.datetime(2023, 6, 15, tzinfo=dt.UTC)),
+            (dt.datetime(2021, 3, 1, tzinfo=dt.UTC), "2023-06-15"),
+            (dt.datetime(2021, 3, 1), dt.datetime(2023, 6, 15, tzinfo=dt.UTC)),
+            (dt.datetime(2021, 3, 1, tzinfo=dt.UTC), dt.datetime(2023, 6, 15)),
         ],
         ids=["string_start_aware_end", "aware_start_string_end", "naive_start_aware_end", "aware_start_naive_end"],
     )
@@ -379,11 +379,11 @@ class TestFindOverlappingPeriods:
     @pytest.mark.parametrize(
         ("start_date", "end_date"),
         [
-            (datetime.date(2022, 6, 15), datetime.datetime(2024, 8, 20)),
-            (datetime.datetime(2022, 6, 15), datetime.date(2024, 8, 20)),
-            (datetime.date(2022, 6, 15), datetime.date(2024, 8, 20)),
-            (12345, datetime.datetime(2024, 8, 20)),
-            (datetime.datetime(2022, 6, 15), 12345),
+            (dt.date(2022, 6, 15), dt.datetime(2024, 8, 20)),
+            (dt.datetime(2022, 6, 15), dt.date(2024, 8, 20)),
+            (dt.date(2022, 6, 15), dt.date(2024, 8, 20)),
+            (12345, dt.datetime(2024, 8, 20)),
+            (dt.datetime(2022, 6, 15), 12345),
         ],
         ids=["date_start", "date_end", "both_date", "int_start", "int_end"],
     )

@@ -26,22 +26,20 @@ def plot(
     figsize: tuple[int, int] | None = None,
     colormap_style: Literal["discrete", "continuous"] = "discrete",
 ) -> SubplotBase:
-    """Plot a cohort heatmap by wrapping heatmap.plot.
-
-    Passes x_labels_position="top" (so the chronology reads top-to-bottom) and
-    cbar_format="{x:.0%}" when percentage is True, else "{x:g}".
+    """Plot a cohort heatmap, with period labels along the top.
 
     Args:
         df (pd.DataFrame): Pre-aggregated cohort matrix (rows = cohorts, columns = periods).
         cbar_label (str): Colorbar label.
-        x_label (str, optional): X-axis label.
-        y_label (str, optional): Y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         title (str, optional): Plot title.
         eyebrow (str, optional): Uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
         ax (Axes, optional): Axes to plot on.
         source_text (str, optional): Source attribution rendered at the bottom.
-        percentage (bool, optional): Display values as percentages (True) or raw numbers.
+        percentage (bool, optional): If True, cells must be 0-1 fractions (as from
+            ``CohortAnalysis(percentage=True)``) and display as percentages; pass False for raw counts.
         figsize (tuple[int, int], optional): Figure size, used only when ax is None.
         colormap_style ("discrete", "continuous", optional): Use "continuous" when retention
             differences between cohorts are small enough that the discrete bins lump them

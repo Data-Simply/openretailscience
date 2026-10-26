@@ -234,26 +234,17 @@ def test_calc_cross_shop_table_customer_id_nunique(sample_data):
     assert cross_shop_table.equals(ret_df)
 
 
-def test_calc_cross_shop_invalid_group_3(sample_data):
-    """Test that _calc_cross_shop raises ValueError if only one of group_3_col or group_3_val is provided."""
-    with pytest.raises(ValueError, match="If group_3_col or group_3_val is populated, then the other must be as well"):
-        CrossShop._calc_cross_shop(
-            sample_data,
+@pytest.mark.parametrize("labels", [None, ["Jeans", "Shoes"]])
+def test_group_3_col_without_group_3_val_raises(sample_data, labels):
+    """group_3_col without group_3_val is reported as such, not as a label-count mismatch."""
+    with pytest.raises(ValueError, match="group_3_col requires group_3_val"):
+        CrossShop(
+            df=sample_data,
             group_1_col="category_1_name",
             group_1_val="Jeans",
-            group_2_col="category_1_name",
             group_2_val="Shoes",
             group_3_col="category_1_name",
-        )
-
-    with pytest.raises(ValueError, match="If group_3_col or group_3_val is populated, then the other must be as well"):
-        CrossShop._calc_cross_shop(
-            sample_data,
-            group_1_col="category_1_name",
-            group_1_val="Jeans",
-            group_2_col="category_1_name",
-            group_2_val="Shoes",
-            group_3_val="T-Shirts",
+            labels=labels,
         )
 
 
@@ -282,19 +273,6 @@ def test_labels_length_mismatch(sample_data):
             group_3_col="category_1_name",
             group_3_val="Dresses",
             labels=["A", "B"],
-        )
-
-
-def test_group_3_only_one_side_provided(sample_data):
-    """Test that ValueError is raised when only group_3_col or group_3_val is given."""
-    with pytest.raises(ValueError, match="If group_3_col or group_3_val is populated"):
-        CrossShop._calc_cross_shop(
-            sample_data,
-            group_1_col="category_1_name",
-            group_1_val="Jeans",
-            group_2_col="category_1_name",
-            group_2_val="Shoes",
-            group_3_col="category_1_name",
         )
 
 

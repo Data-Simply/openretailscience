@@ -33,6 +33,15 @@ class TestTimePlot:
         }
         return pd.DataFrame(data)
 
+    @pytest.mark.parametrize("group_col", [None, "category"])
+    def test_input_dataframe_is_not_modified(self, test_data, group_col):
+        """Plotting leaves the caller's frame exactly as it was (no added period column)."""
+        original = test_data.copy()
+
+        plot(test_data, value_col="sales", period="W", group_col=group_col)
+
+        pd.testing.assert_frame_equal(test_data, original)
+
     def test_generates_time_plot_with_default_parameters(self, test_data):
         """Test that the function generates a time plot with default parameters."""
         df = test_data

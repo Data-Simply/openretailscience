@@ -121,9 +121,9 @@ expected_purchases = pareto.expected_purchases(data=clv.df, future_t=52)
 ## Sampling customers
 
 `n` draws an exact number of customers, and every customer if it exceeds the population. `frac` is a
-share in `(0, 1]` decided per customer, so the row count lands *near* `frac` x population rather than
-on it; it costs one predicate instead of `n`'s sort, and is rejected below the hash's `1e-6` bucket
-resolution.
+share in `[1e-6, 1]` (anything outside raises) decided per customer, so the row count lands *near*
+`frac` x population rather than on it. It is the cheaper of the two: a single filter where `n` needs a
+sort.
 
 Customers are selected by a deterministic hash of `customer_id` salted with `random_state` (default
 `42`). The hash is the backend's own: a draw repeats for one engine at one version (DuckDB's `HASH`

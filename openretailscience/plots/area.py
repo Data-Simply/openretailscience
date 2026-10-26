@@ -38,8 +38,8 @@ def plot(
     Args:
         df (pd.DataFrame or pd.Series): Frame to plot; a Series is converted to a single-column frame.
         value_col (str or list[str]): Column(s) to plot.
-        x_label (str, optional): X-axis label.
-        y_label (str, optional): Y-axis label.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         title (str, optional): Plot title.
         eyebrow (str, optional): Uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
@@ -74,7 +74,11 @@ def plot(
             [value_col] if isinstance(value_col, str) else value_col
         ]
     else:
-        pivot_df = df.pivot(index=x_col if x_col is not None else None, columns=group_col, values=value_col)
+        pivot_df = (
+            df.pivot(columns=group_col, values=value_col)
+            if x_col is None
+            else df.pivot(index=x_col, columns=group_col, values=value_col)
+        )
 
     is_multi_area = (group_col is not None) or (isinstance(value_col, list) and len(value_col) > 1)
 

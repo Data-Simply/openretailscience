@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.resources as pkg_resources
+import math
 import warnings
 from itertools import cycle
 from typing import TYPE_CHECKING, TypedDict
@@ -78,6 +79,9 @@ def format_shorthand(
     Returns:
         str: The formatted number, with trailing zeros removed.
     """
+    if not math.isfinite(num):
+        return f"{prefix}{num}"
+
     magnitude = 0
 
     while abs(num) >= _MAGNITUDE_BASE:
@@ -329,10 +333,10 @@ def _resolve_end_of_line_label_ys(ax: Axes, candidates: list[_EndOfLineCandidate
 def expand_ylim_for_bar_labels(ax: Axes, labels: list[Annotation]) -> None:
     """Grow the y-limits so bar-end value labels sit inside the axes data area.
 
-    Bars have sticky edges that pin the y-view, so ``bar_label``'s edge labels overflow the
-    axes; this grows ``ylim`` in pixel space (so the reserved room tracks font height) until
-    every label clears. Must run after the chrome layout has reflowed the axes. Warns if not
-    converged within the pass cap.
+    Matplotlib leaves no headroom for ``ax.bar_label`` labels at the bar ends, so they can spill
+    past the axes; the room added here scales with the rendered label size. Call it after
+    ``apply_chart_chrome`` (it measures the axes at their final size); it redraws the figure
+    up to 3 times. Emits ``UserWarning`` if the labels still overflow, e.g. on a very short axes.
 
     Args:
         ax (Axes): The axes holding the labelled bars.

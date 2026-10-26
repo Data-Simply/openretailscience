@@ -82,7 +82,7 @@ ParetoNBDModel(data=clv.df, model_config={
 })
 ```
 
-Values are used verbatim in column names (same as ibis `pivot_wider`, no sanitisation).
+Values are used verbatim in column names (no sanitisation).
 `GammaGammaModel` has **no** covariate support in pymc-marketing, so for spend-by-channel, fit a
 separate Gamma-Gamma per channel.
 
@@ -128,8 +128,8 @@ computes it with no month conversion and no `time_unit`.
 
 - `n`: exact number of customers; every customer if it exceeds the population (no error). Costs a
   backend top-N sort.
-- `frac`: share in `(0, 1]`, decided per customer, so the count lands *near* `frac` * population, not
-  on it. One predicate, no sort; **raises** below the hash's `1e-6` bucket resolution.
+- `frac`: share in `[1e-6, 1]` (outside it **raises**), decided per customer, so the count lands *near*
+  `frac` * population, not on it. A single filter, no sort.
 - `random_state`: salts the deterministic hash of `customer_id` that selects customers. Defaults to `42`.
 
 **Reproducibility is per engine and per version.** The key compiles to the backend's own hash, and

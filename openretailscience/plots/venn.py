@@ -1,8 +1,7 @@
 """Venn and Euler diagrams from pre-aggregated subset sizes.
 
 Only 2- or 3-set diagrams are supported; input is subset sizes (no aggregation is
-performed). vary_size=True switches from an equal-circle VennDiagram to an area-accurate
-EulerDiagram.
+performed). vary_size=True switches from equal circles to area-accurate regions.
 """
 
 from collections.abc import Callable
@@ -75,8 +74,9 @@ def plot(
 ) -> SubplotBase:
     """Plot a Venn or Euler diagram from the subset sizes in a DataFrame.
 
-    df needs `groups` (a tuple of 0/1 membership flags, one element per set) and `percent`
-    (the subset size); the all-zero subset is dropped.
+    df needs `groups`, a tuple (not a list) of 0/1 flags where flag i means membership of
+    `labels[i]`, and `percent`, the subset size, shown as given. The all-zero subset is
+    dropped.
 
     Args:
         df (pd.DataFrame): Frame with `groups` and `percent` columns.
@@ -85,13 +85,14 @@ def plot(
         eyebrow (str, optional): Uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.
         source_text (str, optional): Source attribution rendered at the bottom.
-        vary_size (bool, optional): False for an equal-circle VennDiagram; True for an
-            area-accurate EulerDiagram.
+        vary_size (bool, optional): False draws equal circles; True sizes each region by its
+            subset size.
         figsize (tuple[int, int], optional): Figure size, used only when ax is None.
         ax (Axes, optional): Axes to plot on.
         subset_label_formatter (callable, optional): Applied to each subset size; if None,
             the raw value is stringified.
-        **kwargs: Forwarded to the diagram constructor.
+        **kwargs: Forwarded to matplotlib_set_diagrams' ``VennDiagram``, or ``EulerDiagram`` when
+            ``vary_size`` is True.
 
     Returns:
         SubplotBase: The matplotlib axes object.

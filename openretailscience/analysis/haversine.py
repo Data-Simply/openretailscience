@@ -1,8 +1,7 @@
 """Great-circle (haversine) distance between two lat/lon column pairs.
 
-All arguments and the return value are lazy Ibis expressions, so computation is pushed to the
-backend, which must support trigonometric functions. Spherical-Earth approximation; the result is
-a straight-line distance, not a driving distance, in the units of ``radius`` (km by default).
+Spherical-Earth approximation: a straight-line distance, not a driving distance. The backend
+must support trigonometric functions.
 """
 
 import ibis
@@ -17,9 +16,6 @@ def haversine_distance(
 ) -> ibis.Column:
     """Compute the Haversine distance between two sets of latitude and longitude columns.
 
-    Input columns are in degrees; the return value is a lazy Ibis expression in the
-    units of ``radius`` — nothing is materialized here.
-
     Args:
         lat_col (ibis.Column): Source latitudes in degrees.
         lon_col (ibis.Column): Source longitudes in degrees.
@@ -28,7 +24,7 @@ def haversine_distance(
         radius (float): Earth's radius in the desired output units; defaults to 6371.0 km.
 
     Returns:
-        ibis.Column: Lazy Ibis expression for the distance between each source/target pair.
+        ibis.Column: Lazy expression for each source/target pair's distance, in ``radius`` units.
     """
     lat1_rad = lat_col.radians()
     lat2_rad = target_lat_col.radians()

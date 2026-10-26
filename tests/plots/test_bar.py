@@ -299,6 +299,28 @@ def test_plot_with_percentage_by_bar_group_labels(sample_dataframe):
         assert float(label.strip("%")) == pytest.approx(expected_percentage, 0.01)
 
 
+@pytest.mark.parametrize(
+    ("sort_order", "expected_labels"),
+    [
+        (None, ["90%", "50%", "10%", "50%"]),
+        ("asc", ["50%", "90%", "50%", "10%"]),
+    ],
+)
+def test_percentage_by_bar_group_labels_follow_plotted_bar_order(sort_order, expected_labels):
+    """Each bar is a share of its own group's total even when categories aren't in alphabetical order."""
+    channel_sales = pd.DataFrame({"category": ["Shoes", "Jeans"], "online": [90.0, 20.0], "store": [10.0, 20.0]})
+
+    result_ax = bar.plot(
+        df=channel_sales,
+        value_col=["online", "store"],
+        x_col="category",
+        sort_order=sort_order,
+        data_label_format="percentage_by_bar_group",
+    )
+
+    assert [t.get_text() for t in result_ax.texts] == expected_labels
+
+
 def test_plot_with_percentage_by_series_labels(sample_dataframe):
     """Test the bar plot function with data labels in 'percentage_by_series' format and verify percentages."""
     result_ax = bar.plot(

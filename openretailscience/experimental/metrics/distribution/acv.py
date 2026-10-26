@@ -1,7 +1,6 @@
 """ACV (All Commodity Volume) metric.
 
-ACV measures total dollar sales across all products in a set of stores,
-expressed in millions ($MM).
+ACV measures total sales across all products in a set of stores.
 """
 
 from __future__ import annotations
@@ -20,18 +19,18 @@ from openretailscience.options import get_option
 
 
 class Acv:
-    """Calculates ACV (All Commodity Volume) for a set of stores, expressed in millions ($MM).
+    """Calculates ACV (All Commodity Volume): summed spend divided by ``acv_scale_factor``.
 
-    NaN values in the spend column are excluded from the sum.
-
-    Results are accessible via the ``table`` attribute (ibis Table) or the ``df`` property
-    (materialized pandas DataFrame).
+    NaN values in the spend column are excluded from the sum. ``table`` (ibis) and ``df``
+    (pandas) have an ``acv`` column plus any ``group_col`` columns as ordinary columns
+    (RangeIndex), one row per group in no particular order.
 
     Args:
         df (pd.DataFrame | ibis.Table): Transaction data containing at least a unit_spend column.
         group_col (str | list[str] | None, optional): Optional column(s) to group the ACV calculation by
             (e.g., store_id). Defaults to None for total ACV.
-        acv_scale_factor (float, optional): Factor to scale the ACV result (default is 1,000,000 for $MM).
+        acv_scale_factor (float, optional): Divisor; the default 1,000,000 gives millions of the
+            spend currency.
 
     Raises:
         TypeError: If df is not a pandas DataFrame or an Ibis Table.

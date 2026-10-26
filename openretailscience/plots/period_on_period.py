@@ -69,8 +69,8 @@ def plot(
             A list of at least two (start_date, end_date) tuples, each element a string or
             datetime. Use ``find_overlapping_periods`` from ``openretailscience.utils.date`` to
             generate them automatically.
-        x_label (str, optional): Custom label for the x-axis.
-        y_label (str, optional): Custom label for the y-axis.
+        x_label (str, optional): X-axis label; omitted means no label.
+        y_label (str, optional): Y-axis label; omitted means no label.
         title (str, optional): Title for the plot.
         eyebrow (str, optional): Small uppercase label rendered above the title.
         subtitle (str, optional): Supporting copy rendered below the title.

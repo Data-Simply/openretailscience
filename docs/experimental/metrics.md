@@ -13,14 +13,14 @@ social:
 
 ### ACV (All Commodity Volume)
 
-ACV measures the total dollar sales across all products in a set of stores, expressed in millions ($MM). It is commonly
+ACV measures the total sales across all products in a set of stores, in millions of the spend currency. It is commonly
 used in retail analytics to quantify the size of a store or group of stores.
 
 $$
 \text{ACV} = \frac{\sum \text{unit_spend}}{\text{acv_scale_factor}}
 $$
 
-By default, `acv_scale_factor` is 1,000,000 (expressing ACV in $MM).
+By default, `acv_scale_factor` is 1,000,000, so ACV is in millions.
 
 Example:
 
@@ -47,7 +47,7 @@ print(acv.df)
 regardless of its sales volume. It answers the question: "What fraction of stores carry this product?"
 
 $$
-\%\text{Stores} = \frac{\text{COUNT(DISTINCT stores selling product)}}{\text{COUNT(DISTINCT all stores)}} \times 100
+\%\text{Stores} = \frac{\text{stores selling the product}}{\text{all stores in the data}} \times 100
 $$
 
 Example:

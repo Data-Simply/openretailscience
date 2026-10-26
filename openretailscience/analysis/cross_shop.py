@@ -15,8 +15,17 @@ from openretailscience.plots import venn
 class CrossShop:
     """Per-customer overlap of 2-3 segments defined by column=value filters.
 
-    Computed eagerly at construction (``.execute()``); ``.cross_shop_df`` and
-    ``.cross_shop_table_df`` are pandas DataFrames.
+    Both results are pandas DataFrames, computed at construction:
+
+    - ``cross_shop_df``: one row per ``group_col`` value (the index), including entities in
+      no segment. Columns ``group_1``, ``group_2`` (and ``group_3``) are 0/1 flags,
+      ``groups`` is the tuple of those flags in segment order, ``group_labels`` joins the
+      matching labels ("No Groups" when none), and ``value_col`` holds the entity's value.
+    - ``cross_shop_table_df``: one row per ``groups`` combination, with its ``group_labels``,
+      the summed ``value_col`` and ``percent``, that combination's share of the total (a fraction).
+      "No Groups" counts in the total. The share is of ``value_col`` (spend by default),
+      not of customers; pass ``value_col=customer_id, agg_func="nunique"`` for customer
+      shares.
     """
 
     @staticmethod
@@ -48,7 +57,7 @@ class CrossShop:
         """Initialize cross-shop analysis for 2 or 3 segments defined by column=value filters.
 
         Each entity appears once: a segment flag is 1 if the entity has ANY transaction
-        matching that segment (max of the 0/1 flags), and `value_col` is the entity's
+        matching that segment, and `value_col` is the entity's
         `agg_func` over ALL of its transactions, not just matching ones.
 
         Args:
@@ -66,16 +75,21 @@ class CrossShop:
                 `column.customer_id`.
             value_col (str, optional): Metric to aggregate per entity. Defaults to option
                 `column.unit_spend`.
-            agg_func (str, optional): How to combine the entity's values ("sum", "mean", "count").
-                Defaults to "sum".
+            agg_func (str, optional): Ibis aggregation name combining the entity's values (e.g.
+                "sum", "nunique", "count"). The table then sums these across entities, so "mean"
+                gives a sum of per-customer means. Defaults to "sum".
 
         Raises:
             TypeError: If `df` is not a pandas DataFrame or an Ibis Table.
-            ValueError: If required columns are missing or the label count doesn't match the groups.
+            ValueError: If required columns are missing, the label count doesn't match the groups,
+                or `group_3_col` is given without `group_3_val`.
         """
         # Apply smart defaults for simplified interface
         group_col = group_col or get_option("column.customer_id")
         value_col = value_col or get_option("column.unit_spend")
+
+        if group_3_col is not None and group_3_val is None:
+            raise ValueError("group_3_col requires group_3_val")
 
         # Default group_2_col and group_3_col to group_1_col when columns are not provided
         if group_2_col is None:
@@ -142,17 +156,9 @@ class CrossShop:
             labels (list[str], optional): The labels for the groups. Defaults to None.
 
         Returns:
-            pd.DataFrame: One row per `group_col` value, indexed by it. Columns: int32 0/1
-                flags `group_1`/`group_2` (and `group_3` for three-way), `groups` (tuple of
-                the flags), `group_labels` (comma-joined labels, or "No Groups"), and the
-                aggregated `value_col`.
-
-        Raises:
-            ValueError: If group_3_col or group_3_val is populated, then the other must be as well.
+            pd.DataFrame: The ``cross_shop_df`` described on the class.
         """
         df = ensure_ibis_table(df)
-        if (group_3_col is None) != (group_3_val is None):
-            raise ValueError("If group_3_col or group_3_val is populated, then the other must be as well")
 
         # Apply defaults for group_col and value_col
         group_col = group_col or get_option("column.customer_id")
@@ -204,22 +210,15 @@ class CrossShop:
         return cs_df.rename(columns={temp_value_col: value_col})
 
     @staticmethod
-    def _calc_cross_shop_table(
-        df: pd.DataFrame,
-        value_col: str = get_option("column.unit_spend"),
-    ) -> pd.DataFrame:
-        """Calculate the aggregated cross-shop table used to plot the diagram.
-
-        The `value_col` default is evaluated at import time; the only caller passes it
-        explicitly, so a future caller running after `set_option` would get a stale default.
+    def _calc_cross_shop_table(df: pd.DataFrame, value_col: str) -> pd.DataFrame:
+        """Calculate the ``cross_shop_table_df`` described on the class from ``cross_shop_df``.
 
         Args:
-            df (pd.DataFrame): The cross-shop dataframe.
-            value_col (str, optional): The column to aggregate. Defaults to option column.unit_spend.
+            df (pd.DataFrame): The ``cross_shop_df``.
+            value_col (str): The column to sum per ``groups`` combination.
 
         Returns:
-            pd.DataFrame: One row per (`groups`, `group_labels`) with the summed `value_col`
-                and `percent`, the segment's share of the total value.
+            pd.DataFrame: The ``cross_shop_table_df``.
         """
         df = df.groupby(["groups", "group_labels"], dropna=False)[value_col].sum().reset_index().copy()
         df["percent"] = df[value_col] / df[value_col].sum()
@@ -237,9 +236,9 @@ class CrossShop:
         subset_label_formatter: Callable | None = None,
         **kwargs: Any,  # noqa: ANN401
     ) -> SubplotBase:
-        """Generate a Venn diagram of customer segment overlaps.
+        """Generate a Venn diagram of the segment overlaps in `cross_shop_table_df`.
 
-        Delegates to `openretailscience.plots.venn.plot` with `self.cross_shop_table_df`.
+        Region labels are each combination's `percent`, a share of `value_col` (spend by default).
 
         Args:
             title (str, optional): Chart title (e.g., "Cross-Shopping: Organic vs Conventional").

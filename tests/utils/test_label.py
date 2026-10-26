@@ -4,6 +4,7 @@ import ibis
 import pandas as pd
 import pytest
 
+from openretailscience.options import ColumnHelper
 from openretailscience.utils.label import label_by_condition
 
 
@@ -102,6 +103,15 @@ class TestLabelByCondition:
         expected_df = expected_df.sort_values("group_id").reset_index(drop=True)
 
         assert result_df.equals(expected_df)
+
+    def test_unknown_labeling_strategy_raises(self):
+        """A misspelt strategy raises instead of silently running the extended strategy."""
+        table = ibis.memtable(
+            pd.DataFrame({ColumnHelper().customer_id: [1, 1, 2], "on_promotion": [True, False, False]})
+        )
+
+        with pytest.raises(ValueError, match="labeling_strategy must be one of"):
+            label_by_condition(table=table, condition=table["on_promotion"], labeling_strategy="binray")
 
     def test_custom_labels_and_column_names(self):
         """Test custom label names and return column name."""

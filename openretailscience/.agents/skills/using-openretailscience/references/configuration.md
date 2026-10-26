@@ -56,7 +56,7 @@ cols = ColumnHelper()
 cols.customer_id          # configured source customer column
 cols.agg.unit_spend       # configured aggregate spend name (e.g. "spend")
 cols.agg.unit_spend_p1    # period-1 variant
-cols.calc.spend_per_customer
+cols.calc.spend_per_cust  # configured spend-per-customer name
 ColumnHelper.join_options("column.agg.unit_spend", "column.suffix.period_1")  # -> "spend_p1"
 ```
 
@@ -73,8 +73,8 @@ in the repo. Unknown keys raise `ValueError`.
 
 ## Connecting analyses to a database (Ibis)
 
-Analyses accept a pandas DataFrame or an Ibis table; pandas is validated and
-wrapped internally. Pattern: **connect → get a table reference → filter at the
+Analyses accept a pandas DataFrame, which runs in memory on your machine, or an
+Ibis table. Pattern: **connect → get a table reference → filter at the
 source → pass to the analysis**, so aggregation runs in the engine.
 
 ```python

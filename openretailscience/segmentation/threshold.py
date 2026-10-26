@@ -34,14 +34,12 @@ class ThresholdSegmentation:
         zero_value_customers: Literal["separate_segment", "exclude", "include_with_light"] = "separate_segment",
         group_col: str | list[str] | None = None,
     ) -> None:
-        """Segments customers by assigning the first segment whose threshold their percentile rank reaches.
+        """Segments customers by assigning the first segment whose threshold their percentile rank does not exceed.
 
-        A customer's aggregated value_col is ranked with percent_rank and assigned the first
-        segment whose threshold the rank is <= (percentile cuts, not value cuts). Zero handling
-        happens before ranking: "exclude" and "separate_segment" remove zero-value rows from
-        the ranked population, while "include_with_light" keeps them in (they typically land
-        in the lowest segment; the code does not force a specific segment). Ties break by
-        customer_id for deterministic output.
+        Ranks run from 0 (lowest aggregated value_col) to 1 (highest) among the customers in each
+        group, so thresholds cut the customer count, not the value range. Equal values still get
+        distinct ranks, ordered by customer_id, so customers with the same value can land in
+        different segments.
 
         Args:
             df (pd.DataFrame | ibis.Table): A dataframe with the transaction data. The dataframe must contain a
@@ -51,11 +49,16 @@ class ThresholdSegmentation:
             segments (list[str]): A list of segment names, one per threshold.
             value_col (str, optional): The column to use for the segmentation. Defaults to
                 ColumnHelper().unit_spend.
-            agg_func (str, optional): The aggregation function to use when grouping by customer_id. Defaults to "sum".
+            agg_func (str, optional): Ibis aggregation name applied per customer, case-sensitive
+                (e.g. "sum", "mean", "count", "nunique", "max"). Defaults to "sum".
             zero_segment_name (str, optional): The name of the zero-value segment (used with
                 "separate_segment"). Defaults to "Zero".
             zero_value_customers (Literal["separate_segment", "exclude", "include_with_light"], optional):
-                How to handle zero-value customers (case-insensitive). Defaults to "separate_segment".
+                What to do with customers whose aggregated value is 0 (case-insensitive):
+                "separate_segment" labels them ``zero_segment_name`` and leaves them out of the
+                ranking, "exclude" drops them from the result, and "include_with_light" ranks them
+                with everyone else; as tied values, enough of them can spill past the first segment.
+                Defaults to "separate_segment".
             group_col (str | list[str] | None, optional): Column(s) to group by when calculating segments. When
                 specified, percentiles are computed within each group. Defaults to None.
 

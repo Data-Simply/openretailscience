@@ -1,13 +1,22 @@
 """Tests for the GainLoss class in the gain_loss module."""
 
-import datetime
+from __future__ import annotations
+
+import datetime as dt
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pytest
 
 from openretailscience.analysis.gain_loss import GainLoss
-from openretailscience.options import option_context
+from openretailscience.options import ColumnHelper, option_context
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+BRAND_NAMES = {"focus_group_name": "Brand A", "comparison_group_name": "Brand B"}
 
 
 @pytest.fixture(autouse=True)
@@ -94,18 +103,18 @@ def sample_df():
         "transaction_id": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
         "customer_id": [1, 2, 3, 1, 2, 3, 1, 2, 3, 4, 5, 4],
         "transaction_date": [
-            datetime.date(2023, 1, 15),
-            datetime.date(2023, 1, 20),
-            datetime.date(2023, 2, 5),
-            datetime.date(2023, 2, 10),
-            datetime.date(2023, 3, 1),
-            datetime.date(2023, 3, 15),
-            datetime.date(2023, 3, 20),
-            datetime.date(2023, 4, 10),
-            datetime.date(2023, 4, 25),
-            datetime.date(2023, 5, 5),
-            datetime.date(2023, 5, 20),
-            datetime.date(2023, 6, 10),
+            dt.date(2023, 1, 15),
+            dt.date(2023, 1, 20),
+            dt.date(2023, 2, 5),
+            dt.date(2023, 2, 10),
+            dt.date(2023, 3, 1),
+            dt.date(2023, 3, 15),
+            dt.date(2023, 3, 20),
+            dt.date(2023, 4, 10),
+            dt.date(2023, 4, 25),
+            dt.date(2023, 5, 5),
+            dt.date(2023, 5, 20),
+            dt.date(2023, 6, 10),
         ],
         "unit_spend": [100, 150, 200, 120, 160, 210, 130, 170, 220, 140, 180, 230],
         "brand": [
@@ -177,12 +186,155 @@ def test_missing_required_column_raises():
         )
 
 
+@pytest.fixture
+def brand_masks(sample_df: pd.DataFrame) -> dict[str, pd.Series]:
+    """Period and brand masks over ``sample_df``: Jan-Apr vs May-Jun, Brand A (focus) vs Brand B."""
+    cols = ColumnHelper()
+    return {
+        "p1_index": sample_df[cols.transaction_date] < dt.date(2023, 5, 1),
+        "p2_index": sample_df[cols.transaction_date] >= dt.date(2023, 5, 1),
+        "focus_group_index": sample_df["brand"] == "Brand A",
+        "comparison_group_index": sample_df["brand"] == "Brand B",
+    }
+
+
+# astype(object) mimics a nullable flag column read from parquet: after dropna it is object dtype holding plain bools
+@pytest.mark.parametrize("to_mask", [list, np.asarray, lambda mask: mask.astype(object)])
+def test_list_array_and_object_masks_match_boolean_series(
+    sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series], to_mask: Callable
+) -> None:
+    """Lists, numpy arrays and object-dtype Series of bools decompose the same as boolean Series."""
+    expected = GainLoss(df=sample_df, **brand_masks, **BRAND_NAMES).gain_loss_df
+
+    result = GainLoss(df=sample_df, **{k: to_mask(v) for k, v in brand_masks.items()}, **BRAND_NAMES).gain_loss_df
+
+    pd.testing.assert_frame_equal(result, expected)
+
+
+def test_non_unique_index_matches_default_index(sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series]) -> None:
+    """Masks select rows by position, so a df with repeated index labels (e.g. after pd.concat) decomposes the same."""
+    expected = GainLoss(df=sample_df, **brand_masks, **BRAND_NAMES).gain_loss_df
+    half = len(sample_df) // 2
+    concatenated_df = pd.concat([sample_df.iloc[:half], sample_df.iloc[half:].reset_index(drop=True)])
+
+    result = GainLoss(
+        df=concatenated_df, **{k: v.set_axis(concatenated_df.index) for k, v in brand_masks.items()}, **BRAND_NAMES
+    ).gain_loss_df
+
+    pd.testing.assert_frame_equal(result, expected)
+
+
+def test_series_mask_from_reordered_frame_raises(sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series]) -> None:
+    """A Series mask built from a re-sorted copy of df would select the wrong rows by position, so it is rejected."""
+    focus_from_sorted_copy = sample_df.sort_values("unit_spend")["brand"] == "Brand A"
+
+    with pytest.raises(ValueError, match=r"index must match df\.index"):
+        GainLoss(
+            df=sample_df,
+            **{**brand_masks, "focus_group_index": focus_from_sorted_copy},
+            focus_group_name="Brand A",
+            comparison_group_name="Brand B",
+        )
+
+
+def _jan_feb_vs_may_jun_masks(df: pd.DataFrame) -> dict[str, pd.Series]:
+    """Period and brand masks that leave March and April transactions in neither period."""
+    cols = ColumnHelper()
+    return {
+        "p1_index": df[cols.transaction_date] < dt.date(2023, 3, 1),
+        "p2_index": df[cols.transaction_date] >= dt.date(2023, 5, 1),
+        "focus_group_index": df["brand"] == "Brand A",
+        "comparison_group_index": df["brand"] == "Brand B",
+    }
+
+
+def test_rows_in_neither_period_are_ignored(sample_df: pd.DataFrame) -> None:
+    """Transactions between the two periods are left out, giving the same result as pre-filtering them away."""
+    in_period_masks = _jan_feb_vs_may_jun_masks(sample_df)
+    in_periods_df = sample_df[in_period_masks["p1_index"] | in_period_masks["p2_index"]].reset_index(drop=True)
+    expected = GainLoss(df=in_periods_df, **_jan_feb_vs_may_jun_masks(in_periods_df), **BRAND_NAMES).gain_loss_df
+
+    result = GainLoss(df=sample_df, **in_period_masks, **BRAND_NAMES).gain_loss_df
+
+    pd.testing.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize(
+    "make_focus_mask",
+    [
+        lambda df: df["brand"],
+        # NaN coerces to True, so coercing would put every other brand in the focus group
+        lambda df: df["brand"].map({"Brand A": True}),
+        lambda df: list(df["brand"].map({"Brand A": True})),
+    ],
+)
+def test_non_boolean_mask_raises(
+    sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series], make_focus_mask: Callable
+) -> None:
+    """A mask that is not boolean raises instead of having its values coerced to True/False."""
+    with pytest.raises(TypeError, match="must be boolean"):
+        GainLoss(
+            df=sample_df,
+            **{**brand_masks, "focus_group_index": make_focus_mask(sample_df)},
+            focus_group_name="Brand A",
+            comparison_group_name="Brand B",
+        )
+
+
+@pytest.mark.parametrize("brand_dtype", ["string", "string[pyarrow]"])
+def test_nullable_boolean_masks_leave_missing_rows_out(
+    sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series], brand_dtype: str
+) -> None:
+    """Comparing a nullable brand column gives <NA> where the brand is missing; those rows join neither group."""
+    periods = {"p1_index": brand_masks["p1_index"], "p2_index": brand_masks["p2_index"]}
+    unbranded_transaction_id = 2  # a Brand A sale in P1
+    unbranded_df = sample_df.assign(
+        brand=sample_df["brand"]
+        .astype(brand_dtype)
+        .mask(sample_df[ColumnHelper().transaction_id] == unbranded_transaction_id)
+    )
+    focus = unbranded_df["brand"] == "Brand A"
+    comparison = unbranded_df["brand"] == "Brand B"
+    expected = GainLoss(
+        df=unbranded_df,
+        **periods,
+        focus_group_index=focus.fillna(False).astype(bool),
+        comparison_group_index=comparison.fillna(False).astype(bool),
+        **BRAND_NAMES,
+    ).gain_loss_df
+
+    result = GainLoss(
+        df=unbranded_df, **periods, focus_group_index=focus, comparison_group_index=comparison, **BRAND_NAMES
+    ).gain_loss_df
+
+    pd.testing.assert_frame_equal(result, expected)
+
+
+def test_groups_with_no_sales_give_an_all_zero_table(
+    sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series]
+) -> None:
+    """Focus and comparison brands with no sales in either period (e.g. misspelt) give zeros, not a crash."""
+    gl = GainLoss(
+        df=sample_df,
+        p1_index=brand_masks["p1_index"],
+        p2_index=brand_masks["p2_index"],
+        focus_group_index=sample_df["brand"] == "Brand a",
+        focus_group_name="Brand a",
+        comparison_group_index=sample_df["brand"] == "Brand b",
+        comparison_group_name="Brand b",
+    )
+
+    expected = GainLoss(df=sample_df, **brand_masks, **BRAND_NAMES).gain_loss_table_df * 0
+    pd.testing.assert_frame_equal(gl.gain_loss_table_df, expected)
+    assert len(gl.gain_loss_df) == 0
+
+
 def test_valid_gainloss(sample_df):
     """Test that a GainLoss object is successfully with valid input."""
     gl = GainLoss(
         df=sample_df,
-        p1_index=sample_df["transaction_date"] < datetime.date(2023, 5, 1),
-        p2_index=sample_df["transaction_date"] >= datetime.date(2023, 5, 1),
+        p1_index=sample_df["transaction_date"] < dt.date(2023, 5, 1),
+        p2_index=sample_df["transaction_date"] >= dt.date(2023, 5, 1),
         focus_group_index=sample_df["brand"] == "Brand A",
         focus_group_name="Brand A",
         comparison_group_index=sample_df["brand"] == "Brand B",
@@ -236,8 +388,8 @@ def test_calc_gains_loss_table_with_group():
 
 def test_plot_renders_six_gain_loss_segments_with_group_names_in_legend(sample_df):
     """GainLoss.plot renders one labelled legend entry per gain/loss segment, interpolating group names."""
-    p1 = sample_df["transaction_date"] < datetime.date(2023, 5, 1)
-    p2 = sample_df["transaction_date"] >= datetime.date(2023, 5, 1)
+    p1 = sample_df["transaction_date"] < dt.date(2023, 5, 1)
+    p2 = sample_df["transaction_date"] >= dt.date(2023, 5, 1)
 
     focus_group_index = sample_df["brand"] == "Brand A"
     comparison_group_index = sample_df["brand"] == "Brand B"
@@ -273,8 +425,8 @@ def test_with_custom_column_names(sample_df):
         "unit_spend": "total_revenue",
     }
     custom_df = sample_df.rename(columns=rename_mapping)
-    p1_index = custom_df["transaction_date"] < datetime.date(2023, 5, 1)
-    p2_index = custom_df["transaction_date"] >= datetime.date(2023, 5, 1)
+    p1_index = custom_df["transaction_date"] < dt.date(2023, 5, 1)
+    p2_index = custom_df["transaction_date"] >= dt.date(2023, 5, 1)
     focus_group_index = custom_df["brand"] == "Brand A"
     comparison_group_index = custom_df["brand"] == "Brand B"
 
@@ -287,7 +439,6 @@ def test_with_custom_column_names(sample_df):
             focus_group_name="Brand A",
             comparison_group_index=comparison_group_index,
             comparison_group_name="Brand B",
-            value_col="total_revenue",
         )
         gain_loss_df = gl.gain_loss_df
         assert isinstance(gain_loss_df, pd.DataFrame)

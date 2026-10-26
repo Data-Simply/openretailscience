@@ -23,8 +23,8 @@ _font_cache: dict[str, fm.FontProperties] = {}
 def get_font_properties(font_name: str) -> fm.FontProperties:
     """Get matplotlib FontProperties for a bundled or system font; results are cached.
 
-    Resolution order: cache → bundled Poppins registry → system font family. Raises a
-    strict ``ValueError`` naming the bundled fonts when the font is not found.
+    Bundled font names take precedence over system families of the same name. An unknown
+    name raises rather than falling back to matplotlib's default font.
 
     Args:
         font_name (str): A built-in font name (e.g. ``poppins_regular``) or a system

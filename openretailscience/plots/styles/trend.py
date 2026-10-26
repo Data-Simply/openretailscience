@@ -433,7 +433,9 @@ def add_trend_line(
         Axes: The matplotlib axes with the trend line added.
 
     Raises:
-        ValueError: If the plot contains no extractable data or trend_type is not supported.
+        ValueError: If the axes hold no line, bar or scatter data, trend_type is not supported, or
+            the data cannot be fitted (fewer than 2 valid points, constant x, or values <= 0 where
+            the trend type takes logs).
     """
     trend_type = cast("TrendType", ensure_value_choice(trend_type, get_args(TrendType), "trend_type"))
 
