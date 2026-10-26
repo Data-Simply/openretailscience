@@ -224,17 +224,28 @@ def test_non_unique_index_matches_default_index(sample_df: pd.DataFrame, brand_m
     pd.testing.assert_frame_equal(result, expected)
 
 
-def test_series_mask_from_reordered_frame_raises(sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series]) -> None:
-    """A Series mask built from a re-sorted copy of df would select the wrong rows by position, so it is rejected."""
-    focus_from_sorted_copy = sample_df.sort_values("unit_spend")["brand"] == "Brand A"
+@pytest.mark.parametrize(
+    ("make_focus_mask", "match"),
+    [
+        # Same length, but positions would pick the wrong rows
+        (lambda df: df.sort_values("unit_spend")["brand"] == "Brand A", r"index must match df\.index"),
+        (lambda df: list(df["brand"] == "Brand A")[:-1], "one entry per row of df"),
+        (lambda df: df.iloc[1:]["brand"] == "Brand A", "one entry per row of df"),
+    ],
+    ids=["series_from_reordered_frame", "list_one_short", "series_from_filtered_frame"],
+)
+def test_mask_that_does_not_line_up_with_df_raises(
+    sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series], make_focus_mask: Callable, match: str
+) -> None:
+    """A mask of the wrong length, or a Series built from a re-sorted copy of df, is rejected rather than misapplied."""
+    with pytest.raises(ValueError, match=match):
+        GainLoss(df=sample_df, **{**brand_masks, "focus_group_index": make_focus_mask(sample_df)}, **BRAND_NAMES)
 
-    with pytest.raises(ValueError, match=r"index must match df\.index"):
-        GainLoss(
-            df=sample_df,
-            **{**brand_masks, "focus_group_index": focus_from_sorted_copy},
-            focus_group_name="Brand A",
-            comparison_group_name="Brand B",
-        )
+
+def test_group_col_not_in_df_raises(sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series]) -> None:
+    """A group_col missing from df raises naming the column, rather than failing inside the groupby."""
+    with pytest.raises(ValueError, match=r"group_col references columns not present in the data: \['store_id'\]"):
+        GainLoss(df=sample_df, **brand_masks, **BRAND_NAMES, group_col="store_id")
 
 
 def _jan_feb_vs_may_jun_masks(df: pd.DataFrame) -> dict[str, pd.Series]:
