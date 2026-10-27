@@ -1,8 +1,7 @@
 /* ========================================= */
 /* Design tokens — matched to datasimply.co */
 /* =========================================
-   Fonts loaded via <link> in overrides/main.html
-   for non-render-blocking preconnect behavior.
+   Fonts are loaded in overrides/main.html.
    ========================================= */
 
 :root {
@@ -73,7 +72,8 @@ body {
 /* Utility classes                           */
 /* ========================================= */
 .ds-text-dark    { color: var(--ds-dark); }
-.ds-text-primary { color: var(--ds-primary); }
+/* One step darker than --ds-primary, whose 2.3:1 on white is below the 3:1 large text needs. Only the hero uses it. */
+.ds-text-primary { color: #16a34a; }
 .ds-bg-surface   { background: var(--ds-surface); }
 
 .ds-container {

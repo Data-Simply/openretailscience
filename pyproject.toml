@@ -71,6 +71,7 @@ docs = [
     "mkdocs>=1.5.3,<2",
     "mkdocstrings>=0.26,<1.1",
     "mkdocstrings-python>=1.11,<3",
+    "latex2mathml>=3.81,<4",
 ]
 examples = [ "jupyterlab>=4.2.5,<5", "tqdm>=4.66.1,<5" ]
 integration = [
@@ -176,6 +177,8 @@ addopts = [
     "--ignore=tests/integration",
     "--import-mode=importlib",
 ]
+# The docs build hooks aren't a package; this lets tests/docs_hooks import them by module name.
+pythonpath = [ "docs/hooks" ]
 
 [tool.coverage.run]
 branch = true
