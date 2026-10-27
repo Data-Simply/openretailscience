@@ -1,3 +1,7 @@
+---
+description: "Run OpenRetailScience analyses on pandas or directly in DuckDB, BigQuery, Snowflake, Databricks, PySpark, SQL Server or Oracle through Ibis."
+---
+
 # Connecting to your data
 
 OpenRetailScience analyses accept two kinds of input: a pandas DataFrame or an

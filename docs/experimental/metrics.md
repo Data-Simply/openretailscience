@@ -3,6 +3,7 @@ title: Metrics
 social:
   cards_layout_options:
     title: OpenRetailScience | Retail Metrics
+description: "Standard retail metrics in Python, such as ACV and the percentage of stores selling a product. Experimental."
 ---
 
 !!! warning "Experimental"

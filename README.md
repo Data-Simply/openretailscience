@@ -12,6 +12,9 @@
   control of your KPIs.
 </div>
 
+Renamed from `pyretailscience` in v0.45.0 (April 2026). Install `openretailscience`; imports change from
+`pyretailscience` to `openretailscience`.
+
 ## Installation
 
 To get the latest release:

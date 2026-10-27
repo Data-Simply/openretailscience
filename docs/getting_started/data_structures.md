@@ -1,3 +1,7 @@
+---
+description: "The transaction data OpenRetailScience expects, at line-item or transaction level, and its standard columns."
+---
+
 # Data Structures
 
 ## Overview
