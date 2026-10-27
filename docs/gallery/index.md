@@ -1,3 +1,7 @@
+---
+description: "Every OpenRetailScience chart type with examples: bar, line, time, area, cohort, heatmap, Venn, waterfall, revenue tree, price bands and more."
+---
+
 # Plot Gallery
 
 OpenRetailScience provides a comprehensive set of plotting functions designed specifically for retail analytics. All plots

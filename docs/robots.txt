@@ -1,5 +1,4 @@
-User-agent: GPTBot
-Disallow: /examples
+User-agent: *
+Allow: /
 
-User-agent: Google-Extended
-Disallow: /examples
+Sitemap: https://openretailscience.datasimply.co/sitemap.xml

@@ -3,6 +3,7 @@ title: Customer Lifetime Value
 social:
   cards_layout_options:
     title: OpenRetailScience | Customer Lifetime Value
+description: "Estimate customer lifetime value from transactions by preparing data for buy-till-you-die (BTYD) models in pymc-marketing. Experimental."
 ---
 
 !!! warning "Experimental"

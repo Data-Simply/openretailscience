@@ -3,6 +3,7 @@ title: Analysis Modules
 social:
   cards_layout_options:
     title: OpenRetailScience | Retail Analytics Toolbox
+description: "Every OpenRetailScience analysis on one page, from RFM and HML segmentation to gain/loss, cross-shop, cohort retention, revenue trees and product association."
 ---
 
 ## Analysis Modules

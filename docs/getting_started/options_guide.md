@@ -1,3 +1,7 @@
+---
+description: "Map OpenRetailScience to your own column names, such as cid or revenue instead of customer_id or unit_spend, with options set in code or a TOML file."
+---
+
 # Options & Configuration Guide
 
 ## The Column Name Problem

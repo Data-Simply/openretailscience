@@ -1,3 +1,7 @@
+---
+description: "Install the OpenRetailScience agent skill so Claude Code, Databricks Genie and other AI coding agents write correct retail analysis code."
+---
+
 # Agent Skills
 
 OpenRetailScience ships an **agent skill**: a folder of guidance that AI coding

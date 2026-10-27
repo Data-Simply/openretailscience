@@ -22,12 +22,34 @@ dependencies = [
     "toml>=0.10.2,<0.11",
     "tqdm>=4.66.1,<5",
 ]
-description = "Retail Data Science Tools"
+description = "Retail analytics in Python: RFM, HML and threshold segmentation, gain/loss, cross-shop, cohort retention, revenue trees and market basket analysis, on pandas or in your database via Ibis"
+keywords = [
+    "association-rules",
+    "cohort-analysis",
+    "cross-shop",
+    "customer-analytics",
+    "customer-retention",
+    "customer-segmentation",
+    "gain-loss",
+    "ibis",
+    "market-basket-analysis",
+    "pandas",
+    "pyretailscience",
+    "retail",
+    "retail-analytics",
+    "revenue-tree",
+    "rfm",
+]
 license = "Elastic-2.0"
 name = "openretailscience"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 version = "0.48.1"
+[project.urls]
+Changelog     = "https://github.com/Data-Simply/openretailscience/releases"
+Documentation = "https://openretailscience.datasimply.co"
+Issues        = "https://github.com/Data-Simply/openretailscience/issues"
+Source        = "https://github.com/Data-Simply/openretailscience"
 [[project.authors]]
 email = "2493311+mvanwyk@users.noreply.github.com"
 name  = "Murray Vanwyk"
@@ -169,6 +191,7 @@ skip_covered  = true
 "__init__.py"                     = [ "D104", "F401", "F403", "F405" ]
 "docs/gallery/**/*.ipynb"         = [ "ERA001", "PLR2004" ]
 "docs/getting_started/**/*.ipynb" = [ "ANN", "D103", "PLR2004" ]
+"docs/hooks/*"                    = [ "ARG001", "INP001" ]
 "docs/scripts/*"                  = [ "D103", "INP001", "PERF401", "PLR2004", "RUF001", "T201" ]
 "tests/*"                         = [ "ANN", "ARG", "INP001", "S101", "SLF001" ]
 
