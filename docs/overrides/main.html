@@ -1,7 +1,15 @@
 {% extends "base.html" %}
 
-{% block extrahead %}
+{# Replaces the theme's own Google Fonts request so the page makes one render-blocking font request, not two. #}
+{% block fonts %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,700&family=Roboto+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+  <style>:root{--md-text-font:"Poppins";--md-code-font:"Roboto Mono"}</style>
+{% endblock %}
+
+{# Material's search overlay is an unnamed role="dialog", which fails Lighthouse's accessibility-tree check for agents. #}
+{% block scripts %}
+  {{ super() }}
+  <script>document.querySelector(".md-search")?.setAttribute("aria-label", "Search")</script>
 {% endblock %}

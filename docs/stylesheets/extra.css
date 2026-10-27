@@ -15,7 +15,6 @@
   --ds-body: #404040;
   --ds-subtle: #555555;
   --ds-muted: #737373;
-  --ds-placeholder: #a3a3a3;
   --ds-border: #e5e5e5;
   --ds-border-hover: #d1d5db;
 
@@ -48,6 +47,13 @@
   --md-primary-fg-color: #22c55e;
   --md-primary-fg-color--light: #4ade80;
   --md-primary-fg-color--dark: #15803d;
+}
+
+/* Material defines these per color scheme on <body>, so :root can't override them. */
+[data-md-color-scheme="default"] {
+  --md-typeset-a-color: var(--md-primary-fg-color--dark);
+  --md-code-hl-comment-color: #666666;
+  --md-code-hl-operator-color: #666666;
 }
 
 body {
@@ -280,7 +286,7 @@ body {
   font-family: "Poppins", sans-serif;
   font-size: var(--ds-text-subheading);
   font-weight: 600;
-  color: var(--ds-placeholder);
+  color: var(--ds-muted);
   white-space: nowrap;
 }
 
@@ -609,7 +615,7 @@ body {
 .ds-code-filename {
   margin-left: 8px;
   font-size: var(--ds-text-xs);
-  color: #6c7086;
+  color: #9399b2;
   font-family: "Roboto Mono", monospace;
 }
 
@@ -632,7 +638,7 @@ body {
 .ds-code-body .mod { color: #89b4fa; }
 .ds-code-body .cls { color: #a6e3a1; }
 .ds-code-body .fn  { color: #89dceb; }
-.ds-code-body .cmt { color: #6c7086; }
+.ds-code-body .cmt { color: #9399b2; }
 .ds-code-body .num { color: #fab387; }
 .ds-code-body .str { color: #f9e2af; }
 
@@ -880,6 +886,7 @@ body {
 }
 
 .md-consent__controls {
+  --md-primary-fg-color: var(--md-primary-fg-color--dark);
   display: flex;
   gap: 8px;
   flex-shrink: 0;
@@ -1007,4 +1014,20 @@ body {
   line-height: 1.45;
   color: var(--ds-muted);
   margin: 0;
+}
+
+/* ========================================= */
+/* Contrast fixes for theme and notebook     */
+/* ========================================= */
+.md-copyright {
+  color: var(--md-footer-fg-color--light);
+}
+
+/* mkdocs-jupyter's CSS sets these on .jupyter-wrapper and loads after this sheet, so the selector needs the extra
+   class to win. */
+.md-content .jupyter-wrapper {
+  --jp-mirror-editor-number-color: #007000;
+  --jp-mirror-editor-comment-color: #367070;
+  --jp-mirror-editor-operator-color: #9a1ae6;
+  --jp-cell-prompt-not-active-opacity: 1;
 }
