@@ -176,6 +176,8 @@ addopts = [
     "--ignore=tests/integration",
     "--import-mode=importlib",
 ]
+# The docs build hooks aren't a package; this lets tests/docs_hooks import them by module name.
+pythonpath = [ "docs/hooks" ]
 
 [tool.coverage.run]
 branch = true

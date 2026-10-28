@@ -9,10 +9,13 @@ repo_name: Data-Simply/openretailscience
 # Build-helper tooling, not documentation pages — keep out of the rendered site.
 exclude_docs: |
   hooks/
+  overrides/
   scripts/
 
 hooks:
   - docs/hooks/page_descriptions.py
+  - docs/hooks/notebook_assets.py
+  - docs/hooks/llms_txt.py
 
 nav:
   - Home: index.md
@@ -115,19 +118,19 @@ theme:
   language: en
   palette:
     primary: custom
-  font:
-    text: Poppins
-    code: Roboto Mono
   logo: assets/images/logo.svg
   favicon: assets/images/logo.svg
 extra_css:
   - stylesheets/extra.css
 extra_javascript:
   - javascripts/mathjax.js
-  - https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js
 
 plugins:
   - search
+  - privacy:
+      assets_exclude:
+        - unpkg.com/mermaid@*
+        - unpkg.com/mathjax@*
   - mkdocstrings
   - autorefs
   - mkdocs-jupyter:
