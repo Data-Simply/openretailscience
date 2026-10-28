@@ -12,7 +12,7 @@ description: "Every OpenRetailScience analysis on one page, from RFM and HML seg
 
 <div class="clear" markdown>
 
-![Cohort Analysis](assets/images/analysis_modules/cohort.svg){ align=right loading=lazy width="50%"}
+![Cohort Analysis](assets/images/analysis_modules/cohort.svg){ align=right loading=lazy width="461" height="346"}
 
 The cohort analysis module provides functionality for analyzing customer retention patterns over time. It helps
 businesses understand customer behavior by tracking groups of users (cohorts) based on their first interaction and
@@ -131,7 +131,7 @@ pa.df.head()
 
 <div class="clear" markdown>
 
-![Cross Shop](assets/images/analysis_modules/cross_shop.svg){ align=right loading=lazy width="50%"}
+![Cross Shop](assets/images/analysis_modules/cross_shop.svg){ align=right loading=lazy width="446" height="328"}
 
 Cross Shop analysis reveals how customers navigate between different categories, brands, or store locations,
 replacing assumptions with data-driven insights about actual purchase patterns. The Venn diagram visualization
@@ -187,7 +187,7 @@ cs_customers.plot(
 
 <div class="clear" markdown>
 
-![Gain Loss](assets/images/analysis_modules/gain_loss.svg){ align=right loading=lazy width="50%"}
+![Gain Loss](assets/images/analysis_modules/gain_loss.svg){ align=right loading=lazy width="520" height="328"}
 
 The Gain Loss module (also known as switching analysis) helps analyze changes in customer behavior between two time
 periods. It breaks down revenue or customer movement between a focus group and a comparison group by:
@@ -247,7 +247,7 @@ gain_loss.plot(
 
 ![Customer Decision Hierarchy](
     assets/images/analysis_modules/customer_decision_hierarchy.svg
-){ align=right loading=lazy width="50%"}
+){ align=right loading=lazy width="464" height="328"}
 
 Customer Decision Hierarchy (CDH) analysis reveals how customers perceive products as substitutes or complements,
 enabling data-driven range planning decisions. By analyzing actual switching behavior rather than relying on
@@ -294,7 +294,7 @@ ax = cdh.plot(
 
 <div class="clear" markdown>
 
-![Revenue Tree](assets/images/analysis_modules/revenue_tree.svg){ align=right loading=lazy width="50%"}
+![Revenue Tree](assets/images/analysis_modules/revenue_tree.svg){ align=right loading=lazy width="768" height="669"}
 
 The Revenue Tree is a hierarchical breakdown of factors contributing to overall revenue, allowing for
 detailed analysis of sales performance and identification of areas for improvement.
@@ -351,7 +351,9 @@ rev_tree = revenue_tree.RevenueTree(
 
 <div class="clear" markdown>
 
-![HML Segmentation Distribution](assets/images/analysis_modules/hml_segmentation.svg){ align=right loading=lazy width="50%"}
+![HML Segmentation Distribution](
+    assets/images/analysis_modules/hml_segmentation.svg
+){ align=right loading=lazy width="448" height="328"}
 
 Heavy, Medium, Light (HML) is a segmentation that places customers into groups based on their percentile of spend or the
 number of products they bought. Heavy customers are the top 20% of customers, medium are the next 30%, and light are the
@@ -394,7 +396,7 @@ bar.plot(
 
 ![Threshold Segmentation Distribution](
     assets/images/analysis_modules/threshold_segmentation.svg
-){align=right loading=lazy width="50%"}
+){align=right loading=lazy width="448" height="328"}
 
 Threshold Segmentation offers a flexible approach to customer grouping based on custom-defined percentile thresholds.
 Unlike the fixed 20/30/50 split in HML segmentation, Threshold Segmentation allows you to specify your own thresholds
@@ -589,7 +591,7 @@ rfm_results = rfm_segmenter.df
 
 ![Purchases Per Customer](
     assets/images/analysis_modules/purchases_per_customer.svg
-){align=right loading=lazy width="50%"}
+){align=right loading=lazy width="461" height="328"}
 
 The Purchases Per Customer module analyzes and visualizes the distribution of transaction frequency across your customer
 base. This module helps you understand customer purchasing patterns by percentile and is useful for determining values
@@ -621,7 +623,7 @@ ax.axvline(x=ppc.purchases_percentile(0.8), color="black", linestyle="--", lw=2)
 
 ![Days Between Purchases](
     assets/images/analysis_modules/days_between_purchases.svg
-){align=right loading=lazy width="50%"}
+){align=right loading=lazy width="466" height="328"}
 
 The Days Between Purchases module analyzes the time intervals between customer transactions, providing valuable insights
 into purchasing frequency and shopping patterns. This analysis helps you understand:
@@ -659,7 +661,7 @@ ax.axvline(x=dbp.purchases_percentile(0.5), color="black", linestyle="--", lw=2)
 
 <div class="clear" markdown>
 
-![Transaction Churn](assets/images/analysis_modules/transaction_churn.svg){align=right loading=lazy width="50%"}
+![Transaction Churn](assets/images/analysis_modules/transaction_churn.svg){align=right loading=lazy width="475" height="328"}
 
 The Transaction Churn module analyzes how customer churn rates vary based on the number of purchases customers have
 made. This helps reveal critical retention thresholds in the customer lifecycle when setting a churn window

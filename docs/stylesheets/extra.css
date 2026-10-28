@@ -1031,3 +1031,8 @@ body {
   --jp-mirror-editor-operator-color: #9a1ae6;
   --jp-cell-prompt-not-active-opacity: 1;
 }
+
+/* Analysis module diagrams: their width and height attributes only reserve space at the right aspect ratio. */
+.md-typeset img[align="right"] {
+  width: 50%;
+}

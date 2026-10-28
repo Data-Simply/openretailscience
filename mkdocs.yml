@@ -15,7 +15,6 @@ exclude_docs: |
 hooks:
   - docs/hooks/page_descriptions.py
   - docs/hooks/notebook_assets.py
-  - docs/hooks/prerender_math.py
   - docs/hooks/llms_txt.py
 
 nav:
@@ -123,13 +122,17 @@ theme:
   favicon: assets/images/logo.svg
 extra_css:
   - stylesheets/extra.css
+extra_javascript:
+  - javascripts/mathjax.js
 
 plugins:
   - search
   - privacy:
-      # Material names Mermaid for diagram pages; there are none, so skip downloading 3.5 MB of it every build.
       assets_exclude:
+        # Material names Mermaid for diagram pages; there are none, so skip downloading 3.5 MB of it every build.
         - unpkg.com/mermaid@*
+        # MathJax fetches its fonts and extensions from beside its script, which the plugin wouldn't download.
+        - unpkg.com/mathjax@*
   - mkdocstrings
   - autorefs
   - mkdocs-jupyter:
