@@ -11,7 +11,6 @@ window.MathJax = {
   }
 };
 
-// MathJax costs seconds of main-thread time on mobile and only a few pages have math, so load it on those alone.
 document$.subscribe(() => {
   if (document.querySelector(".arithmatex") === null) return
   const script = document.createElement("script")
