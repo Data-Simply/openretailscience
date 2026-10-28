@@ -151,7 +151,7 @@ def plot(  # noqa: C901, PLR0913, PLR0917
     value_col: str,
     group_col: str,
     index_col: str,
-    value_to_index: str,
+    value_to_index: str | int,
     agg_func: str = "sum",
     series_col: str | None = None,
     title: str | None = None,
@@ -189,7 +189,7 @@ def plot(  # noqa: C901, PLR0913, PLR0917
         value_col (str): The column to plot.
         group_col (str): The column to group the data by.
         index_col (str): The column to calculate the index on (e.g., "category").
-        value_to_index (str): The baseline category or value to index against (e.g., "A").
+        value_to_index (str | int): The baseline category or value to index against (e.g., "A").
         agg_func (str, optional): How to aggregate ``value_col``: "sum", "mean", "max", "min" or "nunique".
         series_col (str, optional): The column to use as the series; when set, a legend is rendered
             and each series value gets its own bar per group. ``top_n``, ``bottom_n``,
@@ -250,6 +250,13 @@ def plot(  # noqa: C901, PLR0913, PLR0917
         ValueError: If filtering results in an empty dataset.
         ValueError: If top_n or bottom_n exceeds the number of available groups.
         ValueError: If top_n and bottom_n together exceed the number of available groups.
+
+    Examples:
+        >>> from openretailscience.plots import index
+        >>> ax = index.plot(
+        ...     df=transactions, value_col="unit_spend", group_col="category", index_col="store_id", value_to_index=101,
+        ...     eyebrow="Store 101", title="Category mix against the chain", subtitle="Index, 100 = chain average",
+        ... )
     """
     if sort_by is not None:
         sort_by = ensure_value_choice(sort_by, VALID_SORT_BY, "sort_by")
@@ -393,7 +400,7 @@ def plot(  # noqa: C901, PLR0913, PLR0917
 
 def get_indexes(
     df: pd.DataFrame | ibis.Table,
-    value_to_index: str,
+    value_to_index: str | int,
     index_col: str,
     value_col: str,
     group_col: str,
@@ -410,7 +417,7 @@ def get_indexes(
 
     Args:
         df (pd.DataFrame | ibis.Table): The dataframe or Ibis table to calculate the index on.
-        value_to_index (str): The baseline category or value to index against (e.g., "A").
+        value_to_index (str | int): The baseline category or value to index against (e.g., "A").
         index_col (str): The column to calculate the index on (e.g., "category").
         value_col (str): The column to calculate the index of (e.g., "sales").
         group_col (str): The column to group the data by (e.g., "region").

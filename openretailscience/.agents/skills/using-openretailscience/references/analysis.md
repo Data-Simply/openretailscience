@@ -119,7 +119,8 @@ from openretailscience.analysis.haversine import haversine_distance
   1 = best per sort direction; ties share the lowest rank; nulls rank last (first, i.e. best, in an "asc"
   column on BigQuery); lower `composite_rank` is better. Row order is unspecified, so sort by `composite_rank`.
 - `haversine_distance(lat_col, lon_col, target_lat_col, target_lon_col, radius=6371.0)` —
-  returns an Ibis Column expression (not materialized).
+  returns an Ibis Column expression (not materialized). For one fixed target point pass `ibis.literal(lat)` /
+  `ibis.literal(lon)`; a bare float raises `AttributeError`.
 
 ## Utils (`openretailscience.utils`)
 

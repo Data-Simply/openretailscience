@@ -35,6 +35,13 @@ class ProductAssociation:
     while (b, a) is dropped.
 
     ``table`` is the lazy Ibis result; ``df`` materializes it.
+
+    Examples:
+        >>> from openretailscience.analysis import ProductAssociation
+        >>> pa = ProductAssociation(
+        ...     df=transactions, value_col="product", group_col="transaction_id", target_item="Whole Milk 2L"
+        ... )
+        >>> bought_with_milk = pa.df.nlargest(3, "uplift")
     """
 
     def __init__(

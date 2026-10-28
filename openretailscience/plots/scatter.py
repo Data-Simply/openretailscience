@@ -259,6 +259,13 @@ def plot(  # noqa: PLR0913, PLR0917
         KeyError: If `label_col` or `size_col` is not a column of df.
         ValueError: If `size_col` is non-numeric or contains negative values, or size_scale is not positive.
 
+    Examples:
+        >>> from openretailscience.plots import scatter
+        >>> products = transactions.groupby("product", as_index=False)[["unit_spend", "unit_quantity"]].sum()
+        >>> ax = scatter.plot(
+        ...     df=products, value_col="unit_spend", x_col="unit_quantity", label_col="product",
+        ...     eyebrow="Products", title="Spend against units sold", subtitle="January 2024 to June 2025",
+        ... )
     """
     if isinstance(df, pd.Series):
         df = df.to_frame()

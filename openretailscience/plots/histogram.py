@@ -69,6 +69,14 @@ def plot(
         ValueError: If clip_range is not a 2-tuple or has lower greater than upper.
         ValueError: If value_col is a list and group_col is also provided.
         ValueError: If df is a DataFrame and value_col is None.
+
+    Examples:
+        >>> from openretailscience.plots import histogram
+        >>> spend_per_customer = transactions.groupby("customer_id", as_index=False)["unit_spend"].sum()
+        >>> ax = histogram.plot(
+        ...     df=spend_per_customer, value_col="unit_spend", bins=10,
+        ...     eyebrow="Customers", title="Spend per customer", subtitle="January 2024 to June 2025",
+        ... )
     """
     if isinstance(value_col, list) and group_col is not None:
         raise ValueError("`value_col` cannot be a list when `group_col` is provided. Please choose one or the other.")

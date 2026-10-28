@@ -6,10 +6,11 @@ site_url: https://openretailscience.datasimply.co
 repo_url: https://github.com/Data-Simply/openretailscience
 repo_name: Data-Simply/openretailscience
 
-# Build-helper tooling, not documentation pages — keep out of the rendered site.
+# Build tooling and agent instructions, not documentation pages — keep out of the rendered site.
 exclude_docs: |
   hooks/
   scripts/
+  CLAUDE.md
 
 hooks:
   - docs/hooks/page_descriptions.py

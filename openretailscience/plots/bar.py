@@ -115,6 +115,14 @@ def plot(  # noqa: PLR0913, PLR0917
         ValueError: If df is a Series and x_col is provided.
         ValueError: If orientation, sort_order, or data_label_format is not an accepted value.
         ValueError: If legend_labels is provided and its length does not match the number of legend entries.
+
+    Examples:
+        >>> from openretailscience.plots import bar
+        >>> spend = transactions.groupby("category", as_index=False)["unit_spend"].sum()
+        >>> ax = bar.plot(
+        ...     df=spend, value_col="unit_spend", x_col="category", sort_order="descending",
+        ...     eyebrow="Sales", title="Spend by category", subtitle="January 2024 to June 2025",
+        ... )
     """
     orientation, sort_order, data_label_format = _validate_bar_inputs(
         df,

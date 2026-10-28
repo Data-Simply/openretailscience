@@ -41,6 +41,17 @@ def label_by_condition(
 
     Raises:
         ValueError: If ``labeling_strategy`` is not "binary" or "extended" (case-insensitive).
+
+    Examples:
+        >>> from openretailscience.utils import label_by_condition
+        >>> table = ibis.memtable(transactions)
+        >>> hot_drink_labels = label_by_condition(
+        ...     table, condition=table.category == "Hot Drinks", return_col="buys_hot_drinks"
+        ... )
+        >>> hot_drink_labels.buys_hot_drinks.value_counts().order_by("buys_hot_drinks").to_pandas()
+          buys_hot_drinks  buys_hot_drinks_count
+        0        contains                     81
+        1    not_contains                     30
     """
     labeling_strategy = ensure_value_choice(labeling_strategy, ["binary", "extended"], "labeling_strategy")
     if label_col is None:

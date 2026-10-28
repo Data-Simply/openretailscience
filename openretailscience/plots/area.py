@@ -58,6 +58,14 @@ def plot(
         ValueError: If `value_col` is a list and `group_col` are both provided.
         ValueError: If `legend_style` is not None, "box", or "end_of_line".
 
+    Examples:
+        >>> from openretailscience.plots import area
+        >>> monthly = transactions.assign(month=transactions["transaction_date"].dt.to_period("M").dt.to_timestamp())
+        >>> monthly = monthly.groupby(["month", "category"], as_index=False)["unit_spend"].sum()
+        >>> ax = area.plot(
+        ...     df=monthly, value_col="unit_spend", x_col="month", group_col="category",
+        ...     eyebrow="Sales", title="Monthly spend by category", subtitle="January 2024 to June 2025",
+        ... )
     """
     if legend_style not in (None, "box", "end_of_line"):
         msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"

@@ -66,6 +66,18 @@ class CohortAnalysis:
     ``aggregation_column`` over that cohort's transactions in that period. Cells with no
     transactions, including cohorts with no customers and periods past the end of the data,
     are 0, the same as a genuine 0. The query runs at construction; there is no ``.table``.
+
+    Examples:
+        >>> from openretailscience.analysis import CohortAnalysis
+        >>> cohorts = CohortAnalysis(
+        ...     df=transactions, aggregation_column="customer_id", period="quarter", percentage=True
+        ... )
+        >>> cohorts.df
+        period_since          0     1     2     3     4     5
+        min_period_shopped
+        2024-01-01          1.0  0.28  0.38  0.38  0.35  0.28
+        2024-04-01          1.0  0.38  0.38  0.33  0.17  0.00
+        ...
     """
 
     VALID_PERIODS: ClassVar[tuple[str, ...]] = ("year", "quarter", "month", "week", "day")

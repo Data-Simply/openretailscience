@@ -48,6 +48,17 @@ def plot(
     Returns:
         SubplotBase: The matplotlib axes object.
 
+    Examples:
+        >>> from openretailscience.analysis import CohortAnalysis
+        >>> from openretailscience.plots import cohort
+        >>> cohorts = CohortAnalysis(
+        ...     df=transactions, aggregation_column="customer_id", period="quarter", percentage=True
+        ... )
+        >>> ax = cohort.plot(
+        ...     df=cohorts.df, cbar_label="Customers retained",
+        ...     x_label="Quarters since first purchase", y_label="First quarter",
+        ...     eyebrow="Retention", title="Quarterly customer retention", subtitle="Share of each cohort still buying",
+        ... )
     """
     return heatmap.plot(
         df=df,

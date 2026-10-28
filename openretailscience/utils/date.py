@@ -144,6 +144,15 @@ def filter_and_label_by_periods(
     Raises:
         ValueError: If a period value is not a ``(start, end)`` tuple, if a start date is
             after its end date, or if two periods overlap.
+
+    Examples:
+        >>> from openretailscience.utils import filter_and_label_by_periods
+        >>> periods = {"H1 2024": ("2024-01-01", "2024-06-30"), "H1 2025": ("2025-01-01", "2025-06-30")}
+        >>> h1 = filter_and_label_by_periods(ibis.memtable(transactions), period_ranges=periods)
+        >>> h1.group_by("period_name").aggregate(spend=h1.unit_spend.sum()).order_by("period_name").to_pandas()
+          period_name    spend
+        0     H1 2024  1194.05
+        1     H1 2025  1350.15
     """
     period_ranges = {
         name: tuple(map(_date_to_str, bounds)) if isinstance(bounds, tuple) else bounds
@@ -207,6 +216,11 @@ def find_overlapping_periods(
     Raises:
         TypeError: If ``start_date`` and ``end_date`` have mismatched timezone awareness.
         ValueError: If the start date is after the end date.
+
+    Examples:
+        >>> from openretailscience.utils import find_overlapping_periods
+        >>> find_overlapping_periods("2023-10-01", "2025-12-31")
+        [('2023-10-01', '2024-12-31'), ('2024-10-01', '2025-12-31')]
     """
     # Track whether outputs should be tz-naive to preserve backward compatibility.
     # String inputs and naive datetime inputs both produced naive outputs before.

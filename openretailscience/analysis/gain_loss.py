@@ -31,6 +31,21 @@ class GainLoss:
 
     ``gain_loss_table_df`` has the same columns summed over customers: one row when
     ungrouped, one row per ``group_col`` value otherwise.
+
+    Examples:
+        >>> from openretailscience.analysis import GainLoss
+        >>> gl = GainLoss(
+        ...     df=transactions,
+        ...     p1_index=transactions["period"] == "2025Q1",
+        ...     p2_index=transactions["period"] == "2025Q2",
+        ...     focus_group_index=transactions["brand"] == "Meadow Farm",
+        ...     focus_group_name="Meadow Farm",
+        ...     comparison_group_index=transactions["brand"] == "Greenvale",
+        ...     comparison_group_name="Greenvale",
+        ... )
+        >>> ax = gl.plot(
+        ...     eyebrow="Brand switching", title="Where Meadow Farm spend came from and went", subtitle="Q2 vs Q1 2025"
+        ... )
     """
 
     def __init__(

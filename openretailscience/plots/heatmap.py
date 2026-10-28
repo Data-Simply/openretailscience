@@ -93,6 +93,13 @@ def plot(
     Raises:
         ValueError: If df is empty or contains no finite values.
 
+    Examples:
+        >>> from openretailscience.plots import heatmap
+        >>> spend = transactions.pivot_table(index="category", columns="store_id", values="unit_spend", aggfunc="sum")
+        >>> ax = heatmap.plot(
+        ...     df=spend, cbar_label="Spend",
+        ...     eyebrow="Stores", title="Spend by store and category", subtitle="January 2024 to June 2025",
+        ... )
     """
     data, vmin, vmax, is_uniform = _resolve_data_range(df)
 

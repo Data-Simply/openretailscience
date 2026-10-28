@@ -21,7 +21,20 @@ from openretailscience.options import ColumnHelper
 
 
 class ThresholdSegmentation:
-    """Segments customers based on user-defined thresholds and segments."""
+    """Segments customers based on user-defined thresholds and segments.
+
+    Examples:
+        >>> from openretailscience.segmentation import ThresholdSegmentation
+        >>> quartiles = ThresholdSegmentation(
+        ...     df=transactions, thresholds=[0.25, 0.5, 0.75, 1.0], segments=["Q1_Bottom", "Q2", "Q3", "Q4_Top"]
+        ... )
+        >>> quartiles.df
+                     unit_spend segment_name
+        customer_id
+        83                 0.85    Q1_Bottom
+        9                  2.10    Q1_Bottom
+        ...
+    """
 
     def __init__(
         self,

@@ -76,6 +76,12 @@ class PurchasesPerCustomer:
             and ``purchase_count``.
         df (pd.DataFrame): Materialized view of ``table`` indexed by
             ``customer_id``. Lazily computed on first access.
+
+    Examples:
+        >>> from openretailscience.analysis import PurchasesPerCustomer
+        >>> ppc = PurchasesPerCustomer(df=transactions)
+        >>> ppc.purchases_percentile(0.5)
+        2.0
     """
 
     def __init__(self, df: pd.DataFrame | ibis.Table) -> None:
@@ -162,6 +168,12 @@ class DaysBetweenPurchases:
             and ``avg_days_between_purchases``.
         df (pd.DataFrame): Materialized view of ``table`` indexed by
             ``customer_id``. Lazily computed on first access.
+
+    Examples:
+        >>> from openretailscience.analysis import DaysBetweenPurchases
+        >>> dbp = DaysBetweenPurchases(df=transactions)
+        >>> dbp.purchases_percentile(0.5)
+        120.25
     """
 
     def __init__(self, df: pd.DataFrame | ibis.Table) -> None:
@@ -254,6 +266,16 @@ class TransactionChurn:
             ``transaction_number`` and sorted ascending. Lazily computed on
             first access.
         n_unique_customers (int): Distinct customers in the input data.
+
+    Examples:
+        >>> from openretailscience.analysis import TransactionChurn
+        >>> churn = TransactionChurn(df=transactions, churn_period=90)
+        >>> churn.df
+                            retained  churned  churned_pct
+        transaction_number
+        1                         77       29     0.273585
+        2                         42       28     0.400000
+        ...
     """
 
     def __init__(self, df: pd.DataFrame | ibis.Table, churn_period: int) -> None:

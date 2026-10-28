@@ -83,6 +83,12 @@ def plot(
     Raises:
         ValueError: If df is empty, a required column is missing, or period is invalid.
 
+    Examples:
+        >>> from openretailscience.plots import broken_timeline
+        >>> ax = broken_timeline.plot(
+        ...     df=transactions, category_col="store_id", value_col="unit_spend", period="W",
+        ...     eyebrow="Data quality", title="Weeks with sales by store", subtitle="Gaps are weeks with no sales",
+        ... )
     """
     date_col = get_option("column.transaction_date")
 

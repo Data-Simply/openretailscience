@@ -100,6 +100,13 @@ def plot(
     Raises:
         ValueError: If the number of sets (len(labels)) is not 2 or 3.
 
+    Examples:
+        >>> from openretailscience.plots import venn
+        >>> overlap = pd.DataFrame({"groups": [(1, 0), (0, 1), (1, 1)], "percent": [0.35, 0.40, 0.25]})
+        >>> ax = venn.plot(
+        ...     df=overlap, labels=["Online", "In store"], subset_label_formatter=lambda share: f"{share:.0%}",
+        ...     eyebrow="Channels", title="Where customers shop", subtitle="Share of customers",
+        ... )
     """
     num_sets = len(labels)
     if num_sets not in {MIN_SUPPORTED_SETS, MAX_SUPPORTED_SETS}:
