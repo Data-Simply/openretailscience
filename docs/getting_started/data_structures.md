@@ -227,8 +227,7 @@ expectations are worth checking before you run an analysis.
   analyses such as `RFMSegmentation` and `CohortAnalysis` reject a string or integer date column. Date *parameters*,
   such as `RFMSegmentation(current_date=...)`, accept ISO strings like `"2024-12-31"`.
 - **Timestamps should be timezone-naive.** Date-based analyses such as `RFMSegmentation` and `CohortAnalysis` reject a
-  timezone-aware timestamp outright, because the backend normalizes it to UTC, which can shift day boundaries. Strip
-  the zone on a pandas column with `df["transaction_date"] = df["transaction_date"].dt.tz_localize(None)`.
+  timezone-aware timestamp outright, because the backend normalizes it to UTC, which can shift day boundaries.
 - **Numeric measures** (`unit_spend`, `unit_quantity`, `unit_cost`) must be numeric types so they sum and average
   correctly. A spend column read as a string will not aggregate.
 
