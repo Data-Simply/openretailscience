@@ -316,7 +316,7 @@ def ensure_integer(value: int, param_name: str) -> None:
         param_name (str): The parameter name to surface in error messages.
 
     Raises:
-        TypeError: If ``value`` is not an int (``bool`` and ``float`` are rejected).
+        TypeError: If ``value`` is not an integer (``bool`` and ``float`` are rejected).
     """
     # ``bool`` is an ``int`` subclass; reject it alongside floats so only true integers pass.
     if isinstance(value, bool) or not isinstance(value, numbers.Integral):
@@ -326,6 +326,8 @@ def ensure_integer(value: int, param_name: str) -> None:
 
 def ensure_date(value: str | dt.date, param_name: str) -> dt.date:
     """Normalize a date parameter to a ``datetime.date``; a datetime or ``pd.Timestamp`` keeps only its date part.
+
+    A timezone-aware datetime keeps its local date, which can differ from its UTC date.
 
     Args:
         value (str | datetime.date): The value supplied by the caller.
