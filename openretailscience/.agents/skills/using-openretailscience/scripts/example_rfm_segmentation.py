@@ -19,7 +19,7 @@ max_days_back = np.repeat(np.minimum(days_since_last + 1, 365), num_transactions
 
 # Random transaction date up to each customer's last purchase date
 days_back = rng.integers(0, max_days_back)
-transaction_dates = (last_purchase_per_txn - days_back.astype("timedelta64[D]")).astype(str)
+transaction_dates = last_purchase_per_txn - days_back.astype("timedelta64[D]")
 
 transaction_ids = np.arange(1000, 1000 + customer_ids.size)
 unit_spends = rng.uniform(10, 1000, size=customer_ids.size).round(2)

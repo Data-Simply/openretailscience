@@ -30,13 +30,15 @@ class TestRFMSegmentation:
                 cols.customer_id: [1, 2, 3, 4, 5],
                 cols.transaction_id: [101, 102, 103, 104, 105],
                 cols.unit_spend: [100.0, 200.0, 150.0, 300.0, 250.0],
-                cols.transaction_date: [
-                    "2025-03-01",
-                    "2025-02-15",
-                    "2025-01-30",
-                    "2025-03-10",
-                    "2025-02-20",
-                ],
+                cols.transaction_date: pd.to_datetime(
+                    [
+                        "2025-03-01",
+                        "2025-02-15",
+                        "2025-01-30",
+                        "2025-03-10",
+                        "2025-02-20",
+                    ]
+                ),
             },
         )
 
@@ -64,7 +66,7 @@ class TestRFMSegmentation:
                 cols.customer_id: list(range(1, 21)),
                 cols.transaction_id: list(range(101, 121)),
                 cols.unit_spend: [100.0 + i * 10 for i in range(20)],
-                cols.transaction_date: ["2025-03-01"] * 20,
+                cols.transaction_date: pd.to_datetime(["2025-03-01"] * 20),
             },
         )
 
@@ -79,16 +81,25 @@ class TestRFMSegmentation:
                 cols.customer_id: cid,
                 cols.transaction_id: next(transaction_ids),
                 cols.unit_spend: spend,
-                cols.transaction_date: "2025-03-01",
+                cols.transaction_date: pd.Timestamp("2025-03-01"),
             }
             for cid, (rows, spend) in enumerate(rules, start=1)
             for _ in range(rows)
         ]
         return pd.DataFrame(data)
 
-    @pytest.mark.parametrize("current_date", ["2025-03-17", dt.date(2025, 3, 17)])
+    @pytest.mark.parametrize(
+        "current_date",
+        [
+            "2025-03-17",
+            dt.date(2025, 3, 17),
+            dt.datetime(2025, 3, 17, 15, 30, tzinfo=dt.UTC),
+            pd.Timestamp("2025-03-17 15:30"),
+        ],
+        ids=["iso_string", "date", "datetime", "pandas_timestamp"],
+    )
     def test_correct_rfm_segmentation(self, base_df, expected_df, current_date):
-        """Test that string and datetime.date current_date inputs yield identical scores and segments."""
+        """String, date, datetime and pandas Timestamp current_date inputs yield identical scores and segments."""
         rfm_segmentation = RFMSegmentation(df=base_df, current_date=current_date)
         result_df = rfm_segmentation.df
         expected_df["recency_days"] = [16, 30, 46, 7, 25]
@@ -121,13 +132,15 @@ class TestRFMSegmentation:
                 cols.customer_id: [1, 1, 1, 1, 1],
                 cols.transaction_id: [101, 102, 103, 104, 105],
                 cols.unit_spend: [120.0, 250.0, 180.0, 300.0, 220.0],
-                cols.transaction_date: [
-                    "2025-03-01",
-                    "2025-02-15",
-                    "2025-01-10",
-                    "2025-03-10",
-                    "2025-02-25",
-                ],
+                cols.transaction_date: pd.to_datetime(
+                    [
+                        "2025-03-01",
+                        "2025-02-15",
+                        "2025-01-10",
+                        "2025-03-10",
+                        "2025-02-25",
+                    ]
+                ),
             },
         )
         rfm_segmentation = RFMSegmentation(df=df_multiple_transactions, current_date="2025-03-17")
@@ -189,17 +202,15 @@ class TestRFMSegmentation:
     @pytest.mark.parametrize(
         ("invalid_date", "expected_error", "error_message"),
         [
-            (12345, TypeError, "current_date must be a string in 'YYYY-MM-DD' format, a datetime.date object, or None"),
-            ([], TypeError, "current_date must be a string in 'YYYY-MM-DD' format, a datetime.date object, or None"),
-            (
-                3.14159,
-                TypeError,
-                "current_date must be a string in 'YYYY-MM-DD' format, a datetime.date object, or None",
-            ),
+            (12345, TypeError, "current_date must be an ISO 'YYYY-MM-DD' date string, a datetime.date, or None"),
+            ([], TypeError, "current_date must be an ISO 'YYYY-MM-DD' date string, a datetime.date, or None"),
+            (3.14159, TypeError, "current_date must be an ISO 'YYYY-MM-DD' date string, a datetime.date, or None"),
+            ("31/12/2024", ValueError, "current_date must be an ISO 'YYYY-MM-DD' date string. Got '31/12/2024'."),
+            ("2024-13-01", ValueError, "current_date must be an ISO 'YYYY-MM-DD' date string. Got '2024-13-01'."),
         ],
     )
-    def test_invalid_current_date_type(self, base_df, invalid_date, expected_error, error_message):
-        """Test that RFMSegmentation raises TypeError for invalid current_date types."""
+    def test_invalid_current_date(self, base_df, invalid_date, expected_error, error_message):
+        """An unsupported type or an unparseable date string is rejected naming current_date."""
         with pytest.raises(expected_error, match=error_message):
             RFMSegmentation(base_df, current_date=invalid_date)
 
@@ -239,18 +250,20 @@ class TestRFMSegmentation:
                 cols.customer_id: [1, 1, 2, 2, 2, 2, 3, 4, 4, 4],
                 cols.transaction_id: list(range(101, 111)),
                 cols.unit_spend: [50.0, 50.0, 100.0, 100.0, 100.0, 100.0, 200.0, 100.0, 100.0, 100.0],
-                cols.transaction_date: [
-                    "2025-03-07",
-                    "2025-03-07",
-                    "2025-02-25",
-                    "2025-02-25",
-                    "2025-02-25",
-                    "2025-02-25",
-                    "2025-02-15",
-                    "2025-02-05",
-                    "2025-02-05",
-                    "2025-02-05",
-                ],
+                cols.transaction_date: pd.to_datetime(
+                    [
+                        "2025-03-07",
+                        "2025-03-07",
+                        "2025-02-25",
+                        "2025-02-25",
+                        "2025-02-25",
+                        "2025-02-25",
+                        "2025-02-15",
+                        "2025-02-05",
+                        "2025-02-05",
+                        "2025-02-05",
+                    ]
+                ),
             },
         )
 
@@ -304,7 +317,7 @@ class TestRFMSegmentation:
     @pytest.mark.parametrize(
         ("segment_type", "segment_value", "error_message"),
         [
-            ("r_segments", 0, "r_segments must be between 1 and 10 when specified as an integer"),
+            ("r_segments", 0, "r_segments must be between 1 and 10 when specified as an integer. Got 0."),
             ("f_segments", 11, "f_segments must be between 1 and 10 when specified as an integer"),
             ("m_segments", -1, "m_segments must be between 1 and 10 when specified as an integer"),
             ("r_segments", [], "r_segments must contain between 1 and 9 cut points when specified as a list"),
@@ -319,8 +332,12 @@ class TestRFMSegmentation:
             ("m_segments", [0.5, 1.0], "All cut points in m_segments must be between 0 and 1"),
             ("m_segments", [0.5, "invalid"], "All cut points in m_segments must be numeric"),
             ("r_segments", [0.3, 0.5, 0.3], "Cut points in r_segments must be unique"),
-            ("f_segments", [0.7, 0.3, 0.9], "Cut points in f_segments must be in ascending order"),
-            ("m_segments", "invalid", "m_segments must be an integer or a list of floats"),
+            (
+                "f_segments",
+                [0.7, 0.3, 0.9],
+                r"Cut points in f_segments must be in ascending order. Got \[0.7, 0.3, 0.9\].",
+            ),
+            ("m_segments", "invalid", "m_segments must be an integer or a list of floats. Got 'invalid'."),
         ],
     )
     def test_segment_validation(self, base_df, segment_type, segment_value, error_message):
@@ -348,7 +365,7 @@ class TestRFMSegmentation:
                 cols.customer_id: list(range(1, 11)),
                 cols.transaction_id: list(range(101, 111)),
                 cols.unit_spend: [50.0, 100.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0, 20000.0, 50000.0, 100000.0],
-                cols.transaction_date: ["2025-03-01"] * 10,
+                cols.transaction_date: pd.to_datetime(["2025-03-01"] * 10),
             },
         )
 
@@ -382,14 +399,17 @@ class TestRFMSegmentation:
     @pytest.mark.parametrize(
         ("filter_param", "invalid_value", "expected_error", "error_message"),
         [
-            ("min_monetary", "invalid", TypeError, "min_monetary must be a numeric value"),
-            ("max_monetary", "invalid", TypeError, "max_monetary must be a numeric value"),
-            ("min_frequency", 5.5, TypeError, "min_frequency must be an integer"),
-            ("max_frequency", 5.5, TypeError, "max_frequency must be an integer"),
-            ("min_monetary", -100.0, ValueError, "min_monetary must be non-negative"),
-            ("max_monetary", -100.0, ValueError, "max_monetary must be non-negative"),
-            ("min_frequency", 0, ValueError, "min_frequency must be at least 1"),
-            ("max_frequency", 0, ValueError, "max_frequency must be at least 1"),
+            ("min_monetary", "invalid", TypeError, "min_monetary must be a numeric value. Got 'invalid'."),
+            ("max_monetary", "invalid", TypeError, "max_monetary must be a numeric value. Got 'invalid'."),
+            ("min_frequency", 5.5, TypeError, "min_frequency must be an integer. Got 5.5."),
+            ("max_frequency", 5.5, TypeError, "max_frequency must be an integer. Got 5.5."),
+            # bool is an int subclass, so a misrouted flag would otherwise filter as 0/1
+            ("min_monetary", True, TypeError, "min_monetary must be a numeric value. Got True."),
+            ("max_frequency", True, TypeError, "max_frequency must be an integer. Got True."),
+            ("min_monetary", -100.0, ValueError, "min_monetary must be non-negative. Got -100.0."),
+            ("max_monetary", -100.0, ValueError, "max_monetary must be non-negative. Got -100.0."),
+            ("min_frequency", 0, ValueError, "min_frequency must be at least 1. Got 0."),
+            ("max_frequency", 0, ValueError, "max_frequency must be at least 1. Got 0."),
         ],
     )
     def test_filter_validation(self, base_df, filter_param, invalid_value, expected_error, error_message):
@@ -453,7 +473,7 @@ class TestRFMSegmentation:
                     5000,
                     5500,
                 ],
-                cols.transaction_date: ["2025-03-01"] * 20,
+                cols.transaction_date: pd.to_datetime(["2025-03-01"] * 20),
             },
         )
 

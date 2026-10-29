@@ -1,5 +1,8 @@
 """Tests for the ProductAssociation module."""
 
+import uuid
+
+import ibis
 import numpy as np
 import pandas as pd
 import pytest
@@ -229,69 +232,22 @@ class TestProductAssociations:
             ),
         )
 
-    def test_calc_association_invalid_min_occurrences(self, transactions_df):
-        """Test calculating association rules with an invalid minimum occurrences value."""
-        with pytest.raises(ValueError, match="Minimum occurrences must be at least 1"):
-            ProductAssociation._calc_association(
-                df=transactions_df,
-                value_col="product",
-                group_col=cols.transaction_id,
-                min_occurrences=0,
-            )
-
-    def test_calc_association_invalid_min_cooccurrences(self, transactions_df):
-        """Test calculating association rules with an invalid minimum cooccurrences value."""
-        with pytest.raises(ValueError, match="Minimum cooccurrences must be at least 1"):
-            ProductAssociation._calc_association(
-                df=transactions_df,
-                value_col="product",
-                group_col=cols.transaction_id,
-                min_cooccurrences=0,
-            )
-
-    def test_calc_association_min_support_invalid_range(self, transactions_df):
-        """Test calculating association rules with an invalid minimum support range."""
-        with pytest.raises(ValueError, match="Minimum support must be between 0 and 1"):
-            ProductAssociation._calc_association(
-                df=transactions_df,
-                value_col="product",
-                group_col=cols.transaction_id,
-                min_support=-0.1,
-            )
-        with pytest.raises(ValueError, match="Minimum support must be between 0 and 1"):
-            ProductAssociation._calc_association(
-                df=transactions_df,
-                value_col="product",
-                group_col=cols.transaction_id,
-                min_support=1.1,
-            )
-
-    def test_calc_association_min_confidence_invalid_range(self, transactions_df):
-        """Test calculating association rules with an invalid minimum confidence range."""
-        with pytest.raises(ValueError, match="Minimum confidence must be between 0 and 1"):
-            ProductAssociation._calc_association(
-                df=transactions_df,
-                value_col="product",
-                group_col=cols.transaction_id,
-                min_confidence=-0.1,
-            )
-        with pytest.raises(ValueError, match="Minimum confidence must be between 0 and 1"):
-            ProductAssociation._calc_association(
-                df=transactions_df,
-                value_col="product",
-                group_col=cols.transaction_id,
-                min_confidence=1.1,
-            )
-
-    def test_calc_association_min_uplift_invalid_range(self, transactions_df):
-        """Test calculating association rules with an invalid minimum uplift range."""
-        with pytest.raises(ValueError, match="Minimum uplift must be greater or equal to 0"):
-            ProductAssociation._calc_association(
-                df=transactions_df,
-                value_col="product",
-                group_col=cols.transaction_id,
-                min_uplift=-0.1,
-            )
+    @pytest.mark.parametrize(
+        ("param", "value", "match"),
+        [
+            ("min_occurrences", 0, "min_occurrences must be at least 1. Got 0."),
+            ("min_cooccurrences", 0, "min_cooccurrences must be at least 1. Got 0."),
+            ("min_support", -0.1, r"min_support must be between 0 and 1 \(inclusive\). Got -0.1."),
+            ("min_support", 1.1, r"min_support must be between 0 and 1 \(inclusive\). Got 1.1."),
+            ("min_confidence", -0.1, r"min_confidence must be between 0 and 1 \(inclusive\). Got -0.1."),
+            ("min_confidence", 1.1, r"min_confidence must be between 0 and 1 \(inclusive\). Got 1.1."),
+            ("min_uplift", -0.1, "min_uplift must be greater than or equal to 0. Got -0.1."),
+        ],
+    )
+    def test_out_of_range_minimum_names_param_and_value(self, transactions_df, param, value, match):
+        """Each out-of-range min_* threshold is rejected naming the parameter and the value passed."""
+        with pytest.raises(ValueError, match=match):
+            ProductAssociation(df=transactions_df, value_col="product", group_col=cols.transaction_id, **{param: value})
 
     def test_calc_association_target_item_list(self, transactions_df):
         """Test calculating association rules with a list of target items."""
@@ -359,6 +315,40 @@ class TestProductAssociations:
         pd.testing.assert_frame_equal(
             by_sku.sort_values("product_2", ignore_index=True), expected.sort_values("product_2", ignore_index=True)
         )
+
+    def test_string_target_item_accepted_for_uuid_product_ids(self, transactions_df):
+        """A warehouse uuid SKU column takes its IDs as strings and gives the same rules as the product names."""
+        skus = {name: str(uuid.uuid5(uuid.NAMESPACE_URL, name)) for name in transactions_df["product"].unique()}
+        by_name = ProductAssociation(
+            df=transactions_df, value_col="product", group_col=cols.transaction_id, target_item="milk"
+        ).df
+        uuid_table = ibis.memtable(transactions_df.assign(product=transactions_df["product"].map(skus)))
+        by_sku = ProductAssociation(
+            df=uuid_table.mutate(product=uuid_table["product"].cast("uuid")),
+            value_col="product",
+            group_col=cols.transaction_id,
+            target_item=skus["milk"],
+        ).df
+
+        by_sku = by_sku.assign(product_1=by_sku["product_1"].astype(str), product_2=by_sku["product_2"].astype(str))
+        expected = by_name.assign(product_1=by_name["product_1"].map(skus), product_2=by_name["product_2"].map(skus))
+        pd.testing.assert_frame_equal(
+            by_sku.sort_values("product_2", ignore_index=True), expected.sort_values("product_2", ignore_index=True)
+        )
+
+    @pytest.mark.parametrize(
+        ("value_col", "target_item", "match"),
+        [
+            ("sku", "La Roche-Posay", "target_item 'La Roche-Posay' doesn't match value_col 'sku' \\(int64\\)"),
+            ("product", 1001, "target_item 1001 doesn't match value_col 'product' \\(string\\)"),
+        ],
+        ids=["name_for_integer_sku", "integer_for_product_name"],
+    )
+    def test_target_item_of_wrong_type_for_value_col_raises(self, transactions_df, value_col, target_item, match):
+        """A product name looked up in an integer SKU column (or the reverse) is reported, not sent to the backend."""
+        df = transactions_df.assign(sku=transactions_df["product"].factorize()[0] + 1001)
+        with pytest.raises(ValueError, match=match):
+            ProductAssociation(df=df, value_col=value_col, group_col=cols.transaction_id, target_item=target_item)
 
     @pytest.mark.parametrize(
         "target_item",

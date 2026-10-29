@@ -67,8 +67,13 @@ class TestThresholdSegmentation:
     @pytest.mark.parametrize(
         ("thresholds", "segments", "zero_value_customers", "match"),
         [
-            ([0.5, 1.0], ["Low"], "separate_segment", "number of thresholds must match the number of segments"),
-            ([0.5, 1.0], ["Low", "Medium", "High"], "separate_segment", "number of thresholds must match"),
+            ([0.5, 1.0], ["Low"], "separate_segment", "Got 2 thresholds for 1 segments"),
+            (
+                [0.5, 1.0],
+                ["Low", "Medium", "High"],
+                "separate_segment",
+                r"Got 2 thresholds for 3 segments.*e\.g\. \[0\.5, 0\.8, 1\.0\]",
+            ),
             ([1.0, 0.5], ["Low", "High"], "separate_segment", "thresholds must be strictly ascending"),
             ([0.9, 0.5, 1.0], ["Low", "Medium", "High"], "separate_segment", "thresholds must be strictly ascending"),
             ([0.5, 0.5, 1.0], ["Low", "Medium", "High"], "separate_segment", "thresholds must be strictly ascending"),

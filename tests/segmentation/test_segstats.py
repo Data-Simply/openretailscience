@@ -206,6 +206,92 @@ class TestSegTransactionStats:
         with pytest.raises(ValueError):
             SegTransactionStats(df, "segment_name")
 
+    @pytest.mark.parametrize(
+        "grouping_kwargs",
+        [{"calc_total": True}, {"grouping_sets": "total"}],
+        ids=["calc_total", "grouping_sets_total"],
+    )
+    @pytest.mark.parametrize(
+        ("segment_col", "segment_values", "col_type"),
+        [
+            (cols.store_id, [11, 11, 24], "int64"),
+            # ibis coerces "Total" to True here, so an unchecked total row would pass as the True segment
+            ("is_loyalty_member", [True, True, False], "boolean"),
+            # a warehouse uuid key: ibis rejects "Total" with a ValueError rather than a TypeError
+            (
+                "store_key",
+                [
+                    "6f1c2a4e-5b7d-4c3e-9a8f-0d1e2f3a4b5c",
+                    "6f1c2a4e-5b7d-4c3e-9a8f-0d1e2f3a4b5c",
+                    "0a9b8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d",
+                ],
+                "uuid",
+            ),
+        ],
+        ids=["integer_store_id", "boolean_flag", "uuid_store_key"],
+    )
+    def test_string_rollup_value_on_non_string_segment_col_names_rollup_value(
+        self,
+        grouping_kwargs,
+        segment_col,
+        segment_values,
+        col_type,
+    ):
+        """The default rollup_value "Total" can't label a non-string segment's total row; the error says so."""
+        data = ibis.memtable(
+            pd.DataFrame(
+                {
+                    segment_col: segment_values,
+                    cols.unit_spend: [24.99, 61.50, 12.75],
+                    cols.transaction_id: [9001, 9002, 9003],
+                },
+            ),
+        )
+        data = data.mutate(**{segment_col: data[segment_col].cast(col_type)})
+        with pytest.raises(
+            ValueError, match=rf"rollup_value 'Total' can't be stored in column '{segment_col}' \({col_type}\)"
+        ):
+            SegTransactionStats(data, segment_col=segment_col, **grouping_kwargs)
+
+    @pytest.mark.parametrize("measure_col", [cols.unit_spend, cols.unit_qty])
+    @pytest.mark.parametrize("sum_in_extra_aggs", [False, True], ids=["plain", "summed_in_extra_aggs"])
+    def test_rejects_non_numeric_measure(self, measure_col, sum_in_extra_aggs):
+        """Spend or units read as text (e.g. straight from a CSV) is rejected naming the column, ahead of extra_aggs."""
+        df = pd.DataFrame(
+            {
+                cols.store_id: ["Camden", "Leeds"],
+                cols.unit_spend: [24.99, 61.50],
+                cols.unit_qty: [1, 3],
+                cols.transaction_id: [9001, 9002],
+            },
+        )
+        df[measure_col] = df[measure_col].astype(str)
+        extra_aggs = {"measure_total": (measure_col, "sum")} if sum_in_extra_aggs else None
+        with pytest.raises(TypeError, match=rf"Column '{measure_col}' must be numeric. Got string"):
+            SegTransactionStats(df, segment_col=cols.store_id, grouping_sets="total", extra_aggs=extra_aggs)
+
+    def test_rejects_text_extra_agg_with_unknown_customers(self):
+        """unknown_customer_value coalesces each extra_aggs result to 0, so a text result is rejected up front."""
+        df = pd.DataFrame(
+            {
+                cols.store_id: ["Camden", "Leeds"],
+                cols.unit_spend: [24.99, 61.50],
+                cols.transaction_id: [9001, 9002],
+                cols.customer_id: [101, -1],
+                "brand": ["Coke", "Pepsi"],
+            },
+        )
+        with pytest.raises(
+            ValueError, match=r"extra_aggs\['top_brand'\] 'max' is not an aggregation .* with a numeric result"
+        ):
+            SegTransactionStats(
+                df,
+                segment_col=cols.store_id,
+                grouping_sets="total",
+                extra_aggs={"top_brand": ("brand", "max")},
+                unknown_customer_value=-1,
+            )
+
     def test_raises_error_when_segment_col_is_empty_list(self):
         """Test that a ValueError is raised when segment_col is an empty list."""
         df = pd.DataFrame(
@@ -1205,10 +1291,16 @@ class TestGroupingSetsRollupMode:
         ("extra_aggs", "match"),
         [
             ({"total_sales": ("invalid_column", "sum")}, "Column 'invalid_column' specified in extra_aggs"),
-            ({"total_sales": (cols.unit_spend, "invalid_func")}, "Aggregation function 'invalid_func' not available"),
+            (
+                {"total_sales": (cols.unit_spend, "invalid_func")},
+                r"extra_aggs\['total_sales'\] 'invalid_func' is not an aggregation available",
+            ),
             # "isnull" is a real ibis method but a column->column op, not a scalar reduction: it passes the
             # old hasattr check yet must be rejected by the (source_col, agg_func) -> Scalar validation.
-            ({"total_sales": (cols.unit_spend, "isnull")}, "Aggregation function 'isnull' not available"),
+            (
+                {"total_sales": (cols.unit_spend, "isnull")},
+                r"extra_aggs\['total_sales'\] 'isnull' is not an aggregation available",
+            ),
             # A spec that is not a 2-tuple is rejected before the column/function checks.
             ({"total_sales": (cols.unit_spend,)}, r"must be a \(source_col, agg_func\) tuple"),
         ],
@@ -1357,7 +1449,9 @@ class TestGroupingSetsCustomMode:
 
     def test_custom_grouping_sets_invalid_column(self):
         """Test custom grouping sets raises error for invalid column name."""
-        with pytest.raises(ValueError, match=r"Columns .* in grouping_sets not found in segment_col"):
+        with pytest.raises(
+            ValueError, match=r"Columns .* in grouping_sets not found in segment_col.*e\.g\. \[\('region',\), \(\)\]"
+        ):
             SegTransactionStats._generate_grouping_sets(
                 segment_col=["region", "store"],
                 grouping_sets=[("region", "invalid_col")],
@@ -1386,7 +1480,10 @@ class TestGroupingSetsCustomMode:
     )
     def test_custom_grouping_sets_rejects_non_tuple_elements(self, grouping_sets):
         """Custom grouping sets raise TypeError when any element is not a tuple."""
-        with pytest.raises(TypeError, match="Each element must be a tuple"):
+        with pytest.raises(
+            TypeError,
+            match=r"Each element must be a tuple of segment_col names.*e\.g\. \[\('category_1_name',\), \(\)\]",
+        ):
             SegTransactionStats._validate_grouping_sets_params(
                 grouping_sets=grouping_sets,
                 calc_total=None,
@@ -1986,6 +2083,17 @@ class TestNativeGroupingSets:
                 ["grouping_flag_0", "category"],
                 {"grouping_sets": "rollup"},
             ),
+            # A non-string segment column that every set keeps is never labelled, so "Total" needn't fit its type.
+            (
+                _native_sample_df(),
+                ["region", cols.store_id],
+                {"grouping_sets": [("region", cols.store_id), (cols.store_id,)]},
+            ),
+            (
+                _native_sample_df().assign(is_loyalty_member=lambda df: df[cols.customer_id] > 0),
+                ["region", "is_loyalty_member"],
+                {"grouping_sets": [("region", "is_loyalty_member"), ("is_loyalty_member",)]},
+            ),
         ],
         ids=[
             "rollup",
@@ -1996,6 +2104,8 @@ class TestNativeGroupingSets:
             "extra_aggs",
             "unknown_with_extra_aggs",
             "flag_name_collision",
+            "integer_segment_never_rolled_up",
+            "boolean_segment_never_rolled_up",
         ],
     )
     def test_native_output_matches_union_fallback(self, df, segments, kwargs):

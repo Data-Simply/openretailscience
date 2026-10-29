@@ -6,7 +6,12 @@ import functools
 import ibis
 import pandas as pd
 
-from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
+from openretailscience.core.validation import (
+    ensure_data_has_columns,
+    ensure_date,
+    ensure_ibis_table,
+    ensure_tznaive_datetime,
+)
 from openretailscience.options import ColumnHelper, get_option
 
 
@@ -46,7 +51,7 @@ class RFMSegmentation:
             df (pd.DataFrame | ibis.Table): Transaction data. Must contain the customer_id,
                 transaction_date, unit_spend and transaction_id columns.
             current_date (str | datetime.date | None): Reference date for recency, as a
-                "YYYY-MM-DD" string, a date, or None (today, UTC).
+                "YYYY-MM-DD" string, a date or datetime (its date part), or None (today, UTC).
             r_segments (int | list[float]): Number of equal-count bins (1-10), scored 0..n-1, or 1-9
                 custom percentile cut points in (0, 1), unique and ascending, scored 0..k.
             f_segments (int | list[float]): As r_segments, for frequency.
@@ -58,12 +63,13 @@ class RFMSegmentation:
                 Filters drop customers outside the min/max ranges before scoring.
 
         Raises:
-            ValueError: If required columns are missing, a segment parameter is invalid
+            ValueError: If required columns are missing, transaction_date is timezone-aware,
+                current_date is not an ISO date string, a segment parameter is invalid
                 (out of range, non-numeric, duplicate or unsorted cut points), or a filter
                 bound is out of range.
-            TypeError: If df is not a DataFrame or ibis Table, current_date has an invalid
-                type, a segment is neither an int nor a list, or a filter bound has the
-                wrong type.
+            TypeError: If df is not a DataFrame or ibis Table, transaction_date is not a date or
+                datetime column, current_date has an invalid type, a segment is neither an int
+                nor a list, or a filter bound has the wrong type.
         """
         cols = ColumnHelper()
         required_cols = [
@@ -75,13 +81,11 @@ class RFMSegmentation:
         df = ensure_ibis_table(df)
 
         ensure_data_has_columns(df, required_cols)
+        ensure_tznaive_datetime(df, cols.transaction_date)
 
-        if isinstance(current_date, str):
-            current_date = dt.date.fromisoformat(current_date)
-        elif current_date is None:
-            current_date = dt.datetime.now(dt.UTC).date()
-        elif not isinstance(current_date, dt.date):
-            raise TypeError("current_date must be a string in 'YYYY-MM-DD' format, a datetime.date object, or None")
+        current_date = (
+            dt.datetime.now(dt.UTC).date() if current_date is None else ensure_date(current_date, "current_date")
+        )
 
         self._validate_segments(r_segments, "r_segments")
         self._validate_segments(f_segments, "f_segments")
@@ -119,29 +123,32 @@ class RFMSegmentation:
 
         if isinstance(segments, int):
             if segments < max_segments or segments > max_segments_int:
-                msg = f"{param_name} must be between {max_segments} and {max_segments_int} when specified as an integer"
+                msg = (
+                    f"{param_name} must be between {max_segments} and {max_segments_int} when specified as an "
+                    f"integer. Got {segments}."
+                )
                 raise ValueError(msg)
         elif isinstance(segments, list):
             if len(segments) == 0 or len(segments) > max_segments_list:
                 msg = (
                     f"{param_name} must contain between {max_segments} and"
-                    f" {max_segments_list} cut points when specified as a list"
+                    f" {max_segments_list} cut points when specified as a list. Got {segments}."
                 )
                 raise ValueError(msg)
             if not all(isinstance(x, int | float) for x in segments):  # UP038
-                msg = f"All cut points in {param_name} must be numeric"
+                msg = f"All cut points in {param_name} must be numeric. Got {segments}."
                 raise ValueError(msg)
             if not all(0 < x < 1 for x in segments):
-                msg = f"All cut points in {param_name} must be between 0 and 1 (exclusive)"
+                msg = f"All cut points in {param_name} must be between 0 and 1 (exclusive). Got {segments}."
                 raise ValueError(msg)
             if len(segments) != len(set(segments)):
-                msg = f"Cut points in {param_name} must be unique"
+                msg = f"Cut points in {param_name} must be unique. Got {segments}."
                 raise ValueError(msg)
             if segments != sorted(segments):
-                msg = f"Cut points in {param_name} must be in ascending order"
+                msg = f"Cut points in {param_name} must be in ascending order. Got {segments}."
                 raise ValueError(msg)
         else:
-            msg = f"{param_name} must be an integer or a list of floats"
+            msg = f"{param_name} must be an integer or a list of floats. Got {segments!r}."
             raise TypeError(msg)
 
     def _validate_monetary_filters(self, min_monetary: float | None, max_monetary: float | None) -> None:
@@ -152,19 +159,24 @@ class RFMSegmentation:
             ValueError: If a bound is negative, or min_monetary >= max_monetary.
         """
         if min_monetary is not None:
-            if not isinstance(min_monetary, int | float):
-                raise TypeError("min_monetary must be a numeric value")
+            if isinstance(min_monetary, bool) or not isinstance(min_monetary, int | float):
+                msg = f"min_monetary must be a numeric value. Got {min_monetary!r}."
+                raise TypeError(msg)
             if min_monetary < 0:
-                raise ValueError("min_monetary must be non-negative")
+                msg = f"min_monetary must be non-negative. Got {min_monetary!r}."
+                raise ValueError(msg)
 
         if max_monetary is not None:
-            if not isinstance(max_monetary, int | float):
-                raise TypeError("max_monetary must be a numeric value")
+            if isinstance(max_monetary, bool) or not isinstance(max_monetary, int | float):
+                msg = f"max_monetary must be a numeric value. Got {max_monetary!r}."
+                raise TypeError(msg)
             if max_monetary < 0:
-                raise ValueError("max_monetary must be non-negative")
+                msg = f"max_monetary must be non-negative. Got {max_monetary!r}."
+                raise ValueError(msg)
 
         if min_monetary is not None and max_monetary is not None and min_monetary >= max_monetary:
-            raise ValueError("min_monetary must be less than max_monetary")
+            msg = f"min_monetary must be less than max_monetary. Got {min_monetary!r} and {max_monetary!r}."
+            raise ValueError(msg)
 
     def _validate_frequency_filters(self, min_frequency: float | None, max_frequency: float | None) -> None:
         """Validates min/max frequency filters: integers >= 1, and min <= max.
@@ -174,19 +186,27 @@ class RFMSegmentation:
             ValueError: If a bound is below 1, or min_frequency > max_frequency.
         """
         if min_frequency is not None:
-            if not isinstance(min_frequency, int):
-                raise TypeError("min_frequency must be an integer")
+            if isinstance(min_frequency, bool) or not isinstance(min_frequency, int):
+                msg = f"min_frequency must be an integer. Got {min_frequency!r}."
+                raise TypeError(msg)
             if min_frequency < 1:
-                raise ValueError("min_frequency must be at least 1")
+                msg = f"min_frequency must be at least 1. Got {min_frequency!r}."
+                raise ValueError(msg)
 
         if max_frequency is not None:
-            if not isinstance(max_frequency, int):
-                raise TypeError("max_frequency must be an integer")
+            if isinstance(max_frequency, bool) or not isinstance(max_frequency, int):
+                msg = f"max_frequency must be an integer. Got {max_frequency!r}."
+                raise TypeError(msg)
             if max_frequency < 1:
-                raise ValueError("max_frequency must be at least 1")
+                msg = f"max_frequency must be at least 1. Got {max_frequency!r}."
+                raise ValueError(msg)
 
         if min_frequency is not None and max_frequency is not None and min_frequency > max_frequency:
-            raise ValueError("min_frequency must be less than or equal to max_frequency")
+            msg = (
+                "min_frequency must be less than or equal to max_frequency. "
+                f"Got {min_frequency!r} and {max_frequency!r}."
+            )
+            raise ValueError(msg)
 
     def _compute_rfm(self, df: ibis.Table, current_date: dt.date) -> ibis.Table:
         """Computes the RFM metrics and scores customers accordingly.

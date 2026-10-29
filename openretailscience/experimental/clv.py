@@ -26,7 +26,6 @@ truncated observation period, not something this adapter corrects.
 
 from __future__ import annotations
 
-import datetime as dt
 import functools
 import warnings
 from typing import TYPE_CHECKING, ClassVar
@@ -37,6 +36,7 @@ import pandas as pd
 from openretailscience.core.validation import (
     ensure_columns,
     ensure_data_has_columns,
+    ensure_date,
     ensure_ibis_table,
     ensure_integer,
     ensure_period,
@@ -47,31 +47,8 @@ from openretailscience.core.validation import (
 from openretailscience.options import ColumnHelper
 
 if TYPE_CHECKING:
+    import datetime as dt
     from typing import Self
-
-
-def _coerce_to_date(value: str | dt.date) -> dt.date:
-    """Normalize a date-like value to a ``datetime.date``.
-
-    Args:
-        value (str | datetime.date): An ISO-8601 date string, a ``datetime.date``, or a
-            ``datetime.datetime`` (its date part is used).
-
-    Returns:
-        datetime.date: The normalized date.
-
-    Raises:
-        TypeError: If ``value`` is not a string or ``datetime.date``.
-    """
-    if isinstance(value, str):
-        return dt.date.fromisoformat(value)
-    # ``datetime.datetime`` is a ``datetime.date`` subclass; take its date part explicitly.
-    if isinstance(value, dt.datetime):
-        return value.date()
-    if isinstance(value, dt.date):
-        return value
-    msg = "observation_period_end must be an ISO-8601 date string, a datetime.date, or None."
-    raise TypeError(msg)
 
 
 #: Past this many dummies, a one_hot_col is almost certainly a high-cardinality column (product_id, a
@@ -174,7 +151,7 @@ class CLVStats:
             if ``transaction_date`` is not a date/datetime type, or if ``observation_period_end`` is
             not a valid date-like value.
         ValueError: If required columns are missing, if ``period`` is not ``"day"``, ``"week"``, or
-            ``"month"``, if ``observation_period_end`` is before the latest transaction, if
+            ``"month"``, if ``observation_period_end`` is not an ISO date string or is before the latest transaction, if
             ``customer_attributes`` lacks the ``customer_id`` column or has a duplicate ``customer_id``,
             if ``one_hot_col`` is given without ``customer_attributes`` or names a column absent from
             it, if an attached column name collides with a reserved summary column, or if ``data``
@@ -213,6 +190,8 @@ class CLVStats:
         ensure_data_has_columns(data, [cols.customer_id, cols.transaction_date, cols.unit_spend])
         ensure_tznaive_datetime(data, cols.transaction_date)
         period = ensure_period(period, self.VALID_PERIODS, "period")
+        if observation_period_end is not None:
+            observation_period_end = ensure_date(observation_period_end, "observation_period_end")
         attributes = self._prepare_customer_attributes(customer_attributes)
         one_hot_cols = self._resolve_one_hot_cols(attributes, one_hot_col)
 
@@ -223,17 +202,15 @@ class CLVStats:
         if pd.isna(latest_raw):  # None or NaT: the table has no transactions to summarize.
             msg = "data contains no transactions; cannot build a CLV summary."
             raise ValueError(msg)
-        latest_transaction = _coerce_to_date(latest_raw)
+        latest_transaction = pd.Timestamp(latest_raw).date()
         if observation_period_end is None:
             observation_period_end = latest_transaction
-        else:
-            observation_period_end = _coerce_to_date(observation_period_end)
-            if observation_period_end < latest_transaction:
-                msg = (
-                    f"observation_period_end ({observation_period_end}) must be on or after the latest "
-                    f"transaction date ({latest_transaction}); an earlier end would produce a negative age."
-                )
-                raise ValueError(msg)
+        elif observation_period_end < latest_transaction:
+            msg = (
+                f"observation_period_end ({observation_period_end}) must be on or after the latest "
+                f"transaction date ({latest_transaction}); an earlier end would produce a negative age."
+            )
+            raise ValueError(msg)
 
         summary = self._compute_summary(data, period, observation_period_end)
         table = self._attach_customer_attributes(summary, attributes, one_hot_cols)

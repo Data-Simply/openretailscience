@@ -10,7 +10,13 @@ import ibis
 import numpy as np
 import pandas as pd
 
-from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table, ensure_period
+from openretailscience.core.validation import (
+    ensure_agg_func,
+    ensure_data_has_columns,
+    ensure_ibis_table,
+    ensure_period,
+    ensure_tznaive_datetime,
+)
 from openretailscience.options import ColumnHelper
 
 
@@ -34,12 +40,6 @@ def _periods_between(start: pd.Series, end: pd.Series, period: str) -> pd.Series
     """
     start = pd.to_datetime(start)
     end = pd.to_datetime(end)
-    # Count in wall-clock terms: a tz-aware interval spanning a DST change is not a whole
-    # number of 24h days, which would round the day/week counts below down by one.
-    if start.dt.tz is not None:
-        start = start.dt.tz_localize(None)
-    if end.dt.tz is not None:
-        end = end.dt.tz_localize(None)
     if period == "day":
         result = (end - start).dt.days
     elif period == "week":
@@ -94,7 +94,7 @@ class CohortAnalysis:
 
         Args:
             df (pd.DataFrame | ibis.Table): Transaction data. ``transaction_date`` must be a
-                date or datetime column; strings are not parsed.
+                date or datetime column; strings are rejected.
             aggregation_column (str): The column to aggregate. For customer retention use
                 ``customer_id`` with ``agg_func="nunique"``.
             agg_func (str, optional): Ibis column aggregation name, case-sensitive (e.g.
@@ -108,12 +108,17 @@ class CohortAnalysis:
         Raises:
             TypeError: If `df` is not a pandas DataFrame or an Ibis Table.
             TypeError: If `period` is not a string.
+            TypeError: If `transaction_date` is not a date or datetime column.
             ValueError: If `period` is not one of the allowed values.
             ValueError: If `df` is missing required columns
                 (`customer_id`, `transaction_date`, or `aggregation_column`).
+            ValueError: If `agg_func` is not an aggregation available for `aggregation_column`
+                with a numeric result.
+            ValueError: If `transaction_date` is timezone-aware.
         """
         cols = ColumnHelper()
 
+        df = ensure_ibis_table(df)
         period = ensure_period(period, self.VALID_PERIODS, "period")
 
         required_cols = [
@@ -122,6 +127,8 @@ class CohortAnalysis:
             aggregation_column,
         ]
         ensure_data_has_columns(df, required_cols)
+        ensure_tznaive_datetime(df, cols.transaction_date)
+        ensure_agg_func(df, aggregation_column, agg_func, numeric=True)
 
         self.df = self._calculate_cohorts(
             df=df,
@@ -163,7 +170,7 @@ class CohortAnalysis:
 
     def _calculate_cohorts(
         self,
-        df: pd.DataFrame | ibis.Table,
+        df: ibis.Table,
         aggregation_column: str,
         agg_func: str = "nunique",
         period: str = "month",
@@ -172,7 +179,7 @@ class CohortAnalysis:
         """Computes the cohort matrix described on the class.
 
         Args:
-            df (pd.DataFrame | ibis.Table): The dataset containing transaction data.
+            df (ibis.Table): The dataset containing transaction data.
             aggregation_column (str): The column to aggregate.
             agg_func (str, optional): Ibis aggregation name. Defaults to "nunique".
             period (str): Period for cohort analysis: "year", "quarter", "month", "week", or "day".
@@ -183,11 +190,9 @@ class CohortAnalysis:
         """
         cols = ColumnHelper()
 
-        ibis_table = ensure_ibis_table(df)
-
-        filtered_table = ibis_table.mutate(
-            period_shopped=ibis_table[cols.transaction_date].truncate(period),
-            period_value=ibis_table[aggregation_column],
+        filtered_table = df.mutate(
+            period_shopped=df[cols.transaction_date].truncate(period),
+            period_value=df[aggregation_column],
         )
 
         customer_cohort = filtered_table.group_by(cols.customer_id).aggregate(

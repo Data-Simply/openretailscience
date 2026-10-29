@@ -15,7 +15,7 @@ from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.sparse import csr_matrix
 from scipy.spatial.distance import squareform
 
-from openretailscience.core.validation import ensure_data_has_columns
+from openretailscience.core.validation import ensure_data_has_columns, ensure_dataframe, ensure_value_choice
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
@@ -65,12 +65,15 @@ class CustomerDecisionHierarchy:
             random_state (int): Stored but has no effect; results are already deterministic.
 
         Raises:
+            TypeError: If ``df`` is not a pandas DataFrame, or ``method`` is not a string.
             ValueError: If the required columns are missing from the dataframe.
             ValueError: If ``method`` is not "yules_q".
         """
+        ensure_dataframe(df, "df")
         cols = ColumnHelper()
         required_cols = [cols.customer_id, cols.transaction_id, product_col]
         ensure_data_has_columns(df, required_cols)
+        method = ensure_value_choice(method, ["yules_q"], "method")
 
         self.random_state = random_state
         self.product_col = product_col
@@ -129,11 +132,19 @@ class CustomerDecisionHierarchy:
 
         """
         if len(bought_product_1) != len(bought_product_2):
-            raise ValueError("The bought_product_1 and bought_product_2 must be the same length")
+            msg = (
+                "bought_product_1 and bought_product_2 must be the same length. "
+                f"Got {len(bought_product_1)} and {len(bought_product_2)}."
+            )
+            raise ValueError(msg)
         if len(bought_product_1) == 0:
             return 0.0
         if bought_product_1.dtype != bool or bought_product_2.dtype != bool:
-            raise ValueError("The bought_product_1 and bought_product_2 must be boolean arrays")
+            msg = (
+                "bought_product_1 and bought_product_2 must be boolean arrays. "
+                f"Got {bought_product_1.dtype} and {bought_product_2.dtype}."
+            )
+            raise ValueError(msg)
 
         a = np.count_nonzero(bought_product_1 & bought_product_2)
         b = np.count_nonzero(bought_product_1 & ~bought_product_2)

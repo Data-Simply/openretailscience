@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from ibis import _
 
-from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
+from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table, ensure_unit_interval
 from openretailscience.options import get_option
 
 
@@ -75,10 +75,13 @@ class ProductAssociation:
 
         Raises:
             ValueError: If any ``min_*`` value is out of range.
-            ValueError: If ``target_item`` is an empty list.
+            ValueError: If ``target_item`` is an empty list, or a str for a numeric ``value_col``
+                (or an integer for a non-numeric one).
             TypeError: If ``target_item`` contains values that are not str or integer.
+            TypeError: If ``min_support`` or ``min_confidence`` is not an int or float.
             ValueError: If ``group_col`` or ``value_col`` columns are missing from the data.
         """
+        df = ensure_ibis_table(df)
         group_col = group_col or get_option("column.customer_id")
         required_cols = [group_col, value_col]
         ensure_data_has_columns(df, required_cols)
@@ -115,21 +118,21 @@ class ProductAssociation:
 
         Raises:
             ValueError: If any parameter is outside its valid range.
+            TypeError: If ``min_support`` or ``min_confidence`` is not an int or float.
         """
-        if min_occurrences < 1:
-            raise ValueError("Minimum occurrences must be at least 1")
-        if min_cooccurrences < 1:
-            raise ValueError("Minimum cooccurrences must be at least 1")
-        if min_support < 0.0 or min_support > 1.0:
-            raise ValueError("Minimum support must be between 0 and 1")
-        if min_confidence < 0.0 or min_confidence > 1.0:
-            raise ValueError("Minimum confidence must be between 0 and 1")
+        for name, value in [("min_occurrences", min_occurrences), ("min_cooccurrences", min_cooccurrences)]:
+            if value < 1:
+                msg = f"{name} must be at least 1. Got {value!r}."
+                raise ValueError(msg)
+        ensure_unit_interval(min_support, "min_support")
+        ensure_unit_interval(min_confidence, "min_confidence")
         if min_uplift < 0.0:
-            raise ValueError("Minimum uplift must be greater or equal to 0")
+            msg = f"min_uplift must be greater than or equal to 0. Got {min_uplift!r}."
+            raise ValueError(msg)
 
     @staticmethod
     def _calc_association(
-        df: pd.DataFrame | ibis.Table,
+        df: ibis.Table,
         value_col: str,
         group_col: str,
         target_item: str | int | list[str | int] | None = None,
@@ -138,7 +141,7 @@ class ProductAssociation:
         min_support: float = 0.0,
         min_confidence: float = 0.0,
         min_uplift: float = 0.0,
-    ) -> pd.DataFrame:
+    ) -> ibis.Table:
         """Build the association rules as a lazy Ibis expression tree.
 
         Returns the result table without executing it. The unit of analysis is the
@@ -175,7 +178,12 @@ class ProductAssociation:
             if len(target_item) == 0:
                 raise ValueError("target_item cannot be an empty list")
 
-        df = ensure_ibis_table(df)
+            # A str ID fits any non-numeric column (string, uuid, ...); an integer ID needs a numeric one.
+            value_type = df[value_col].type()
+            mismatched = [item for item in target_item if isinstance(item, str) == value_type.is_numeric()]
+            if len(mismatched) > 0:
+                msg = f"target_item {mismatched[0]!r} doesn't match value_col {value_col!r} ({value_type})."
+                raise ValueError(msg)
 
         unique_transactions = df.select(_[group_col], _[value_col]).distinct()
         total_transactions = unique_transactions.alias("t")[group_col].nunique().name("total_count")

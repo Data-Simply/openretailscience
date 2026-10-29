@@ -14,7 +14,12 @@ import ibis
 import numpy as np
 import pandas as pd
 
-from openretailscience.core.validation import ensure_columns, ensure_data_has_columns, ensure_ibis_table
+from openretailscience.core.validation import (
+    ensure_columns,
+    ensure_data_has_columns,
+    ensure_dataframe,
+    ensure_ibis_table,
+)
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots.styles import graph_utils as gu
 from openretailscience.plots.tree_diagram import DetailedTreeNode, TreeGrid
@@ -115,9 +120,7 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame) -> pd.DataFrame:
     cols = ColumnHelper()
     required_cols = [cols.agg.customer_id, cols.agg.transaction_id, cols.agg.unit_spend]
     for name, frame in (("p1_df", p1_df), ("p2_df", p2_df)):
-        if not isinstance(frame, pd.DataFrame):
-            msg = f"{name} must be a pandas DataFrame, got {type(frame).__name__}."
-            raise TypeError(msg)
+        ensure_dataframe(frame, name)
         ensure_data_has_columns(frame, required_cols)
         if not frame.index.is_unique:
             msg = f"{name} has repeated index labels; each group needs at most one row per period."
@@ -230,6 +233,7 @@ class RevenueTree:
             group_col (str | list[str] | None): Column(s) to break the analysis down by.
 
         Raises:
+            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table.
             ValueError: If the required columns are not present in the data, if
                 ``p1_value`` equals ``p2_value``, or if either matches no rows of ``period_col``.
             ibis.common.exceptions.IbisTypeError: If ``p1_value`` or ``p2_value`` can't be compared
@@ -237,6 +241,7 @@ class RevenueTree:
         """
         cols = ColumnHelper()
 
+        df = ensure_ibis_table(df)
         if p1_value == p2_value:
             msg = f"p1_value and p2_value must be different, got {p1_value!r} for both."
             raise ValueError(msg)

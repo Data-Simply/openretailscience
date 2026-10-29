@@ -101,6 +101,18 @@ class TestCustomerDecisionHierarchy:
         with pytest.raises(ValueError):
             rp.CustomerDecisionHierarchy(df, "invalid_product_col", exclude_same_transaction_products)
 
+    def test_init_invalid_method_names_param_and_value(self):
+        """An unsupported distance method is rejected naming method and the value passed."""
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [101, 102, 103],
+                cols.transaction_id: [9001, 9002, 9003],
+                "product_name": ["Coke", "Pepsi", "Sprite"],
+            },
+        )
+        with pytest.raises(ValueError, match=r"method must be one of \['yules_q'\]. Got 'jaccard'."):
+            rp.CustomerDecisionHierarchy(df, "product_name", method="jaccard")
+
     def test_init_exclude_same_transaction_products_true(self):
         """Test that the function returns the correct pairs dataframe when exclude_same_transaction_products is True."""
         df = pd.DataFrame(

@@ -99,6 +99,17 @@ class TestCLVStats:
         with pytest.raises(ValueError, match="missing required columns"):
             CLVStats(data)
 
+    @pytest.mark.parametrize("observation_period_end", ["31/12/2024", "2024-13-01"])
+    # An empty table would fail its own check once queried, so the parameter error proves it runs first.
+    @pytest.mark.parametrize("n_rows", [None, 0], ids=["all_transactions", "empty_data"])
+    def test_unparseable_observation_period_end_names_param(self, observation_period_end, n_rows):
+        """A non-ISO or impossible date string is rejected naming observation_period_end, before the data is read."""
+        with pytest.raises(
+            ValueError,
+            match=f"observation_period_end must be an ISO 'YYYY-MM-DD' date string. Got '{observation_period_end}'.",
+        ):
+            CLVStats(_transactions().iloc[:n_rows], observation_period_end=observation_period_end)
+
     def test_non_temporal_transaction_date_raises(self):
         """A string transaction_date column is rejected (day math needs a temporal type)."""
         data = _transactions()
