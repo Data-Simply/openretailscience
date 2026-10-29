@@ -223,13 +223,11 @@ expectations are worth checking before you run an analysis.
 
 ### Types
 
-- **Dates and times** should be genuine temporal types (`date` / `datetime`), not strings. `DaysBetweenPurchases`
-  and `TransactionChurn` validate this and reject a non-temporal column; other date-based analyses such as
-  `RFMSegmentation` and `CohortAnalysis` assume a temporal column rather than checking it, so a string date can
-  produce wrong results.
-- **Timestamps should be timezone-naive.** `DaysBetweenPurchases` and `TransactionChurn` reject a timezone-aware
-  timestamp outright, because the backend normalizes it to UTC, which can shift day boundaries. Strip the zone on a
-  pandas column with `df["transaction_date"] = df["transaction_date"].dt.tz_localize(None)`.
+- **Date columns** such as `transaction_date` must be genuine temporal types (`date` / `datetime`). Date-based
+  analyses such as `RFMSegmentation` and `CohortAnalysis` reject a string or integer date column. Date *parameters*,
+  such as `RFMSegmentation(current_date=...)`, accept ISO strings like `"2024-12-31"`.
+- **Timestamps should be timezone-naive.** Date-based analyses such as `RFMSegmentation` and `CohortAnalysis` reject a
+  timezone-aware timestamp outright, because the backend normalizes it to UTC, which can shift day boundaries.
 - **Numeric measures** (`unit_spend`, `unit_quantity`, `unit_cost`) must be numeric types so they sum and average
   correctly. A spend column read as a string will not aggregate.
 

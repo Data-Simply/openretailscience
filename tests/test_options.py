@@ -14,18 +14,27 @@ class TestOptions:
     @pytest.mark.parametrize(
         "operation",
         [
-            lambda o: o.set_option("unknown.option", "some_value"),
-            lambda o: o.get_option("unknown.option"),
-            lambda o: o.reset_option("unknown.option"),
-            lambda o: o.describe_option("unknown.option"),
+            lambda o, pat: o.set_option(pat, "some_value"),
+            lambda o, pat: o.get_option(pat),
+            lambda o, pat: o.reset_option(pat),
+            lambda o, pat: o.describe_option(pat),
         ],
         ids=["set_option", "get_option", "reset_option", "describe_option"],
     )
-    def test_unknown_option_raises_value_error(self, operation):
-        """Test that each option accessor raises ValueError for an unknown option."""
+    @pytest.mark.parametrize(
+        ("pat", "match"),
+        [
+            ("transaction_date", r"Unknown option 'transaction_date'\. Did you mean 'column\.transaction_date'\?"),
+            ("unknown.option", r"Unknown option 'unknown\.option'\. See list_options\(\)"),
+            (42, r"Unknown option '42'\. See list_options\(\)"),
+        ],
+        ids=["close_match", "no_match", "non_string"],
+    )
+    def test_unknown_option_raises_value_error(self, operation, pat, match):
+        """Each accessor names the unknown option, suggests the closest real one and points at list_options()."""
         options = opt.Options()
-        with pytest.raises(ValueError, match=r"Unknown option: unknown\.option"):
-            operation(options)
+        with pytest.raises(ValueError, match=match):
+            operation(options, pat)
 
     def test_set_option_updates_value(self):
         """Test setting an option updates the option value correctly."""
@@ -76,7 +85,7 @@ class TestOptions:
     def test_context_manager_odd_number_of_arguments_raises_value_error(self):
         """Test that the context manager raises a ValueError when an odd number of arguments is passed."""
         with (
-            pytest.raises(ValueError, match="The context manager requires an even number of arguments"),
+            pytest.raises(ValueError, match=r"even number of arguments.*Got 1: \('column\.customer_id',\)"),
             opt.option_context("column.customer_id"),
         ):
             pass

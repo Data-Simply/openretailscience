@@ -9,12 +9,37 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-from openretailscience.core.validation import ensure_columns, ensure_data_has_columns
+from openretailscience.core.validation import (
+    ensure_columns,
+    ensure_data_has_columns,
+    ensure_dataframe,
+    ensure_excludes_customer_col,
+)
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots import bar
 from openretailscience.plots.styles.colors import COLORS
 
 Mask = list[bool] | np.ndarray | pd.Series
+
+# Reductions only: a groupby method such as "cumsum" or "head" returns rows per transaction, not per customer.
+# No "prod": the categorical customer_id grouping gives absent customers prod's empty value 1, not 0.
+_GROUPBY_AGGREGATIONS = (
+    "sum",
+    "mean",
+    "median",
+    "min",
+    "max",
+    "count",
+    "nunique",
+    "size",
+    "std",
+    "var",
+    "sem",
+    "skew",
+    "quantile",
+    "first",
+    "last",
+)
 
 
 class GainLoss:
@@ -76,18 +101,21 @@ class GainLoss:
             comparison_group_name (str): Display name of the comparison group.
             group_col (str | None): Optional column to break the analysis down by.
             value_col (str | None): Value column to aggregate; defaults to option ``column.unit_spend``.
-            agg_func (str): A pandas groupby aggregation name, such as "sum", "mean" or "nunique"
-                (case-sensitive). Defaults to "sum".
+            agg_func (str): A pandas groupby reduction from a fixed list ("sum", "mean", "median", "min", "max",
+                "count", "nunique", "size", "std", "var", "sem", "skew", "quantile", "first", "last"; case-sensitive).
+                Defaults to "sum".
 
         Raises:
-            TypeError: If a mask is not boolean.
+            TypeError: If ``df`` is not a pandas DataFrame, or a mask is not boolean.
             ValueError: If ``p1_index`` and ``p2_index`` overlap.
             ValueError: If ``focus_group_index`` and ``comparison_group_index`` overlap.
             ValueError: If a mask does not have one entry per row of ``df``, or is a Series whose
                 index differs from ``df.index``.
             ValueError: If the option-derived customer_id or ``value_col`` columns are missing,
-                or if a given ``group_col`` is not in ``df``.
+                or if a given ``group_col`` is not in ``df`` or is the customer column.
+            ValueError: If ``agg_func`` is not a pandas groupby aggregation.
         """
+        ensure_dataframe(df, "df")
         value_col = get_option("column.unit_spend") if value_col is None else value_col
         if not len(df) == len(p1_index) == len(p2_index) == len(focus_group_index) == len(comparison_group_index):
             raise ValueError(
@@ -119,7 +147,13 @@ class GainLoss:
         if group_col is not None:
             # group_col is typed str | None here, so unpack the single-element list back to a string.
             group_col = ensure_columns(df, group_col, "group_col")[0]
+            ensure_excludes_customer_col([group_col], "group_col")
         ensure_data_has_columns(df, [get_option("column.customer_id"), value_col])
+        if agg_func not in _GROUPBY_AGGREGATIONS:
+            msg = (
+                f"agg_func {agg_func!r} is not a pandas groupby aggregation. Use one of {list(_GROUPBY_AGGREGATIONS)}."
+            )
+            raise ValueError(msg)
 
         self.focus_group_name = focus_group_name
         self.comparison_group_name = comparison_group_name

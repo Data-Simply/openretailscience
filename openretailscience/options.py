@@ -1,5 +1,6 @@
 """Pandas-like options system (get/set/reset + ``option_context``)."""
 
+import difflib
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -272,6 +273,14 @@ class Options:
         }
         self._default_options: dict[str, OptionTypes] = self._options.copy()
 
+    def _ensure_known(self, pat: str) -> None:
+        if pat in self._options:
+            return
+        close = difflib.get_close_matches(pat, self._options, n=1) if isinstance(pat, str) else []
+        suggestion = f" Did you mean '{close[0]}'?" if len(close) > 0 else ""
+        msg = f"Unknown option '{pat}'.{suggestion} See list_options()."
+        raise ValueError(msg)
+
     def set_option(self, pat: str, val: OptionTypes) -> None:
         """Set the value of the specified option.
 
@@ -282,10 +291,7 @@ class Options:
         Raises:
             ValueError: If the option name is unknown.
         """
-        if pat not in self._options:
-            msg = f"Unknown option: {pat}"
-            raise ValueError(msg)
-
+        self._ensure_known(pat)
         self._options[pat] = val
 
     def get_option(self, pat: str) -> OptionTypes:
@@ -300,11 +306,8 @@ class Options:
         Raises:
             ValueError: If the option name is unknown.
         """
-        if pat in self._options:
-            return self._options[pat]
-
-        msg = f"Unknown option: {pat}"
-        raise ValueError(msg)
+        self._ensure_known(pat)
+        return self._options[pat]
 
     def reset_option(self, pat: str) -> None:
         """Reset the specified option to its default value.
@@ -315,10 +318,7 @@ class Options:
         Raises:
             ValueError: If the option name is unknown.
         """
-        if pat not in self._options:
-            msg = f"Unknown option: {pat}"
-            raise ValueError(msg)
-
+        self._ensure_known(pat)
         self._options[pat] = self._default_options[pat]
 
     def list_options(self) -> list[str]:
@@ -341,11 +341,8 @@ class Options:
         Raises:
             ValueError: If the option name is unknown.
         """
-        if pat in self._descriptions:
-            return f"{pat}: {self._descriptions[pat]} (current value: {self._options[pat]})"
-
-        msg = f"Unknown option: {pat}"
-        raise ValueError(msg)
+        self._ensure_known(pat)
+        return f"{pat}: {self._descriptions[pat]} (current value: {self._options[pat]})"
 
     @staticmethod
     def flatten_options(k: str, v: OptionTypes, parent_key: str = "") -> dict[str, OptionTypes]:
@@ -515,7 +512,11 @@ def option_context(*args: OptionTypes) -> Generator[None, None, None]:
     if len(args) == 1 and isinstance(args[0], dict):
         items = args[0].items()
     elif len(args) % 2 != 0:
-        raise ValueError("The context manager requires an even number of arguments")
+        msg = (
+            "option_context requires an even number of arguments, alternating option names and values. "
+            f"Got {len(args)}: {args!r}."
+        )
+        raise ValueError(msg)
     else:
         items = zip(args[::2], args[1::2], strict=True)
 

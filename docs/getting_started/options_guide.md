@@ -387,10 +387,11 @@ print(info)
 **Error:**
 
 ```python
-ValueError: Unknown option: column.custom_field
+ValueError: Unknown option 'column.custom_field'. Did you mean 'column.customer_id'? See list_options().
 ```
 
-**Solution:** Only predefined options can be used. Check `list_options()` for available options.
+**Solution:** Only predefined options can be used. The error suggests the closest real option when there is one;
+`list_options()` lists them all.
 
 ### TOML Not Loading
 

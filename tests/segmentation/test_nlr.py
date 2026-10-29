@@ -182,14 +182,23 @@ class TestNLRSegmentation:
         assert len(result) == 0
 
     @pytest.mark.parametrize(
-        "agg_func",
-        ["foobar", "min"],
-        ids=["unknown_func", "min_not_supported"],
+        ("agg_func", "value_col", "match"),
+        [
+            ("foobar", cols.unit_spend, "agg_func"),
+            ("min", cols.unit_spend, "agg_func"),
+            ("sum", "store_name", "agg_func 'sum' is not an aggregation available for column 'store_name'"),
+            # max reduces text, but to text that can't be compared with 0 to decide activity
+            ("max", "store_name", "agg_func 'max' is not an aggregation available for column 'store_name'"),
+        ],
+        ids=["unknown_func", "min_not_supported", "sum_of_text_column", "max_of_text_column"],
     )
-    def test_raises_on_invalid_agg_func(self, transaction_df, agg_func):
-        """Test that ValueError is raised when agg_func is not a supported aggregation."""
-        with pytest.raises(ValueError, match="agg_func"):
-            NLRSegmentation(df=transaction_df, period_col="year", p1_value=2023, p2_value=2024, agg_func=agg_func)
+    def test_raises_on_invalid_agg_func(self, transaction_df, agg_func, value_col, match):
+        """An unsupported agg_func, or one that doesn't apply to value_col's type, raises ValueError."""
+        df = transaction_df.assign(store_name=["Camden", "Leeds", "Camden", "York", "Leeds", "York", "York", "Camden"])
+        with pytest.raises(ValueError, match=match):
+            NLRSegmentation(
+                df=df, period_col="year", p1_value=2023, p2_value=2024, value_col=value_col, agg_func=agg_func
+            )
 
     @pytest.mark.parametrize("agg_func", ["SUM", "Sum", "MEAN", "MAX", "Count", "NUnique"])
     def test_agg_func_case_insensitive(self, transaction_df, agg_func):

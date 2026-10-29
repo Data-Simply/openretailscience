@@ -7,7 +7,12 @@ import ibis
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 
-from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table
+from openretailscience.core.validation import (
+    ensure_agg_func,
+    ensure_columns,
+    ensure_data_has_columns,
+    ensure_ibis_table,
+)
 from openretailscience.options import get_option
 from openretailscience.plots import venn
 
@@ -95,14 +100,18 @@ class CrossShop:
         Raises:
             TypeError: If `df` is not a pandas DataFrame or an Ibis Table.
             ValueError: If required columns are missing, the label count doesn't match the groups,
-                or `group_3_col` is given without `group_3_val`.
+                `group_3_col` is given without `group_3_val`, or `agg_func` is not an aggregation
+                available for `value_col` with a numeric result.
         """
         # Apply smart defaults for simplified interface
         group_col = group_col or get_option("column.customer_id")
         value_col = value_col or get_option("column.unit_spend")
 
+        df = ensure_ibis_table(df)
+
         if group_3_col is not None and group_3_val is None:
-            raise ValueError("group_3_col requires group_3_val")
+            msg = f"group_3_col requires group_3_val. Got group_3_col={group_3_col!r} and no group_3_val."
+            raise ValueError(msg)
 
         # Default group_2_col and group_3_col to group_1_col when columns are not provided
         if group_2_col is None:
@@ -110,13 +119,19 @@ class CrossShop:
         if group_3_val is not None and group_3_col is None:
             group_3_col = group_1_col
 
+        ensure_columns(df, group_1_col, "group_1_col")
+        ensure_columns(df, group_2_col, "group_2_col")
+        if group_3_col is not None:
+            ensure_columns(df, group_3_col, "group_3_col")
         required_cols = [group_col, value_col]
         ensure_data_has_columns(df, required_cols)
+        ensure_agg_func(df, value_col, agg_func, numeric=True)
 
         self.group_count = 2 if group_3_col is None else 3
 
         if (labels is not None) and (len(labels) != self.group_count):
-            raise ValueError("The number of labels must be equal to the number of group indexes given")
+            msg = f"labels must have one entry per group. Got {len(labels)} labels for {self.group_count} groups."
+            raise ValueError(msg)
 
         self.labels = labels if labels is not None else self._generate_default_labels(self.group_count)
 

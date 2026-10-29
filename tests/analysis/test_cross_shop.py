@@ -237,7 +237,7 @@ def test_calc_cross_shop_table_customer_id_nunique(sample_data):
 @pytest.mark.parametrize("labels", [None, ["Jeans", "Shoes"]])
 def test_group_3_col_without_group_3_val_raises(sample_data, labels):
     """group_3_col without group_3_val is reported as such, not as a label-count mismatch."""
-    with pytest.raises(ValueError, match="group_3_col requires group_3_val"):
+    with pytest.raises(ValueError, match=r"group_3_col requires group_3_val\. Got group_3_col='category_1_name'"):
         CrossShop(
             df=sample_data,
             group_1_col="category_1_name",
@@ -261,9 +261,24 @@ def test_missing_columns_raises(sample_data):
         )
 
 
+@pytest.mark.parametrize(
+    ("group_kwargs", "param_name"),
+    [
+        ({"group_1_col": "brand_name"}, "group_1_col"),
+        ({"group_1_col": "category_1_name", "group_2_col": "brand_name"}, "group_2_col"),
+        ({"group_1_col": "category_1_name", "group_3_col": "brand_name", "group_3_val": "Levi's"}, "group_3_col"),
+    ],
+    ids=["group_1_col", "group_2_col", "group_3_col"],
+)
+def test_missing_segment_column_raises_value_error_naming_param(sample_data, group_kwargs, param_name):
+    """A segment column absent from the data is reported against its parameter, as the documented ValueError."""
+    with pytest.raises(ValueError, match=rf"{param_name} references columns not present in the data: \['brand_name'\]"):
+        CrossShop(df=sample_data, group_1_val="Jeans", group_2_val="Shoes", **group_kwargs)
+
+
 def test_labels_length_mismatch(sample_data):
     """Test that ValueError is raised when labels length does not match group count."""
-    with pytest.raises(ValueError, match="The number of labels must be equal to the number of group indexes given"):
+    with pytest.raises(ValueError, match=r"labels must have one entry per group\. Got 2 labels for 3 groups\."):
         CrossShop(
             df=sample_data,
             group_1_col="category_1_name",

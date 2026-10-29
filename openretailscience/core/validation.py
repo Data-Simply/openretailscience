@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import datetime as dt
+import numbers
 from typing import TYPE_CHECKING
 
 import ibis
+import ibis.expr.operations as ops
 import pandas as pd
-from ibis.expr.types import Scalar
+from ibis.common.annotations import ValidationError
+from ibis.common.exceptions import IbisError
+from ibis.expr.types import Expr, Scalar
+
+from openretailscience.options import get_option
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -14,6 +21,7 @@ if TYPE_CHECKING:
 
 VALID_SORT_ORDERS = ("asc", "ascending", "desc", "descending")
 _EXTRA_AGG_SPEC_LEN = 2  # each extra_aggs value is a (source_col, agg_func) pair
+_COMMON_AGG_FUNCS = ("sum", "mean", "min", "max", "count", "nunique")
 
 #: Period aliases (case-insensitive, short and long forms) mapped to their canonical word.
 PERIOD_ALIASES: dict[str, str] = {
@@ -51,14 +59,55 @@ def ensure_ibis_table(df: pd.DataFrame | ibis.Table, param_name: str = "df") -> 
         ibis.Table: An ibis Table representation of the input data.
 
     Raises:
-        TypeError: If df is neither a pandas DataFrame nor an ibis Table.
+        TypeError: If df is neither a pandas DataFrame nor an ibis Table, or has a pandas period column.
     """
     if isinstance(df, pd.DataFrame):
+        period_cols = [col for col, dtype in df.dtypes.items() if isinstance(dtype, pd.PeriodDtype)]
+        if len(period_cols) > 0:
+            msg = (
+                f"Columns {period_cols} have a pandas period dtype, which isn't supported. "
+                "Convert them with .astype(str) or .dt.to_timestamp()."
+            )
+            raise TypeError(msg)
         return ibis.memtable(df)
     if isinstance(df, ibis.Table):
         return df
     msg = f"{param_name} must be either a pandas DataFrame or an Ibis Table."
     raise TypeError(msg)
+
+
+def ensure_dataframe(df: pd.DataFrame, param_name: str) -> None:
+    """Validate that a parameter is a pandas DataFrame, for code that has no Ibis path.
+
+    Args:
+        df (pd.DataFrame): The value supplied by the caller.
+        param_name (str): The parameter name to surface in error messages.
+
+    Raises:
+        TypeError: If ``df`` is not a pandas DataFrame.
+    """
+    if not isinstance(df, pd.DataFrame):
+        msg = f"{param_name} must be a pandas DataFrame. Got {type(df).__name__}."
+        raise TypeError(msg)
+
+
+def ensure_excludes_customer_col(columns: list[str], param_name: str) -> None:
+    """Reject grouping columns that include the customer column, for analyses already grouped by customer.
+
+    Args:
+        columns (list[str]): The caller's grouping columns.
+        param_name (str): The parameter name to surface in error messages.
+
+    Raises:
+        ValueError: If ``columns`` contains the ``column.customer_id`` option's column.
+    """
+    customer_col = get_option("column.customer_id")
+    if customer_col in columns:
+        msg = (
+            f"{param_name} must not include the customer column '{customer_col}'; "
+            "this analysis already groups by customer."
+        )
+        raise ValueError(msg)
 
 
 def ensure_columns(
@@ -206,18 +255,18 @@ def ensure_period(value: str, choices: Iterable[str], param_name: str = "period"
 
 
 def ensure_number(value: float, param_name: str) -> None:
-    """Validate that a parameter is a real number — an int or float, but not a bool.
+    """Validate that a parameter is a real number (numpy scalars included), but not a bool.
 
     Args:
         value (float): The value supplied by the caller.
         param_name (str): The parameter name to surface in error messages.
 
     Raises:
-        TypeError: If ``value`` is not an int or float (``bool`` is rejected).
+        TypeError: If ``value`` is not a real number (``bool`` is rejected).
     """
     # ``bool`` is an ``int`` subclass; reject it so a misrouted flag does not silently pass
     # as 0/1 wherever a numeric value is expected.
-    if isinstance(value, bool) or not isinstance(value, int | float):
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
         msg = f"{param_name} must be a number. Got {type(value).__name__}."
         raise TypeError(msg)
 
@@ -230,7 +279,7 @@ def ensure_unit_interval(value: float, param_name: str) -> None:
         param_name (str): The parameter name to surface in error messages.
 
     Raises:
-        TypeError: If ``value`` is not an int or float (``bool`` is rejected).
+        TypeError: If ``value`` is not a real number (``bool`` is rejected).
         ValueError: If ``value`` is outside the inclusive range [0, 1].
     """
     ensure_number(value, param_name)
@@ -257,7 +306,7 @@ def ensure_positive(value: float, param_name: str) -> None:
 
 
 def ensure_integer(value: int, param_name: str) -> None:
-    """Validate that a parameter is an integer — not a bool or a float.
+    """Validate that a parameter is an integer (numpy integers included), not a bool or a float.
 
     Use for parameters that are meaningless at sub-unit granularity (e.g. a whole number of
     days), where a float would silently produce a fractional result.
@@ -267,15 +316,53 @@ def ensure_integer(value: int, param_name: str) -> None:
         param_name (str): The parameter name to surface in error messages.
 
     Raises:
-        TypeError: If ``value`` is not an int (``bool`` and ``float`` are rejected).
+        TypeError: If ``value`` is not an integer (``bool`` and ``float`` are rejected).
     """
     # ``bool`` is an ``int`` subclass; reject it alongside floats so only true integers pass.
-    if isinstance(value, bool) or not isinstance(value, int):
+    if isinstance(value, bool) or not isinstance(value, numbers.Integral):
         msg = f"{param_name} must be an integer. Got {type(value).__name__}."
         raise TypeError(msg)
 
 
-def ensure_valid_extra_aggs(data: ibis.Table, extra_aggs: dict[str, tuple[str, str]] | None) -> None:
+def ensure_date(value: str | dt.date, param_name: str) -> dt.date:
+    """Normalize a date parameter to a ``datetime.date``; a datetime or ``pd.Timestamp`` keeps only its date part.
+
+    A timezone-aware datetime keeps its local date, which can differ from its UTC date.
+
+    Args:
+        value (str | datetime.date): The value supplied by the caller.
+        param_name (str): The parameter name to surface in error messages.
+
+    Returns:
+        datetime.date: The normalized date.
+
+    Raises:
+        TypeError: If ``value`` is not a string or ``datetime.date``.
+        ValueError: If ``value`` is a string that isn't an ISO date, or is ``pd.NaT``.
+    """
+    if isinstance(value, str):
+        try:
+            return dt.date.fromisoformat(value)
+        except ValueError as err:
+            msg = f"{param_name} must be an ISO 'YYYY-MM-DD' date string. Got {value!r}."
+            raise ValueError(msg) from err
+    if value is pd.NaT:
+        msg = f"{param_name} must be a date. Got NaT."
+        raise ValueError(msg)
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    msg = f"{param_name} must be an ISO 'YYYY-MM-DD' date string or a datetime.date. Got {type(value).__name__}."
+    raise TypeError(msg)
+
+
+def ensure_valid_extra_aggs(
+    data: ibis.Table,
+    extra_aggs: dict[str, tuple[str, str]] | None,
+    *,
+    numeric: bool = False,
+) -> None:
     """Validate an ``extra_aggs`` mapping of ``{output_col: (source_col, agg_func)}``.
 
     Each entry names a source column that must exist in ``data`` and an Ibis aggregation
@@ -286,11 +373,12 @@ def ensure_valid_extra_aggs(data: ibis.Table, extra_aggs: dict[str, tuple[str, s
         data (ibis.Table): The table the aggregations will run against.
         extra_aggs (dict[str, tuple[str, str]] | None): The aggregation spec to validate.
             ``None`` is a no-op.
+        numeric (bool): Also require each aggregation to have a numeric result. Defaults to False.
 
     Raises:
         ValueError: If a spec value is not a ``(source_col, agg_func)`` tuple, if a source
             column is absent from ``data``, or if ``agg_func`` is not a no-argument aggregation
-            that reduces that column to a scalar.
+            that reduces that column to a scalar (with a numeric result when ``numeric`` is True).
     """
     if extra_aggs is None:
         return
@@ -302,15 +390,55 @@ def ensure_valid_extra_aggs(data: ibis.Table, extra_aggs: dict[str, tuple[str, s
         if col not in data.columns:
             msg = f"Column '{col}' specified in extra_aggs does not exist in the data"
             raise ValueError(msg)
-        # A bare hasattr(func) passes for non-aggregations (e.g. "cast", "isnull") that build fine
-        # but crash later; require func to build a scalar reduction on the column.
-        try:
-            aggregation = getattr(data[col], func)()
-        except (AttributeError, TypeError):
-            aggregation = None
-        if not isinstance(aggregation, Scalar):
-            msg = f"Aggregation function '{func}' not available for column '{col}'"
-            raise ValueError(msg)  # noqa: TRY004 -- bad aggregation name is a value error, not a type error
+        ensure_agg_func(data, col, func, f"extra_aggs['{output_col}']", numeric=numeric)
+
+
+def _is_aggregation(column: ibis.Column, func: str, numeric: bool) -> bool:
+    # Expr's own methods (execute, to_pyarrow, visualize, ...) run or export the query, so they're never called.
+    # Methods that need arguments fail with assorted exception types ("clip" ValueError, "round" ValidationError).
+    try:
+        if hasattr(Expr, func):
+            return False
+        expr = getattr(column, func)()
+    except (AttributeError, TypeError, ValueError, ValidationError, IbisError):
+        return False
+    # find, not the root op: "notany" is Not(Any(...)).
+    is_reduction = isinstance(expr, Scalar) and len(expr.op().find(ops.Reduction)) > 0
+    return is_reduction and (not numeric or expr.type().is_numeric())
+
+
+def ensure_agg_func(
+    data: ibis.Table,
+    column: str,
+    func: str,
+    param_name: str = "agg_func",
+    *,
+    numeric: bool = False,
+) -> None:
+    """Validate that ``func`` names an Ibis aggregation that reduces ``column`` to a scalar.
+
+    Args:
+        data (ibis.Table): The table the aggregation will run against.
+        column (str): The column to aggregate; must exist in ``data``.
+        func (str): The aggregation name supplied by the caller (e.g. ``"sum"``, ``"nunique"``).
+        param_name (str): The parameter name to surface in error messages. Defaults to ``"agg_func"``.
+        numeric (bool): Also require a numeric result, for callers that sum, rank or compare it with 0.
+            Defaults to False.
+
+    Raises:
+        ValueError: If ``func`` is not a no-argument aggregation available for ``column`` (with a numeric
+            result when ``numeric`` is True).
+    """
+    # Probe a schema-only copy: func is an arbitrary method name, and a Column one like "to_list" would query the table.
+    probe = ibis.table({column: data[column].type()}, name="agg_func_probe")[column]
+    if not _is_aggregation(probe, func, numeric):
+        valid = [name for name in _COMMON_AGG_FUNCS if _is_aggregation(probe, name, numeric)]
+        result = " with a numeric result" if numeric else ""
+        msg = (
+            f"{param_name} {func!r} is not an aggregation available for column '{column}' "
+            f"({probe.type()}){result}. Use one of {valid}."
+        )
+        raise ValueError(msg)
 
 
 def ensure_tznaive_datetime(df: ibis.Table, column: str) -> None:
@@ -329,14 +457,14 @@ def ensure_tznaive_datetime(df: ibis.Table, column: str) -> None:
         ValueError: If ``column`` is a timezone-aware timestamp.
     """
     col_type = df[column].type()
-    if not col_type.is_temporal():
+    # is_temporal() also admits a time of day, which has no date to truncate or count days from.
+    if not (col_type.is_date() or col_type.is_timestamp()):
         msg = f"Column '{column}' must be a date or datetime type. Got {col_type}."
         raise TypeError(msg)
     if col_type.is_timestamp() and col_type.timezone is not None:
         msg = (
             f"Column '{column}' is timezone-aware ({col_type.timezone}). The backend normalizes "
             f"timezone-aware timestamps to UTC, which can shift day boundaries. Provide a "
-            f"timezone-naive wall-clock time instead (for a pandas DataFrame: "
-            f"df['{column}'] = df['{column}'].dt.tz_localize(None))."
+            f"timezone-naive wall-clock time instead."
         )
         raise ValueError(msg)

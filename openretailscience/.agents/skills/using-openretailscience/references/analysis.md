@@ -20,8 +20,11 @@ from openretailscience.segmentation.segstats import SegTransactionStats, cube, r
   `"total"`, `"rollup"`, `"cube"`, or a list of column tuples. `extra_aggs` is
   `{out: (col, agg)}`. Read `.table` / `.df` (RangeIndex, segment columns as columns, row order unspecified
   unless `sort_by=True`; columns a grouping set omits hold `rollup_value`; zero-denominator ratios are null).
+  The default `rollup_value="Total"` only fits string columns: a rolled-up int or boolean segment column raises
+  unless you pass a `rollup_value` of its type.
   With `unknown_customer_value`, plain metrics cover identified customers only, and spend/transactions/units
-  (+ their ratios and extra_aggs) gain `_unknown`/`_total` variants; customers do not.
+  (+ their ratios and extra_aggs) gain `_unknown`/`_total` variants; customers do not. Each extra_aggs
+  result must then be numeric (`"max"` of a text column raises).
 - `cube(*columns)` → all 2ⁿ grouping-set tuples; `rollup(*columns)` → n+1
   hierarchical tuples.
 
@@ -50,7 +53,8 @@ from openretailscience.segmentation.nlr import NLRSegmentation
 ```
 
 - `RFMSegmentation(df, current_date=None, r_segments=10, f_segments=10, m_segments=10, ...)` —
-  Recency/Frequency/Monetary; `.df` is indexed by `customer_id` with `recency_days`, `frequency`, `monetary`,
+  Recency/Frequency/Monetary; `transaction_date` must be date or datetime (string columns are rejected;
+  `current_date` may be an ISO string). `.df` is indexed by `customer_id` with `recency_days`, `frequency`, `monetary`,
   `r_score`/`f_score`/`m_score` (0-based, higher is better: 0..n-1 for `*_segments=n`, 0..k for k cut points),
   `rfm_segment` = R*100+F*10+M and `fm_segment` = F*10+M.
 - `HMLSegmentation(df, value_col=None, agg_func="sum", ...)` — Heavy/Medium/Light: bottom 50% / next 30% /
@@ -89,14 +93,15 @@ from openretailscience.analysis.haversine import haversine_distance
   `customer_id` (`(group_col, customer_id)` when grouped); its six components sum to `focus_diff`.
   `.gain_loss_table_df` is one row ungrouped; `.plot(...)`.
 - `CohortAnalysis(df, aggregation_column, agg_func="nunique", period="month", percentage=False)` —
-  `period` ∈ year/quarter/month/week/day; `transaction_date` must be date or datetime (strings aren't
-  parsed). For retention use
+  `period` ∈ year/quarter/month/week/day; `transaction_date` must be date or datetime (string
+  columns are rejected). For retention use
   `aggregation_column="customer_id"` (nunique on a value column counts distinct values). `.df` is the cohort
   matrix: index = first-purchase period, int columns = periods since (empty cells 0, not necessarily square);
   `percentage=True` gives fractions of period 0 rounded to 2 (pair with `plots.cohort.plot`).
 - `ProductAssociation(df, value_col, group_col=None, target_item=None, min_support=0.0, ...)` —
   `.table` / `.df` with support, confidence, uplift. `group_col` is the basket: the default `customer_id`
   pools all of a customer's purchases; pass `group_col="transaction_id"` for per-transaction baskets.
+  `target_item` must match `value_col`'s type: integer IDs for a numeric column, strings otherwise.
 - `RevenueTree(df, period_col, p1_value, p2_value, group_col=None)` — `period_col` holds a
   caller-assigned period label per row (not a raw date); both values must exist and differ. `.df` is the
   KPI table, one row per group (`_pct_diff` columns are fractions); `.draw_tree(row_index=0, ...)` → tree

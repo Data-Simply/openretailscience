@@ -12,8 +12,10 @@ import ibis
 import pandas as pd
 
 from openretailscience.core.validation import (
+    ensure_agg_func,
     ensure_columns,
     ensure_data_has_columns,
+    ensure_excludes_customer_col,
     ensure_ibis_table,
     ensure_value_choice,
 )
@@ -77,12 +79,18 @@ class ThresholdSegmentation:
 
         Raises:
             ValueError: If the dataframe is missing the customer_id or value_col columns, the
-                thresholds break the contract above or do not match the number of segments, or
-                zero_value_customers is not one of its allowed values.
+                thresholds break the contract above or do not match the number of segments,
+                zero_value_customers is not one of its allowed values, agg_func is not an
+                aggregation available for value_col with a numeric result, or group_col includes
+                the customer column.
         """
         self._group_col: list[str] | None = None
         if len(thresholds) != len(segments):
-            raise ValueError("The number of thresholds must match the number of segments")
+            msg = (
+                f"Got {len(thresholds)} thresholds for {len(segments)} segments. thresholds are ascending "
+                "percentile upper bounds, one per segment, ending at 1.0, e.g. [0.5, 0.8, 1.0]."
+            )
+            raise ValueError(msg)
 
         if any(lower >= upper for lower, upper in pairwise(thresholds)):
             msg = f"thresholds must be strictly ascending. Got {thresholds}."
@@ -103,12 +111,15 @@ class ThresholdSegmentation:
 
         df = ensure_ibis_table(df)
 
-        self._group_col = ensure_columns(df, group_col, "group_col") if group_col is not None else None
+        if group_col is not None:
+            self._group_col = ensure_columns(df, group_col, "group_col")
+            ensure_excludes_customer_col(self._group_col, "group_col")
 
         value_col = cols.unit_spend if value_col is None else value_col
 
         # group_col is already validated above; only the function's hard-coded requirements remain.
         ensure_data_has_columns(df, [cols.customer_id, value_col])
+        ensure_agg_func(df, value_col, agg_func, numeric=True)
 
         # Build group_by columns: customer_id + optional group columns
         group_by_cols = [cols.customer_id]

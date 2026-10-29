@@ -263,9 +263,11 @@ class SegTransactionStats:
             ValueError: If grouping_sets is used with explicit calc_total or calc_rollup; if
                 grouping_sets is not a valid value or is an empty list; if the grouping sets and
                 segment_col do not cover each other; if rollup_value is a list whose length does
-                not match segment_col; or if unknown_customer_value is set without a customer_id
-                column.
-            TypeError: If a grouping_sets list element is not a tuple.
+                not match segment_col; if rollup_value can't be cast to its segment_col column's
+                type; or if unknown_customer_value is set without a customer_id column, or with an
+                extra_aggs aggregation whose result isn't numeric.
+            TypeError: If a grouping_sets list element is not a tuple, or unit_spend or unit_quantity is not
+                numeric.
         """
         data = ensure_ibis_table(data, "data")
 
@@ -283,7 +285,12 @@ class SegTransactionStats:
             ],
         )
 
-        ensure_valid_extra_aggs(data, extra_aggs)
+        for measure_col in [cols.unit_spend, cols.unit_qty]:
+            if measure_col in data.columns and not data[measure_col].type().is_numeric():
+                msg = f"Column '{measure_col}' must be numeric. Got {data[measure_col].type()}."
+                raise TypeError(msg)
+        # The unknown/total split coalesces each extra_aggs result to 0, which a text or date result can't take.
+        ensure_valid_extra_aggs(data, extra_aggs, numeric=unknown_customer_value is not None)
 
         self.segment_col = segment_col
         self.extra_aggs = {} if extra_aggs is None else extra_aggs
@@ -378,11 +385,24 @@ class SegTransactionStats:
 
         Returns:
             dict[str, ibis.Scalar]: Column names mapped to typed literals, used as rollup labels.
+
+        Raises:
+            ValueError: If a value can't be cast to its column's type.
         """
         mutations = {}
-        for i, col in enumerate(columns):
+        for col, value in zip(columns, values, strict=True):
             col_type = data[col].type()
-            mutations[col] = ibis.literal(values[i], type=col_type)
+            msg = (
+                f"rollup_value {value!r} can't be stored in column '{col}' ({col_type}). Pass a rollup_value "
+                "of that type, or cast the column to str."
+            )
+            # ibis coerces any value to a boolean without raising, so "Total" would label the total row True.
+            if col_type.is_boolean() and value is not None and not isinstance(value, bool):
+                raise ValueError(msg)
+            try:
+                mutations[col] = ibis.literal(value, type=col_type)
+            except (TypeError, ValueError) as err:
+                raise ValueError(msg) from err
         return mutations
 
     @staticmethod
@@ -442,7 +462,10 @@ class SegTransactionStats:
             # Validate each element is a tuple (consistency: always list of tuples)
             for item in grouping_sets:
                 if not isinstance(item, tuple):
-                    msg = f"Each element must be a tuple. Got: {type(item).__name__}"
+                    msg = (
+                        f"Each element must be a tuple of segment_col names. Got: {type(item).__name__}. "
+                        "Pass e.g. [('category_1_name',), ()], or 'total', 'rollup' or 'cube'."
+                    )
                     raise TypeError(msg)
 
     @staticmethod
@@ -572,7 +595,7 @@ class SegTransactionStats:
             if invalid_cols:
                 msg = (
                     f"Columns {sorted(invalid_cols)} in grouping_sets not found in segment_col {segment_col}. "
-                    f"All grouping set columns must be in segment_col."
+                    f"grouping_sets entries are tuples of segment_col names, e.g. [({segment_col[0]!r},), ()]."
                 )
                 raise ValueError(msg)
 
@@ -723,12 +746,19 @@ class SegTransactionStats:
         out_schema = ibis.schema({**base.schema(), **dict.fromkeys(flag_names, "int32")})
         gs_table = backend.sql(native_sql, schema=out_schema)
 
-        # Rolled-up columns come back NULL; GROUPING(col) == 1 marks them, so replace with rollup_value.
-        typed_values = SegTransactionStats._create_typed_literals(data, segment_col, rollup_value)
+        # Rolled-up columns come back NULL; GROUPING(col) == 1 marks them, so replace with rollup_value. A column
+        # every set keeps is never rolled up, so its rollup_value needn't fit its type (as on the union path).
+        rolled = {
+            col: value
+            for col, value in zip(segment_col, rollup_value, strict=True)
+            if any(col not in gs for gs in grouping_sets)
+        }
+        typed_values = SegTransactionStats._create_typed_literals(data, list(rolled), list(rolled.values()))
         labelled = gs_table.mutate(
             **{
                 col: ibis.ifelse(gs_table[flag] == 1, typed_values[col], gs_table[col])
                 for col, flag in zip(segment_col, flag_names, strict=True)
+                if col in typed_values
             },
         )
         return labelled.drop(*flag_names)

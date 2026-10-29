@@ -3,12 +3,17 @@
 import datetime as dt
 
 import ibis
+import numpy as np
 import pandas as pd
 import pytest
 
 from openretailscience.core.validation import (
+    ensure_agg_func,
     ensure_columns,
     ensure_data_has_columns,
+    ensure_dataframe,
+    ensure_date,
+    ensure_excludes_customer_col,
     ensure_ibis_table,
     ensure_integer,
     ensure_number,
@@ -18,6 +23,9 @@ from openretailscience.core.validation import (
     ensure_unit_interval,
     ensure_value_choice,
 )
+from openretailscience.options import ColumnHelper, option_context
+
+cols = ColumnHelper()
 
 
 class TestEnsureColumns:
@@ -230,16 +238,148 @@ class TestEnsureIbisTable:
         with pytest.raises(TypeError, match="data must be either a pandas DataFrame or an Ibis Table"):
             ensure_ibis_table("not a dataframe", param_name="data")
 
+    def test_rejects_period_dtype_naming_the_column(self):
+        """A pandas period column, which ibis can't convert, is named along with the conversion to apply."""
+        df = pd.DataFrame(
+            {
+                cols.customer_id: [101, 102],
+                "month": pd.PeriodIndex(["2024-01", "2024-02"], freq="M"),
+            },
+        )
+        with pytest.raises(TypeError, match=r"\['month'\] have a pandas period dtype.*\.dt\.to_timestamp\(\)"):
+            ensure_ibis_table(df)
+
+
+class TestEnsureDataframe:
+    """Tests for the ensure_dataframe helper."""
+
+    def test_accepts_dataframe(self):
+        """A pandas DataFrame passes without raising."""
+        assert ensure_dataframe(pd.DataFrame({cols.customer_id: [101]}), "df") is None
+
+    @pytest.mark.parametrize(
+        ("value", "type_name"),
+        [([24.99, 61.50], "list"), (ibis.memtable(pd.DataFrame({cols.customer_id: [101]})), "Table")],
+        ids=["list", "ibis_table"],
+    )
+    def test_rejects_non_dataframe_naming_param_and_type(self, value, type_name):
+        """Anything but a pandas DataFrame raises TypeError naming the parameter and the type passed."""
+        with pytest.raises(TypeError, match=f"p1_df must be a pandas DataFrame. Got {type_name}."):
+            ensure_dataframe(value, "p1_df")
+
+
+class TestEnsureAggFunc:
+    """Tests for the ensure_agg_func helper."""
+
+    @pytest.fixture
+    def table(self) -> ibis.Table:
+        """Spend per transaction with the store name and the shopper's loyalty membership."""
+        return ibis.memtable(
+            pd.DataFrame(
+                {
+                    cols.unit_spend: [24.99, 61.50],
+                    "store_name": ["Camden", "Leeds"],
+                    "is_loyalty_member": [True, False],
+                },
+            ),
+        )
+
+    @pytest.mark.parametrize(
+        ("column", "func"),
+        [
+            (cols.unit_spend, "sum"),
+            (cols.unit_spend, "mean"),
+            (cols.unit_spend, "nunique"),
+            (cols.unit_spend, "max"),
+            # notany is NOT bool_or(...): a reduction, though not the outermost op
+            ("is_loyalty_member", "notany"),
+        ],
+    )
+    def test_accepts_aggregation(self, table, column, func):
+        """A scalar reduction available on the column passes."""
+        assert ensure_agg_func(table, column, func) is None
+
+    @pytest.mark.parametrize("func", ["execute", "to_list", "to_pandas", "visualize"])
+    def test_rejects_query_method_without_running_it(self, func):
+        """A method that runs or renders the query is rejected from the schema alone, so no warehouse table is read."""
+        con = ibis.duckdb.connect()
+        sales = con.create_table("sales", pd.DataFrame({cols.unit_spend: [24.99, 61.50]}))
+        # Any query against the dropped table fails, so reaching the ValueError proves validation ran none.
+        con.drop_table("sales")
+        with pytest.raises(ValueError, match=f"agg_func {func!r} is not an aggregation"):
+            ensure_agg_func(sales, cols.unit_spend, func)
+
+    @pytest.mark.parametrize(
+        ("column", "func"),
+        [
+            (cols.unit_spend, "summ"),
+            # isnull exists on the column but returns a column, not a scalar
+            (cols.unit_spend, "isnull"),
+            # as_scalar returns a scalar subquery, not a reduction
+            (cols.unit_spend, "as_scalar"),
+            ("store_name", "sum"),
+            (cols.unit_spend, 42),
+            # clip validates its own arguments with a ValueError; round rejects a boolean in ibis's signature check
+            (cols.unit_spend, "clip"),
+            ("is_loyalty_member", "round"),
+        ],
+        ids=[
+            "typo",
+            "non_reduction",
+            "scalar_subquery",
+            "wrong_type_for_column",
+            "non_string",
+            "method_raising_value_error",
+            "method_failing_ibis_signature",
+        ],
+    )
+    def test_rejects_non_aggregation_naming_param_value_and_column(self, table, column, func):
+        """The error names the parameter, the value passed and the column."""
+        with pytest.raises(
+            ValueError, match=f"agg_func {func!r} is not an aggregation available for column '{column}'"
+        ):
+            ensure_agg_func(table, column, func)
+
+    @pytest.mark.parametrize(
+        ("func", "numeric", "valid"),
+        [("sum", False, r"\['min', 'max', 'count', 'nunique'\]"), ("max", True, r"\['count', 'nunique'\]")],
+        ids=["any_result", "numeric_result"],
+    )
+    def test_error_lists_aggregations_valid_for_the_column(self, table, func, numeric, valid):
+        """The valid options listed are the ones that work on that column's type, with a numeric result if required."""
+        with pytest.raises(ValueError, match=rf"agg_func {func!r} is not an aggregation .* Use one of {valid}"):
+            ensure_agg_func(table, "store_name", func, numeric=numeric)
+
+
+class TestEnsureExcludesCustomerCol:
+    """Tests for the ensure_excludes_customer_col helper."""
+
+    def test_accepts_columns_without_customer(self):
+        """Grouping columns that don't include the customer column pass."""
+        assert ensure_excludes_customer_col([cols.store_id], "group_col") is None
+
+    def test_rejects_customer_column_from_option(self):
+        """The customer column comes from the column.customer_id option, so a renamed column is caught."""
+        with (
+            option_context("column.customer_id", "shopper_id"),
+            pytest.raises(ValueError, match="group_col must not include the customer column 'shopper_id'"),
+        ):
+            ensure_excludes_customer_col([cols.store_id, "shopper_id"], "group_col")
+
 
 class TestEnsureNumber:
     """Tests for the ensure_number helper."""
 
-    @pytest.mark.parametrize("value", [0, 5, -3, 2.5, -0.1])
+    @pytest.mark.parametrize("value", [0, 5, -3, 2.5, -0.1, np.float32(0.05), np.int64(3)])
     def test_accepts_int_and_float(self, value):
-        """Ints and floats pass without raising."""
+        """Ints and floats, including numpy scalars read from a DataFrame, pass without raising."""
         assert ensure_number(value, "value") is None
 
-    @pytest.mark.parametrize("value", [True, False, "5", None, [1]], ids=["true", "false", "str", "none", "list"])
+    @pytest.mark.parametrize(
+        "value",
+        [True, False, np.True_, "5", None, [1]],
+        ids=["true", "false", "numpy_bool", "str", "none", "list"],
+    )
     def test_rejects_non_number(self, value):
         """Bools (an int subclass) and non-numeric types are rejected with a TypeError."""
         with pytest.raises(TypeError, match="value must be a number"):
@@ -289,43 +429,94 @@ class TestEnsurePositive:
 class TestEnsureInteger:
     """Tests for the ensure_integer helper."""
 
-    @pytest.mark.parametrize("value", [0, 1, -3, 1000])
+    @pytest.mark.parametrize("value", [0, 1, -3, 1000, np.int64(30)])
     def test_accepts_int(self, value):
-        """Integers pass without raising."""
+        """Integers, including numpy integers, pass without raising."""
         assert ensure_integer(value, "churn_period") is None
 
-    @pytest.mark.parametrize("value", [True, 1.0, 30.5, "30", None], ids=["bool", "int_float", "float", "str", "none"])
+    @pytest.mark.parametrize(
+        "value",
+        [True, 1.0, 30.5, np.float64(30.0), "30", None],
+        ids=["bool", "int_float", "float", "numpy_float", "str", "none"],
+    )
     def test_rejects_non_integer(self, value):
         """Bools, floats, strings, and None raise TypeError."""
         with pytest.raises(TypeError, match="churn_period must be an integer"):
             ensure_integer(value, "churn_period")
 
 
+class TestEnsureDate:
+    """Tests for the ensure_date helper."""
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "2024-12-31",
+            dt.date(2024, 12, 31),
+            dt.datetime(2024, 12, 31, 18, 45, tzinfo=dt.UTC),
+            pd.Timestamp("2024-12-31"),
+        ],
+        ids=["iso_string", "date", "datetime", "pandas_timestamp"],
+    )
+    def test_normalizes_to_date(self, value):
+        """ISO strings, dates, datetimes and pandas Timestamps all become the plain date of year end."""
+        assert ensure_date(value, "current_date") == dt.date(2024, 12, 31)
+
+    @pytest.mark.parametrize(
+        ("value", "error", "match"),
+        [
+            ("31/12/2024", ValueError, "current_date must be an ISO 'YYYY-MM-DD' date string. Got '31/12/2024'."),
+            (
+                20241231,
+                TypeError,
+                "current_date must be an ISO 'YYYY-MM-DD' date string or a datetime.date. Got int.",
+            ),
+            # NaT, e.g. the max date of an empty frame, is a datetime subclass with no date to take
+            (pd.NaT, ValueError, "current_date must be a date. Got NaT."),
+        ],
+        ids=["non_iso_string", "integer_yyyymmdd", "missing_timestamp"],
+    )
+    def test_rejects_non_date_naming_param(self, value, error, match):
+        """An unparseable string, a missing timestamp or a non-date type is rejected naming the parameter."""
+        with pytest.raises(error, match=match):
+            ensure_date(value, "current_date")
+
+
 class TestEnsureTznaiveDatetime:
     """Tests for the ensure_tznaive_datetime helper."""
 
-    def test_accepts_tznaive_datetime(self):
-        """A timezone-naive datetime column passes without raising."""
-        table = ibis.memtable(pd.DataFrame({"transaction_date": pd.to_datetime(["2024-01-01", "2024-01-02"])}))
-        assert ensure_tznaive_datetime(table, "transaction_date") is None
-
-    def test_accepts_date_column(self):
-        """A plain date column passes without raising."""
-        table = ibis.memtable(
-            pd.DataFrame({"transaction_date": [dt.date(2024, 1, 1), dt.date(2024, 1, 2)]}),
-        )
-        assert ensure_tznaive_datetime(table, "transaction_date") is None
+    @pytest.mark.parametrize(
+        "dates",
+        [pd.to_datetime(["2024-01-01", "2024-01-02"]), [dt.date(2024, 1, 1), dt.date(2024, 1, 2)]],
+        ids=["datetime", "date"],
+    )
+    def test_accepts_tznaive_temporal(self, dates):
+        """A tz-naive date or datetime column passes without raising."""
+        table = ibis.memtable(pd.DataFrame({cols.transaction_date: dates}))
+        assert ensure_tznaive_datetime(table, cols.transaction_date) is None
 
     def test_rejects_tz_aware(self):
         """A timezone-aware column raises ValueError pointing at the tz."""
         table = ibis.memtable(
-            pd.DataFrame({"transaction_date": pd.to_datetime(["2024-01-01"]).tz_localize("US/Eastern")}),
+            pd.DataFrame({cols.transaction_date: pd.to_datetime(["2024-01-01"]).tz_localize("US/Eastern")}),
         )
         with pytest.raises(ValueError, match="timezone-aware"):
-            ensure_tznaive_datetime(table, "transaction_date")
+            ensure_tznaive_datetime(table, cols.transaction_date)
 
-    def test_rejects_non_temporal(self):
-        """A non-temporal (string) column raises TypeError."""
-        table = ibis.memtable(pd.DataFrame({"transaction_date": ["2024-01-01", "2024-01-02"]}))
-        with pytest.raises(TypeError, match="date or datetime"):
-            ensure_tznaive_datetime(table, "transaction_date")
+    @pytest.mark.parametrize(
+        ("dates", "type_name"),
+        [
+            (["2024-01-01", "2024-01-02"], "string"),
+            ([20240101, 20240102], "int64"),
+            ([dt.time(9, 30), dt.time(17, 5)], "time"),
+        ],
+        ids=["iso_string", "integer_yyyymmdd", "time_of_day"],
+    )
+    def test_rejects_non_temporal(self, dates, type_name):
+        """String, integer and time-of-day values raise TypeError naming the column and its type, with no pandas fix."""
+        table = ibis.memtable(pd.DataFrame({cols.transaction_date: dates}))
+        with pytest.raises(
+            TypeError,
+            match=rf"^Column '{cols.transaction_date}' must be a date or datetime type\. Got {type_name}\.$",
+        ):
+            ensure_tznaive_datetime(table, cols.transaction_date)

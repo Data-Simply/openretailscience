@@ -12,8 +12,10 @@ from typing import TYPE_CHECKING
 import ibis
 
 from openretailscience.core.validation import (
+    ensure_agg_func,
     ensure_columns,
     ensure_data_has_columns,
+    ensure_excludes_customer_col,
     ensure_ibis_table,
     ensure_value_choice,
 )
@@ -92,8 +94,8 @@ class NLRSegmentation:
                 Defaults to None.
 
         Raises:
-            ValueError: If required columns are missing, agg_func is unsupported, or p1_value
-                equals p2_value.
+            ValueError: If required columns are missing, agg_func is unsupported or has no numeric
+                result for value_col, p1_value equals p2_value, or group_col includes the customer column.
             TypeError: If agg_func is not a string.
         """
         cols = ColumnHelper()
@@ -101,9 +103,10 @@ class NLRSegmentation:
 
         df = ensure_ibis_table(df)
 
-        self._group_col: list[str] | None = (
-            ensure_columns(df, group_col, "group_col") if group_col is not None else None
-        )
+        self._group_col: list[str] | None = None
+        if group_col is not None:
+            self._group_col = ensure_columns(df, group_col, "group_col")
+            ensure_excludes_customer_col(self._group_col, "group_col")
 
         # group_col is already validated above; only the function's hard-coded requirements remain.
         ensure_data_has_columns(df, [cols.customer_id, value_col, period_col])
@@ -115,6 +118,7 @@ class NLRSegmentation:
             raise ValueError(msg)
 
         agg_func = ensure_value_choice(agg_func, VALID_AGG_FUNCS, "agg_func")
+        ensure_agg_func(df, value_col, agg_func, numeric=True)
 
         # Filter to only P1 and P2 rows
         df = df.filter((df[period_col] == p1_value) | (df[period_col] == p2_value))
