@@ -21,6 +21,11 @@ class RFMSegmentation:
     Scores are 0-based on every backend: 0..n-1 for n bins, 0..k for k cut points, with
     the highest score marking the top percentile of customers. The composite `rfm_segment` is
     R*100 + F*10 + M, so 0-999.
+
+    Examples:
+        >>> from openretailscience.segmentation import RFMSegmentation
+        >>> rfm = RFMSegmentation(df=transactions, current_date="2025-07-01", r_segments=5, f_segments=5, m_segments=5)
+        >>> best_customers = rfm.df[rfm.df["rfm_segment"] == 444]
     """
 
     def __init__(

@@ -90,6 +90,15 @@ def plot(
     Raises:
         ValueError: If periods contains fewer than two (start, end) tuples.
         ValueError: If legend_style is not one of ``None``, ``"box"``, or ``"end_of_line"``.
+
+    Examples:
+        >>> from openretailscience.plots import period_on_period
+        >>> daily = transactions.groupby("transaction_date", as_index=False)["unit_spend"].sum()
+        >>> ax = period_on_period.plot(
+        ...     df=daily, x_col="transaction_date", value_col="unit_spend",
+        ...     periods=[("2024-01-01", "2024-06-30"), ("2025-01-01", "2025-06-30")],
+        ...     eyebrow="Sales", title="First half spend, year on year", subtitle="Daily spend",
+        ... )
     """
     if legend_style not in (None, "box", "end_of_line"):
         msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"

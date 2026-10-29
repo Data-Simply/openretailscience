@@ -36,6 +36,13 @@ class CustomerDecisionHierarchy:
       the other, 0.5 = no association, 1 = never bought by the same customer, or no customer
       bought neither (Yule's Q of -1 either way).
     - ``plot()``: dendrogram of the ward hierarchical clustering.
+
+    Examples:
+        >>> from openretailscience.analysis import CustomerDecisionHierarchy
+        >>> cdh = CustomerDecisionHierarchy(df=transactions, product_col="product")
+        >>> ax = cdh.plot(
+        ...     eyebrow="Range review", title="Products shoppers switch between", subtitle="January 2024 to June 2025"
+        ... )
     """
 
     def __init__(

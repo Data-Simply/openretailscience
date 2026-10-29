@@ -103,6 +103,14 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame) -> pd.DataFrame:
         TypeError: If ``p1_df`` or ``p2_df`` is not a DataFrame.
         ValueError: If a required column is missing, a frame repeats an index label, or only one
             frame has ``column.agg.unit_quantity``.
+
+    Examples:
+        >>> from openretailscience.analysis import calc_tree_kpis
+        >>> p1 = pd.DataFrame({"customers": [120], "transactions": [300], "spend": [4500.0]})
+        >>> p2 = pd.DataFrame({"customers": [130], "transactions": [340], "spend": [5200.0]})
+        >>> calc_tree_kpis(p1, p2)[["spend_diff", "customers_contrib", "spend_per_customer_contrib"]]
+           spend_diff  customers_contrib  spend_per_customer_contrib
+        0       700.0              387.5                       312.5
     """
     cols = ColumnHelper()
     required_cols = [cols.agg.customer_id, cols.agg.transaction_id, cols.agg.unit_spend]
@@ -191,6 +199,11 @@ class RevenueTree:
     ``price_per_unit`` with quantity data), ``{metric}_contrib`` for the tree's factors, and
     ``frequency_elasticity`` / ``price_elasticity``. ``_pct_diff`` is a fraction (0.1 = +10%).
     See `calc_tree_kpis` for the formulas. ``draw_tree()`` renders one row as a diagram.
+
+    Examples:
+        >>> from openretailscience.analysis import RevenueTree
+        >>> tree = RevenueTree(df=transactions, period_col="period", p1_value="2025Q1", p2_value="2025Q2")
+        >>> ax = tree.draw_tree(value_labels=("Q2 2025", "Q1 2025"))
     """
 
     def __init__(

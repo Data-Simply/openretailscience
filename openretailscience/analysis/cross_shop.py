@@ -26,6 +26,19 @@ class CrossShop:
       "No Groups" counts in the total. The share is of ``value_col`` (spend by default),
       not of customers; pass ``value_col=customer_id, agg_func="nunique"`` for customer
       shares.
+
+    Examples:
+        >>> from openretailscience.analysis import CrossShop
+        >>> cs = CrossShop(
+        ...     df=transactions, group_1_col="category", group_1_val="Dairy", group_2_val="Bakery",
+        ...     labels=["Dairy", "Bakery"],
+        ... )
+        >>> cs.cross_shop_table_df
+           groups   group_labels  unit_spend   percent
+        0  (0, 0)      No Groups      152.60  0.036507
+        1  (0, 1)         Bakery      132.25  0.031638
+        2  (1, 0)          Dairy      990.65  0.236995
+        3  (1, 1)  Dairy, Bakery     2904.55  0.694860
     """
 
     @staticmethod

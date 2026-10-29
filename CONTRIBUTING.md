@@ -36,19 +36,26 @@ where users can ask usage questions, discuss design decisions, and propose new f
 If you are able to help answer questions, please do so!
 This will allow the maintainers to spend more time focused on development and bug fixing.
 
-### Keeping the agent skill current
+### Keeping the agent skill and docstring examples current
 
-OpenRetailScience ships an AI-agent skill at
+AI agents read the public API in two places. OpenRetailScience ships an AI-agent skill at
 `openretailscience/.agents/skills/using-openretailscience/` (installed by
 `openretailscience.skills.install_skills`). Its `SKILL.md` and `references/*.md`
 describe the public API — analyses, plots, options, and how to connect to data.
+Agents that haven't loaded the skill read docstrings instead, through `help()`, so
+every class and function exported by `analysis`, `segmentation` and `utils`, and
+each plot module's `plot()`, has an `Examples:` section showing the call.
 
 If you add, rename, or remove a public class, function, plot, or option, update
-the skill in the same PR. `tests/test_skills.py` guards this: it re-executes
-every import example and every bundled example script, and it requires the
-reference files under `references/` and the links pointing at them to match
-exactly, so a new reference file must also be linked from the skill. Run
-`uv run pytest tests/test_skills.py` before pushing.
+the skill and the docstring example in the same PR. Write the example with the
+same call pattern as the matching `scripts/example_*.py`, in about five lines.
+`tests/test_skills.py` re-executes every skill import example and every bundled
+example script, and it requires the reference files under `references/` and the
+links pointing at them to match exactly, so a new reference file must also be
+linked from the skill. `tests/test_docstring_examples.py` fails when an
+exported class or function, or a `plot()`, has no example, and runs each one
+with `pd`, `ibis` and a sample `transactions` frame in scope. Run both before
+pushing.
 
 ### Getting Help
 

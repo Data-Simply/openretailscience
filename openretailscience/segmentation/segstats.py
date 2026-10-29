@@ -107,18 +107,16 @@ def cube(*columns: str) -> list[tuple[str, ...]]:
         TypeError: If any column is not a string.
         UserWarning: If more than MAX_CUBE_DIMENSIONS_WITHOUT_WARNING columns.
 
-    Example:
-        >>> cube("store", "region")
-        [("store", "region"), ("store",), ("region",), ()]
-        >>>
-        >>> # CUBE with fixed columns - wrap in tuple
-        >>> SegTransactionStats(
-        ...     data=df,
-        ...     segment_col=["store", "region", "date"],
-        ...     grouping_sets=[(cube("store", "region"), "date")]
+    Examples:
+        >>> from openretailscience.segmentation import SegTransactionStats, cube
+        >>> cube("category", "brand")
+        [('category', 'brand'), ('category',), ('brand',), ()]
+        >>> # Wrap in a tuple to add a fixed column to every set: (category, brand, period) ... (period,)
+        >>> stats = SegTransactionStats(
+        ...     data=transactions,
+        ...     segment_col=["category", "brand", "period"],
+        ...     grouping_sets=[(cube("category", "brand"), "period")],
         ... )
-        # Produces 4 grouping sets (2^2 from CUBE):
-        # [("store", "region", "date"), ("store", "date"), ("region", "date"), ("date",)]
     """
     if len(columns) == 0:
         raise ValueError("cube() requires at least one column")
@@ -163,19 +161,16 @@ def rollup(*columns: str) -> list[tuple[str, ...]]:
         ValueError: If no columns are provided.
         TypeError: If any column is not a string.
 
-    Example:
-        >>> rollup("year", "quarter", "month")
-        [("year", "quarter", "month"), ("year", "quarter"), ("year",), ()]
-        >>>
-        >>> # ROLLUP with fixed column - wrap in tuple
-        >>> SegTransactionStats(
-        ...     data=df,
-        ...     segment_col=["year", "quarter", "month", "store"],
-        ...     grouping_sets=[(rollup("year", "quarter", "month"), "store")]
+    Examples:
+        >>> from openretailscience.segmentation import SegTransactionStats, rollup
+        >>> rollup("category", "product")
+        [('category', 'product'), ('category',), ()]
+        >>> # Wrap in a tuple to add a fixed column to every set: (category, product, store_id) ... (store_id,)
+        >>> stats = SegTransactionStats(
+        ...     data=transactions,
+        ...     segment_col=["category", "product", "store_id"],
+        ...     grouping_sets=[(rollup("category", "product"), "store_id")],
         ... )
-        # Produces 4 grouping sets (3+1 from ROLLUP):
-        # [("year", "quarter", "month", "store"), ("year", "quarter", "store"),
-        #  ("year", "store"), ("store",)]
     """
     if len(columns) == 0:
         raise ValueError("rollup() requires at least one column")
@@ -201,6 +196,10 @@ class SegTransactionStats:
     contributes one row per segment combination present in the data; a segment column the
     set leaves out holds that column's `rollup_value`. Row order is unspecified unless
     `sort_by=True`. A ratio whose denominator is 0 is null.
+
+    Examples:
+        >>> from openretailscience.segmentation import SegTransactionStats
+        >>> stats = SegTransactionStats(data=transactions, segment_col="category", grouping_sets="total")
     """
 
     def __init__(

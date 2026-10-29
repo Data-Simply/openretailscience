@@ -46,6 +46,16 @@ class NLRSegmentation:
             can be applied before materializing.
         df (pd.DataFrame): The materialized results, indexed by customer_id (and group_col if
             specified). Cached after first access.
+
+    Examples:
+        >>> from openretailscience.segmentation import NLRSegmentation
+        >>> nlr = NLRSegmentation(df=transactions, period_col="period", p1_value="2025Q1", p2_value="2025Q2")
+        >>> nlr.df.sort_index()
+                    segment_name  unit_spend_p1  unit_spend_p2
+        customer_id
+        1                    New           0.00           27.2
+        3                 Lapsed          18.40            0.0
+        ...
     """
 
     def __init__(

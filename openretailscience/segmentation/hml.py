@@ -12,7 +12,18 @@ from openretailscience.segmentation.threshold import ThresholdSegmentation
 
 
 class HMLSegmentation(ThresholdSegmentation):
-    """Segments customers into Heavy, Medium, Light and Zero spenders based on the total spend."""
+    """Segments customers into Heavy, Medium, Light and Zero spenders based on the total spend.
+
+    Examples:
+        >>> from openretailscience.segmentation import HMLSegmentation
+        >>> hml = HMLSegmentation(df=transactions)
+        >>> hml.df
+                     unit_spend segment_name
+        customer_id
+        83                 0.85        Light
+        9                  2.10        Light
+        ...
+    """
 
     def __init__(
         self,

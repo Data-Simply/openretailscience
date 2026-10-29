@@ -27,6 +27,14 @@ class CompositeRank:
     worst single-metric rank. Rows come back in no particular order; sort on
     `composite_rank` yourself. `.table` is a lazy ibis Table; `.df` materializes on first
     access and is cached.
+
+    Examples:
+        >>> from openretailscience.analysis import CompositeRank
+        >>> sales = transactions.groupby("product", as_index=False)[["unit_spend", "unit_quantity"]].sum()
+        >>> ranks = CompositeRank(
+        ...     df=sales, rank_cols=[("unit_spend", "desc"), ("unit_quantity", "desc")], agg_func="mean"
+        ... )
+        >>> delist_candidates = ranks.df.nlargest(2, "composite_rank")
     """
 
     def __init__(
@@ -58,15 +66,6 @@ class CompositeRank:
             ValueError: If a specified metric is not in the data or the sort order is invalid.
             ValueError: If the aggregation function is not supported.
             ValueError: If `group_col` is specified but doesn't exist in the data.
-
-        Examples:
-            >>> # Group-based ranking: each product competes with its own category
-            >>> ranker = CompositeRank(
-            ...     df=product_data,
-            ...     rank_cols=[("weekly_sales", "desc"), ("margin_percentage", "desc"), ("stock_cover_days", "asc")],
-            ...     agg_func="mean",
-            ...     group_col="product_category",
-            ... )
         """
         df = ensure_ibis_table(df)
 

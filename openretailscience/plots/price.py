@@ -163,6 +163,13 @@ def plot(
         KeyError: If value_col or group_col is not a column of df.
         TypeError: If bins is neither an int nor a list.
 
+    Examples:
+        >>> from openretailscience.plots import price
+        >>> products = transactions.groupby(["category", "product"], as_index=False)["unit_price"].median()
+        >>> ax = price.plot(
+        ...     df=products, value_col="unit_price", group_col="category", bins=4,
+        ...     eyebrow="Pricing", title="Price bands by category", subtitle="Share of each category's products",
+        ... )
     """
     # Validate inputs and get clean data
     df_clean, bins = _validate_inputs(df, value_col, group_col, bins)

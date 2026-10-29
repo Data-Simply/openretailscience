@@ -68,6 +68,13 @@ def plot(
         ValueError: If len(amounts) != len(labels), or data_label_format is not one of
             "absolute", "percentage", "both".
 
+    Examples:
+        >>> from openretailscience.plots import waterfall
+        >>> ax = waterfall.plot(
+        ...     amounts=[1200.0, -450.0, 300.0], labels=["New customers", "Lost customers", "Bigger baskets"],
+        ...     display_net_bar=True,
+        ...     eyebrow="Revenue bridge", title="What changed spend this year", subtitle="2025 vs 2024",
+        ... )
     """
     if len(amounts) != len(labels):
         raise ValueError("The lengths of amounts and labels must be the same")

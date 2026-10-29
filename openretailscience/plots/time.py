@@ -70,6 +70,13 @@ def plot(
 
     Raises:
         ValueError: If legend_style is not one of ``None``, ``"box"``, or ``"end_of_line"``.
+
+    Examples:
+        >>> from openretailscience.plots import time
+        >>> ax = time.plot(
+        ...     df=transactions, value_col="unit_spend", period="M", group_col="category",
+        ...     eyebrow="Sales", title="Monthly spend by category", subtitle="January 2024 to June 2025",
+        ... )
     """
     if legend_style not in (None, "box", "end_of_line"):
         msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"

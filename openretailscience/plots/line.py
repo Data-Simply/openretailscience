@@ -231,6 +231,14 @@ def plot(  # noqa: PLR0913, PLR0917
         ValueError: If highlight is an empty list.
         ValueError: If highlight values do not match available groups/columns.
         ValueError: If legend_style is not one of ``None``, ``"box"``, or ``"end_of_line"``.
+
+    Examples:
+        >>> from openretailscience.plots import line
+        >>> launch = pd.DataFrame({"days_since_launch": range(-3, 4), "units_sold": [40, 42, 41, 95, 88, 80, 76]})
+        >>> ax = line.plot(
+        ...     df=launch, value_col="units_sold", x_col="days_since_launch",
+        ...     eyebrow="New product", title="Units sold around launch", subtitle="Day 0 is launch day",
+        ... )
     """
     if legend_style not in (None, "box", "end_of_line"):
         msg = f"legend_style must be one of (None, 'box', 'end_of_line'); got {legend_style!r}"
