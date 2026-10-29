@@ -3,6 +3,7 @@
 import datetime as dt
 
 import ibis
+import numpy as np
 import pandas as pd
 import pytest
 from freezegun import freeze_time
@@ -218,8 +219,10 @@ class TestRFMSegmentation:
         ("r_segments", "f_segments", "m_segments"),
         [
             (5, 3, 4),
+            (np.int64(5), np.int64(3), np.int64(4)),
             ([0.2, 0.4, 0.6, 0.8], [0.33, 0.66], [0.25, 0.5, 0.75]),
         ],
+        ids=["int", "numpy_int", "cut_points"],
     )
     def test_custom_segment_counts(self, larger_df, r_segments, f_segments, m_segments):
         """Integer bin counts and cut-point lists both produce the expected min/max score range."""
@@ -331,6 +334,7 @@ class TestRFMSegmentation:
             ("r_segments", [0.0, 0.5], "All cut points in r_segments must be between 0 and 1"),
             ("m_segments", [0.5, 1.0], "All cut points in m_segments must be between 0 and 1"),
             ("m_segments", [0.5, "invalid"], "All cut points in m_segments must be numeric"),
+            ("m_segments", [0.5, True], "All cut points in m_segments must be numeric"),
             ("r_segments", [0.3, 0.5, 0.3], "Cut points in r_segments must be unique"),
             (
                 "f_segments",
@@ -338,6 +342,7 @@ class TestRFMSegmentation:
                 r"Cut points in f_segments must be in ascending order. Got \[0.7, 0.3, 0.9\].",
             ),
             ("m_segments", "invalid", "m_segments must be an integer or a list of floats. Got 'invalid'."),
+            ("r_segments", True, "r_segments must be an integer or a list of floats. Got True."),
         ],
     )
     def test_segment_validation(self, base_df, segment_type, segment_value, error_message):
@@ -350,6 +355,7 @@ class TestRFMSegmentation:
         ("filter_config", "expected_count", "expected_condition"),
         [
             ({"min_monetary": MIN_MONETARY}, 8, lambda df: df["monetary"].min() >= MIN_MONETARY),
+            ({"min_monetary": np.int64(MIN_MONETARY)}, 8, lambda df: df["monetary"].min() >= MIN_MONETARY),
             ({"max_monetary": MAX_MONETARY}, 7, lambda df: df["monetary"].max() <= MAX_MONETARY),
             (
                 {"min_monetary": MIN_MONETARY, "max_monetary": MAX_MONETARY},
@@ -379,6 +385,7 @@ class TestRFMSegmentation:
         ("filter_config", "expected_count", "expected_condition"),
         [
             ({"min_frequency": MIN_FREQ}, EXPECTED_COUNT_ONE, lambda df: df["frequency"].min() >= MIN_FREQ),
+            ({"min_frequency": np.int64(MIN_FREQ)}, EXPECTED_COUNT_ONE, lambda df: df["frequency"].min() >= MIN_FREQ),
             ({"max_frequency": MAX_FREQ}, EXPECTED_COUNT_ONE, lambda df: df["frequency"].max() <= MAX_FREQ),
             (
                 {"min_frequency": MIN_FREQ, "max_frequency": MAX_FREQ},
@@ -399,13 +406,13 @@ class TestRFMSegmentation:
     @pytest.mark.parametrize(
         ("filter_param", "invalid_value", "expected_error", "error_message"),
         [
-            ("min_monetary", "invalid", TypeError, "min_monetary must be a numeric value. Got 'invalid'."),
-            ("max_monetary", "invalid", TypeError, "max_monetary must be a numeric value. Got 'invalid'."),
-            ("min_frequency", 5.5, TypeError, "min_frequency must be an integer. Got 5.5."),
-            ("max_frequency", 5.5, TypeError, "max_frequency must be an integer. Got 5.5."),
+            ("min_monetary", "invalid", TypeError, "min_monetary must be a number. Got str."),
+            ("max_monetary", "invalid", TypeError, "max_monetary must be a number. Got str."),
+            ("min_frequency", 5.5, TypeError, "min_frequency must be an integer. Got float."),
+            ("max_frequency", 5.5, TypeError, "max_frequency must be an integer. Got float."),
             # bool is an int subclass, so a misrouted flag would otherwise filter as 0/1
-            ("min_monetary", True, TypeError, "min_monetary must be a numeric value. Got True."),
-            ("max_frequency", True, TypeError, "max_frequency must be an integer. Got True."),
+            ("min_monetary", True, TypeError, "min_monetary must be a number. Got bool."),
+            ("max_frequency", True, TypeError, "max_frequency must be an integer. Got bool."),
             ("min_monetary", -100.0, ValueError, "min_monetary must be non-negative. Got -100.0."),
             ("max_monetary", -100.0, ValueError, "max_monetary must be non-negative. Got -100.0."),
             ("min_frequency", 0, ValueError, "min_frequency must be at least 1. Got 0."),

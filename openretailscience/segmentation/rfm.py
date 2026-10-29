@@ -2,6 +2,7 @@
 
 import datetime as dt
 import functools
+import numbers
 
 import ibis
 import pandas as pd
@@ -10,6 +11,8 @@ from openretailscience.core.validation import (
     ensure_data_has_columns,
     ensure_date,
     ensure_ibis_table,
+    ensure_integer,
+    ensure_number,
     ensure_tznaive_datetime,
 )
 from openretailscience.options import ColumnHelper, get_option
@@ -121,7 +124,7 @@ class RFMSegmentation:
         max_segments_list = 9
         max_segments = 1
 
-        if isinstance(segments, int):
+        if isinstance(segments, numbers.Integral) and not isinstance(segments, bool):
             if segments < max_segments or segments > max_segments_int:
                 msg = (
                     f"{param_name} must be between {max_segments} and {max_segments_int} when specified as an "
@@ -135,7 +138,7 @@ class RFMSegmentation:
                     f" {max_segments_list} cut points when specified as a list. Got {segments}."
                 )
                 raise ValueError(msg)
-            if not all(isinstance(x, int | float) for x in segments):  # UP038
+            if not all(isinstance(x, numbers.Real) and not isinstance(x, bool) for x in segments):
                 msg = f"All cut points in {param_name} must be numeric. Got {segments}."
                 raise ValueError(msg)
             if not all(0 < x < 1 for x in segments):
@@ -159,17 +162,13 @@ class RFMSegmentation:
             ValueError: If a bound is negative, or min_monetary >= max_monetary.
         """
         if min_monetary is not None:
-            if isinstance(min_monetary, bool) or not isinstance(min_monetary, int | float):
-                msg = f"min_monetary must be a numeric value. Got {min_monetary!r}."
-                raise TypeError(msg)
+            ensure_number(min_monetary, "min_monetary")
             if min_monetary < 0:
                 msg = f"min_monetary must be non-negative. Got {min_monetary!r}."
                 raise ValueError(msg)
 
         if max_monetary is not None:
-            if isinstance(max_monetary, bool) or not isinstance(max_monetary, int | float):
-                msg = f"max_monetary must be a numeric value. Got {max_monetary!r}."
-                raise TypeError(msg)
+            ensure_number(max_monetary, "max_monetary")
             if max_monetary < 0:
                 msg = f"max_monetary must be non-negative. Got {max_monetary!r}."
                 raise ValueError(msg)
@@ -186,17 +185,13 @@ class RFMSegmentation:
             ValueError: If a bound is below 1, or min_frequency > max_frequency.
         """
         if min_frequency is not None:
-            if isinstance(min_frequency, bool) or not isinstance(min_frequency, int):
-                msg = f"min_frequency must be an integer. Got {min_frequency!r}."
-                raise TypeError(msg)
+            ensure_integer(min_frequency, "min_frequency")
             if min_frequency < 1:
                 msg = f"min_frequency must be at least 1. Got {min_frequency!r}."
                 raise ValueError(msg)
 
         if max_frequency is not None:
-            if isinstance(max_frequency, bool) or not isinstance(max_frequency, int):
-                msg = f"max_frequency must be an integer. Got {max_frequency!r}."
-                raise TypeError(msg)
+            ensure_integer(max_frequency, "max_frequency")
             if max_frequency < 1:
                 msg = f"max_frequency must be at least 1. Got {max_frequency!r}."
                 raise ValueError(msg)
@@ -300,8 +295,8 @@ class RFMSegmentation:
             order_by=[order_fn(table[column]), ibis.asc(table[ColumnHelper().customer_id])],
         )
 
-        if isinstance(segments, int):
-            return ibis.ntile(segments).over(window)
+        if isinstance(segments, numbers.Integral):
+            return ibis.ntile(int(segments)).over(window)
 
         percentile = ibis.percent_rank().over(window)
 
