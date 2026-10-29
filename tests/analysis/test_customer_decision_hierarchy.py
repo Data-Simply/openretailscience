@@ -50,12 +50,25 @@ class TestCustomerDecisionHierarchy:
         """Test that Yule's Q returns the expected value for identical, opposite, and empty arrays."""
         assert rp.CustomerDecisionHierarchy._calculate_yules_q(bought_product_1, bought_product_2) == expected_q
 
-    def test_calculate_yules_q_different_length_arrays(self):
-        """Test that the function raises a ValueError when the arrays have different lengths."""
-        bought_product_1 = np.array([1, 0, 1, 0, 1], dtype=bool)
-        bought_product_2 = np.array([1, 0, 1, 0], dtype=bool)
-
-        with pytest.raises(ValueError):
+    @pytest.mark.parametrize(
+        ("bought_product_1", "bought_product_2", "match"),
+        [
+            (
+                np.array([1, 0, 1, 0, 1], dtype=bool),
+                np.array([1, 0, 1, 0], dtype=bool),
+                "must be the same length. Got 5 and 4.",
+            ),
+            (
+                np.array([1, 0, 1, 0], dtype=int),
+                np.array([1, 0, 1, 0], dtype=bool),
+                "must be boolean arrays. Got int64 and bool.",
+            ),
+        ],
+        ids=["different_length", "non_boolean"],
+    )
+    def test_calculate_yules_q_rejects_mismatched_vectors(self, bought_product_1, bought_product_2, match):
+        """Purchase vectors of different lengths or a non-boolean dtype raise ValueError stating what was given."""
+        with pytest.raises(ValueError, match=match):
             rp.CustomerDecisionHierarchy._calculate_yules_q(bought_product_1, bought_product_2)
 
     @pytest.mark.parametrize(
