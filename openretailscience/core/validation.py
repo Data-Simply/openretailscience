@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import numbers
 from typing import TYPE_CHECKING
 
 import ibis
@@ -254,18 +255,18 @@ def ensure_period(value: str, choices: Iterable[str], param_name: str = "period"
 
 
 def ensure_number(value: float, param_name: str) -> None:
-    """Validate that a parameter is a real number — an int or float, but not a bool.
+    """Validate that a parameter is a real number (numpy scalars included), but not a bool.
 
     Args:
         value (float): The value supplied by the caller.
         param_name (str): The parameter name to surface in error messages.
 
     Raises:
-        TypeError: If ``value`` is not an int or float (``bool`` is rejected).
+        TypeError: If ``value`` is not a real number (``bool`` is rejected).
     """
     # ``bool`` is an ``int`` subclass; reject it so a misrouted flag does not silently pass
     # as 0/1 wherever a numeric value is expected.
-    if isinstance(value, bool) or not isinstance(value, int | float):
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
         msg = f"{param_name} must be a number. Got {type(value).__name__}."
         raise TypeError(msg)
 
@@ -278,7 +279,7 @@ def ensure_unit_interval(value: float, param_name: str) -> None:
         param_name (str): The parameter name to surface in error messages.
 
     Raises:
-        TypeError: If ``value`` is not an int or float (``bool`` is rejected).
+        TypeError: If ``value`` is not a real number (``bool`` is rejected).
         ValueError: If ``value`` is outside the inclusive range [0, 1].
     """
     ensure_number(value, param_name)
@@ -305,7 +306,7 @@ def ensure_positive(value: float, param_name: str) -> None:
 
 
 def ensure_integer(value: int, param_name: str) -> None:
-    """Validate that a parameter is an integer — not a bool or a float.
+    """Validate that a parameter is an integer (numpy integers included), not a bool or a float.
 
     Use for parameters that are meaningless at sub-unit granularity (e.g. a whole number of
     days), where a float would silently produce a fractional result.
@@ -318,7 +319,7 @@ def ensure_integer(value: int, param_name: str) -> None:
         TypeError: If ``value`` is not an int (``bool`` and ``float`` are rejected).
     """
     # ``bool`` is an ``int`` subclass; reject it alongside floats so only true integers pass.
-    if isinstance(value, bool) or not isinstance(value, int):
+    if isinstance(value, bool) or not isinstance(value, numbers.Integral):
         msg = f"{param_name} must be an integer. Got {type(value).__name__}."
         raise TypeError(msg)
 
@@ -350,7 +351,7 @@ def ensure_date(value: str | dt.date, param_name: str) -> dt.date:
         return value.date()
     if isinstance(value, dt.date):
         return value
-    msg = f"{param_name} must be an ISO 'YYYY-MM-DD' date string, a datetime.date, or None. Got {type(value).__name__}."
+    msg = f"{param_name} must be an ISO 'YYYY-MM-DD' date string or a datetime.date. Got {type(value).__name__}."
     raise TypeError(msg)
 
 

@@ -3,6 +3,7 @@
 import datetime as dt
 
 import ibis
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -369,12 +370,16 @@ class TestEnsureExcludesCustomerCol:
 class TestEnsureNumber:
     """Tests for the ensure_number helper."""
 
-    @pytest.mark.parametrize("value", [0, 5, -3, 2.5, -0.1])
+    @pytest.mark.parametrize("value", [0, 5, -3, 2.5, -0.1, np.float32(0.05), np.int64(3)])
     def test_accepts_int_and_float(self, value):
-        """Ints and floats pass without raising."""
+        """Ints and floats, including numpy scalars read from a DataFrame, pass without raising."""
         assert ensure_number(value, "value") is None
 
-    @pytest.mark.parametrize("value", [True, False, "5", None, [1]], ids=["true", "false", "str", "none", "list"])
+    @pytest.mark.parametrize(
+        "value",
+        [True, False, np.True_, "5", None, [1]],
+        ids=["true", "false", "numpy_bool", "str", "none", "list"],
+    )
     def test_rejects_non_number(self, value):
         """Bools (an int subclass) and non-numeric types are rejected with a TypeError."""
         with pytest.raises(TypeError, match="value must be a number"):
@@ -424,12 +429,16 @@ class TestEnsurePositive:
 class TestEnsureInteger:
     """Tests for the ensure_integer helper."""
 
-    @pytest.mark.parametrize("value", [0, 1, -3, 1000])
+    @pytest.mark.parametrize("value", [0, 1, -3, 1000, np.int64(30)])
     def test_accepts_int(self, value):
-        """Integers pass without raising."""
+        """Integers, including numpy integers, pass without raising."""
         assert ensure_integer(value, "churn_period") is None
 
-    @pytest.mark.parametrize("value", [True, 1.0, 30.5, "30", None], ids=["bool", "int_float", "float", "str", "none"])
+    @pytest.mark.parametrize(
+        "value",
+        [True, 1.0, 30.5, np.float64(30.0), "30", None],
+        ids=["bool", "int_float", "float", "numpy_float", "str", "none"],
+    )
     def test_rejects_non_integer(self, value):
         """Bools, floats, strings, and None raise TypeError."""
         with pytest.raises(TypeError, match="churn_period must be an integer"):
@@ -460,7 +469,7 @@ class TestEnsureDate:
             (
                 20241231,
                 TypeError,
-                "current_date must be an ISO 'YYYY-MM-DD' date string, a datetime.date, or None. Got int.",
+                "current_date must be an ISO 'YYYY-MM-DD' date string or a datetime.date. Got int.",
             ),
             # NaT, e.g. the max date of an empty frame, is a datetime subclass with no date to take
             (pd.NaT, ValueError, "current_date must be a date. Got NaT."),

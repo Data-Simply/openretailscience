@@ -101,8 +101,9 @@ class GainLoss:
             comparison_group_name (str): Display name of the comparison group.
             group_col (str | None): Optional column to break the analysis down by.
             value_col (str | None): Value column to aggregate; defaults to option ``column.unit_spend``.
-            agg_func (str): A pandas groupby aggregation name, such as "sum", "mean" or "nunique"
-                (case-sensitive). Defaults to "sum".
+            agg_func (str): A pandas groupby reduction from a fixed list ("sum", "mean", "median", "min", "max",
+                "count", "nunique", "size", "std", "var", "sem", "skew", "quantile", "first", "last"; case-sensitive).
+                Defaults to "sum".
 
         Raises:
             TypeError: If ``df`` is not a pandas DataFrame, or a mask is not boolean.

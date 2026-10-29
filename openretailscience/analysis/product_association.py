@@ -11,7 +11,13 @@ import numpy as np
 import pandas as pd
 from ibis import _
 
-from openretailscience.core.validation import ensure_data_has_columns, ensure_ibis_table, ensure_unit_interval
+from openretailscience.core.validation import (
+    ensure_data_has_columns,
+    ensure_ibis_table,
+    ensure_integer,
+    ensure_number,
+    ensure_unit_interval,
+)
 from openretailscience.options import get_option
 
 
@@ -78,7 +84,8 @@ class ProductAssociation:
             ValueError: If ``target_item`` is an empty list, or a str for a numeric ``value_col``
                 (or an integer for a non-numeric one).
             TypeError: If ``target_item`` contains values that are not str or integer.
-            TypeError: If ``min_support`` or ``min_confidence`` is not an int or float.
+            TypeError: If ``min_occurrences`` or ``min_cooccurrences`` is not an integer, or another
+                minimum is not a number.
             ValueError: If ``group_col`` or ``value_col`` columns are missing from the data.
         """
         df = ensure_ibis_table(df)
@@ -118,14 +125,17 @@ class ProductAssociation:
 
         Raises:
             ValueError: If any parameter is outside its valid range.
-            TypeError: If ``min_support`` or ``min_confidence`` is not an int or float.
+            TypeError: If ``min_occurrences`` or ``min_cooccurrences`` is not an integer, or another
+                minimum is not a number.
         """
         for name, value in [("min_occurrences", min_occurrences), ("min_cooccurrences", min_cooccurrences)]:
+            ensure_integer(value, name)
             if value < 1:
                 msg = f"{name} must be at least 1. Got {value!r}."
                 raise ValueError(msg)
         ensure_unit_interval(min_support, "min_support")
         ensure_unit_interval(min_confidence, "min_confidence")
+        ensure_number(min_uplift, "min_uplift")
         if min_uplift < 0.0:
             msg = f"min_uplift must be greater than or equal to 0. Got {min_uplift!r}."
             raise ValueError(msg)

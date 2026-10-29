@@ -202,9 +202,9 @@ class TestRFMSegmentation:
     @pytest.mark.parametrize(
         ("invalid_date", "expected_error", "error_message"),
         [
-            (12345, TypeError, "current_date must be an ISO 'YYYY-MM-DD' date string, a datetime.date, or None"),
-            ([], TypeError, "current_date must be an ISO 'YYYY-MM-DD' date string, a datetime.date, or None"),
-            (3.14159, TypeError, "current_date must be an ISO 'YYYY-MM-DD' date string, a datetime.date, or None"),
+            (12345, TypeError, "current_date must be an ISO 'YYYY-MM-DD' date string or a datetime.date"),
+            ([], TypeError, "current_date must be an ISO 'YYYY-MM-DD' date string or a datetime.date"),
+            (3.14159, TypeError, "current_date must be an ISO 'YYYY-MM-DD' date string or a datetime.date"),
             ("31/12/2024", ValueError, "current_date must be an ISO 'YYYY-MM-DD' date string. Got '31/12/2024'."),
             ("2024-13-01", ValueError, "current_date must be an ISO 'YYYY-MM-DD' date string. Got '2024-13-01'."),
         ],

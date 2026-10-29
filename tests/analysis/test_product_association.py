@@ -249,6 +249,39 @@ class TestProductAssociations:
         with pytest.raises(ValueError, match=match):
             ProductAssociation(df=transactions_df, value_col="product", group_col=cols.transaction_id, **{param: value})
 
+    @pytest.mark.parametrize(
+        ("param", "value", "match"),
+        [
+            ("min_occurrences", "5", "min_occurrences must be an integer. Got str."),
+            ("min_cooccurrences", 1.5, "min_cooccurrences must be an integer. Got float."),
+            ("min_uplift", "1.2", "min_uplift must be a number. Got str."),
+        ],
+    )
+    def test_wrong_type_minimum_names_param(self, transactions_df, param, value, match):
+        """A min_* threshold of the wrong type is rejected naming the parameter, not with a bare comparison error."""
+        with pytest.raises(TypeError, match=match):
+            ProductAssociation(df=transactions_df, value_col="product", group_col=cols.transaction_id, **{param: value})
+
+    def test_numpy_minimums_match_python_numbers(self, transactions_df):
+        """Thresholds read from a DataFrame as numpy scalars filter the same as their Python equivalents."""
+        numpy_result = ProductAssociation(
+            df=transactions_df,
+            value_col="product",
+            group_col=cols.transaction_id,
+            min_occurrences=np.int64(2),
+            min_support=np.float32(0.25),
+            min_uplift=np.float64(1.0),
+        ).df
+        python_result = ProductAssociation(
+            df=transactions_df,
+            value_col="product",
+            group_col=cols.transaction_id,
+            min_occurrences=2,
+            min_support=0.25,
+            min_uplift=1.0,
+        ).df
+        pd.testing.assert_frame_equal(numpy_result, python_result)
+
     def test_calc_association_target_item_list(self, transactions_df):
         """Test calculating association rules with a list of target items."""
         target_items = ["milk", "bread"]
