@@ -457,9 +457,7 @@ def ensure_tznaive_datetime(df: ibis.Table, column: str) -> None:
     col_type = df[column].type()
     # is_temporal() also admits a time of day, which has no date to truncate or count days from.
     if not (col_type.is_date() or col_type.is_timestamp()):
-        # A bare pd.to_datetime reads integers as epoch nanoseconds, so a YYYYMMDD key would land in 1970.
-        fix = "pd.to_datetime(..., format='%Y%m%d')" if col_type.is_integer() else "pd.to_datetime"
-        msg = f"Column '{column}' must be a date or datetime type. Got {col_type}. Convert it with {fix} first."
+        msg = f"Column '{column}' must be a date or datetime type. Got {col_type}."
         raise TypeError(msg)
     if col_type.is_timestamp() and col_type.timezone is not None:
         msg = (

@@ -504,21 +504,19 @@ class TestEnsureTznaiveDatetime:
             ensure_tznaive_datetime(table, cols.transaction_date)
 
     @pytest.mark.parametrize(
-        ("dates", "type_name", "fix"),
+        ("dates", "type_name"),
         [
-            (["2024-01-01", "2024-01-02"], "string", r"pd\.to_datetime first"),
-            # a bare pd.to_datetime reads 20240101 as epoch nanoseconds, so the fix must carry the format
-            ([20240101, 20240102], "int64", r"pd\.to_datetime\(\.\.\., format='%Y%m%d'\) first"),
-            ([dt.time(9, 30), dt.time(17, 5)], "time", r"pd\.to_datetime first"),
+            (["2024-01-01", "2024-01-02"], "string"),
+            ([20240101, 20240102], "int64"),
+            ([dt.time(9, 30), dt.time(17, 5)], "time"),
         ],
         ids=["iso_string", "integer_yyyymmdd", "time_of_day"],
     )
-    def test_rejects_non_temporal(self, dates, type_name, fix):
-        """String, integer and time-of-day values raise TypeError naming the column, its type and the fix."""
+    def test_rejects_non_temporal(self, dates, type_name):
+        """String, integer and time-of-day values raise TypeError naming the column and its type, with no pandas fix."""
         table = ibis.memtable(pd.DataFrame({cols.transaction_date: dates}))
         with pytest.raises(
             TypeError,
-            match=rf"'{cols.transaction_date}' must be a date or datetime type\. Got {type_name}\. "
-            rf"Convert it with {fix}",
+            match=rf"^Column '{cols.transaction_date}' must be a date or datetime type\. Got {type_name}\.$",
         ):
             ensure_tznaive_datetime(table, cols.transaction_date)

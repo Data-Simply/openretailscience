@@ -267,7 +267,7 @@ class TestSegTransactionStats:
         )
         df[measure_col] = df[measure_col].astype(str)
         extra_aggs = {"measure_total": (measure_col, "sum")} if sum_in_extra_aggs else None
-        with pytest.raises(TypeError, match=rf"Column '{measure_col}' must be numeric. Got string"):
+        with pytest.raises(TypeError, match=rf"^Column '{measure_col}' must be numeric\. Got string\.$"):
             SegTransactionStats(df, segment_col=cols.store_id, grouping_sets="total", extra_aggs=extra_aggs)
 
     def test_rejects_text_extra_agg_with_unknown_customers(self):

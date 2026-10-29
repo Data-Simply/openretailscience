@@ -70,8 +70,8 @@ class TestDateColumn:
     )
     @pytest.mark.parametrize("construct", DATE_CONSTRUCTORS)
     def test_rejects_non_date_transaction_date(self, transactions, construct, dates):
-        """String and integer dates raise before any query runs, naming the column and the conversion to apply."""
-        with pytest.raises(TypeError, match=rf"'{cols.transaction_date}'.*pd\.to_datetime"):
+        """String and integer dates raise before any query runs, naming the column and its type."""
+        with pytest.raises(TypeError, match=rf"'{cols.transaction_date}' must be a date or datetime type\. Got \w+\.$"):
             construct(transactions.assign(**{cols.transaction_date: dates}))
 
     @pytest.mark.parametrize("construct", DATE_CONSTRUCTORS)

@@ -287,10 +287,7 @@ class SegTransactionStats:
 
         for measure_col in [cols.unit_spend, cols.unit_qty]:
             if measure_col in data.columns and not data[measure_col].type().is_numeric():
-                msg = (
-                    f"Column '{measure_col}' must be numeric. Got {data[measure_col].type()}. "
-                    "Convert it with pd.to_numeric first."
-                )
+                msg = f"Column '{measure_col}' must be numeric. Got {data[measure_col].type()}."
                 raise TypeError(msg)
         # The unknown/total split coalesces each extra_aggs result to 0, which a text or date result can't take.
         ensure_valid_extra_aggs(data, extra_aggs, numeric=unknown_customer_value is not None)
