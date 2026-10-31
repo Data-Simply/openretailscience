@@ -27,7 +27,8 @@ filtering and aggregation are pushed into the engine.
 `from openretailscience.analysis.cross_shop import CrossShop`. `plots` exports chart modules
 (`from openretailscience.plots import bar`). `experimental` exports nothing: use
 `from openretailscience.experimental.clv import CLVStats`.
-`help(openretailscience.analysis)` (or `segmentation`, `plots`) maps questions to classes or chart modules.
+`help(openretailscience.analysis)` (or `segmentation`, `utils`, `plots`) maps questions to classes, functions or
+chart modules.
 
 ## Core workflow
 
