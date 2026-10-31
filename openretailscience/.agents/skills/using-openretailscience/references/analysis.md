@@ -15,13 +15,13 @@ Transaction KPIs by segment or dimension:
 from openretailscience.segmentation.segstats import SegTransactionStats, cube, rollup
 ```
 
-- `SegTransactionStats(data, segment_col="segment_name", grouping_sets=None, extra_aggs=None, ...)` —
+- `SegTransactionStats(data, *, segment_col="segment_name", grouping_sets=None, extra_aggs=None, ...)` —
   spend/transactions/customers and ratios per segment. `grouping_sets` is
   `"total"`, `"rollup"`, `"cube"`, or a list of column tuples. `extra_aggs` is
   `{out: (col, agg)}`. Read `.table` / `.df` (RangeIndex, segment columns as columns, row order unspecified
   unless `sort_by=True`; columns a grouping set omits hold `rollup_value`; zero-denominator ratios are null).
-  The default `rollup_value="Total"` only fits string columns: a rolled-up int or boolean segment column raises
-  unless you pass a `rollup_value` of its type.
+  Rolled-up rows are labeled `"Total"` by default, which only fits string columns: a rolled-up int or boolean
+  segment column raises unless you pass a `rollup_value` of its type. `rollup_value` requires `grouping_sets`.
   With `unknown_customer_value`, plain metrics cover identified customers only, and spend/transactions/units
   (+ their ratios and extra_aggs) gain `_unknown`/`_total` variants; customers do not. Each extra_aggs
   result must then be numeric (`"max"` of a text column raises).
@@ -31,6 +31,7 @@ from openretailscience.segmentation.segstats import SegTransactionStats, cube, r
 `grouping_sets` worked examples (a set is a tuple of `segment_col` columns; `()` is the
 grand total):
 
+- `None` (default) — one row per `segment_col` combination, no subtotals or total.
 - `"rollup"` — hierarchical subtotals over `segment_col`: `[A,B,C], [A,B], [A], ()`.
 - `"cube"` — all 2ⁿ combinations of `segment_col`, including the `()` grand total.
 - `"total"` — the full `[A,B,C]` set plus the `()` grand total.
@@ -38,10 +39,6 @@ grand total):
 - `[(cube("store", "region"), "date")]` — nested spec: one `cube()`/`rollup()` result per
   tuple plus str fixed columns, which are appended as a suffix to every set (produces
   `[("store", "region", "date"), ("store", "date"), ("region", "date"), ("date",)]`).
-
-`calc_total`/`calc_rollup` are deprecated: a `FutureWarning` is emitted when
-`grouping_sets=None` and both are omitted. Legacy `calc_rollup=True` generates prefix AND
-suffix rollups, and suffix rollups are generated only when `calc_total=True`.
 
 Customer segments:
 

@@ -205,11 +205,10 @@ class SegTransactionStats:
     def __init__(
         self,
         data: pd.DataFrame | ibis.Table,
+        *,
         segment_col: str | list[str] = "segment_name",
-        calc_total: bool | None = None,
         extra_aggs: dict[str, tuple[str, str]] | None = None,
-        calc_rollup: bool | None = None,
-        rollup_value: Any | list[Any] = "Total",  # noqa: ANN401 - Any is required for ibis.literal typing
+        rollup_value: Any | list[Any] | None = None,  # noqa: ANN401 - Any is required for ibis.literal typing
         unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None = None,
         grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None = None,
         sort_by: bool = False,
@@ -222,23 +221,14 @@ class SegTransactionStats:
                 customer-based and quantity-based columns when present.
             segment_col (str | list[str], optional): The column or list of columns to use for
                 the segmentation. Defaults to "segment_name".
-            calc_total (bool | None, optional): Whether to include the grand total row.
-                Defaults to True when grouping_sets is None. Cannot be used with grouping_sets.
-                Deprecated: a FutureWarning is emitted when grouping_sets is None and both
-                calc_total and calc_rollup are omitted. Use grouping_sets='total' instead.
             extra_aggs (dict[str, tuple[str, str]], optional): Additional aggregations. Keys are
                 output column names; values are (column_name, aggregation_function) tuples, e.g.
                 {"stores": ("store_id", "nunique")} counts unique store_ids. The function is any
                 no-argument Ibis column aggregation, case-sensitive ("sum", "mean", "count", "max", ...).
-            calc_rollup (bool | None, optional): Whether to add subtotal rows. Defaults to False
-                when grouping_sets is None. Unlike grouping_sets='rollup' (prefix rollups only),
-                True generates prefix and suffix rollups; suffix rollups only when calc_total=True.
-                Cannot be used with grouping_sets.
-                Deprecated: a FutureWarning is emitted when grouping_sets is None and both
-                calc_total and calc_rollup are omitted. Use grouping_sets='rollup' instead.
-            rollup_value (Any | list[Any], optional): The value used for rollup rows. A single
+            rollup_value (Any | list[Any] | None, optional): The value used for rollup rows. A single
                 value applies to all columns, or a list with one value per segment_col column,
-                each cast to the corresponding column's type. Defaults to "Total".
+                each cast to the corresponding column's type. Requires grouping_sets. None (default)
+                labels them "Total".
             unknown_customer_value (int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None, optional):
                 Value, ibis literal, or boolean expression identifying unknown customers
                 (requires the customer_id column). When set, the plain metrics cover identified
@@ -247,27 +237,28 @@ class SegTransactionStats:
                 (suffixes from the options column.suffix.unknown_customer / column.suffix.total).
                 Customers and the per-customer ratios have no variants.
             grouping_sets (Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None, optional):
-                Grouping sets mode, mutually exclusive with calc_total/calc_rollup:
+                Grouping sets mode:
                 - "rollup": SQL ROLLUP — [A,B,C], [A,B], [A], ().
                 - "cube": SQL CUBE — all 2^n combinations.
                 - "total": the full grouping plus the () grand total.
                 - list of tuples: custom grouping sets; each tuple is either explicit columns or
-                  a cube()/rollup() result plus fixed columns (see cube()). Sets are deduplicated
-                  (order not preserved); every segment_col column must appear in at least one set
-                  and every set column must be in segment_col.
-                - None: use calc_total/calc_rollup behavior.
+                  a cube()/rollup() result plus fixed columns (see cube()). Duplicate sets are
+                  dropped; every segment_col column must appear in at least one set and every set
+                  column must be in segment_col.
+                - None (default): one row per segment_col combination, with no subtotals or total.
             sort_by (bool, optional): When True, sort the output rows ascending by segment_col.
                 Defaults to False.
 
         Raises:
-            ValueError: If grouping_sets is used with explicit calc_total or calc_rollup; if
-                grouping_sets is not a valid value or is an empty list; if the grouping sets and
-                segment_col do not cover each other; if rollup_value is a list whose length does
-                not match segment_col; if rollup_value can't be cast to its segment_col column's
-                type; or if unknown_customer_value is set without a customer_id column, or with an
+            ValueError: If grouping_sets is an unknown string or an empty list, or a spec tuple holds
+                more than one or an empty cube()/rollup() result; if the grouping sets and
+                segment_col do not cover each other; if rollup_value is set without grouping_sets, or
+                is a list whose length does not match segment_col; if rollup_value can't be cast to its
+                segment_col column's type; or if unknown_customer_value is set without a customer_id column, or with an
                 extra_aggs aggregation whose result isn't numeric.
-            TypeError: If a grouping_sets list element is not a tuple, or unit_spend or unit_quantity is not
-                numeric.
+            TypeError: If grouping_sets is not a str, list or None; if a grouping_sets list element is not a
+                tuple, or holds a column that isn't a str, or a spec tuple holds a list that isn't a list of tuples;
+                or if unit_spend or unit_quantity is not numeric.
         """
         data = ensure_ibis_table(data, "data")
 
@@ -292,25 +283,25 @@ class SegTransactionStats:
         # The unknown/total split coalesces each extra_aggs result to 0, which a text or date result can't take.
         ensure_valid_extra_aggs(data, extra_aggs, numeric=unknown_customer_value is not None)
 
+        if rollup_value is not None and grouping_sets is None:
+            msg = (
+                "rollup_value labels rolled-up rows, and with grouping_sets=None there are none. "
+                "Pass grouping_sets, e.g. 'total', or drop rollup_value."
+            )
+            raise ValueError(msg)
+        rollup_value = "Total" if rollup_value is None else rollup_value
+
         self.segment_col = segment_col
         self.extra_aggs = {} if extra_aggs is None else extra_aggs
         self.rollup_value = rollup_value
         self.unknown_customer_value = unknown_customer_value
 
-        # Validate grouping_sets parameter
-        self._validate_grouping_sets_params(grouping_sets, calc_total, calc_rollup)
-
-        # Normalize parameters as local variables (only in legacy mode)
-        if grouping_sets is None:
-            calc_total = True if calc_total is None else calc_total
-            calc_rollup = False if calc_rollup is None else calc_rollup
+        self._validate_grouping_sets_params(grouping_sets)
 
         self.table = self._calc_seg_stats(
             data,
             segment_col,
-            calc_total,
             self.extra_aggs,
-            calc_rollup,
             rollup_value,
             unknown_customer_value,
             grouping_sets,
@@ -408,44 +399,22 @@ class SegTransactionStats:
     @staticmethod
     def _validate_grouping_sets_params(
         grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None,
-        calc_total: bool | None,
-        calc_rollup: bool | None,
     ) -> None:
         """Validate grouping_sets parameter (type checking only).
 
         Column validation happens in _generate_grouping_sets() since it requires segment_col.
-        Emits a FutureWarning when grouping_sets is None and both calc_total and calc_rollup
-        are omitted (the implicit calc_total=True default is deprecated).
 
         Args:
             grouping_sets (Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None): The
                 grouping_sets parameter value.
-            calc_total (bool | None): Whether to include grand total.
-            calc_rollup (bool | None): Whether to generate rollup subtotals.
 
         Raises:
-            ValueError: If grouping_sets is used with explicit calc_total or calc_rollup.
             ValueError: If grouping_sets is not a valid value or is an empty list.
-            TypeError: If grouping_sets is a list containing a non-tuple element.
+            TypeError: If grouping_sets is not a str, list or None, or is a list containing a non-tuple element.
         """
         if grouping_sets is None:
-            # Warn if relying on implicit calc_total=True default (calc_total will be removed)
-            if calc_total is None and calc_rollup is None:
-                warnings.warn(
-                    "The calc_total parameter is deprecated and will be removed in a future version. "
-                    "To maintain the current behavior of including a grand total, use grouping_sets='total' "
-                    "or grouping_sets=[()] instead. "
-                    "See documentation for more flexible aggregation control with the grouping_sets parameter.",
-                    FutureWarning,
-                    stacklevel=3,
-                )
             return
 
-        # Mutual exclusivity check
-        if calc_total is not None or calc_rollup is not None:
-            raise ValueError("Cannot use grouping_sets with calc_total or calc_rollup")
-
-        # String validation
         if isinstance(grouping_sets, str):
             if grouping_sets not in ["rollup", "cube", "total"]:
                 msg = (
@@ -454,12 +423,10 @@ class SegTransactionStats:
                 )
                 raise ValueError(msg)
 
-        # List validation - only accept tuples for consistency (Ticket 5 design)
         elif isinstance(grouping_sets, list):
             if len(grouping_sets) == 0:
                 raise ValueError("grouping_sets list cannot be empty")
 
-            # Validate each element is a tuple (consistency: always list of tuples)
             for item in grouping_sets:
                 if not isinstance(item, tuple):
                     msg = (
@@ -467,6 +434,13 @@ class SegTransactionStats:
                         "Pass e.g. [('category_1_name',), ()], or 'total', 'rollup' or 'cube'."
                     )
                     raise TypeError(msg)
+
+        else:
+            msg = (
+                "grouping_sets must be 'rollup', 'cube', 'total', a list of tuples, or None. "
+                f"Got {type(grouping_sets).__name__}. Pass e.g. 'total' or [('category_1_name',), ()]."
+            )
+            raise TypeError(msg)
 
     @staticmethod
     def _flatten_item(item: tuple) -> list[tuple[str, ...]]:
@@ -485,7 +459,8 @@ class SegTransactionStats:
         Raises:
             ValueError: If the specification contains multiple cube()/rollup() results or an
                 empty cube()/rollup() result.
-            TypeError: If the specification contains a non-str, non-list element.
+            TypeError: If the item holds an element that is neither a str nor, in a specification, a
+                list of tuples.
 
         Example:
             >>> _flatten_item(("region", "store"))
@@ -496,6 +471,12 @@ class SegTransactionStats:
             >>> _flatten_item((cube_result, "date"))
             [("region", "store", "date"), ("region", "date"), ("store", "date"), ("date",)]
         """
+        # Checked before hashing: dict.fromkeys and the column checks need hashable str columns.
+        non_str = [elem for elem in item if not isinstance(elem, str | list)]
+        if len(non_str) > 0:
+            msg = f"Grouping set columns must be segment_col names (str). Got {type(non_str[0]).__name__} in {item!r}."
+            raise TypeError(msg)
+
         # Check if tuple contains a list (cube()/rollup() result)
         has_list = any(isinstance(elem, list) for elem in item)
 
@@ -512,13 +493,15 @@ class SegTransactionStats:
                 # This is a cube()/rollup() result (list of tuples)
                 if grouping_sets_list is not None:
                     raise ValueError("Only one cube()/rollup() call allowed per specification")
+                if not all(isinstance(gs, tuple) for gs in element):
+                    msg = (
+                        "A list in a specification tuple must be a cube()/rollup() result (a list of tuples). "
+                        "Pass e.g. [(cube('region', 'store'), 'date')], or list explicit sets as tuples."
+                    )
+                    raise TypeError(msg)
                 grouping_sets_list = element
-            elif isinstance(element, str):
-                # Fixed column
-                fixed_cols.append(element)
             else:
-                msg = f"Invalid type in specification tuple: {type(element).__name__}"
-                raise TypeError(msg)
+                fixed_cols.append(element)
 
         # Validate cube()/rollup() result is not empty
         if len(grouping_sets_list) == 0:
@@ -531,23 +514,17 @@ class SegTransactionStats:
     @staticmethod
     def _generate_grouping_sets(
         segment_col: list[str],
-        calc_total: bool | None = None,
-        calc_rollup: bool | None = None,
-        grouping_sets: (
-            Literal["rollup", "cube", "total"] | list[tuple[str, ...] | tuple[list | str, ...]] | None
-        ) = None,
+        grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...] | tuple[list | str, ...]] | None,
     ) -> list[tuple[str, ...]]:
-        """Generate grouping sets based on grouping_sets parameter or calc_total/calc_rollup settings.
+        """Generate the grouping sets for a grouping_sets mode.
 
         "rollup"/"cube" delegate to rollup()/cube(); "total" yields the full grouping plus the
-        () grand total. List mode flattens each item, deduplicates via set() (order not
-        preserved), and validates that the sets and segment_col cover each other. Any other
-        value delegates to _generate_legacy_grouping_sets().
+        () grand total. List mode flattens each item, drops duplicate sets (keeping the first),
+        and validates that the sets and segment_col cover each other. None yields the full
+        segment grouping alone.
 
         Args:
             segment_col (list[str]): The segment columns to generate grouping sets for.
-            calc_total (bool | None): Whether to include grand total (ignored if grouping_sets is not None).
-            calc_rollup (bool | None): Whether to generate rollup subtotals (ignored if grouping_sets is not None).
             grouping_sets (Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None): Grouping sets mode.
 
         Returns:
@@ -557,18 +534,11 @@ class SegTransactionStats:
         Raises:
             ValueError: If a grouping set references a column not in segment_col, or a
                 segment_col column is missing from every grouping set.
+            TypeError: If grouping_sets is none of the handled modes.
 
         Example:
-            >>> # Legacy mode (calc_total/calc_rollup): base, prefix and suffix rollups, grand total
-            >>> _generate_grouping_sets(["region", "store", "product"], True, True, None)
-            [
-                ("region", "store", "product"),  # base grouping
-                ("region", "store"),             # prefix rollup
-                ("region",),                     # prefix rollup
-                ("store", "product"),            # suffix rollup
-                ("product",),                    # suffix rollup
-                (),                              # grand total
-            ]
+            >>> _generate_grouping_sets(["region", "store"], "total")
+            [("region", "store"), ()]
         """
         # Handle string shortcuts - delegate to helper functions
         if grouping_sets == "rollup":
@@ -586,8 +556,9 @@ class SegTransactionStats:
             for item in grouping_sets:
                 expanded.extend(SegTransactionStats._flatten_item(item))
 
-            # Deduplicate (order not preserved, but not needed)
-            expanded = list(set(expanded))
+            # dict.fromkeys, not set(): str hashing is randomized per process, so set order would make the SQL
+            # text (and so warehouse result caching) and the union row order differ between runs.
+            expanded = list(dict.fromkeys(expanded))
 
             # Validate columns (applies to list modes)
             all_mentioned_cols = {col for gs in expanded for col in gs}
@@ -610,42 +581,11 @@ class SegTransactionStats:
 
             return expanded
 
-        # Legacy mode - delegate to helper
-        return SegTransactionStats._generate_legacy_grouping_sets(segment_col, calc_total, calc_rollup)
+        if grouping_sets is None:
+            return [tuple(segment_col)]
 
-    @staticmethod
-    def _generate_legacy_grouping_sets(
-        segment_col: list[str],
-        calc_total: bool | None,
-        calc_rollup: bool | None,
-    ) -> list[tuple[str, ...]]:
-        """Generate grouping sets using legacy calc_total/calc_rollup parameters.
-
-        The base grouping (all columns) is always included; calc_rollup adds prefix rollups and,
-        only when calc_total is also true, suffix rollups; calc_total appends the () grand total.
-
-        Args:
-            segment_col (list[str]): The segment columns.
-            calc_total (bool | None): Whether to include grand total.
-            calc_rollup (bool | None): Whether to generate rollup subtotals.
-
-        Returns:
-            list[tuple[str, ...]]: List of grouping set tuples.
-        """
-        grouping_sets_list = [tuple(segment_col)]  # Base grouping always included
-
-        if calc_rollup:
-            # Prefix rollups: progressively remove from the right
-            grouping_sets_list.extend(tuple(segment_col[:i]) for i in range(1, len(segment_col)))
-
-            # Suffix rollups: progressively remove from the left (only if calc_total=True)
-            if calc_total:
-                grouping_sets_list.extend(tuple(segment_col[i:]) for i in range(1, len(segment_col)))
-
-        if calc_total:
-            grouping_sets_list.append(())  # Empty tuple = grand total
-
-        return grouping_sets_list
+        msg = f"Unhandled grouping_sets: {grouping_sets!r}"
+        raise TypeError(msg)
 
     @staticmethod
     def _execute_grouping_sets(
@@ -885,12 +825,10 @@ class SegTransactionStats:
     def _calc_seg_stats(
         data: ibis.Table,
         segment_col: list[str],
-        calc_total: bool | None,
-        extra_aggs: dict[str, tuple[str, str]] | None = None,
-        calc_rollup: bool | None = None,
-        rollup_value: Any | list[Any] = "Total",  # noqa: ANN401 - Any is required for ibis.literal typing
-        unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None = None,
-        grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None = None,
+        extra_aggs: dict[str, tuple[str, str]],
+        rollup_value: Any | list[Any],  # noqa: ANN401 - Any is required for ibis.literal typing
+        unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None,
+        grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None,
     ) -> ibis.Table:
         """Calculate the transaction statistics by segment as a lazy ibis expression.
 
@@ -903,9 +841,7 @@ class SegTransactionStats:
         Args:
             data (ibis.Table): The transaction data.
             segment_col (list[str]): The columns to use for the segmentation.
-            calc_total (bool | None): Whether to include the total row (ignored if grouping_sets is not None).
-            extra_aggs (dict[str, tuple[str, str]] | None): Additional aggregations (see __init__).
-            calc_rollup (bool | None): Whether to calculate rollup totals (ignored if grouping_sets is not None).
+            extra_aggs (dict[str, tuple[str, str]]): Additional aggregations (see __init__).
             rollup_value (Any | list[Any]): Rollup label(s); a list must match the segment_col length.
             unknown_customer_value (int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None):
                 Value or expression identifying unknown customers (see __init__).
@@ -947,13 +883,7 @@ class SegTransactionStats:
             else SegTransactionStats._build_standard_aggs(data, extra_aggs)
         )
 
-        # Generate ALL grouping sets based on current parameters
-        grouping_sets_list = SegTransactionStats._generate_grouping_sets(
-            segment_col,
-            calc_total,
-            calc_rollup,
-            grouping_sets,
-        )
+        grouping_sets_list = SegTransactionStats._generate_grouping_sets(segment_col, grouping_sets)
 
         # Native GROUPING SETS only pays off by fusing 2+ sets into one scan; a single set has no benefit.
         use_native = (
