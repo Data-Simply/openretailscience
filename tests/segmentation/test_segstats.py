@@ -468,6 +468,11 @@ class TestGroupingSets:
         """Each mode yields its grouping sets exactly once, in first-occurrence order so the SQL is stable."""
         assert SegTransactionStats._generate_grouping_sets(segment_col, grouping_sets) == expected
 
+    def test_generate_grouping_sets_raises_on_unhandled_mode(self):
+        """A mode no branch handles raises instead of returning None."""
+        with pytest.raises(TypeError, match=r"Unhandled grouping_sets: \('region',\)"):
+            SegTransactionStats._generate_grouping_sets(["region"], ("region",))
+
     @pytest.mark.parametrize(
         ("grouping_sets", "expected_rows"),
         [
