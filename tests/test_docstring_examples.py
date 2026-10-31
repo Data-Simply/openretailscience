@@ -33,7 +33,7 @@ STORE_IDS = [101, 102, 103]
 FIRST_DATE = pd.Timestamp("2024-01-01")
 NUM_DAYS = 547
 MAX_UNITS = 4
-# Every other module in plots.__all__ is a chart, so one without plot() fails collection instead of going unchecked
+# Every other module in dir(plots) is a chart, so one without plot() fails collection instead of going unchecked
 NON_CHART_PLOT_MODULES = {"styles", "tree_diagram"}
 # Pandas' notebook defaults: outside IPython the repr fits the terminal, so shown frames fail below ~65 columns
 PANDAS_DISPLAY_OPTIONS = ("display.max_columns", 20, "display.width", 80)
@@ -92,9 +92,9 @@ def _entry_points() -> dict[str, Callable]:
     entry_points = {
         f"{package.__name__}.{name}": getattr(package, name)
         for package in (analysis, segmentation, utils)
-        for name in package.__all__
+        for name in dir(package)
     }
-    for name in plots.__all__:
+    for name in dir(plots):
         if name in NON_CHART_PLOT_MODULES:
             continue
         module = importlib.import_module(f"{plots.__name__}.{name}")

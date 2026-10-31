@@ -1,8 +1,11 @@
-"""Tests for the package-level public API: short imports and lazy loading."""
+"""Tests for the package-level public API: short imports, lazy loading and `help()` pages."""
 
+import functools
 import importlib
 import inspect
 import pkgutil
+import pydoc
+import re
 import subprocess
 import sys
 from types import FunctionType, ModuleType
@@ -12,6 +15,10 @@ import pytest
 
 import openretailscience
 from openretailscience import analysis, plots, segmentation, utils
+
+# About 600 tokens: an agent reading a package's map spends under 2% of a 32k-token context on it.
+HELP_PAGE_MAX_CHARS = 2_500
+HELP_PAGE_PACKAGES = [openretailscience, analysis, segmentation, utils, plots]
 
 
 def _public_definitions(package: ModuleType) -> dict[str, type | FunctionType]:
@@ -34,6 +41,11 @@ def _public_definitions(package: ModuleType) -> dict[str, type | FunctionType]:
     return definitions
 
 
+def _help_page(package: ModuleType) -> str:
+    """Render the page `help(package)` prints."""
+    return pydoc.plain(pydoc.render_doc(package))
+
+
 def _raise_attribute_error(name: str) -> NoReturn:
     """Stand in for a dependency whose API changed, so a module fails to import with an AttributeError."""
     msg = f"importing {name} hit a removed dependency attribute"
@@ -46,12 +58,12 @@ class TestSubpackageExports:
     @pytest.mark.parametrize("package", [analysis, segmentation, utils])
     def test_exports_match_module_definitions(self, package: ModuleType) -> None:
         """A class or function added to a module without being exported fails here."""
-        exported = {name: getattr(package, name) for name in package.__all__}
+        exported = {name: getattr(package, name) for name in dir(package)}
         assert exported == _public_definitions(package)
 
     def test_plots_exports_every_chart_module(self) -> None:
         """A chart module missing from `__all__` is unreachable as `plots.<name>`."""
-        assert sorted(plots.__all__) == sorted(module.name for module in pkgutil.iter_modules(plots.__path__))
+        assert dir(plots) == sorted(module.name for module in pkgutil.iter_modules(plots.__path__))
 
     def test_from_import_surfaces_module_import_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """`from analysis import name` must not hide why the defining module failed as "cannot import name"."""
@@ -97,3 +109,29 @@ class TestLazyLoading:
         )
         result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)  # noqa: S603
         assert result.returncode == 0, result.stderr
+
+
+class TestHelpPages:
+    """`help()` on a package is a short map that names the call one level down, not every class's full docs."""
+
+    @pytest.mark.parametrize("package", HELP_PAGE_PACKAGES)
+    def test_page_is_a_short_map_without_class_or_function_docs(self, package: ModuleType) -> None:
+        """help() renders every name in `__all__` in full, which put whole classes on the package page."""
+        page = _help_page(package)
+        assert len(page) <= HELP_PAGE_MAX_CHARS
+        assert re.findall(r"^(CLASSES|FUNCTIONS)$", page, flags=re.MULTILINE) == []
+
+    @pytest.mark.parametrize("package", HELP_PAGE_PACKAGES)
+    def test_page_names_a_working_next_call(self, package: ModuleType) -> None:
+        """The one `help(...)` call on the page must resolve to a name the package lists, so it can't go stale."""
+        calls = re.findall(r"help\(([\w.]+)\)", _help_page(package))
+        assert len(calls) == 1
+        child, *rest = calls[0].removeprefix(f"{package.__name__}.").split(".")
+        assert child in dir(package)
+        assert pydoc.locate(calls[0]) is functools.reduce(getattr, rest, getattr(package, child))
+
+    @pytest.mark.parametrize("package", HELP_PAGE_PACKAGES)
+    def test_map_names_every_listed_name(self, package: ModuleType) -> None:
+        """A name `dir()` lists but the map omits is invisible to an agent reading `help()`."""
+        page = _help_page(package)
+        assert [name for name in dir(package) if f"`{name}`" not in page] == []

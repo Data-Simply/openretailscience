@@ -13,6 +13,9 @@
 - distance between two lat/lon points → `haversine_distance`
 
 Spend, transactions and customers by segment live in `openretailscience.segmentation.SegTransactionStats`.
+
+Call help() on a class or function, such as `help(openretailscience.analysis.RevenueTree)`, for its parameters,
+output and an example.
 """
 
 from __future__ import annotations
@@ -23,17 +26,29 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from types import FunctionType
 
-    from openretailscience.analysis.cohort import CohortAnalysis
-    from openretailscience.analysis.composite_rank import CompositeRank
-    from openretailscience.analysis.cross_shop import CrossShop
-    from openretailscience.analysis.customer import DaysBetweenPurchases, PurchasesPerCustomer, TransactionChurn
-    from openretailscience.analysis.customer_decision_hierarchy import CustomerDecisionHierarchy
-    from openretailscience.analysis.gain_loss import GainLoss
-    from openretailscience.analysis.haversine import haversine_distance
-    from openretailscience.analysis.product_association import ProductAssociation
-    from openretailscience.analysis.revenue_tree import RevenueTree, calc_tree_kpis
+    from openretailscience.analysis.cohort import CohortAnalysis as CohortAnalysis
+    from openretailscience.analysis.composite_rank import CompositeRank as CompositeRank
+    from openretailscience.analysis.cross_shop import CrossShop as CrossShop
+    from openretailscience.analysis.customer import (
+        DaysBetweenPurchases as DaysBetweenPurchases,
+    )
+    from openretailscience.analysis.customer import (
+        PurchasesPerCustomer as PurchasesPerCustomer,
+    )
+    from openretailscience.analysis.customer import (
+        TransactionChurn as TransactionChurn,
+    )
+    from openretailscience.analysis.customer_decision_hierarchy import (
+        CustomerDecisionHierarchy as CustomerDecisionHierarchy,
+    )
+    from openretailscience.analysis.gain_loss import GainLoss as GainLoss
+    from openretailscience.analysis.haversine import haversine_distance as haversine_distance
+    from openretailscience.analysis.product_association import ProductAssociation as ProductAssociation
+    from openretailscience.analysis.revenue_tree import RevenueTree as RevenueTree
+    from openretailscience.analysis.revenue_tree import calc_tree_kpis as calc_tree_kpis
 
 # Lazy (PEP 562): some modules pull in matplotlib and scipy, so each loads only when one of its names is used.
+# No `__all__`: pydoc would render every listed class in full on this package's help() page.
 _EXPORTS = {
     "CohortAnalysis": "cohort",
     "CompositeRank": "composite_rank",
@@ -48,8 +63,6 @@ _EXPORTS = {
     "RevenueTree": "revenue_tree",
     "calc_tree_kpis": "revenue_tree",
 }
-
-__all__ = list(_EXPORTS)
 
 
 def __getattr__(name: str) -> type | FunctionType:
@@ -66,4 +79,4 @@ def __getattr__(name: str) -> type | FunctionType:
 
 
 def __dir__() -> list[str]:
-    return __all__
+    return list(_EXPORTS)
