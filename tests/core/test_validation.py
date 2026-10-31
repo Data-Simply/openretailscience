@@ -21,6 +21,7 @@ from openretailscience.core.validation import (
     ensure_positive,
     ensure_tznaive_datetime,
     ensure_unit_interval,
+    ensure_valid_extra_aggs,
     ensure_value_choice,
 )
 from openretailscience.options import ColumnHelper, option_context
@@ -520,3 +521,25 @@ class TestEnsureTznaiveDatetime:
             match=rf"^Column '{cols.transaction_date}' must be a date or datetime type\. Got {type_name}\.$",
         ):
             ensure_tznaive_datetime(table, cols.transaction_date)
+
+
+class TestEnsureValidExtraAggs:
+    """Tests for ensure_valid_extra_aggs."""
+
+    @pytest.mark.parametrize(
+        ("extra_aggs", "match"),
+        [
+            ({"total_sales": ("invalid_column", "sum")}, "Column 'invalid_column' specified in extra_aggs"),
+            (
+                {"total_sales": (cols.unit_spend, "invalid_func")},
+                r"extra_aggs\['total_sales'\] 'invalid_func' is not an aggregation available",
+            ),
+            # A spec that is not a 2-tuple is rejected before the column/function checks.
+            ({"total_sales": (cols.unit_spend,)}, r"must be a \(source_col, agg_func\) tuple"),
+        ],
+    )
+    def test_validate_extra_aggs_rejects_invalid_spec(self, extra_aggs, match):
+        """extra_aggs validation raises ValueError for a bad spec shape, unknown column, or non-reduction func."""
+        table = ibis.memtable(pd.DataFrame({"region": ["North", "South"], cols.unit_spend: [100, 200]}))
+        with pytest.raises(ValueError, match=match):
+            ensure_valid_extra_aggs(table, extra_aggs)

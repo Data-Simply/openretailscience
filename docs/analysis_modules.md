@@ -478,12 +478,11 @@ segment_stats = SegTransactionStats(table_with_segments)
 segment_stats.df
 ```
 <!-- markdownlint-disable MD013 -->
-| segment_name   |    spend |   transactions |   customers |   spend_per_customer |   spend_per_transaction |   transactions_per_customer |   customers_pct |
-|:---------------|---------:|---------------:|------------:|---------------------:|------------------------:|----------------------------:|----------------:|
-| Heavy          | 2927.21  |             30 |          10 |             292.721  |                97.5735  |                           3 |             0.2 |
-| Medium         | 1014.97  |             45 |          15 |              67.6644 |                22.5548  |                           3 |             0.3 |
-| Light          |  662.107 |             75 |          25 |              26.4843 |                 8.82809 |                           3 |             0.5 |
-| Total          | 4604.28  |            150 |          50 |              92.0856 |                30.6952  |                           3 |             1   |
+| segment_name   |    spend |   transactions |   customers |   spend_per_customer |   spend_per_transaction |   transactions_per_customer |
+|:---------------|---------:|---------------:|------------:|---------------------:|------------------------:|----------------------------:|
+| Heavy          | 2927.21  |             30 |          10 |             292.721  |                97.5735  |                           3 |
+| Medium         | 1014.97  |             45 |          15 |              67.6644 |                22.5548  |                           3 |
+| Light          |  662.107 |             75 |          25 |              26.4843 |                 8.82809 |                           3 |
 <!-- markdownlint-enable MD013 -->
 
 ### NLR (New-Lapsed-Repeating) Segmentation

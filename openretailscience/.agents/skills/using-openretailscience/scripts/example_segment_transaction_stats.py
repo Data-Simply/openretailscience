@@ -29,7 +29,7 @@ df_with_segments = transactions.merge(
     how="left",
 )
 
-stats = SegTransactionStats(data=df_with_segments, segment_col="segment_name", calc_total=True)
+stats = SegTransactionStats(data=df_with_segments, segment_col="segment_name", grouping_sets="total")
 results = stats.df
 # results columns include segment_name, spend, transactions, customers,
 # spend_per_customer, transactions_per_customer
@@ -38,10 +38,10 @@ results = stats.df
 stats_multi = SegTransactionStats(
     data=transactions,
     segment_col=["store_id", "category"],
-    calc_total=True
+    grouping_sets="total"
 )
 results_multi = stats_multi.df
-# calc_total=True adds a store_id="Total"/category="Total" row for the grand total
+# grouping_sets="total" adds a store_id="Total"/category="Total" row for the grand total
 
 # Example 3: Add Custom Aggregations
 stats_custom = SegTransactionStats(
@@ -52,7 +52,7 @@ stats_custom = SegTransactionStats(
         "unique_stores": ("store_id", "nunique"),
         "avg_quantity": ("unit_quantity", "mean")
     },
-    calc_total=True
+    grouping_sets="total"
 )
 results_custom = stats_custom.df
 
@@ -60,8 +60,7 @@ results_custom = stats_custom.df
 stats_rollup = SegTransactionStats(
     data=transactions,
     segment_col=["store_id", "category"],
-    calc_rollup=True,
-    calc_total=True,
+    grouping_sets="rollup",
     rollup_value=["All Stores", "All Categories"]
 )
 results_rollup = stats_rollup.df
@@ -87,16 +86,12 @@ stats_unknown = SegTransactionStats(
     data=df_with_segments_unknown,
     segment_col="segment_name",
     unknown_customer_value=-1,
-    calc_total=True
+    grouping_sets="total"
 )
 results_unknown = stats_unknown.df
 # results_unknown adds spend_unknown/spend_total and transactions_unknown/transactions_total
 # columns alongside the regular (known-customer) spend/transactions columns
 
-# Example 6: Segment Stats Without Total Row
-stats_no_total = SegTransactionStats(
-    data=df_with_segments,
-    segment_col="segment_name",
-    calc_total=False
-)
+# Example 6: Segment Stats Without Total Row (the default)
+stats_no_total = SegTransactionStats(data=df_with_segments, segment_col="segment_name")
 results_no_total = stats_no_total.df

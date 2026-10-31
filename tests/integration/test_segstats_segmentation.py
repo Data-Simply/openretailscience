@@ -6,17 +6,17 @@ from openretailscience.segmentation.segstats import SegTransactionStats
 
 
 @pytest.mark.parametrize(
-    ("calc_total", "extra_aggs"),
+    ("grouping_sets", "extra_aggs"),
     [
-        (True, None),
-        (True, {"unique_products": ("product_id", "nunique")}),
-        (False, None),
-        (False, {"unique_products": ("product_id", "nunique")}),
+        ("total", None),
+        ("total", {"unique_products": ("product_id", "nunique")}),
+        (None, None),
+        (None, {"unique_products": ("product_id", "nunique")}),
     ],
 )
 def test_seg_transaction_stats_integration(
     transactions_table,
-    calc_total,
+    grouping_sets,
     extra_aggs,
 ):
     """Integration test for SegTransactionStats using parameterized database backends.
@@ -28,7 +28,7 @@ def test_seg_transaction_stats_integration(
     Args:
         transactions_table: Parameterized fixture providing either BigQuery
                           or PySpark transactions table
-        calc_total: Whether to calculate total statistics
+        grouping_sets: Grouping sets mode passed to SegTransactionStats
         extra_aggs: Extra aggregations to include
     """
     limited_table = transactions_table.limit(10000)
@@ -36,13 +36,13 @@ def test_seg_transaction_stats_integration(
     seg_transaction_stats = SegTransactionStats(
         data=limited_table,
         segment_col=["category_0_name", "category_1_name"],
-        calc_total=calc_total,
+        grouping_sets=grouping_sets,
         extra_aggs=extra_aggs,
     )
 
-    assert seg_transaction_stats is not None
     result = seg_transaction_stats.df
-    assert result is not None
+    grand_total_rows = (result["category_0_name"] == "Total") & (result["category_1_name"] == "Total")
+    assert grand_total_rows.sum() == (1 if grouping_sets == "total" else 0)
 
 
 def test_seg_transaction_stats_with_unknown_customer_integration(transactions_table):
@@ -61,13 +61,13 @@ def test_seg_transaction_stats_with_unknown_customer_integration(transactions_ta
     seg_transaction_stats = SegTransactionStats(
         data=limited_table,
         segment_col=["category_0_name", "category_1_name"],
-        calc_total=True,
+        grouping_sets="total",
         unknown_customer_value=-1,
     )
 
-    assert seg_transaction_stats is not None
     result = seg_transaction_stats.df
-    assert result is not None
+    grand_total_rows = (result["category_0_name"] == "Total") & (result["category_1_name"] == "Total")
+    assert grand_total_rows.sum() == 1
 
     assert "spend_unknown" in result.columns
     assert "transactions_unknown" in result.columns
