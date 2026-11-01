@@ -2,6 +2,7 @@
 
 # flake8: noqa: DTZ001
 import datetime as dt
+from zoneinfo import ZoneInfo
 
 import ibis
 import pandas as pd
@@ -9,6 +10,8 @@ import pytest
 
 from openretailscience.options import ColumnHelper, option_context
 from openretailscience.utils.date import filter_and_label_by_periods, find_overlapping_periods
+
+cols = ColumnHelper()
 
 
 class TestFilterAndLabelByPeriods:
@@ -68,53 +71,104 @@ class TestFilterAndLabelByPeriods:
         assert sorted(q1_transactions["transaction_id"].tolist()) == [1, 2], "Q1 should have transaction IDs 1 and 2"
         assert sorted(q2_transactions["transaction_id"].tolist()) == [3, 4], "Q2 should have transaction IDs 3 and 4"
 
-    def test_filter_and_label_by_periods_with_string_dates(self, sample_transactions_table):
-        """Test filtering and labeling periods using string dates."""
-        # Define expected transaction counts
-        q1_count = 2
-        q2_count = 2
-        q3_count = 2
-        total_count = q1_count + q2_count + q3_count
-
+    @pytest.mark.parametrize(
+        "to_input",
+        [lambda table: table, lambda table: table.to_pandas()],
+        ids=["ibis_table", "pandas_dataframe"],
+    )
+    def test_filter_and_label_by_periods_with_string_dates(self, sample_transactions_table, to_input):
+        """String-date periods label each transaction, from an ibis table or a pandas DataFrame."""
         period_ranges = {
             "Q1": ("2023-01-01", "2023-03-31"),
             "Q2": ("2023-04-01", "2023-06-30"),
             "Q3": ("2023-07-01", "2023-09-30"),
         }
 
-        result = filter_and_label_by_periods(sample_transactions_table, period_ranges)
-        result_df = result.execute()
+        result = filter_and_label_by_periods(to_input(sample_transactions_table), period_ranges)
 
-        # Verify the correct number of transactions
-        assert len(result_df) == total_count, f"Should return all {total_count} transactions across Q1, Q2, and Q3"
+        pd.testing.assert_frame_equal(
+            result.select(cols.transaction_id, "period_name").order_by(cols.transaction_id).to_pandas(),
+            pd.DataFrame(
+                {cols.transaction_id: [1, 2, 3, 4, 5, 6], "period_name": ["Q1", "Q1", "Q2", "Q2", "Q3", "Q3"]},
+            ),
+        )
 
-        # Verify the period labels are correct for each quarter
-        q1_transactions = result_df[result_df["period_name"] == "Q1"]
-        q2_transactions = result_df[result_df["period_name"] == "Q2"]
-        q3_transactions = result_df[result_df["period_name"] == "Q3"]
-
-        assert len(q1_transactions) == q1_count, f"Should have {q1_count} transactions in Q1"
-        assert len(q2_transactions) == q2_count, f"Should have {q2_count} transactions in Q2"
-        assert len(q3_transactions) == q3_count, f"Should have {q3_count} transactions in Q3"
-
-        # Verify specific transaction IDs are in the correct periods
-        assert sorted(q1_transactions["transaction_id"].tolist()) == [1, 2], "Q1 should have transaction IDs 1 and 2"
-        assert sorted(q2_transactions["transaction_id"].tolist()) == [3, 4], "Q2 should have transaction IDs 3 and 4"
-        assert sorted(q3_transactions["transaction_id"].tolist()) == [5, 6], "Q3 should have transaction IDs 5 and 6"
-
-    def test_filter_and_label_by_periods_invalid_period_format(self, sample_transactions_table):
-        """Test that invalid period formats raise ValueError."""
-        # Single date instead of tuple
-        period_ranges = {"Invalid": "2023-01-01"}
-
-        with pytest.raises(ValueError, match="Period 'Invalid' must have a \\(start_date, end_date\\) tuple"):
-            filter_and_label_by_periods(sample_transactions_table, period_ranges)
-
-        # Tuple with wrong length
-        period_ranges = {"Invalid": ("2023-01-01", "2023-03-31", "extra-value")}
-
-        with pytest.raises(ValueError, match="Period 'Invalid' must have a \\(start_date, end_date\\) tuple"):
-            filter_and_label_by_periods(sample_transactions_table, period_ranges)
+    @pytest.mark.parametrize(
+        ("to_input", "period_ranges", "error", "match"),
+        [
+            (
+                lambda table: table,
+                {"Invalid": "2023-01-01"},
+                ValueError,
+                r"Period 'Invalid' must have a \(start_date, end_date\) tuple",
+            ),
+            (
+                lambda table: table,
+                {"Invalid": ("2023-01-01", "2023-03-31", "extra-value")},
+                ValueError,
+                r"Period 'Invalid' must have a \(start_date, end_date\) tuple",
+            ),
+            (lambda table: table, {}, ValueError, "period_ranges must contain at least one period"),
+            (
+                lambda table: table,
+                [("2023-01-01", "2023-03-31")],
+                TypeError,
+                r"period_ranges must be a mapping of period names to \(start_date, end_date\) tuples\. Got list\.",
+            ),
+            (
+                lambda table: table.drop(cols.transaction_date),
+                {"Q1": ("2023-01-01", "2023-03-31")},
+                ValueError,
+                rf"missing required columns: \['{cols.transaction_date}'\]",
+            ),
+            (
+                lambda table: [100.0, 200.0, 150.0],
+                {"Q1": ("2023-01-01", "2023-03-31")},
+                TypeError,
+                "transactions must be either a pandas DataFrame or an Ibis Table",
+            ),
+            (
+                lambda table: table,
+                {"Q1": ("2023/01/01", "2023-03-31")},
+                ValueError,
+                r"^Period 'Q1' start '2023/01/01' is not a valid 'YYYY-MM-DD' date\.",
+            ),
+            (
+                lambda table: table,
+                {"Q1": ("2023-01-01", "2023-02-30")},
+                ValueError,
+                r"^Period 'Q1' end '2023-02-30' is not a valid 'YYYY-MM-DD' date\.",
+            ),
+            (
+                lambda table: table.mutate(period_name=ibis.literal("Q0")),
+                {"Q1": ("2023-01-01", "2023-03-31")},
+                ValueError,
+                r"^period_col 'period_name' is already a column in transactions\.",
+            ),
+            (
+                lambda table: table,
+                {"Q1": (20230101, "2023-03-31")},
+                TypeError,
+                "Expected str or datetime, got <class 'int'>",
+            ),
+        ],
+        ids=[
+            "single_date",
+            "three_values",
+            "empty",
+            "not_a_mapping",
+            "missing_date_column",
+            "list_transactions",
+            "malformed_start",
+            "impossible_end",
+            "period_col_exists",
+            "integer_bound",
+        ],
+    )
+    def test_invalid_input_raises(self, sample_transactions_table, to_input, period_ranges, error, match):
+        """Malformed periods or transactions raise a specific error naming what is wrong."""
+        with pytest.raises(error, match=match):
+            filter_and_label_by_periods(to_input(sample_transactions_table), period_ranges)
 
     def test_filter_and_label_by_periods_no_matches(self, sample_transactions_table):
         """Test behavior when no transactions match the given periods."""
@@ -172,10 +226,7 @@ class TestFilterAndLabelByPeriods:
         [
             ("2023-01-01", "2023-03-31", pd.to_datetime(["2023-03-31 00:00", "2023-03-31 18:45", "2023-04-01 09:00"])),
             ("2023-01-01", "2023-3-31", pd.to_datetime(["2023-03-31 00:00", "2023-03-31 18:45", "2023-04-01 09:00"])),
-            # ISO strings compare as text: the next day's "2023-04-01" must not sort under the bound
-            ("2023-01-01", "2023-03-31", ["2023-03-31", "2023-03-31 18:45", "2023-04-01"]),
-            # Unpadded, "2023-3-31" sorts after every "2023-03-..." string, so the start must be padded too
-            ("2023-3-31", "2023-3-31", ["2023-03-31", "2023-03-31 18:45", "2023-04-01"]),
+            ("2023-3-31", "2023-3-31", pd.to_datetime(["2023-03-31 00:00", "2023-03-31 18:45", "2023-04-01 09:00"])),
             (
                 dt.date(2023, 1, 1),
                 dt.date(2023, 3, 31),
@@ -186,12 +237,12 @@ class TestFilterAndLabelByPeriods:
                 dt.date(2023, 3, 31),
                 [dt.date(2023, 3, 31), dt.date(2023, 3, 31), dt.date(2023, 4, 1)],
             ),
+            ("2023-1-1", "2023-3-31", [dt.date(2023, 3, 31), dt.date(2023, 3, 31), dt.date(2023, 4, 1)]),
         ],
-        ids=["padded", "unpadded_end", "string_column", "unpadded_start", "date_objects", "date_column"],
+        ids=["padded", "unpadded_end", "unpadded_start", "date_objects", "date_column", "unpadded_on_date_column"],
     )
     def test_date_only_bounds_cover_whole_days(self, q1_start, q1_end, transaction_dates):
         """Date-only bounds (strings, padded or not, or date objects) keep every sale on the end day."""
-        cols = ColumnHelper()
         transactions = ibis.memtable(
             pd.DataFrame({cols.transaction_id: [101, 102, 103], cols.transaction_date: transaction_dates}),
         )
@@ -200,12 +251,54 @@ class TestFilterAndLabelByPeriods:
 
         assert sorted(result[cols.transaction_id]) == [101, 102]
 
-    def test_datetime_start_inside_a_string_end_day_overlaps(self, sample_transactions_table):
-        """A date-only end covers its whole day, so a period starting at noon that day overlaps it."""
-        period_ranges = {"Q1": ("2023-01-01", "2023-03-31"), "Q2": (dt.datetime(2023, 3, 31, 12), "2023-06-30")}
+    def test_aware_bounds_filter_on_wall_clock(self):
+        """A timezone-aware bound is read as wall-clock time on the naive column; its offset is ignored."""
+        transactions = pd.DataFrame(
+            {
+                cols.transaction_id: [101, 102, 103],
+                cols.transaction_date: pd.to_datetime(["2023-03-31 21:00", "2023-03-31 23:00", "2023-04-01 03:00"]),
+            },
+        )
+        tokyo = ZoneInfo("Asia/Tokyo")
+        late_night = (dt.datetime(2023, 3, 31, 22, tzinfo=tokyo), dt.datetime(2023, 4, 1, 2, tzinfo=tokyo))
 
-        with pytest.raises(ValueError, match="overlap"):
-            filter_and_label_by_periods(sample_transactions_table, period_ranges)
+        result = filter_and_label_by_periods(transactions, {"Late night": late_night}).execute()
+
+        assert result[cols.transaction_id].tolist() == [102]
+
+    @pytest.mark.parametrize(
+        ("transaction_dates", "period_ranges"),
+        [
+            (
+                pd.to_datetime(["2023-03-31 09:00", "2023-03-31 18:45"]),
+                {"Q1": ("2023-01-01", "2023-03-31"), "Q2": (dt.datetime(2023, 3, 31, 12), "2023-06-30")},
+            ),
+            (
+                [dt.date(2023, 3, 31), dt.date(2023, 4, 1)],
+                {
+                    "Q1": (dt.datetime(2023, 1, 1), dt.datetime(2023, 3, 31, 11)),
+                    "Q2": (dt.datetime(2023, 3, 31, 12), dt.datetime(2023, 6, 30)),
+                },
+            ),
+            (
+                # 22:30 in New York is already Apr 1 in UTC, but the naive column holds wall-clock times
+                pd.to_datetime(["2023-03-31 09:00", "2023-03-31 23:00"]),
+                {
+                    "Q1": ("2023-01-01", "2023-03-31"),
+                    "Q2": (dt.datetime(2023, 3, 31, 22, 30, tzinfo=ZoneInfo("America/New_York")), "2023-06-30"),
+                },
+            ),
+        ],
+        ids=["string_end_on_timestamp_column", "datetimes_on_date_column", "aware_start_on_wall_clock"],
+    )
+    def test_bounds_sharing_a_day_overlap(self, transaction_dates, period_ranges):
+        """Periods sharing a day overlap, whether via a whole-day end, a date column, or an aware wall-clock bound."""
+        transactions = ibis.memtable(
+            pd.DataFrame({cols.transaction_id: [101, 102], cols.transaction_date: transaction_dates}),
+        )
+
+        with pytest.raises(ValueError, match=r"Periods 'Q1' \(2023-01-01-2023-03-31\) and 'Q2' \(2023-03-31-.*overlap"):
+            filter_and_label_by_periods(transactions, period_ranges)
 
     @pytest.mark.parametrize(
         ("period_ranges", "match"),

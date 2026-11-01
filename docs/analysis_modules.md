@@ -795,16 +795,14 @@ Example:
 
 ```python
 import pandas as pd
-import ibis
 from openretailscience.utils.date import filter_and_label_by_periods
 
-# Create a sample transactions table
-transactions = ibis.memtable(pd.DataFrame({
+transactions = pd.DataFrame({
     "transaction_id": range(1, 101),
     "transaction_date": pd.date_range(start="2023-01-01", periods=100, freq="D"),
     "customer_id": [f"C{i % 20 + 1}" for i in range(100)],
     "amount": [float(i % 5 * 25 + 50) for i in range(100)],
-}))
+})
 
 # Define period ranges for analysis
 period_ranges = {
