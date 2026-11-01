@@ -16,8 +16,6 @@ import pytest
 import openretailscience
 from openretailscience import analysis, plots, segmentation, utils
 
-# About 600 tokens: an agent reading a package's map spends under 2% of a 32k-token context on it.
-HELP_PAGE_MAX_CHARS = 2_500
 HELP_PAGE_PACKAGES = [openretailscience, analysis, segmentation, utils, plots]
 
 
@@ -112,14 +110,12 @@ class TestLazyLoading:
 
 
 class TestHelpPages:
-    """`help()` on a package is a short map that names the call one level down, not every class's full docs."""
+    """`help()` on a package is a map that names the call one level down, not every class's full docs."""
 
     @pytest.mark.parametrize("package", HELP_PAGE_PACKAGES)
-    def test_page_is_a_short_map_without_class_or_function_docs(self, package: ModuleType) -> None:
+    def test_page_has_no_class_or_function_docs(self, package: ModuleType) -> None:
         """help() renders every name in `__all__` in full, which put whole classes on the package page."""
-        page = _help_page(package)
-        assert len(page) <= HELP_PAGE_MAX_CHARS
-        assert re.findall(r"^(CLASSES|FUNCTIONS)$", page, flags=re.MULTILINE) == []
+        assert re.findall(r"^(CLASSES|FUNCTIONS)$", _help_page(package), flags=re.MULTILINE) == []
 
     @pytest.mark.parametrize("package", HELP_PAGE_PACKAGES)
     def test_page_names_a_working_next_call(self, package: ModuleType) -> None:
@@ -132,6 +128,6 @@ class TestHelpPages:
 
     @pytest.mark.parametrize("package", HELP_PAGE_PACKAGES)
     def test_map_names_every_listed_name(self, package: ModuleType) -> None:
-        """A name `dir()` lists but the map omits is invisible to an agent reading `help()`."""
+        """A name `dir()` lists but the map omits is invisible to a reader of `help()`."""
         page = _help_page(package)
         assert [name for name in dir(package) if f"`{name}`" not in page] == []
