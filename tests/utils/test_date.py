@@ -145,6 +145,12 @@ class TestFilterAndLabelByPeriods:
                 ValueError,
                 r"^period_col 'period_name' is already a column in transactions\.",
             ),
+            (
+                lambda table: table,
+                {"Q1": (20230101, "2023-03-31")},
+                TypeError,
+                "Expected str or datetime, got <class 'int'>",
+            ),
         ],
         ids=[
             "single_date",
@@ -156,6 +162,7 @@ class TestFilterAndLabelByPeriods:
             "malformed_start",
             "impossible_end",
             "period_col_exists",
+            "integer_bound",
         ],
     )
     def test_invalid_input_raises(self, sample_transactions_table, to_input, period_ranges, error, match):
@@ -230,8 +237,9 @@ class TestFilterAndLabelByPeriods:
                 dt.date(2023, 3, 31),
                 [dt.date(2023, 3, 31), dt.date(2023, 3, 31), dt.date(2023, 4, 1)],
             ),
+            ("2023-1-1", "2023-3-31", [dt.date(2023, 3, 31), dt.date(2023, 3, 31), dt.date(2023, 4, 1)]),
         ],
-        ids=["padded", "unpadded_end", "unpadded_start", "date_objects", "date_column"],
+        ids=["padded", "unpadded_end", "unpadded_start", "date_objects", "date_column", "unpadded_on_date_column"],
     )
     def test_date_only_bounds_cover_whole_days(self, q1_start, q1_end, transaction_dates):
         """Date-only bounds (strings, padded or not, or date objects) keep every sale on the end day."""
