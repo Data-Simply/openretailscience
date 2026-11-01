@@ -460,6 +460,11 @@ def ensure_tznaive_datetime(df: ibis.Table, column: str) -> None:
     # is_temporal() also admits a time of day, which has no date to truncate or count days from.
     if not (col_type.is_date() or col_type.is_timestamp()):
         msg = f"Column '{column}' must be a date or datetime type. Got {col_type}."
+        if col_type.is_string():
+            msg += (
+                f" Parse it first: pd.to_datetime(df['{column}']) or pd.read_csv(..., parse_dates=['{column}'])"
+                f" for pandas, or table['{column}'].cast('timestamp') for ISO strings in an ibis table."
+            )
         raise TypeError(msg)
     if col_type.is_timestamp() and col_type.timezone is not None:
         msg = (

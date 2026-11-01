@@ -133,9 +133,11 @@ from openretailscience.utils.label import label_by_condition
 ```
 
 - `filter_and_label_by_periods(transactions, period_ranges, period_col="period_name")` —
-  filter an Ibis table to named inclusive `{name: (start, end)}` ranges and tag each row;
-  validates non-overlap. A `"YYYY-MM-DD"` string or `date` end includes that whole day; on a timestamp column a
-  datetime end is an exact instant, so `datetime(2023, 3, 31)` drops sales later on Mar 31.
+  filter a DataFrame or Ibis table to named inclusive `{name: (start, end)}` ranges and tag each row, returning an
+  Ibis table; validates non-overlap. `transaction_date` must be a tz-naive date or datetime (string and tz-aware
+  columns are rejected). A `"YYYY-MM-DD"` string or `date` end includes that whole day; on a timestamp column a
+  datetime end is an exact instant, so `datetime(2023, 3, 31)` drops sales later on Mar 31. A tz-aware bound is read
+  as wall-clock time (its offset is ignored).
 - `find_overlapping_periods(start_date, end_date, return_str=True)` — split a range
   into year-aligned `(start, end)` tuples for `plots.period_on_period.plot`.
 - `filter_and_label_by_condition(table, conditions, label_col="label")` — keep rows

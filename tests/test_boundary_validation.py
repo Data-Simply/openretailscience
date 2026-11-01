@@ -16,6 +16,7 @@ from openretailscience.segmentation.hml import HMLSegmentation
 from openretailscience.segmentation.nlr import NLRSegmentation
 from openretailscience.segmentation.rfm import RFMSegmentation
 from openretailscience.segmentation.threshold import ThresholdSegmentation
+from openretailscience.utils.date import filter_and_label_by_periods
 
 cols = ColumnHelper()
 
@@ -54,6 +55,10 @@ DATE_CONSTRUCTORS = [
     pytest.param(DaysBetweenPurchases, id="DaysBetweenPurchases"),
     pytest.param(lambda df: TransactionChurn(df, churn_period=90), id="TransactionChurn"),
     pytest.param(CLVStats, id="CLVStats"),
+    pytest.param(
+        lambda df: filter_and_label_by_periods(df, {"H1 2024": ("2024-01-01", "2024-06-30")}),
+        id="filter_and_label_by_periods",
+    ),
 ]
 
 
@@ -61,17 +66,28 @@ class TestDateColumn:
     """transaction_date must be a real date or datetime column in every class that reads it."""
 
     @pytest.mark.parametrize(
-        "dates",
+        ("dates", "advice"),
         [
-            pytest.param(["2024-02-03", "2024-08-14", "2024-03-21", "2024-09-02"], id="iso_string"),
-            pytest.param(["02/03/2024", "08/14/2024", "03/21/2024", "09/02/2024"], id="non_iso_string"),
-            pytest.param([20240203, 20240814, 20240321, 20240902], id="integer_yyyymmdd"),
+            pytest.param(
+                ["2024-02-03", "2024-08-14", "2024-03-21", "2024-09-02"],
+                rf" Parse it first: pd\.to_datetime\(df\['{cols.transaction_date}'\]\)",
+                id="iso_string",
+            ),
+            pytest.param(
+                ["02/03/2024", "08/14/2024", "03/21/2024", "09/02/2024"],
+                rf" Parse it first: pd\.to_datetime\(df\['{cols.transaction_date}'\]\)",
+                id="non_iso_string",
+            ),
+            pytest.param([20240203, 20240814, 20240321, 20240902], "$", id="integer_yyyymmdd"),
         ],
     )
     @pytest.mark.parametrize("construct", DATE_CONSTRUCTORS)
-    def test_rejects_non_date_transaction_date(self, transactions, construct, dates):
-        """String and integer dates raise before any query runs, naming the column and its type."""
-        with pytest.raises(TypeError, match=rf"'{cols.transaction_date}' must be a date or datetime type\. Got \w+\.$"):
+    def test_rejects_non_date_transaction_date(self, transactions, construct, dates, advice):
+        """String and integer dates raise before any query runs, naming the column and type; strings get the parse."""
+        with pytest.raises(
+            TypeError,
+            match=rf"'{cols.transaction_date}' must be a date or datetime type\. Got \w+\.{advice}",
+        ):
             construct(transactions.assign(**{cols.transaction_date: dates}))
 
     @pytest.mark.parametrize("construct", DATE_CONSTRUCTORS)
