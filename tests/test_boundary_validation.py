@@ -61,6 +61,10 @@ DATE_CONSTRUCTORS = [
     ),
 ]
 
+PANDAS_PARSE_HINT = (
+    rf" Parse it first: df\['{cols.transaction_date}'\] = pd\.to_datetime\(df\['{cols.transaction_date}'\]\)"
+)
+
 
 class TestDateColumn:
     """transaction_date must be a real date or datetime column in every class that reads it."""
@@ -70,12 +74,12 @@ class TestDateColumn:
         [
             pytest.param(
                 ["2024-02-03", "2024-08-14", "2024-03-21", "2024-09-02"],
-                rf" Parse it first: pd\.to_datetime\(df\['{cols.transaction_date}'\]\)",
+                PANDAS_PARSE_HINT,
                 id="iso_string",
             ),
             pytest.param(
                 ["02/03/2024", "08/14/2024", "03/21/2024", "09/02/2024"],
-                rf" Parse it first: pd\.to_datetime\(df\['{cols.transaction_date}'\]\)",
+                PANDAS_PARSE_HINT,
                 id="non_iso_string",
             ),
             pytest.param([20240203, 20240814, 20240321, 20240902], "$", id="integer_yyyymmdd"),

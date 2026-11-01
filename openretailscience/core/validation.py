@@ -462,8 +462,8 @@ def ensure_tznaive_datetime(df: ibis.Table, column: str) -> None:
         msg = f"Column '{column}' must be a date or datetime type. Got {col_type}."
         if col_type.is_string():
             msg += (
-                f" Parse it first: pd.to_datetime(df['{column}']) or pd.read_csv(..., parse_dates=['{column}'])"
-                f" for pandas, or table['{column}'].cast('timestamp') for ISO strings in an ibis table."
+                f" Parse it first: df['{column}'] = pd.to_datetime(df['{column}']) for pandas,"
+                f" or table.mutate({column}=table['{column}'].cast('timestamp')) for ISO strings in an ibis table."
             )
         raise TypeError(msg)
     if col_type.is_timestamp() and col_type.timezone is not None:

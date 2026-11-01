@@ -511,8 +511,10 @@ class TestEnsureTznaiveDatetime:
                 ["2024-01-01", "2024-01-02"],
                 "string",
                 (
-                    rf" Parse it first: pd\.to_datetime.*parse_dates=.*"
-                    rf"table\['{cols.transaction_date}'\]\.cast\('timestamp'\) for ISO strings in an ibis table\.$"
+                    rf" Parse it first: df\['{cols.transaction_date}'\] = "
+                    rf"pd\.to_datetime\(df\['{cols.transaction_date}'\]\)"
+                    rf" for pandas, or table\.mutate\({cols.transaction_date}=table\['{cols.transaction_date}'\]"
+                    rf"\.cast\('timestamp'\)\) for ISO strings in an ibis table\.$"
                 ),
             ),
             ([20240101, 20240102], "int64", "$"),
