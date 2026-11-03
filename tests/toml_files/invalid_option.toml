@@ -1,3 +1,3 @@
-[column.agg]
-customer_id    = "customer_id"
-unknown_column = "unknown_column"
+[column]
+brand_name  = "brand"
+customer_id = "cust_id"
