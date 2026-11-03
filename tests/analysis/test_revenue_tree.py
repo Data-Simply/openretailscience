@@ -180,7 +180,7 @@ class TestRevenueTree:
         expected_p1: dict[int, tuple[int, float, int]],
         expected_p2: dict[int, tuple[int, float, int]],
     ) -> None:
-        """Each period frame has one row per store present in it, on a CategoricalIndex shared by both periods."""
+        """Each period frame has one row per store present in it, as a Categorical column shared by both periods."""
         df = pd.DataFrame(
             {
                 cols.store_id: store_ids,
@@ -201,24 +201,24 @@ class TestRevenueTree:
         for result, expected in ((p1_df, expected_p1), (p2_df, expected_p2)):
             expected_df = pd.DataFrame(
                 {
+                    cols.store_id: pd.Categorical(list(expected), categories=categories),
                     cols.agg.customer_id: [n for n, _, _ in expected.values()],
                     cols.agg.transaction_id: [n for n, _, _ in expected.values()],
                     cols.agg.unit_spend: [spend for _, spend, _ in expected.values()],
                 },
-                index=pd.CategoricalIndex(list(expected), categories=categories, name=cols.store_id),
             )
             if include_quantity:
                 expected_df[cols.agg.unit_qty] = [qty for _, _, qty in expected.values()]
-            pd.testing.assert_frame_equal(result, expected_df)
+            pd.testing.assert_frame_equal(result.sort_values(cols.store_id, ignore_index=True), expected_df)
 
     @pytest.mark.parametrize("include_quantity", [True, False])
     @pytest.mark.parametrize(
-        ("store_ids", "row_label"),
+        ("store_ids", "row"),
         [
             # Ungrouped: the single row compares all of P1 with all of P2
             (None, 0),
-            # Store 103 trades only in P1, so its P2 side is zero-filled
-            ([101, 101, 101, 102, 102, 102, 103], 103),
+            # Store 103, the last row, trades only in P1, so its P2 side is zero-filled
+            ([101, 101, 101, 102, 102, 102, 103], 2),
         ],
     )
     def test_contribs_sum_to_parent(
@@ -226,7 +226,7 @@ class TestRevenueTree:
         cols: ColumnHelper,
         include_quantity: bool,
         store_ids: list[int] | None,
-        row_label: int,
+        row: int,
     ) -> None:
         """Sibling contributions sum to their parent's, and every ``_diff`` is p2 minus p1."""
         df = pd.DataFrame(
@@ -245,7 +245,7 @@ class TestRevenueTree:
             group_col = cols.store_id
 
         rt = RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2", group_col=group_col)
-        tree = rt.df.loc[row_label]
+        tree = rt.df.iloc[row]
 
         assert math.isclose(
             tree[cols.agg.customer_id_contrib] + tree[cols.calc.spend_per_cust_contrib],
@@ -324,47 +324,74 @@ class TestRevenueTree:
 
             assert round(result["price_elasticity"].iloc[0], 6) == round(expected_elasticity, 6)
 
-    def test_calc_tree_kpis_pairs_periods_by_index_label(self, cols: ColumnHelper) -> None:
-        """Rows are paired by label for any index, so a store that closed and one that opened stay separate."""
+    def test_calc_tree_kpis_pairs_periods_by_group_col(self, cols: ColumnHelper) -> None:
+        """Rows are paired by group_col, so a store that closed and one that opened stay separate."""
         totals = {cols.agg.customer_id: [2], cols.agg.transaction_id: [2]}
-        p1_df = pd.DataFrame(
-            {**totals, cols.agg.unit_spend: [100.0]}, index=pd.Index(["Store_101"], name=cols.store_id)
-        )
-        p2_df = pd.DataFrame(
-            {**totals, cols.agg.unit_spend: [300.0]}, index=pd.Index(["Store_102"], name=cols.store_id)
-        )
+        p1_df = pd.DataFrame({cols.store_id: ["Store_101"], **totals, cols.agg.unit_spend: [100.0]})
+        p2_df = pd.DataFrame({cols.store_id: ["Store_102"], **totals, cols.agg.unit_spend: [300.0]})
 
-        result = calc_tree_kpis(p1_df, p2_df)
+        result = calc_tree_kpis(p1_df, p2_df, group_col=cols.store_id)
 
         expected = pd.DataFrame(
-            {cols.agg.unit_spend_p1: [100.0, 0.0], cols.agg.unit_spend_p2: [0.0, 300.0]},
-            index=pd.Index(["Store_101", "Store_102"], name=cols.store_id),
+            {
+                cols.store_id: ["Store_101", "Store_102"],
+                cols.agg.unit_spend_p1: [100.0, 0.0],
+                cols.agg.unit_spend_p2: [0.0, 300.0],
+            },
         )
-        pd.testing.assert_frame_equal(result[[cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected)
+        pd.testing.assert_frame_equal(result[[cols.store_id, cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected)
 
     @pytest.mark.parametrize(
-        ("make_p2_df", "error", "match"),
+        ("make_p2_df", "group_by_store", "error", "match"),
         [
-            (lambda _cols: [False, True], TypeError, "p2_df must be a pandas DataFrame"),
+            (lambda _cols: [False, True], True, TypeError, "p2_df must be a pandas DataFrame"),
             (
                 lambda cols: pd.DataFrame(
-                    {cols.agg.customer_id: [1, 2], cols.agg.transaction_id: [1, 2], cols.agg.unit_spend: [50.0, 80.0]},
-                    index=pd.Index(["Store_101", "Store_101"], name=cols.store_id),
+                    {
+                        cols.store_id: ["Store_101", "Store_101"],
+                        cols.agg.customer_id: [1, 2],
+                        cols.agg.transaction_id: [1, 2],
+                        cols.agg.unit_spend: [50.0, 80.0],
+                    },
                 ),
+                True,
                 ValueError,
-                "p2_df has repeated index labels",
+                "p2_df repeats a group_col value",
+            ),
+            (
+                lambda cols: pd.DataFrame(
+                    {cols.agg.customer_id: [1], cols.agg.transaction_id: [1], cols.agg.unit_spend: [80.0]},
+                ),
+                True,
+                ValueError,
+                "group_col references columns not present in the data",
+            ),
+            # Two stores and no group_col: there is nothing to pair the rows by
+            (
+                lambda cols: pd.DataFrame(
+                    {
+                        cols.store_id: ["Store_101", "Store_102"],
+                        cols.agg.customer_id: [1, 2],
+                        cols.agg.transaction_id: [1, 2],
+                        cols.agg.unit_spend: [50.0, 80.0],
+                    },
+                ),
+                False,
+                ValueError,
+                "p2_df has 2 rows; pass group_col",
             ),
             # Units in P2 only: dropping them silently would hide the units and price nodes
             (
                 lambda cols: pd.DataFrame(
                     {
+                        cols.store_id: ["Store_101"],
                         cols.agg.customer_id: [1],
                         cols.agg.transaction_id: [1],
                         cols.agg.unit_spend: [80.0],
                         cols.agg.unit_qty: [4],
                     },
-                    index=pd.Index(["Store_101"], name=cols.store_id),
                 ),
+                True,
                 ValueError,
                 "both have .* or neither",
             ),
@@ -374,17 +401,22 @@ class TestRevenueTree:
         self,
         cols: ColumnHelper,
         make_p2_df: Callable[[ColumnHelper], list[bool] | pd.DataFrame],
+        group_by_store: bool,
         error: type[Exception],
         match: str,
     ) -> None:
-        """Unpairable input raises: a non-DataFrame such as a mask, repeated labels, or units on one side only."""
+        """Raises for a non-DataFrame, a repeated or missing group, extra ungrouped rows or one-sided units."""
         p1_df = pd.DataFrame(
-            {cols.agg.customer_id: [1], cols.agg.transaction_id: [1], cols.agg.unit_spend: [50.0]},
-            index=pd.Index(["Store_101"], name=cols.store_id),
+            {
+                cols.store_id: ["Store_101"],
+                cols.agg.customer_id: [1],
+                cols.agg.transaction_id: [1],
+                cols.agg.unit_spend: [50.0],
+            },
         )
 
         with pytest.raises(error, match=match):
-            calc_tree_kpis(p1_df, make_p2_df(cols))
+            calc_tree_kpis(p1_df, make_p2_df(cols), group_col=cols.store_id if group_by_store else None)
 
     @pytest.mark.parametrize(
         ("p1_totals", "p2_totals", "expected_contribs"),
@@ -435,7 +467,8 @@ class TestRevenueTree:
             [(300.0, 0.0, 0.0, 0.0, 0.0, 0.0), (-80.0, 0.0, 0.0, 0.0, 0.0, 0.0)], columns=contrib_cols
         )
         pd.testing.assert_frame_equal(
-            rt.df.loc[["Store_102", "Store_103"], contrib_cols].reset_index(drop=True), expected
+            rt.df.loc[rt.df[cols.store_id].isin(["Store_102", "Store_103"]), contrib_cols].reset_index(drop=True),
+            expected,
         )
 
     @pytest.mark.parametrize("group_by_store", [False, True])
@@ -567,23 +600,29 @@ class TestRevenueTree:
             df, period_col="period", p1_value="P1", p2_value="P2", group_col=["region", "store"]
         )
 
-        expected_index = pd.MultiIndex.from_tuples(
-            [("North", "Store_101"), ("South", "Store_102")], names=["region", "store"]
-        )
+        groups = {"region": ["North", "South"], "store": ["Store_101", "Store_102"]}
         expected_p1 = pd.DataFrame(
-            {cols.agg.customer_id: [2, 1], cols.agg.transaction_id: [2, 1], cols.agg.unit_spend: [400.0, 500.0]},
-            index=expected_index,
+            {
+                **groups,
+                cols.agg.customer_id: [2, 1],
+                cols.agg.transaction_id: [2, 1],
+                cols.agg.unit_spend: [400.0, 500.0],
+            },
         )
         expected_p2 = pd.DataFrame(
-            {cols.agg.customer_id: [1, 2], cols.agg.transaction_id: [1, 2], cols.agg.unit_spend: [200.0, 1000.0]},
-            index=expected_index,
+            {
+                **groups,
+                cols.agg.customer_id: [1, 2],
+                cols.agg.transaction_id: [1, 2],
+                cols.agg.unit_spend: [200.0, 1000.0],
+            },
         )
         if include_quantity:
             expected_p1[cols.agg.unit_qty] = [4, 5]
             expected_p2[cols.agg.unit_qty] = [2, 10]
 
-        pd.testing.assert_frame_equal(p1_df, expected_p1)
-        pd.testing.assert_frame_equal(p2_df, expected_p2)
+        pd.testing.assert_frame_equal(p1_df.sort_values(list(groups), ignore_index=True), expected_p1)
+        pd.testing.assert_frame_equal(p2_df.sort_values(list(groups), ignore_index=True), expected_p2)
 
     def test_revenue_tree_with_multi_group_cols(self, cols: ColumnHelper):
         """Test RevenueTree end-to-end with multiple group columns."""
@@ -606,17 +645,17 @@ class TestRevenueTree:
             group_col=["region", "store"],
         )
 
-        # Verify MultiIndex
-        assert isinstance(rt.df.index, pd.MultiIndex)
-        assert rt.df.index.names == ["region", "store"]
-        expected_num_combinations = 2
-        assert len(rt.df) == expected_num_combinations  # 2 unique combinations
-
-        # Verify we have all the expected columns
-        assert cols.agg.customer_id_p1 in rt.df.columns
-        assert cols.agg.customer_id_p2 in rt.df.columns
-        assert cols.agg.unit_spend_p1 in rt.df.columns
-        assert cols.agg.unit_spend_p2 in rt.df.columns
+        expected = pd.DataFrame(
+            {
+                "region": ["North", "South"],
+                "store": ["Store_101", "Store_102"],
+                cols.agg.unit_spend_p1: [100.0, 300.0],
+                cols.agg.unit_spend_p2: [200.0, 400.0],
+            },
+        )
+        pd.testing.assert_frame_equal(
+            rt.df[["region", "store", cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected
+        )
 
     @pytest.mark.parametrize("group_by_region", [False, True])
     @pytest.mark.parametrize(
@@ -655,16 +694,15 @@ class TestRevenueTree:
 
         rt = RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2", group_col=group_col)
 
-        expected_index = (
-            pd.MultiIndex.from_arrays([["North"] * len(expected_stores), expected_stores], names=group_col)
+        groups = (
+            {"region": ["North"] * len(expected_stores), cols.store_id: expected_stores}
             if group_by_region
-            else pd.CategoricalIndex(expected_stores, name=cols.store_id)
+            else {cols.store_id: pd.Categorical(expected_stores)}
         )
         expected = pd.DataFrame(
-            {cols.agg.unit_spend_p1: expected_spend_p1, cols.agg.unit_spend_p2: expected_spend_p2},
-            index=expected_index,
+            {**groups, cols.agg.unit_spend_p1: expected_spend_p1, cols.agg.unit_spend_p2: expected_spend_p2},
         )
-        pd.testing.assert_frame_equal(rt.df[[cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected)
+        pd.testing.assert_frame_equal(rt.df[[*groups, cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected)
 
     def test_missing_group_value_gets_its_own_row(self, cols: ColumnHelper) -> None:
         """Transactions with no store recorded form a row of their own, after the named stores."""
@@ -681,10 +719,13 @@ class TestRevenueTree:
         rt = RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2", group_col=cols.store_id)
 
         expected = pd.DataFrame(
-            {cols.agg.unit_spend_p1: [100.0, 40.0], cols.agg.unit_spend_p2: [150.0, 60.0]},
-            index=pd.CategoricalIndex(["Store_101", None], name=cols.store_id),
+            {
+                cols.store_id: pd.Categorical(["Store_101", None]),
+                cols.agg.unit_spend_p1: [100.0, 40.0],
+                cols.agg.unit_spend_p2: [150.0, 60.0],
+            },
         )
-        pd.testing.assert_frame_equal(rt.df[[cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected)
+        pd.testing.assert_frame_equal(rt.df[[cols.store_id, cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected)
 
     @pytest.mark.parametrize("include_qty", [True, False])
     def test_draw_tree_matplotlib(self, cols: ColumnHelper, include_qty: bool):
@@ -763,7 +804,7 @@ class TestRevenueTree:
         # Should have 2 rows (North and South)
         expected_regions = ["North", "South"]
         assert len(rt.df) == len(expected_regions)
-        assert rt.df.index.tolist() == expected_regions
+        assert rt.df["region"].tolist() == expected_regions
 
         # Draw first row (North region)
         ax = rt.draw_tree(row_index=0)
@@ -882,7 +923,7 @@ class TestRevenueTree:
         )
 
         # Group 2 has no P1 data, so every pct_diff, P1 ratio and elasticity built from them is undefined
-        group2_data = rt.df.loc[2]
+        group2_data = rt.df.set_index("group_id").loc[2]
 
         expected_nan_cols = [
             cols.calc.frequency_elasticity,

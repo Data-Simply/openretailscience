@@ -29,11 +29,8 @@ class TestThresholdSegmentation:
             value_col=cols.unit_spend,
             zero_value_customers="exclude",
         )
-        result_df = seg.df
-        assert result_df.loc[1, "segment_name"] == "Low"
-        assert result_df.loc[2, "segment_name"] == "Low"
-        assert result_df.loc[3, "segment_name"] == "High"
-        assert result_df.loc[4, "segment_name"] == "High"
+        expected_df = df.assign(segment_name=["Low", "Low", "High", "High"])
+        pd.testing.assert_frame_equal(seg.df.sort_values(cols.customer_id, ignore_index=True), expected_df)
 
     def test_correct_aggregation_function(self):
         """Test that the correct aggregation function is applied for product_id custom segmentation."""
@@ -62,7 +59,7 @@ class TestThresholdSegmentation:
                 "segment_name": ["Low", "High", "Medium", "Medium", "Medium"],
             },
         )
-        pd.testing.assert_frame_equal(my_seg.df.sort_values(cols.customer_id).reset_index(), expected_result)
+        pd.testing.assert_frame_equal(my_seg.df.sort_values(cols.customer_id, ignore_index=True), expected_result)
 
     @pytest.mark.parametrize(
         ("thresholds", "segments", "zero_value_customers", "match"),
@@ -111,12 +108,12 @@ class TestThresholdSegmentation:
         )
         expected = pd.DataFrame(
             {
+                cols.customer_id: [1002, 1003, 1004, 1005],
                 cols.unit_spend: [25.0, 50.0, 75.0, 100.0],
                 "segment_name": ["Light", "Light", "Heavy", "Heavy"],
             },
-            index=pd.Index([1002, 1003, 1004, 1005], name=cols.customer_id),
         )
-        pd.testing.assert_frame_equal(seg.df.sort_index(), expected)
+        pd.testing.assert_frame_equal(seg.df.sort_values(cols.customer_id, ignore_index=True), expected)
 
     def test_with_custom_column_names(self):
         """Test ThresholdSegmentation with custom column names."""
@@ -139,8 +136,7 @@ class TestThresholdSegmentation:
             )
 
             result_df = seg.df
-            assert isinstance(result_df, pd.DataFrame), "Should execute successfully with custom column names"
-            assert result_df.index.name == "buyer_id", "Should use custom customer_id column name as index"
+            assert result_df.columns.tolist() == ["buyer_id", "spend_amount", "segment_name"]
 
     def test_segmentation_with_tied_spend_values(self):
         """Test customers with identical spend are segmented consistently using customer_id as tiebreaker."""
@@ -174,9 +170,9 @@ class TestThresholdSegmentation:
                 cols.unit_spend: [100, 100, 100, 200, 200, 300, 300, 300],
                 "segment_name": ["Low", "Low", "Low", "Low", "High", "High", "High", "High"],
             },
-        ).set_index(cols.customer_id)
+        )
 
-        pd.testing.assert_frame_equal(result.sort_index(), expected_df)
+        pd.testing.assert_frame_equal(result.sort_values(cols.customer_id, ignore_index=True), expected_df)
 
 
 class TestThresholdSegmentationGroupCol:
@@ -214,9 +210,11 @@ class TestThresholdSegmentationGroupCol:
                 cols.unit_spend: [500.00, 100.00, 200.00, 50.00, 400.00, 300.00],
                 "segment_name": ["High", "Low", "Low", "Low", "High", "Low"],
             },
-        ).set_index([cols.customer_id, cols.store_id])
+        )
 
-        pd.testing.assert_frame_equal(seg.df.sort_index(), expected_df.sort_index())
+        pd.testing.assert_frame_equal(
+            seg.df.sort_values([cols.store_id, cols.customer_id], ignore_index=True), expected_df
+        )
 
     def test_group_col_as_list(self, store_transaction_df):
         """Test that group_col works when provided as a list of columns."""
@@ -232,7 +230,13 @@ class TestThresholdSegmentationGroupCol:
         )
 
         result_df = seg.df
-        assert result_df.index.names == [cols.customer_id, cols.store_id, "category_id"]
+        assert result_df.columns.tolist() == [
+            cols.customer_id,
+            cols.store_id,
+            "category_id",
+            cols.unit_spend,
+            "segment_name",
+        ]
 
     def test_zero_value_separate_segment_within_groups(self):
         """Test that zero-value customers are correctly segmented within each group."""
@@ -260,9 +264,11 @@ class TestThresholdSegmentationGroupCol:
                 cols.unit_spend: [500.00, 100.00, 0.00, 50.00, 400.00, 0.00],
                 "segment_name": ["High", "Low", "Zero", "Low", "High", "Zero"],
             },
-        ).set_index([cols.customer_id, cols.store_id])
+        )
 
-        pd.testing.assert_frame_equal(seg.df.sort_index(), expected_df.sort_index())
+        pd.testing.assert_frame_equal(
+            seg.df.sort_values([cols.store_id, cols.customer_id], ignore_index=True), expected_df
+        )
 
     def test_missing_group_col_raises_error(self):
         """Test that missing group_col column raises ValueError."""

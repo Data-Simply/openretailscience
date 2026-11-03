@@ -87,10 +87,8 @@ seg = ThresholdSegmentation(
     segments=["Low", "Medium", "High"]
 )
 
-# seg.df is indexed by customer_id; merge its segment_name back on
 transactions_with_segments = transactions.merge(
-    seg.df["segment_name"],
-    left_on="customer_id",
-    right_index=True,
+    seg.df[["customer_id", "segment_name"]],
+    on="customer_id",
     how="left",
 )

@@ -46,18 +46,17 @@ class NLRSegmentation:
     Attributes:
         table (ibis.Table): The underlying lazy ibis Table expression; further ibis operations
             can be applied before materializing.
-        df (pd.DataFrame): The materialized results, indexed by customer_id (and group_col if
-            specified). Cached after first access.
+        df (pd.DataFrame): The materialized results. Cached after first access.
 
     Examples:
         >>> from openretailscience.segmentation import NLRSegmentation
         >>> nlr = NLRSegmentation(df=transactions, period_col="period", p1_value="2025Q1", p2_value="2025Q2")
-        >>> nlr.df.sort_index()
-                    segment_name  unit_spend_p1  unit_spend_p2
-        customer_id
-        1                    New           0.00           27.2
-        3                 Lapsed          18.40            0.0
-        ...
+        >>> nlr.df["segment_name"].value_counts()
+        segment_name
+        Lapsed       39
+        New          18
+        Repeating     8
+        Name: count, dtype: int64
     """
 
     def __init__(
@@ -103,10 +102,9 @@ class NLRSegmentation:
 
         df = ensure_ibis_table(df)
 
-        self._group_col: list[str] | None = None
         if group_col is not None:
-            self._group_col = ensure_columns(df, group_col, "group_col")
-            ensure_excludes_customer_col(self._group_col, "group_col")
+            group_col = ensure_columns(df, group_col, "group_col")
+            ensure_excludes_customer_col(group_col, "group_col")
 
         # group_col is already validated above; only the function's hard-coded requirements remain.
         ensure_data_has_columns(df, [cols.customer_id, value_col, period_col])
@@ -125,8 +123,8 @@ class NLRSegmentation:
 
         # Determine which periods each customer has positive spend in
         group_cols = [cols.customer_id]
-        if self._group_col is not None:
-            group_cols.extend(self._group_col)
+        if group_col is not None:
+            group_cols.extend(group_col)
 
         p1_col = f"{value_col}_p1"
         p2_col = f"{value_col}_p2"
@@ -164,12 +162,8 @@ class NLRSegmentation:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Returns the DataFrame with segment names, indexed by customer_id (and group_col if specified).
+        """Returns the DataFrame with segment names.
 
-        Columns: segment_name, {value_col}_p1 and {value_col}_p2.
+        Columns: customer_id, group_col if specified, segment_name, {value_col}_p1 and {value_col}_p2.
         """
-        cols = ColumnHelper()
-        index_cols = [cols.customer_id]
-        if self._group_col is not None:
-            index_cols.extend(self._group_col)
-        return self.table.execute().set_index(index_cols)
+        return self.table.execute()
