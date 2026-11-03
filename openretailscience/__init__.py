@@ -4,7 +4,9 @@
 - `analysis`: revenue trees, gain-loss switching, cross-shop overlap, cohorts, market baskets and more
 - `plots`: one module per chart type, each with a `plot()` function
 - `utils`: Ibis helpers for labelling rows and splitting transactions into time periods
-- `options`: map your column names once with `set_option`
+- `options`: map your column names onto the standard ones (customer_id, unit_spend, …) when they differ, and rename
+  outputs, with `set_option`, `option_context` or an `openretailscience.toml` file; pass other columns to analyses as
+  arguments (group_col=, segment_col=)
 - `experimental`: APIs that may change without notice
 - `skills`: install the bundled AI-agent skill with `install_skills()`
 """

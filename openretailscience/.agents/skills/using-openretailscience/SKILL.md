@@ -31,8 +31,8 @@ filtering and aggregation are pushed into the engine.
 
 ## Core workflow
 
-1. **Configure column names once** with the options system, so analyses find your
-   schema without per-call column arguments.
+1. **Map your column names** with the options system when they differ from the
+   standard ones (customer_id, unit_spend, …); pass other columns to analyses as arguments.
 2. **Instantiate an analysis class** (or call a plot function) with your data.
 3. **Read results** from `.df` (pandas) or `.table` (Ibis), and/or render with
    `.plot()` / `.draw_tree()` or a `plots.*` function.

@@ -1,11 +1,23 @@
 """Tests for the Options module."""
 
+import re
 from pathlib import Path
 
 import pytest
 import toml
 
 import openretailscience.options as opt
+
+LIST_HINT = "See openretailscience.options.list_options()."
+COLUMN_HINT = (
+    "Options rename only the standard input and output columns (openretailscience.options.list_options()); "
+    "if {name!r} isn't one, pass it to analyses as an argument instead, e.g. group_col={name!r}."
+)
+
+
+def _enter_option_context(*args):
+    with opt.option_context(*args):
+        pass
 
 
 class TestOptions:
@@ -14,27 +26,229 @@ class TestOptions:
     @pytest.mark.parametrize(
         "operation",
         [
-            lambda o, pat: o.set_option(pat, "some_value"),
-            lambda o, pat: o.get_option(pat),
-            lambda o, pat: o.reset_option(pat),
-            lambda o, pat: o.describe_option(pat),
+            lambda pat: opt.set_option(pat, "brand"),
+            opt.get_option,
+            opt.reset_option,
+            opt.describe_option,
+            lambda pat: _enter_option_context(pat, "brand"),
+            lambda pat: _enter_option_context({pat: "brand"}),
+            opt.ColumnHelper.join_options,
         ],
-        ids=["set_option", "get_option", "reset_option", "describe_option"],
+        ids=[
+            "set_option",
+            "get_option",
+            "reset_option",
+            "describe_option",
+            "option_context",
+            "option_context_dict",
+            "join_options",
+        ],
     )
     @pytest.mark.parametrize(
-        ("pat", "match"),
+        ("pat", "expected"),
         [
-            ("transaction_date", r"Unknown option 'transaction_date'\. Did you mean 'column\.transaction_date'\?"),
-            ("unknown.option", r"Unknown option 'unknown\.option'\. See list_options\(\)"),
-            (42, r"Unknown option '42'\. See list_options\(\)"),
+            (
+                "column.custmer_id",
+                "Unknown option 'column.custmer_id'. Did you mean 'column.customer_id'? "
+                + COLUMN_HINT.format(name="custmer_id"),
+            ),
+            (
+                "column.cusotmer_id",
+                "Unknown option 'column.cusotmer_id'. Did you mean 'column.customer_id'? "
+                + COLUMN_HINT.format(name="cusotmer_id"),
+            ),
+            (
+                "column.customer",
+                "Unknown option 'column.customer'. Did you mean 'column.customer_id'? "
+                + COLUMN_HINT.format(name="customer"),
+            ),
+            (
+                "column.unit_qty",
+                "Unknown option 'column.unit_qty'. Did you mean 'column.unit_quantity'? "
+                + COLUMN_HINT.format(name="unit_qty"),
+            ),
+            (
+                "column.spend",
+                "Unknown option 'column.spend'. Did you mean 'column.unit_spend'? " + COLUMN_HINT.format(name="spend"),
+            ),
+            (
+                "column.spend_per_customer",
+                "Unknown option 'column.spend_per_customer'. Did you mean 'column.calc.spend_per_customer'? "
+                + COLUMN_HINT.format(name="spend_per_customer"),
+            ),
+            (
+                "column.calc.unit_spend",
+                "Unknown option 'column.calc.unit_spend'. Did you mean 'column.agg.unit_spend'? "
+                + COLUMN_HINT.format(name="unit_spend"),
+            ),
+            (
+                "column.store_name",
+                "Unknown option 'column.store_name'. Did you mean 'column.store_id'? "
+                + COLUMN_HINT.format(name="store_name"),
+            ),
+            (
+                "column.date",
+                "Unknown option 'column.date'. " + COLUMN_HINT.format(name="date"),
+            ),
+            (
+                "column.brand_name",
+                "Unknown option 'column.brand_name'. " + COLUMN_HINT.format(name="brand_name"),
+            ),
+            (
+                "column.loyalty_tier",
+                "Unknown option 'column.loyalty_tier'. " + COLUMN_HINT.format(name="loyalty_tier"),
+            ),
+            (
+                "column.source",
+                "Unknown option 'column.source'. " + COLUMN_HINT.format(name="source"),
+            ),
+            (
+                "column.customer_segment",
+                "Unknown option 'column.customer_segment'. " + COLUMN_HINT.format(name="customer_segment"),
+            ),
+            (
+                "column.agg.gross_margin",
+                "Unknown option 'column.agg.gross_margin'. " + COLUMN_HINT.format(name="gross_margin"),
+            ),
+            (
+                "column.calc.margin",
+                "Unknown option 'column.calc.margin'. " + COLUMN_HINT.format(name="margin"),
+            ),
+            (
+                "customer_id",
+                "Unknown option 'customer_id'. Did you mean 'column.customer_id'? "
+                + COLUMN_HINT.format(name="customer_id"),
+            ),
+            (
+                "customer",
+                "Unknown option 'customer'. Did you mean 'column.customer_id'? " + COLUMN_HINT.format(name="customer"),
+            ),
+            (
+                "agg.unit_spend",
+                "Unknown option 'agg.unit_spend'. Did you mean 'column.agg.unit_spend'? "
+                + COLUMN_HINT.format(name="unit_spend"),
+            ),
+            (
+                "calc.spend_per_cust",
+                "Unknown option 'calc.spend_per_cust'. Did you mean 'column.calc.spend_per_customer'? "
+                + COLUMN_HINT.format(name="spend_per_cust"),
+            ),
+            (
+                "brand_name",
+                "Unknown option 'brand_name'. " + COLUMN_HINT.format(name="brand_name"),
+            ),
+            (
+                "column.suffix.percentage",
+                "Unknown option 'column.suffix.percentage'. Did you mean 'column.suffix.percent'? " + LIST_HINT,
+            ),
+            (
+                "column.suffixes.count",
+                "Unknown option 'column.suffixes.count'. Did you mean 'column.suffix.count'? " + LIST_HINT,
+            ),
+            (
+                "column.difference",
+                "Unknown option 'column.difference'. Did you mean 'column.suffix.difference'? " + LIST_HINT,
+            ),
+            (
+                "column.percent",
+                "Unknown option 'column.percent'. Did you mean 'column.suffix.percent'? " + LIST_HINT,
+            ),
+            (
+                "plot.colour.primary",
+                "Unknown option 'plot.colour.primary'. Did you mean 'plot.color.primary'? " + LIST_HINT,
+            ),
+            (
+                "font.title_size",
+                "Unknown option 'font.title_size'. Did you mean 'plot.font.title_size'? " + LIST_HINT,
+            ),
+            (
+                "color.primary",
+                "Unknown option 'color.primary'. Did you mean 'plot.color.primary'? " + LIST_HINT,
+            ),
+            (
+                "title_size",
+                "Unknown option 'title_size'. Did you mean 'plot.font.title_size'? " + LIST_HINT,
+            ),
+            (
+                "use_native_sql",
+                "Unknown option 'use_native_sql'. Did you mean 'optimization.use_native_sql'? " + LIST_HINT,
+            ),
+            (
+                "primary",
+                "Unknown option 'primary'. Did you mean 'plot.color.primary'? " + LIST_HINT,
+            ),
+            (
+                "Column.Customer_ID",
+                "Unknown option 'Column.Customer_ID'. Did you mean 'column.customer_id'? "
+                + COLUMN_HINT.format(name="Customer_ID"),
+            ),
+            ("plot.style.dark_mode", "Unknown option 'plot.style.dark_mode'. " + LIST_HINT),
+            ("style.dark_mode", "Unknown option 'style.dark_mode'. " + LIST_HINT),
+            ("display.max_rows", "Unknown option 'display.max_rows'. " + LIST_HINT),
+            (42, "Unknown option '42'. " + LIST_HINT),
+            (3.5, "Unknown option '3.5'. " + LIST_HINT),
         ],
-        ids=["close_match", "no_match", "non_string"],
+        ids=[
+            "dropped_letter",
+            "swapped_letters",
+            "missing_id",
+            "abbreviation",
+            "lowest_scoring_typo",
+            "missing_calc_group",
+            "wrong_group",
+            "non_standard_near_real_key",
+            "short_standard_name",
+            "non_standard",
+            "non_standard_far_from_any_key",
+            "non_standard_named_like_a_plot_option",
+            "non_standard_just_below_cutoff",
+            "invented_agg_output",
+            "invented_calc_output",
+            "missing_column_prefix",
+            "missing_column_prefix_and_id",
+            "missing_column_prefix_on_output",
+            "missing_column_prefix_typo",
+            "missing_column_prefix_non_standard",
+            "suffix_typo",
+            "suffix_group_typo",
+            "missing_suffix_group",
+            "missing_suffix_group_at_cutoff",
+            "other_typo",
+            "missing_plot_prefix",
+            "missing_plot_prefix_color",
+            "missing_plot_groups",
+            "missing_optimization_group",
+            "missing_plot_groups_single_word",
+            "mixed_case",
+            "other_no_match",
+            "missing_plot_prefix_no_match",
+            "unknown_group",
+            "non_string",
+            "non_string_with_dot",
+        ],
     )
-    def test_unknown_option_raises_value_error(self, operation, pat, match):
-        """Each accessor names the unknown option, suggests the closest real one and points at list_options()."""
-        options = opt.Options()
-        with pytest.raises(ValueError, match=match):
-            operation(options, pat)
+    def test_unknown_option_raises_value_error(self, operation, pat, expected):
+        """Each entry point names the unknown key, suggests a close real one and says where non-standard columns go."""
+        with pytest.raises(ValueError, match=f"^{re.escape(expected)}$"):
+            operation(pat)
+
+    @pytest.mark.parametrize("pat", [["column.customer_id"], {"column.customer_id": "cust_id"}], ids=["list", "dict"])
+    def test_unhashable_option_key_raises_value_error(self, pat):
+        """A key that can't index the options gets the unknown-option error, not a TypeError."""
+        expected = f"Unknown option '{pat}'. " + LIST_HINT
+        with pytest.raises(ValueError, match=f"^{re.escape(expected)}$"):
+            opt.get_option(pat)
+
+    def test_option_context_unknown_key_restores_earlier_options(self):
+        """An unknown key raises before it is set, and the keys set before it are restored."""
+        original_customer = opt.get_option("column.customer_id")
+        with (
+            pytest.raises(ValueError, match=re.escape("Unknown option 'column.brand_name'.")),
+            opt.option_context("column.customer_id", "cust_id", "column.brand_name", "brand"),
+        ):
+            pass
+        assert opt.get_option("column.customer_id") == original_customer
+        assert "column.brand_name" not in opt.list_options()
 
     def test_set_option_updates_value(self):
         """Test setting an option updates the option value correctly."""
@@ -129,9 +343,10 @@ class TestOptions:
         assert options.get_option("column.suffix.count") == "new_cnt"
 
     def test_load_invalid_option_toml(self):
-        """Test loading an invalid TOML file raises a ValueError."""
+        """An unknown key in a TOML file raises the unknown-option error, prefixed with the file's path."""
         test_file_path = Path("tests/toml_files/invalid_option.toml").resolve()
-        with pytest.raises(ValueError, match=r"Unknown option in TOML file: column.agg.unknown_column"):
+        expected = f"{test_file_path}: Unknown option 'column.brand_name'. " + COLUMN_HINT.format(name="brand_name")
+        with pytest.raises(ValueError, match=f"^{re.escape(expected)}$"):
             opt.Options.load_from_toml(test_file_path)
 
     def test_options_template_matches_defaults(self):
