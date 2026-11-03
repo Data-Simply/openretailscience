@@ -179,8 +179,7 @@ class TestOptions:
             ),
             (
                 "Column.Customer_ID",
-                "Unknown option 'Column.Customer_ID'. Did you mean 'column.customer_id'? "
-                + COLUMN_HINT.format(name="Customer_ID"),
+                "Unknown option 'Column.Customer_ID'. Did you mean 'column.customer_id'? " + LIST_HINT,
             ),
             ("plot.style.dark_mode", "Unknown option 'plot.style.dark_mode'. " + LIST_HINT),
             ("style.dark_mode", "Unknown option 'style.dark_mode'. " + LIST_HINT),
