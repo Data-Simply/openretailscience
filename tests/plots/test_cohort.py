@@ -102,3 +102,10 @@ def test_plot_cohort_percentage_formatting(percentage):
         )
     else:
         assert all("%" not in val for val in text_values), "Should not have percentage formatting"
+
+
+def test_plot_cohort_index_labelled_matrix_without_y_col_none_raises(sample_cohort_dataframe):
+    """A matrix labelled by its index, plotted with the default y_col, says to pass y_col=None."""
+    df = sample_cohort_dataframe.set_index("min_period_shopped")
+    with pytest.raises(ValueError, match=r"'min_period_shopped' is not a column of df; pass y_col=None"):
+        cohort.plot(df=df, cbar_label="Retention Rate")
