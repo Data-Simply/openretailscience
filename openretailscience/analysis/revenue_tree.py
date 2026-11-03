@@ -53,14 +53,49 @@ def _contribution_ratio(df: pd.DataFrame, ratio: str, numerator: str, denominato
     return ratio_p1.mask(empty_p1, ratio_p2), ratio_p2.mask(empty_p2, ratio_p1)
 
 
-def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame) -> pd.DataFrame:
+def _pair_periods(p1_df: pd.DataFrame, p2_df: pd.DataFrame, keys: list[str], columns: list[str]) -> pd.DataFrame:
+    """Join the two periods' ``columns`` side by side on ``keys``, suffixed by period, sorted with a NaN group last.
+
+    A group missing from a period gets 0 for that period. With no ``keys``, each frame holds at most one row.
+
+    Args:
+        p1_df (pd.DataFrame): Period 1 aggregates.
+        p2_df (pd.DataFrame): Period 2 aggregates.
+        keys (list[str]): Group columns to pair rows on; empty when ungrouped.
+        columns (list[str]): Metric columns to take from each period.
+
+    Returns:
+        pd.DataFrame: The ``keys`` columns, then each of ``columns`` suffixed by period.
+    """
+    p1, p2 = get_option("column.suffix.period_1"), get_option("column.suffix.period_2")
+    if len(keys) == 0:
+        df = pd.concat(
+            [
+                p1_df[columns].add_suffix(f"_{p1}").reset_index(drop=True),
+                p2_df[columns].add_suffix(f"_{p2}").reset_index(drop=True),
+            ],
+            axis=1,
+        )
+    else:
+        # The merge puts a categorical NaN group first; sorting puts it last
+        df = (
+            p1_df[[*keys, *columns]]
+            .merge(p2_df[[*keys, *columns]], on=keys, how="outer", suffixes=(f"_{p1}", f"_{p2}"))
+            .sort_values(keys, ignore_index=True)
+        )
+    period_cols = [f"{col}_{period}" for period in (p1, p2) for col in columns]
+    df[period_cols] = df[period_cols].fillna(0)
+    return df
+
+
+def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame, group_col: str | list[str] | None = None) -> pd.DataFrame:
     """Calculate the revenue-tree KPIs from per-period aggregates.
 
     Each frame has one row per group with the option-derived columns ``column.agg.customer_id``,
     ``column.agg.transaction_id``, ``column.agg.unit_spend`` and, optionally,
-    ``column.agg.unit_quantity``. Rows are paired across periods by index label; a group
-    missing from one frame gets 0 counts for that period. For an ungrouped comparison, pass
-    one row per period with the same label (e.g. both indexed ``0``).
+    ``column.agg.unit_quantity``. Rows are paired across periods on ``group_col``, missing
+    values included; a group missing from one frame gets 0 counts for that period. Without
+    ``group_col``, each frame holds at most one row.
 
     Output columns are ``{metric}_p1`` / ``_p2`` / ``_diff`` / ``_pct_diff`` (suffixes
     from the ``column.suffix.*`` options) plus ``{metric}_contrib`` contribution
@@ -99,15 +134,17 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame) -> pd.DataFrame:
     Args:
         p1_df (pd.DataFrame): Period 1 aggregates, one row per group.
         p2_df (pd.DataFrame): Period 2 aggregates, one row per group.
+        group_col (str | list[str] | None): Column(s) identifying the group in both frames.
 
     Returns:
-        pd.DataFrame: One row per group, sorted by group, with the period, difference,
-            percent-difference, and contribution columns described above.
+        pd.DataFrame: One row per group, sorted by group with a missing group last: the
+            ``group_col`` columns, then the period, difference, percent-difference, and
+            contribution columns described above.
 
     Raises:
         TypeError: If ``p1_df`` or ``p2_df`` is not a DataFrame.
-        ValueError: If a required column is missing, a frame repeats an index label, or only one
-            frame has ``column.agg.unit_quantity``.
+        ValueError: If a required or ``group_col`` column is missing, a frame repeats a group (or
+            has several rows without ``group_col``), or only one frame has ``column.agg.unit_quantity``.
 
     Examples:
         >>> from openretailscience.analysis import calc_tree_kpis
@@ -122,8 +159,12 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame) -> pd.DataFrame:
     for name, frame in (("p1_df", p1_df), ("p2_df", p2_df)):
         ensure_dataframe(frame, name)
         ensure_data_has_columns(frame, required_cols)
-        if not frame.index.is_unique:
-            msg = f"{name} has repeated index labels; each group needs at most one row per period."
+        keys = [] if group_col is None else ensure_columns(frame, group_col, "group_col")
+        if len(keys) == 0 and len(frame) > 1:
+            msg = f"{name} has {len(frame)} rows; pass group_col to pair rows across periods by group."
+            raise ValueError(msg)
+        if len(keys) > 0 and frame.duplicated(keys).any():
+            msg = f"{name} repeats a group_col value; each group needs at most one row per period."
             raise ValueError(msg)
 
     ratio_parts = {
@@ -143,10 +184,7 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame) -> pd.DataFrame:
         metric_cols += [cols.agg.unit_qty, cols.calc.units_per_trans, cols.calc.price_per_unit]
     p1, p2 = get_option("column.suffix.period_1"), get_option("column.suffix.period_2")
 
-    # A group missing from a period gets 0 counts; sort=True keeps P2-only groups in group order, not appended last
-    df = pd.concat(
-        [p1_df[required_cols].add_suffix(f"_{p1}"), p2_df[required_cols].add_suffix(f"_{p2}")], axis=1, sort=True
-    ).fillna(0)
+    df = _pair_periods(p1_df, p2_df, keys, required_cols)
 
     for ratio, (numerator, denominator) in ratio_parts.items():
         for period in (p1, p2):
@@ -187,21 +225,21 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame) -> pd.DataFrame:
         df[cols.calc.units_per_trans_contrib] = (u2 - u1) * (pr1 + pr2) / 2 * trans_per_cust_weight
         df[cols.calc.price_per_unit_contrib] = (pr2 - pr1) * (u1 + u2) / 2 * trans_per_cust_weight
 
-    return df[RevenueTree._get_final_col_order(include_quantity=has_quantity)]
+    return df[[*keys, *RevenueTree._get_final_col_order(include_quantity=has_quantity)]]
 
 
 class RevenueTree:
     """Period-over-period revenue decomposition with per-factor contributions.
 
-    ``df`` (pandas) has one row per group: a single row labelled 0 when ungrouped, a
-    ``CategoricalIndex`` for one ``group_col`` and a ``MultiIndex`` for several. A group
-    missing from one period has 0 customers, transactions and spend for it. Columns are
-    ``{metric}_p1`` / ``_p2`` / ``_diff`` / ``_pct_diff`` for ``customers``, ``transactions``,
-    ``spend``, ``spend_per_customer``, ``transactions_per_customer`` and
-    ``spend_per_transaction`` (plus ``units``, ``units_per_transaction`` and
-    ``price_per_unit`` with quantity data), ``{metric}_contrib`` for the tree's factors, and
-    ``frequency_elasticity`` / ``price_elasticity``. ``_pct_diff`` is a fraction (0.1 = +10%).
-    See `calc_tree_kpis` for the formulas. ``draw_tree()`` renders one row as a diagram.
+    ``df`` (pandas) has one row per group, or a single row when ungrouped. A group
+    missing from one period has 0 customers, transactions and spend for it. Columns are the
+    ``group_col`` columns (Categorical for a single one), then ``{metric}_p1`` / ``_p2`` /
+    ``_diff`` / ``_pct_diff`` for ``customers``, ``transactions``, ``spend``,
+    ``spend_per_customer``, ``transactions_per_customer`` and ``spend_per_transaction`` (plus
+    ``units``, ``units_per_transaction`` and ``price_per_unit`` with quantity data),
+    ``{metric}_contrib`` for the tree's factors, and ``frequency_elasticity`` /
+    ``price_elasticity``. ``_pct_diff`` is a fraction (0.1 = +10%). See `calc_tree_kpis` for the
+    formulas. ``draw_tree()`` renders one row as a diagram.
 
     Examples:
         >>> from openretailscience.analysis import RevenueTree
@@ -254,7 +292,7 @@ class RevenueTree:
         # group_col is already validated above; only the function's hard-coded requirements remain.
         ensure_data_has_columns(df, required_cols)
 
-        self.df = calc_tree_kpis(*self._agg_data(df, period_col, p1_value, p2_value, group_col))
+        self.df = calc_tree_kpis(*self._agg_data(df, period_col, p1_value, p2_value, group_col), group_col=group_col)
 
     @staticmethod
     def _agg_data(
@@ -275,9 +313,8 @@ class RevenueTree:
 
         Returns:
             tuple[pd.DataFrame, pd.DataFrame]: The period 1 and period 2 aggregates, one row per
-                group present in that period, sorted by group. Ungrouped, each is one row labelled
-                0; one group column gives a ``CategoricalIndex`` with the same categories in both
-                periods, several give a ``MultiIndex``.
+                group present in that period, with the ``group_col`` columns first. A single group
+                column is Categorical, with the same categories in both periods.
         """
         cols = ColumnHelper()
 
@@ -318,15 +355,13 @@ class RevenueTree:
                 msg = f"{name} {value!r} does not appear in period column {period_col!r}, which has {shown}."
                 raise ValueError(msg)
 
-        if group_col is None:
-            return p1_df.reset_index(drop=True), p2_df.reset_index(drop=True)
-
-        p1_df, p2_df = p1_df.set_index(group_col).sort_index(), p2_df.set_index(group_col).sort_index()
-        if len(group_col) == 1:
-            # Categories can't be null; a missing group value stays a NaN label
-            categories = p1_df.index.union(p2_df.index).dropna().rename(None)
-            p1_df.index = pd.CategoricalIndex(p1_df.index, categories=categories, name=group_col[0])
-            p2_df.index = pd.CategoricalIndex(p2_df.index, categories=categories, name=group_col[0])
+        p1_df, p2_df = p1_df.reset_index(drop=True), p2_df.reset_index(drop=True)
+        if group_col is not None and len(group_col) == 1:
+            # Categories can't be null, so a missing group value stays NaN. union() leaves equal inputs unsorted.
+            col = group_col[0]
+            categories = pd.Index(p1_df[col]).union(pd.Index(p2_df[col])).dropna().sort_values().rename(None)
+            p1_df[col] = pd.Categorical(p1_df[col], categories=categories)
+            p2_df[col] = pd.Categorical(p2_df[col], categories=categories)
         return p1_df, p2_df
 
     @staticmethod

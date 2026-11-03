@@ -22,10 +22,12 @@ class CrossShop:
 
     Both results are pandas DataFrames, computed at construction:
 
-    - ``cross_shop_df``: one row per ``group_col`` value (the index), including entities in
-      no segment. Columns ``group_1``, ``group_2`` (and ``group_3``) are 0/1 flags,
+    - ``cross_shop_df``: one row per ``group_col`` value (the first column), including entities
+      in no segment. Columns ``group_1``, ``group_2`` (and ``group_3``) are 0/1 flags,
       ``groups`` is the tuple of those flags in segment order, ``group_labels`` joins the
-      matching labels ("No Groups" when none), and ``value_col`` holds the entity's value.
+      matching labels ("No Groups" when none), and ``value_col`` holds the entity's value. When
+      ``value_col`` is ``group_col`` (e.g. counting customers), it is named
+      ``{value_col}_{agg_func}`` in both frames instead.
     - ``cross_shop_table_df``: one row per ``groups`` combination, with its ``group_labels``,
       the summed ``value_col`` and ``percent``, that combination's share of the total (a fraction).
       "No Groups" counts in the total. The share is of ``value_col`` (spend by default),
@@ -45,18 +47,6 @@ class CrossShop:
         2  (1, 0)          Dairy      990.65  0.236995
         3  (1, 1)  Dairy, Bakery     2904.55  0.694860
     """
-
-    @staticmethod
-    def _generate_default_labels(count: int) -> list[str]:
-        """Generate default alphabetical labels for groups.
-
-        Args:
-            count (int): Number of labels to generate.
-
-        Returns:
-            list[str]: List of alphabetical labels (A, B, C, etc.).
-        """
-        return [chr(65 + i) for i in range(count)]
 
     def __init__(
         self,
@@ -133,7 +123,7 @@ class CrossShop:
             msg = f"labels must have one entry per group. Got {len(labels)} labels for {self.group_count} groups."
             raise ValueError(msg)
 
-        self.labels = labels if labels is not None else self._generate_default_labels(self.group_count)
+        self.labels = labels if labels is not None else list("ABC"[: self.group_count])
 
         self.cross_shop_df = self._calc_cross_shop(
             df=df,
@@ -150,7 +140,7 @@ class CrossShop:
         )
         self.cross_shop_table_df = self._calc_cross_shop_table(
             df=self.cross_shop_df,
-            value_col=value_col,
+            value_col=f"{value_col}_{agg_func}" if value_col == group_col else value_col,
         )
 
     @staticmethod
@@ -192,11 +182,9 @@ class CrossShop:
         group_col = group_col or get_option("column.customer_id")
         value_col = value_col or get_option("column.unit_spend")
 
-        # Using a temporary value column to avoid duplicate column errors during selection.
-        # This happens when `value_col` has the same name as `group_col`, causing conflicts
-        # in `.select()`.
-        temp_value_col = "temp_value_col"
-        df = df.mutate(**{temp_value_col: df[value_col]})
+        # Renamed when it is group_col, which .select() can't take twice
+        out_value_col = f"{value_col}_{agg_func}" if value_col == group_col else value_col
+        df = df.mutate(**{out_value_col: df[value_col]})
 
         # ifelse (not casting the boolean directly) keeps this portable to engines with no
         # boolean type (SQL Server, Oracle < 23c); the cast preserves the int32 dtype.
@@ -210,21 +198,20 @@ class CrossShop:
             group_cols.append("group_3")
             select_cols.append(group_3)
 
-        cs_df = df.select([*select_cols, df[temp_value_col]])
+        cs_df = df.select([*select_cols, df[out_value_col]])
         cs_df = (
             cs_df.group_by(group_col)
             .aggregate(
                 **{col: cs_df[col].max().name(col) for col in group_cols},
-                **{temp_value_col: getattr(cs_df[temp_value_col], agg_func)().name(temp_value_col)},
+                **{out_value_col: getattr(cs_df[out_value_col], agg_func)().name(out_value_col)},
             )
             .order_by(group_col)
         ).execute()
 
         cs_df["groups"] = cs_df[group_cols].apply(tuple, axis=1)
 
-        # Use default alphabetical labels if none provided
         if labels is None:
-            labels = CrossShop._generate_default_labels(len(group_cols))
+            labels = list("ABC"[: len(group_cols)])
 
         group_label_series = cs_df[group_cols].apply(
             lambda x: [labels[i] for i, grp_val in enumerate(x) if grp_val == 1],
@@ -232,10 +219,7 @@ class CrossShop:
         )
         cs_df["group_labels"] = group_label_series.map(lambda x: "No Groups" if len(x) == 0 else ", ".join(x))
 
-        column_order = [group_col, *group_cols, "groups", "group_labels", temp_value_col]
-        cs_df = cs_df[column_order]
-        cs_df = cs_df.set_index(group_col)
-        return cs_df.rename(columns={temp_value_col: value_col})
+        return cs_df[[group_col, *group_cols, "groups", "group_labels", out_value_col]]
 
     @staticmethod
     def _calc_cross_shop_table(df: pd.DataFrame, value_col: str) -> pd.DataFrame:

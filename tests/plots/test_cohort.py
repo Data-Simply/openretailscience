@@ -21,7 +21,9 @@ def sample_cohort_dataframe():
     """Generates a sample cohort DataFrame."""
     rng = np.random.default_rng(42)
     data = np.round(rng.uniform(0, 1, size=(6, 6)), 2)
-    return pd.DataFrame(data, columns=[f"Month {i + 1}" for i in range(6)], index=[f"Cohort {i + 1}" for i in range(6)])
+    df = pd.DataFrame(data, columns=list(range(6)))
+    df.insert(0, "min_period_shopped", pd.date_range("2024-01-01", periods=6, freq="MS"))
+    return df
 
 
 def test_plot_cohort(sample_cohort_dataframe):
@@ -38,8 +40,15 @@ def test_plot_cohort(sample_cohort_dataframe):
         title=title,
     )
 
-    assert isinstance(result_ax, Axes)
-    assert len(result_ax.texts) == sample_cohort_dataframe.size
+    assert len(result_ax.texts) == sample_cohort_dataframe.drop(columns="min_period_shopped").size
+    assert [t.get_text() for t in result_ax.get_yticklabels()] == [
+        "2024-01-01",
+        "2024-02-01",
+        "2024-03-01",
+        "2024-04-01",
+        "2024-05-01",
+        "2024-06-01",
+    ]
     assert result_ax.get_xlabel() == x_label
     assert result_ax.get_ylabel() == y_label
     title_texts = [t for t in result_ax.figure.texts if t.get_text() == title]
@@ -81,7 +90,7 @@ def test_plot_cohort_percentage_formatting(percentage):
     data = np.array([[0.5, 0.3], [0.8, 0.6]])
     df = pd.DataFrame(data, columns=["Month 1", "Month 2"], index=["Cohort A", "Cohort B"])
 
-    result_ax = cohort.plot(df=df, cbar_label="Retention Rate", percentage=percentage)
+    result_ax = cohort.plot(df=df, cbar_label="Retention Rate", percentage=percentage, y_col=None)
 
     assert len(result_ax.texts) == df.size
     texts = result_ax.texts

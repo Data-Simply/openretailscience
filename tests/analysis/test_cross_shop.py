@@ -60,7 +60,7 @@ def test_calc_cross_shop_two_groups(sample_data):
             "group_labels": ["A", "B", "No Groups", "No Groups", "A, B", "A", "B", "A", "B", "A"],
             cols.unit_spend: [10, 20, 30, 40, 70, 10, 20, 45, 40, 50],
         },
-    ).set_index(cols.customer_id)
+    )
 
     assert cross_shop_df.equals(ret_df)
 
@@ -97,7 +97,7 @@ def test_calc_cross_shop_three_groups(sample_data):
             "group_labels": ["A", "B", "C", "No Groups", "A, B", "A", "B", "A, C", "B", "A"],
             cols.unit_spend: [10, 20, 30, 40, 70, 10, 20, 45, 40, 50],
         },
-    ).set_index(cols.customer_id)
+    )
 
     pd.testing.assert_frame_equal(cross_shop_df, ret_df)
 
@@ -117,6 +117,7 @@ def test_calc_cross_shop_three_groups_customer_id_nunique(sample_data):
     )
     ret_df = pd.DataFrame(
         {
+            cols.customer_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             "group_1": [1, 0, 0, 0, 1, 1, 0, 1, 0, 1],
             "group_2": [0, 1, 0, 0, 1, 0, 1, 0, 1, 0],
             "group_3": [0, 0, 1, 0, 0, 0, 0, 1, 0, 0],
@@ -133,11 +134,9 @@ def test_calc_cross_shop_three_groups_customer_id_nunique(sample_data):
                 (1, 0, 0),
             ],
             "group_labels": ["A", "B", "C", "No Groups", "A, B", "A", "B", "A, C", "B", "A"],
-            cols.customer_id: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            f"{cols.customer_id}_nunique": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         },
-        index=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     )
-    ret_df.index.name = cols.customer_id
     ret_df = ret_df.astype({"group_1": "int32", "group_2": "int32", "group_3": "int32"})
     assert cross_shop_df.equals(ret_df)
 
@@ -220,18 +219,49 @@ def test_calc_cross_shop_table_customer_id_nunique(sample_data):
     )
     cross_shop_table = CrossShop._calc_cross_shop_table(
         cross_shop_df,
-        value_col=cols.customer_id,
+        value_col=f"{cols.customer_id}_nunique",
     )
     ret_df = pd.DataFrame(
         {
             "groups": [(0, 0, 0), (0, 0, 1), (0, 1, 0), (1, 0, 0), (1, 0, 1), (1, 1, 0)],
             "group_labels": ["No Groups", "C", "B", "A", "A, C", "A, B"],
-            cols.customer_id: [1, 1, 3, 3, 1, 1],
+            f"{cols.customer_id}_nunique": [1, 1, 3, 3, 1, 1],
             "percent": [0.1, 0.1, 0.3, 0.3, 0.1, 0.1],
         },
     )
 
     assert cross_shop_table.equals(ret_df)
+
+
+def test_customer_count_value_col_does_not_clash_with_customer_key(sample_data):
+    """Counting customers names the count column apart from the customer_id key column."""
+    cross_shop = CrossShop(
+        df=sample_data,
+        group_1_col="category_1_name",
+        group_1_val="Jeans",
+        group_2_val="Shoes",
+        value_col=cols.customer_id,
+        agg_func="nunique",
+    )
+    assert cross_shop.cross_shop_df.columns.tolist() == [
+        cols.customer_id,
+        "group_1",
+        "group_2",
+        "groups",
+        "group_labels",
+        f"{cols.customer_id}_nunique",
+    ]
+    pd.testing.assert_frame_equal(
+        cross_shop.cross_shop_table_df,
+        pd.DataFrame(
+            {
+                "groups": [(0, 0), (0, 1), (1, 0), (1, 1)],
+                "group_labels": ["No Groups", "B", "A", "A, B"],
+                f"{cols.customer_id}_nunique": [2, 3, 4, 1],
+                "percent": [0.2, 0.3, 0.4, 0.1],
+            },
+        ),
+    )
 
 
 @pytest.mark.parametrize("labels", [None, ["Jeans", "Shoes"]])
@@ -399,7 +429,7 @@ def test_cross_shop_with_custom_value_col_and_agg_func(sample_data):
 
     assert "custom_value" in cross_shop.cross_shop_df.columns
 
-    assert cross_shop.cross_shop_df.loc[5, "custom_value"] == customer_value
+    assert cross_shop.cross_shop_df.set_index(cols.customer_id).loc[5, "custom_value"] == customer_value
 
 
 def test_plot_default_formatter_renders_subset_labels_as_percent_with_one_decimal(sample_data):
@@ -459,16 +489,8 @@ def test_with_custom_column_names(sample_data):
         cross_shop_df = cross_shop.cross_shop_df
         assert isinstance(cross_shop_df, pd.DataFrame)
         assert not cross_shop_df.empty
-        assert "my_customer_identifier" in cross_shop_df.index.name or cross_shop_df.index.name is None, (
-            "Should handle custom customer_id column name"
-        )
+        assert cross_shop_df.columns[0] == "my_customer_identifier"
         assert "total_amount_spent" in cross_shop_df.columns, "Should handle custom unit_spend column name"
-
-
-def test_generate_default_labels():
-    """Test the _generate_default_labels static method."""
-    assert CrossShop._generate_default_labels(2) == ["A", "B"]
-    assert CrossShop._generate_default_labels(3) == ["A", "B", "C"]
 
 
 @pytest.mark.parametrize(
@@ -547,7 +569,7 @@ def test_custom_group_col_handling(sample_data, test_name, custom_col, use_optio
     assert isinstance(cross_shop.cross_shop_df, pd.DataFrame)
     assert not cross_shop.cross_shop_df.empty
     # Verify it used the custom customer column
-    assert cross_shop.cross_shop_df.index.name == custom_col
+    assert cross_shop.cross_shop_df.columns[0] == custom_col
 
 
 def test_backward_compatibility_explicit_params(sample_data):
@@ -661,7 +683,7 @@ def test_custom_customer_columns_integration(sample_data):
     )
 
     # Verify it worked with custom column
-    assert cross_shop.cross_shop_df.index.name == "shopper_id"
+    assert cross_shop.cross_shop_df.columns[0] == "shopper_id"
     assert cross_shop.group_count == TWO_GROUPS
 
     # Test scenario 2: Option context with simplified interface
@@ -679,7 +701,7 @@ def test_custom_customer_columns_integration(sample_data):
         )
 
         # Verify it used option context for customer column
-        assert cross_shop2.cross_shop_df.index.name == "member_id"
+        assert cross_shop2.cross_shop_df.columns[0] == "member_id"
         assert cross_shop2.group_count == THREE_GROUPS
 
     # Test scenario 3: Explicit group_col overrides option context
@@ -696,5 +718,5 @@ def test_custom_customer_columns_integration(sample_data):
         )
 
         # Verify explicit parameter overrides option context
-        assert cross_shop3.cross_shop_df.index.name == "buyer_id"
+        assert cross_shop3.cross_shop_df.columns[0] == "buyer_id"
         assert cross_shop3.group_count == TWO_GROUPS

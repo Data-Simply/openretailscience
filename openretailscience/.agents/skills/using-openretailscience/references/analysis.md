@@ -3,7 +3,9 @@
 Every class accepts a pandas `DataFrame` or an Ibis `Table` and reads column
 names from the options system unless an argument overrides them. Results come
 from a `.df` (pandas) and/or `.table` (Ibis) property; some classes also render
-with `.plot()` / `.draw_tree()`. Call `help(Cls)` for the authoritative
+with `.plot()` / `.draw_tree()`. Result frames carry their keys (`customer_id`, `group_col`, ...) as
+columns on a RangeIndex; merge on them (`on="customer_id"`).
+Call `help(Cls)` for the authoritative
 Google-style Args/Returns/Raises — the summaries below list only the key
 arguments.
 
@@ -51,17 +53,17 @@ from openretailscience.segmentation.nlr import NLRSegmentation
 
 - `RFMSegmentation(df, current_date=None, r_segments=10, f_segments=10, m_segments=10, ...)` —
   Recency/Frequency/Monetary; `transaction_date` must be date or datetime (string columns are rejected;
-  `current_date` may be an ISO string). `.df` is indexed by `customer_id` with `recency_days`, `frequency`, `monetary`,
+  `current_date` may be an ISO string). `.df` has `customer_id`, `recency_days`, `frequency`, `monetary`,
   `r_score`/`f_score`/`m_score` (0-based, higher is better: 0..n-1 for `*_segments=n`, 0..k for k cut points),
   `rfm_segment` = R*100+F*10+M and `fm_segment` = F*10+M.
 - `HMLSegmentation(df, value_col=None, agg_func="sum", ...)` — Heavy/Medium/Light: bottom 50% / next 30% /
   top 20% of customers by spend (percentile ranks, not spend values); subclass of `ThresholdSegmentation`.
 - `ThresholdSegmentation(df, thresholds, segments, value_col=None, ...)` — generic
   percentile thresholds, strictly ascending and ending at `1.0` (else `ValueError`);
-  `.df` is indexed by `customer_id` (+ `group_col`) with `segment_name`. Tied values get distinct ranks by
-  `customer_id`, so equal spenders can split across segments. `zero_value_customers`: `"separate_segment"`
-  (own segment, unranked), `"exclude"` (dropped), `"include_with_light"` (ranked with everyone; tied zeros
-  can spill past the first segment).
+  `.df` has `customer_id` (+ `group_col`), the aggregated `value_col` and `segment_name`. Tied values get
+  distinct ranks by `customer_id`, so equal spenders can split across segments. `zero_value_customers`:
+  `"separate_segment"` (own segment, unranked), `"exclude"` (dropped), `"include_with_light"` (ranked with
+  everyone; tied zeros can spill past the first segment).
 - `NLRSegmentation(df, period_col, p1_value, p2_value, ...)` — New / Lapsed /
   Repeating across two periods. With `count`/`nunique` the positive-value rule measures
   transaction presence, not spend.
@@ -82,18 +84,20 @@ from openretailscience.analysis.haversine import haversine_distance
 
 - `CrossShop(df, group_1_col, group_1_val, group_2_val, ...)` — 2/3-way overlap.
   `.cross_shop_df` (one row per customer, incl. "No Groups"), `.cross_shop_table_df` (`percent` = fraction of
-  summed `value_col`, spend by default; use `value_col="customer_id", agg_func="nunique"` for customer shares);
+  summed `value_col`, spend by default; use `value_col="customer_id", agg_func="nunique"` for customer shares,
+  which names the count column `customer_id_nunique` in both frames);
   `.plot(vary_size=False, ...)` → Venn.
 - `GainLoss(df, p1_index, p2_index, focus_group_index, focus_group_name, comparison_group_index, ...)` —
   period/group index args are boolean lists, arrays or Series with one entry per row of `df` (matched by
-  position; a Series must have `df`'s index, so build it from `df`). `.gain_loss_df` is indexed by
-  `customer_id` (`(group_col, customer_id)` when grouped); its six components sum to `focus_diff`.
-  `.gain_loss_table_df` is one row ungrouped; `.plot(...)`.
+  position; a Series must have `df`'s index, so build it from `df`). `.gain_loss_df` has one row per
+  `customer_id` (per `group_col` and `customer_id` when grouped); its six components sum to `focus_diff`.
+  `.gain_loss_table_df` is one row ungrouped, else one per `group_col` value; `.plot(...)`.
 - `CohortAnalysis(df, aggregation_column, agg_func="nunique", period="month", percentage=False)` —
   `period` ∈ year/quarter/month/week/day; `transaction_date` must be date or datetime (string
   columns are rejected). For retention use
   `aggregation_column="customer_id"` (nunique on a value column counts distinct values). `.df` is the cohort
-  matrix: index = first-purchase period, int columns = periods since (empty cells 0, not necessarily square);
+  matrix: `min_period_shopped` column = first-purchase period, then int columns = periods since (empty cells
+  0, not necessarily square);
   `percentage=True` gives fractions of period 0 rounded to 2 (pair with `plots.cohort.plot`).
 - `ProductAssociation(df, value_col, group_col=None, target_item=None, min_support=0.0, ...)` —
   `.table` / `.df` with support, confidence, uplift. `group_col` is the basket: the default `customer_id`
@@ -101,19 +105,19 @@ from openretailscience.analysis.haversine import haversine_distance
   `target_item` must match `value_col`'s type: integer IDs for a numeric column, strings otherwise.
 - `RevenueTree(df, period_col, p1_value, p2_value, group_col=None)` — `period_col` holds a
   caller-assigned period label per row (not a raw date); both values must exist and differ. `.df` is the
-  KPI table, one row per group (`_pct_diff` columns are fractions); `.draw_tree(row_index=0, ...)` → tree
-  diagram. `calc_tree_kpis(p1_df, p2_df)` computes the same table from pre-aggregated per-period frames
-  (customers/transactions/spend[/units] columns, one row per group), pairing rows by index label; for an
-  ungrouped comparison give both one row labelled 0.
+  KPI table, one row per group, `group_col` columns first (`_pct_diff` columns are fractions);
+  `.draw_tree(row_index=0, ...)` → tree diagram. `calc_tree_kpis(p1_df, p2_df, group_col=None)` computes the
+  same table from pre-aggregated per-period frames (customers/transactions/spend[/units] columns, one row per
+  group), pairing rows on `group_col`; for an ungrouped comparison give each one row.
 - `CustomerDecisionHierarchy(df, product_col, method="yules_q", ...)` —
   `.pairs_df`, `.distances` ([0, 1], ordered by `pairs_df[product_col].cat.categories`; 0 = every buyer of
   one also buys the other, 1 = never the same buyer, or no customer bought neither; by default near =
   substitutes); `.plot(...)` → dendrogram.
-- `PurchasesPerCustomer(df)` — `.df` (`purchase_count`); `.purchases_percentile(0.5)`,
+- `PurchasesPerCustomer(df)` — `.df` (`customer_id`, `purchase_count`); `.purchases_percentile(0.5)`,
   `.find_purchase_percentile(n, comparison="less_than_equal_to")`.
-- `DaysBetweenPurchases(df)` — `.df` (`avg_days_between_purchases`);
+- `DaysBetweenPurchases(df)` — `.df` (`customer_id`, `avg_days_between_purchases`);
   `.purchases_percentile(0.5)`.
-- `TransactionChurn(df, churn_period)` — `.df` by 1-based purchase-day number (`retained`,
+- `TransactionChurn(df, churn_period)` — `.df` by 1-based purchase-day number (`transaction_number`, `retained`,
   `churned`, `churned_pct` = churned / (churned + retained)); row N counts only customers whose N-th purchase
   day is more than `churn_period` days before the last day in the data. `.n_unique_customers`.
 - `CompositeRank(df, rank_cols, agg_func, ignore_ties=False, group_col=None)` —
