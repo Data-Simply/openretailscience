@@ -300,7 +300,9 @@ class Options:
             msg += f" Did you mean '{meant}'?"
         # A bare name (brand_name) is read as a column. Suffixes are fragments of output names, not columns an
         # analysis takes.
-        if ("." not in meant or meant.startswith("column.")) and not meant.startswith("column.suffix."):
+        # A key that differs from a real one only in case (Column.Customer_ID) names a standard column.
+        is_column = "." not in meant or meant.startswith("column.")
+        if is_column and not meant.startswith("column.suffix.") and key not in self._options:
             name = pat.rsplit(".", 1)[-1]
             # Conditional because a suggestion can be wrong (store_name -> store_id) and a short form of a standard
             # column (date) can match nothing.
