@@ -53,8 +53,7 @@ def plot(
         SubplotBase: The matplotlib axes object.
 
     Raises:
-        ValueError: If ``y_col`` is not a column of df (pass ``y_col=None`` for a frame labelled by
-            its index), or df is empty or contains no finite values.
+        ValueError: If ``y_col`` is not a column of df, or df is empty or contains no finite values.
         TypeError: If a period column is not numeric.
 
     Examples:
@@ -69,6 +68,9 @@ def plot(
         ...     eyebrow="Retention", title="Quarterly customer retention", subtitle="Share of each cohort still buying",
         ... )
     """
+    if y_col is not None and y_col not in df.columns:
+        msg = f"{y_col!r} is not a column of df; pass y_col=None to label the rows by the index."
+        raise ValueError(msg)
     return heatmap.plot(
         df=df,
         cbar_label=cbar_label,
