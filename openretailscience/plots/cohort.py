@@ -1,7 +1,7 @@
 """Cohort heatmap: wraps heatmap.plot with x tick labels on top and percentage formatting.
 
-Input is a pre-aggregated matrix (rows = cohorts, columns = periods since start); no
-aggregation is performed.
+Input is a pre-aggregated matrix (rows = cohorts, columns = periods since start), such as
+``CohortAnalysis.df``; no aggregation is performed.
 """
 
 from typing import Literal
@@ -25,11 +25,13 @@ def plot(
     percentage: bool = True,
     figsize: tuple[int, int] | None = None,
     colormap_style: Literal["discrete", "continuous"] = "discrete",
+    y_col: str | None = "min_period_shopped",
 ) -> SubplotBase:
     """Plot a cohort heatmap, with period labels along the top.
 
     Args:
-        df (pd.DataFrame): Pre-aggregated cohort matrix (rows = cohorts, columns = periods).
+        df (pd.DataFrame): Pre-aggregated cohort matrix: the ``y_col`` cohort labels, then one
+            column per period.
         cbar_label (str): Colorbar label.
         x_label (str, optional): X-axis label; omitted means no label.
         y_label (str, optional): Y-axis label; omitted means no label.
@@ -44,9 +46,16 @@ def plot(
         colormap_style ("discrete", "continuous", optional): Use "continuous" when retention
             differences between cohorts are small enough that the discrete bins lump them
             together.
+        y_col (str, optional): Column holding the cohort labels; None uses the index. Defaults to
+            "min_period_shopped", as in ``CohortAnalysis.df``.
 
     Returns:
         SubplotBase: The matplotlib axes object.
+
+    Raises:
+        ValueError: If ``y_col`` is not a column of df (pass ``y_col=None`` for a frame labelled by
+            its index), or df is empty or contains no finite values.
+        TypeError: If a period column is not numeric.
 
     Examples:
         >>> from openretailscience.analysis import CohortAnalysis
@@ -74,4 +83,5 @@ def plot(
         x_labels_position="top",
         cbar_format="{x:.0%}" if percentage else "{x:g}",
         colormap_style=colormap_style,
+        y_col=y_col,
     )

@@ -22,43 +22,19 @@ class TestHMLSegmentation:
             },
         )
 
-    # Correctly handles zero spend customers when zero_value_customers is "exclude"
-    def test_handles_zero_spend_customers_are_excluded_in_result(self, base_df):
-        """Test that the method correctly handles zero spend customers when zero_value_customers is "exclude"."""
-        hml_segmentation = HMLSegmentation(base_df, zero_value_customers="exclude")
-        result_df = hml_segmentation.df
+    @pytest.mark.parametrize(
+        ("zero_value_customers", "expected_segments"),
+        [
+            ("exclude", {1: "Heavy", 2: "Light", 4: "Medium", 5: "Light"}),
+            ("include_with_light", {1: "Heavy", 2: "Light", 3: "Light", 4: "Medium", 5: "Light"}),
+            ("separate_segment", {1: "Heavy", 2: "Light", 3: "Zero", 4: "Medium", 5: "Light"}),
+        ],
+    )
+    def test_zero_spend_customer_handling(self, base_df, zero_value_customers, expected_segments):
+        """Zero-spend customer 3 is dropped, ranked with Light, or put in its own Zero segment."""
+        result_df = HMLSegmentation(base_df, zero_value_customers=zero_value_customers).df
 
-        zero_spend_customer_id = 3
-
-        assert result_df.loc[1, "segment_name"] == "Heavy"
-        assert result_df.loc[2, "segment_name"] == "Light"
-        assert zero_spend_customer_id not in result_df.index
-        assert result_df.loc[4, "segment_name"] == "Medium"
-        assert result_df.loc[5, "segment_name"] == "Light"
-
-    # Correctly handles zero spend customers when zero_value_customers is "include_with_light"
-    def test_handles_zero_spend_customers_include_with_light(self, base_df):
-        """Test handling of zero spend customers when zero_value_customers is "include_with_light"."""
-        hml_segmentation = HMLSegmentation(base_df, zero_value_customers="include_with_light")
-        result_df = hml_segmentation.df
-
-        assert result_df.loc[1, "segment_name"] == "Heavy"
-        assert result_df.loc[2, "segment_name"] == "Light"
-        assert result_df.loc[3, "segment_name"] == "Light"
-        assert result_df.loc[4, "segment_name"] == "Medium"
-        assert result_df.loc[5, "segment_name"] == "Light"
-
-    # Correctly handles zero spend customers when zero_value_customers is "separate_segment"
-    def test_handles_zero_spend_customers_separate_segment(self, base_df):
-        """Test handling of zero spend customers when zero_value_customers is "separate_segment"."""
-        hml_segmentation = HMLSegmentation(base_df, zero_value_customers="separate_segment")
-        result_df = hml_segmentation.df
-
-        assert result_df.loc[1, "segment_name"] == "Heavy"
-        assert result_df.loc[2, "segment_name"] == "Light"
-        assert result_df.loc[3, "segment_name"] == "Zero"
-        assert result_df.loc[4, "segment_name"] == "Medium"
-        assert result_df.loc[5, "segment_name"] == "Light"
+        assert dict(zip(result_df[cols.customer_id], result_df["segment_name"], strict=True)) == expected_segments
 
     # Raises ValueError if required columns are missing
     def test_raises_value_error_if_required_columns_missing(self, base_df):
@@ -82,10 +58,13 @@ class TestHMLSegmentation:
         hml_segmentation = HMLSegmentation(base_df, value_col=cols.unit_qty)
         result_df = hml_segmentation.df
 
-        assert result_df.loc[1, "segment_name"] == "Heavy"
-        assert result_df.loc[2, "segment_name"] == "Light"
-        assert result_df.loc[4, "segment_name"] == "Medium"
-        assert result_df.loc[5, "segment_name"] == "Light"
+        assert dict(zip(result_df[cols.customer_id], result_df["segment_name"], strict=True)) == {
+            1: "Heavy",
+            2: "Light",
+            3: "Zero",
+            4: "Medium",
+            5: "Light",
+        }
 
 
 class TestHMLSegmentationGroupCol:
@@ -156,9 +135,11 @@ class TestHMLSegmentationGroupCol:
                     "Heavy",
                 ],
             },
-        ).set_index([cols.customer_id, cols.store_id])
+        )
 
-        pd.testing.assert_frame_equal(hml.df.sort_index(), expected_df.sort_index())
+        pd.testing.assert_frame_equal(
+            hml.df.sort_values([cols.store_id, cols.customer_id], ignore_index=True), expected_df
+        )
 
     def test_hml_with_zero_value_and_group_col(self):
         """Test HML segmentation handles zero-value customers correctly within groups."""
@@ -217,6 +198,8 @@ class TestHMLSegmentationGroupCol:
                     "Heavy",
                 ],
             },
-        ).set_index([cols.customer_id, cols.store_id])
+        )
 
-        pd.testing.assert_frame_equal(hml.df.sort_index(), expected_df.sort_index())
+        pd.testing.assert_frame_equal(
+            hml.df.sort_values([cols.store_id, cols.customer_id], ignore_index=True), expected_df
+        )

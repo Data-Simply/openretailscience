@@ -38,8 +38,9 @@ distinctive arguments are listed below; see each function's docstring for the re
 - `venn.plot(df, labels, vary_size=False, subset_label_formatter=None, ...)` — 2/3-set
   Venn (df needs `groups`, a tuple of 0/1 flags in `labels` order, + `percent`, shown unscaled). Usually
   reached via `CrossShop.plot`.
-- `heatmap.plot(df, cbar_label, colormap_style="discrete", ...)` — generic heatmap.
-- `cohort.plot(df, cbar_label, percentage=True, ...)` — cohort heatmap (wraps
+- `heatmap.plot(df, cbar_label, colormap_style="discrete", y_col=None, ...)` — generic heatmap: `y_col`
+  (or the index when None) labels the rows, every other column is a cell column.
+- `cohort.plot(df, cbar_label, percentage=True, y_col="min_period_shopped", ...)` — cohort heatmap (wraps
   `heatmap.plot`); feed it `CohortAnalysis(..., percentage=True).df`, or pass `percentage=False` for
   counts (a count of 25 would otherwise render as "2500%").
 - `time.plot(df, value_col, period="D", agg_func="sum", group_col=None, ...)` — resampled

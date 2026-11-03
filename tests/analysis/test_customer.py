@@ -71,20 +71,14 @@ def transactions_df() -> pd.DataFrame:
 
 @pytest.fixture
 def expected_purchase_counts() -> pd.DataFrame:
-    """Per-customer transaction counts for the fixture, indexed by customer_id."""
-    return pd.DataFrame(
-        {"purchase_count": [3, 2, 4, 1]},
-        index=pd.Index([101, 102, 103, 104], name="customer_id"),
-    )
+    """Per-customer transaction counts for the fixture."""
+    return pd.DataFrame({"customer_id": [101, 102, 103, 104], "purchase_count": [3, 2, 4, 1]})
 
 
 @pytest.fixture
 def expected_days_between_purchases() -> pd.DataFrame:
     """Per-customer mean inter-purchase gap in days (single-transaction customers are excluded)."""
-    return pd.DataFrame(
-        {"avg_days_between_purchases": [30.0, 31.0, 14.0]},
-        index=pd.Index([101, 102, 103], name="customer_id"),
-    )
+    return pd.DataFrame({"customer_id": [101, 102, 103], "avg_days_between_purchases": [30.0, 31.0, 14.0]})
 
 
 @pytest.fixture
@@ -99,11 +93,11 @@ def expected_churn_table() -> pd.DataFrame:
     """
     return pd.DataFrame(
         {
+            "transaction_number": [1, 2, 3],
             "retained": [3, 1, 0],
             "churned": [1, 1, 1],
             "churned_pct": [0.25, 0.5, 1.0],
         },
-        index=pd.Index([1, 2, 3], name="transaction_number"),
     )
 
 
@@ -185,28 +179,25 @@ class TestSharedConstructorContract:
             make([1, 2, 3])
 
     @pytest.mark.parametrize(
-        ("make", "rename_map", "options", "expected_fixture", "axis_name"),
+        ("make", "rename_map", "options", "expected_fixture"),
         [
             (
                 MAKE_PURCHASES,
                 {"transaction_id": "txn_id", "customer_id": "cust_id"},
                 ("column.customer_id", "cust_id", "column.transaction_id", "txn_id"),
                 "expected_purchase_counts",
-                "cust_id",
             ),
             (
                 MAKE_DAYS,
                 {"customer_id": "cust_id", "transaction_date": "txn_date"},
                 ("column.customer_id", "cust_id", "column.transaction_date", "txn_date"),
                 "expected_days_between_purchases",
-                "cust_id",
             ),
             (
                 MAKE_CHURN,
                 {"customer_id": "cust_id", "transaction_date": "txn_date"},
                 ("column.customer_id", "cust_id", "column.transaction_date", "txn_date"),
                 "expected_churn_table",
-                None,
             ),
         ],
         ids=["purchases", "days_between", "churn"],
@@ -219,17 +210,12 @@ class TestSharedConstructorContract:
         rename_map,
         options,
         expected_fixture,
-        axis_name,
     ):
         """Custom ColumnHelper names are honoured and produce identical results."""
         renamed = transactions_df.rename(columns=rename_map)
         with option_context(*options):
             actual = make(renamed).df
-        expected = request.getfixturevalue(expected_fixture)
-        # PurchasesPerCustomer / DaysBetweenPurchases index on the renamed customer_id;
-        # TransactionChurn indexes on the derived transaction_number, which is unaffected.
-        if axis_name is not None:
-            expected = expected.rename_axis(axis_name)
+        expected = request.getfixturevalue(expected_fixture).rename(columns=rename_map)
         assert_frame_equal(actual, expected)
 
     @pytest.mark.parametrize("make", [MAKE_PURCHASES, MAKE_DAYS], ids=["purchases", "days_between"])
@@ -239,7 +225,7 @@ class TestSharedConstructorContract:
         with option_context("column.customer_id", "cust_id"):
             # Must not raise — the column was resolved at __init__ and baked into the cached frame.
             result = obj.df
-        assert result.index.name == "customer_id"
+        assert result.columns[0] == "customer_id"
 
 
 class TestPurchasesPerCustomer:
@@ -322,9 +308,9 @@ class TestPurchasesPerCustomer:
             ppc = PurchasesPerCustomer(renamed)
             inside = ppc.df
         outside = ppc.df
-        # Same cached object; the index name was fixed at __init__ to "cust_id" and does not silently revert.
-        assert inside.index.name == "cust_id"
-        assert outside.index.name == "cust_id"
+        # Both reads return the cached frame, whose key column was resolved at __init__.
+        assert inside.columns[0] == "cust_id"
+        assert outside.columns[0] == "cust_id"
 
 
 class TestDaysBetweenPurchases:
@@ -345,7 +331,7 @@ class TestDaysBetweenPurchases:
         )
         dbp = DaysBetweenPurchases(empty)
         assert len(dbp.df) == 0
-        assert list(dbp.df.columns) == ["avg_days_between_purchases"]
+        assert list(dbp.df.columns) == ["customer_id", "avg_days_between_purchases"]
 
     def test_same_day_transactions_collapse_to_one_purchase_day(self):
         """Multiple transactions on the same day count as a single purchase day."""
@@ -362,7 +348,7 @@ class TestDaysBetweenPurchases:
             },
         )
         dbp = DaysBetweenPurchases(df)
-        assert dbp.df.loc[201, "avg_days_between_purchases"] == pytest.approx(10.0)
+        assert_frame_equal(dbp.df, pd.DataFrame({"customer_id": [201], "avg_days_between_purchases": [10.0]}))
 
     @pytest.mark.parametrize(
         ("percentile", "expected"),
@@ -446,8 +432,10 @@ class TestTransactionChurn:
         tc = TransactionChurn(df, churn_period=30)
         # Customer 302's transaction on 2024-03-15 is the only row strictly before 2024-04-01.
         # That customer has a later transaction (2024-05-01), so they are retained at txn 1.
-        assert tc.df.loc[1, "retained"] == 1
-        assert tc.df.loc[1, "churned"] == 0
+        assert_frame_equal(
+            tc.df,
+            pd.DataFrame({"transaction_number": [1], "retained": [1], "churned": [0], "churned_pct": [0.0]}),
+        )
 
     @pytest.mark.parametrize("churn_period", [0, -5])
     def test_churn_period_must_be_positive(self, transactions_df, churn_period):
@@ -466,7 +454,7 @@ class TestTransactionChurn:
         tc = TransactionChurn(empty, churn_period=30)
         assert tc.n_unique_customers == 0
         assert len(tc.df) == 0
-        assert list(tc.df.columns) == ["retained", "churned", "churned_pct"]
+        assert list(tc.df.columns) == ["transaction_number", "retained", "churned", "churned_pct"]
 
 
 class TestInputValidation:

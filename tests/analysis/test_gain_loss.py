@@ -131,6 +131,7 @@ def sample_df():
             "Brand A",
             "Brand B",
         ],
+        ColumnHelper().store_id: [101, 101, 102, 102, 101, 101, 102, 102, 101, 101, 102, 102],
     }
     return pd.DataFrame(data)
 
@@ -244,8 +245,8 @@ def test_mask_that_does_not_line_up_with_df_raises(
 
 def test_group_col_not_in_df_raises(sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series]) -> None:
     """A group_col missing from df raises naming the column, rather than failing inside the groupby."""
-    with pytest.raises(ValueError, match=r"group_col references columns not present in the data: \['store_id'\]"):
-        GainLoss(df=sample_df, **brand_masks, **BRAND_NAMES, group_col="store_id")
+    with pytest.raises(ValueError, match=r"group_col references columns not present in the data: \['region_id'\]"):
+        GainLoss(df=sample_df, **brand_masks, **BRAND_NAMES, group_col="region_id")
 
 
 def _jan_feb_vs_may_jun_masks(df: pd.DataFrame) -> dict[str, pd.Series]:
@@ -355,46 +356,101 @@ def test_valid_gainloss(sample_df):
     assert isinstance(gl, GainLoss)
 
 
-def test_calc_gains_loss_table_without_group():
-    """Test _calc_gains_loss_table with a flat DataFrame (no group index)."""
-    df = pd.DataFrame(
-        {
-            "gain": [10, -5, 20],
-            "loss": [5, 2, 1],
-        },
-    )
-    result = GainLoss._calc_gains_loss_table(df)
+def test_ungrouped_results_have_customer_column_and_one_table_row(
+    sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series]
+) -> None:
+    """Ungrouped, gain_loss_df has an int customer_id column and gain_loss_table_df is its one-row column sum."""
+    cols = ColumnHelper()
+    gl = GainLoss(df=sample_df, **brand_masks, **BRAND_NAMES)
+
+    zeros = [0, 0, 0, 0, 0]
     expected = pd.DataFrame(
         {
-            "gain": [25],
-            "loss": [8],
+            cols.customer_id: [1, 2, 3, 4, 5],
+            "focus_p1": [230, 160, 420, 0, 0],
+            "comparison_p1": [120, 320, 210, 0, 0],
+            "total_p1": [350, 480, 630, 0, 0],
+            "focus_p2": [0, 0, 0, 0, 180],
+            "comparison_p2": [0, 0, 0, 370, 0],
+            "total_p2": [0, 0, 0, 370, 180],
+            "focus_diff": [-230, -160, -420, 0, 180],
+            "comparison_diff": [-120, -320, -210, 370, 0],
+            "total_diff": [-350, -480, -630, 370, 180],
+            "new": [0, 0, 0, 0, 180],
+            "lost": [-230, -160, -420, 0, 0],
+            "increased_focus": zeros,
+            "decreased_focus": zeros,
+            "switch_from_comparison": zeros,
+            "switch_to_comparison": zeros,
         },
     )
-    pd.testing.assert_frame_equal(result.reset_index(drop=True), expected)
+    pd.testing.assert_frame_equal(gl.gain_loss_df, expected)
+    pd.testing.assert_frame_equal(gl.gain_loss_table_df, expected.drop(columns=cols.customer_id).sum().to_frame().T)
 
 
-def test_calc_gains_loss_table_with_group():
-    """Test _calc_gains_loss_table with grouped DataFrame."""
-    idx = pd.MultiIndex.from_tuples([("Group A", 1), ("Group A", 2), ("Group B", 1)], names=["group", "id"])
-    df = pd.DataFrame(
-        {
-            "gain": [10, 15, 5],
-            "loss": [1, 2, 3],
-        },
-        index=idx,
+def test_grouped_results_have_group_and_customer_columns(
+    sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series]
+) -> None:
+    """Grouped, both frames carry group_col as a column; gain_loss_df keeps customer_id's input dtype."""
+    cols = ColumnHelper()
+    gl = GainLoss(df=sample_df, **brand_masks, **BRAND_NAMES, group_col=cols.store_id)
+
+    pd.testing.assert_frame_equal(
+        gl.gain_loss_df[[cols.store_id, cols.customer_id]],
+        pd.DataFrame(
+            {
+                cols.store_id: [101, 101, 101, 101, 102, 102, 102, 102, 102],
+                cols.customer_id: [1, 2, 3, 4, 1, 2, 3, 4, 5],
+            },
+        ),
+    )
+    pd.testing.assert_frame_equal(
+        gl.gain_loss_table_df[[cols.store_id, "focus_p1", "comparison_p2", "new", "lost"]],
+        pd.DataFrame(
+            {
+                cols.store_id: [101, 102],
+                "focus_p1": [480, 330],
+                "comparison_p2": [140, 230],
+                "new": [0.0, 180.0],
+                "lost": [-480.0, -330.0],
+            },
+        ),
     )
 
-    result = GainLoss._calc_gains_loss_table(df, group_col="group")
 
-    expected = pd.DataFrame(
-        {
-            "gain": [25, 5],
-            "loss": [3, 3],
-        },
-        index=pd.Index(["Group A", "Group B"], name="group"),
-    )
+def test_grouped_table_omits_unused_group_categories(
+    sample_df: pd.DataFrame, brand_masks: dict[str, pd.Series]
+) -> None:
+    """A categorical group_col's unused category (a store with no sales) gets no table row."""
+    cols = ColumnHelper()
+    df = sample_df.astype({cols.store_id: pd.CategoricalDtype([101, 102, 103])})
 
-    pd.testing.assert_frame_equal(result, expected)
+    gl = GainLoss(df=df, **brand_masks, **BRAND_NAMES, group_col=cols.store_id)
+
+    assert gl.gain_loss_table_df[cols.store_id].tolist() == [101, 102]
+
+
+@pytest.mark.parametrize(
+    ("by_store", "plot_kwargs", "expected_labels"),
+    [
+        (False, {}, [""]),
+        (True, {}, ["101", "102"]),
+        # A caller's x_col is ignored like stacked and color, so the bars stay labelled by group
+        (True, {"x_col": "new"}, ["101", "102"]),
+    ],
+)
+def test_plot_labels_one_bar_per_table_row(
+    sample_df: pd.DataFrame,
+    brand_masks: dict[str, pd.Series],
+    by_store: bool,
+    plot_kwargs: dict[str, str],
+    expected_labels: list[str],
+) -> None:
+    """Ungrouped, the single bar is unlabelled (the y label names it); grouped, each bar is labelled by group."""
+    group_col = ColumnHelper().store_id if by_store else None
+    ax = GainLoss(df=sample_df, **brand_masks, **BRAND_NAMES, group_col=group_col).plot(**plot_kwargs)
+
+    assert [t.get_text() for t in ax.get_yticklabels()] == expected_labels
 
 
 def test_plot_renders_six_gain_loss_segments_with_group_names_in_legend(sample_df):

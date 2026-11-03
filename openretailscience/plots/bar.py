@@ -12,7 +12,6 @@ from typing import Any, Literal
 import pandas as pd
 from matplotlib.axes import Axes, SubplotBase
 from matplotlib.container import BarContainer
-from matplotlib.patches import Rectangle
 
 import openretailscience.plots.styles.graph_utils as gu
 from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_columns, ensure_value_choice
@@ -255,19 +254,6 @@ def _generate_bar_labels(
         )
 
 
-def _get_bar_value(v: Rectangle, plot_type: str) -> float:
-    """Return the bar's value: height for "bar", width for "barh".
-
-    Args:
-        v (Rectangle): The bar/rectangle object.
-        plot_type (str): The type of plot ("bar" for vertical, "barh" for horizontal).
-
-    Returns:
-        float: The value represented by the bar.
-    """
-    return v.get_height() if plot_type == "bar" else v.get_width()
-
-
 def _generate_absolute_labels(
     container: BarContainer,
     plot_kind: str,
@@ -285,7 +271,9 @@ def _generate_absolute_labels(
     """
     return [
         gu.truncate_to_x_digits(
-            num_str=gu.format_shorthand(num=_get_bar_value(v, plot_kind), decimals=num_digits),
+            num_str=gu.format_shorthand(
+                num=v.get_height() if plot_kind == "bar" else v.get_width(), decimals=num_digits
+            ),
             digits=num_digits,
         )
         for v in container
@@ -323,7 +311,7 @@ def _generate_percentage_labels(
             division_by_zero_list.append(True)
             labels.append("")
         else:
-            bar_value = _get_bar_value(v, plot_kind)
+            bar_value = v.get_height() if plot_kind == "bar" else v.get_width()
             percentage_value = (bar_value / denom) * 100
             labels.append(
                 gu.truncate_to_x_digits(

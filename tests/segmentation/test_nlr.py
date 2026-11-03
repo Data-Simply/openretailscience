@@ -38,7 +38,7 @@ class TestNLRSegmentation:
             p1_value=2023,
             p2_value=2024,
         )
-        result = seg.df.sort_index()
+        result = seg.df.sort_values(cols.customer_id, ignore_index=True)
         p1_col = f"{cols.unit_spend}_p1"
         p2_col = f"{cols.unit_spend}_p2"
 
@@ -49,7 +49,7 @@ class TestNLRSegmentation:
                 p1_col: [100.00, 200.00, 150.00, 0.00],
                 p2_col: [120.00, 0.00, 180.00, 90.00],
             },
-        ).set_index(cols.customer_id)
+        )
 
         assert_frame_equal(result, expected)
 
@@ -84,10 +84,11 @@ class TestNLRSegmentation:
         )
         result = seg.df
 
-        # 1001 has zero spend in Q1 but positive in Q2 -> New
-        assert result.loc[1001, "segment_name"] == SEGMENT_NEW
-        # 1002 only in Q1 with positive spend -> Lapsed
-        assert result.loc[1002, "segment_name"] == SEGMENT_LAPSED
+        # 1001 has zero spend in Q1 but positive in Q2 -> New; 1002 only in Q1 with positive spend -> Lapsed
+        assert dict(zip(result[cols.customer_id], result["segment_name"], strict=True)) == {
+            1001: SEGMENT_NEW,
+            1002: SEGMENT_LAPSED,
+        }
 
     def test_zero_spend_both_periods_excluded(self):
         """Test that a customer with zero spend in both periods is excluded from results."""
@@ -106,12 +107,8 @@ class TestNLRSegmentation:
         )
         result = seg.df
 
-        zero_spend_customer = 1001
-        positive_spend_customer = 1002
-        # Customer with zero spend in both periods should not appear
-        assert zero_spend_customer not in result.index
-        # Customer with positive spend in both should be Repeating
-        assert result.loc[positive_spend_customer, "segment_name"] == SEGMENT_REPEATING
+        # 1001 (zero spend in both periods) is absent; 1002 (positive in both) is Repeating
+        assert dict(zip(result[cols.customer_id], result["segment_name"], strict=True)) == {1002: SEGMENT_REPEATING}
 
     def test_negative_spend_not_counted_as_bought(self):
         """Test that a customer with negative aggregated spend in a period is not considered to have bought."""
@@ -131,7 +128,7 @@ class TestNLRSegmentation:
         result = seg.df
 
         # 1001 has negative aggregated spend (-50+30=-20) in P1 but positive in P2 -> New
-        assert result.loc[1001, "segment_name"] == SEGMENT_NEW
+        assert dict(zip(result[cols.customer_id], result["segment_name"], strict=True)) == {1001: SEGMENT_NEW}
 
     @pytest.mark.parametrize(
         "columns",
@@ -205,10 +202,10 @@ class TestNLRSegmentation:
         """Mixed-case agg_func produces identical output to the lowercase form."""
         lower = NLRSegmentation(
             df=transaction_df, period_col="year", p1_value=2023, p2_value=2024, agg_func=agg_func.lower()
-        ).df.sort_index()
+        ).df.sort_values(cols.customer_id, ignore_index=True)
         upper = NLRSegmentation(
             df=transaction_df, period_col="year", p1_value=2023, p2_value=2024, agg_func=agg_func
-        ).df.sort_index()
+        ).df.sort_values(cols.customer_id, ignore_index=True)
         assert_frame_equal(upper, lower)
 
     def test_alternate_value_col(self):
@@ -229,8 +226,10 @@ class TestNLRSegmentation:
         )
         result = seg.df
 
-        assert result.loc[1001, "segment_name"] == SEGMENT_REPEATING
-        assert result.loc[1002, "segment_name"] == SEGMENT_LAPSED
+        assert dict(zip(result[cols.customer_id], result["segment_name"], strict=True)) == {
+            1001: SEGMENT_REPEATING,
+            1002: SEGMENT_LAPSED,
+        }
 
     def test_agg_func_count_segments_by_transaction_count(self):
         """Test that agg_func='count' segments based on transaction counts rather than spend."""
@@ -248,7 +247,7 @@ class TestNLRSegmentation:
             p2_value=2024,
             agg_func="count",
         )
-        result = seg.df.sort_index()
+        result = seg.df.sort_values(cols.customer_id, ignore_index=True)
         p1_col = f"{cols.unit_spend}_p1"
         p2_col = f"{cols.unit_spend}_p2"
 
@@ -259,7 +258,7 @@ class TestNLRSegmentation:
                 p1_col: [2, 1, 0],
                 p2_col: [1, 0, 1],
             },
-        ).set_index(cols.customer_id)
+        )
 
         assert_frame_equal(result, expected)
 
@@ -301,9 +300,12 @@ class TestNLRSegmentation:
         )
         result = seg.df
 
-        assert result.loc[1001, "segment_name"] == SEGMENT_REPEATING
-        assert result.loc[1002, "segment_name"] == SEGMENT_LAPSED
-        assert result.loc[1004, "segment_name"] == SEGMENT_NEW
+        assert dict(zip(result[cols.customer_id], result["segment_name"], strict=True)) == {
+            1001: SEGMENT_REPEATING,
+            1002: SEGMENT_LAPSED,
+            1003: SEGMENT_REPEATING,
+            1004: SEGMENT_NEW,
+        }
 
     @pytest.mark.parametrize(
         ("p1_value", "p2_value"),
@@ -324,9 +326,12 @@ class TestNLRSegmentation:
         )
         result = seg.df
 
-        assert result.loc[1001, "segment_name"] == SEGMENT_REPEATING
-        assert result.loc[1002, "segment_name"] == SEGMENT_LAPSED
-        assert result.loc[1004, "segment_name"] == SEGMENT_NEW
+        assert dict(zip(result[cols.customer_id], result["segment_name"], strict=True)) == {
+            1001: SEGMENT_REPEATING,
+            1002: SEGMENT_LAPSED,
+            1003: SEGMENT_REPEATING,
+            1004: SEGMENT_NEW,
+        }
 
 
 class TestNLRSegmentationGroupCol:
@@ -358,7 +363,7 @@ class TestNLRSegmentationGroupCol:
             p2_value=2024,
             group_col=group_col,
         )
-        result = seg.df.sort_index()
+        result = seg.df.sort_values([cols.customer_id, cols.store_id], ignore_index=True)
         p1_col = f"{cols.unit_spend}_p1"
         p2_col = f"{cols.unit_spend}_p2"
 
@@ -378,7 +383,7 @@ class TestNLRSegmentationGroupCol:
                 p1_col: [100.00, 120.00, 200.00, 90.00, 0.00, 0.00, 0.00],
                 p2_col: [150.00, 0.00, 0.00, 0.00, 80.00, 70.00, 60.00],
             },
-        ).set_index([cols.customer_id, cols.store_id])
+        )
 
         assert_frame_equal(result, expected)
 

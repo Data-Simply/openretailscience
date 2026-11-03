@@ -46,7 +46,7 @@ nlr_basic = NLRSegmentation(
     p2_value="P2",
 )
 results_basic = nlr_basic.df
-# columns: segment_name, unit_spend_p1, unit_spend_p2
+# columns: customer_id, segment_name, unit_spend_p1, unit_spend_p2
 
 # Example 2: Segment by Visit Count (value_col=transaction_id, agg_func=nunique)
 nlr_visits = NLRSegmentation(

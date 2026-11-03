@@ -31,10 +31,9 @@ class ThresholdSegmentation:
         ...     df=transactions, thresholds=[0.25, 0.5, 0.75, 1.0], segments=["Q1_Bottom", "Q2", "Q3", "Q4_Top"]
         ... )
         >>> quartiles.df
-                     unit_spend segment_name
-        customer_id
-        83                 0.85    Q1_Bottom
-        9                  2.10    Q1_Bottom
+             customer_id  unit_spend segment_name
+        0             83        0.85    Q1_Bottom
+        1              9        2.10    Q1_Bottom
         ...
     """
 
@@ -84,7 +83,6 @@ class ThresholdSegmentation:
                 aggregation available for value_col with a numeric result, or group_col includes
                 the customer column.
         """
-        self._group_col: list[str] | None = None
         if len(thresholds) != len(segments):
             msg = (
                 f"Got {len(thresholds)} thresholds for {len(segments)} segments. thresholds are ascending "
@@ -112,8 +110,8 @@ class ThresholdSegmentation:
         df = ensure_ibis_table(df)
 
         if group_col is not None:
-            self._group_col = ensure_columns(df, group_col, "group_col")
-            ensure_excludes_customer_col(self._group_col, "group_col")
+            group_col = ensure_columns(df, group_col, "group_col")
+            ensure_excludes_customer_col(group_col, "group_col")
 
         value_col = cols.unit_spend if value_col is None else value_col
 
@@ -123,8 +121,8 @@ class ThresholdSegmentation:
 
         # Build group_by columns: customer_id + optional group columns
         group_by_cols = [cols.customer_id]
-        if self._group_col is not None:
-            group_by_cols.extend(self._group_col)
+        if group_col is not None:
+            group_by_cols.extend(group_col)
 
         df = df.group_by(*group_by_cols).aggregate(
             **{value_col: getattr(df[value_col], agg_func)()},
@@ -142,10 +140,10 @@ class ThresholdSegmentation:
         # Order by value_col first, then customer_id to ensure deterministic ordering when values are tied
         window = (
             ibis.window(order_by=[ibis.asc(df[value_col]), ibis.asc(df[cols.customer_id])])
-            if self._group_col is None
+            if group_col is None
             else ibis.window(
                 order_by=[ibis.asc(df[value_col]), ibis.asc(df[cols.customer_id])],
-                group_by=self._group_col,
+                group_by=group_col,
             )
         )
         df = df.mutate(ptile=ibis.percent_rank().over(window))
@@ -163,11 +161,6 @@ class ThresholdSegmentation:
     def df(self) -> pd.DataFrame:
         """Returns the dataframe with the segment names.
 
-        Indexed by customer_id (and group_col if specified); columns: the aggregated value_col
-        and segment_name.
+        Columns: customer_id, group_col if specified, the aggregated value_col and segment_name.
         """
-        cols = ColumnHelper()
-        index_cols = [cols.customer_id]
-        if self._group_col is not None:
-            index_cols.extend(self._group_col)
-        return self.table.execute().set_index(index_cols)
+        return self.table.execute()

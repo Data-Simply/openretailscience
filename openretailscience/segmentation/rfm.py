@@ -15,7 +15,7 @@ from openretailscience.core.validation import (
     ensure_number,
     ensure_tznaive_datetime,
 )
-from openretailscience.options import ColumnHelper, get_option
+from openretailscience.options import ColumnHelper
 
 
 class RFMSegmentation:
@@ -315,9 +315,9 @@ class RFMSegmentation:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Per-customer RFM table, indexed by customer_id.
+        """Per-customer RFM table.
 
-        Columns: recency_days, frequency, monetary, r_score, f_score, m_score, rfm_segment
-        and fm_segment (F*10 + M).
+        Columns: customer_id, recency_days, frequency, monetary, r_score, f_score, m_score,
+        rfm_segment and fm_segment (F*10 + M).
         """
-        return self.table.execute().set_index(get_option("column.customer_id"))
+        return self.table.execute()
