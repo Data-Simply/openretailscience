@@ -34,7 +34,8 @@ class TestHMLSegmentation:
         """Zero-spend customer 3 is dropped, ranked with Light, or put in its own Zero segment."""
         result_df = HMLSegmentation(base_df, zero_value_customers=zero_value_customers).df
 
-        assert dict(zip(result_df[cols.customer_id], result_df["segment_name"], strict=True)) == expected_segments
+        expected_df = base_df.merge(pd.DataFrame(expected_segments.items(), columns=[cols.customer_id, "segment_name"]))
+        pd.testing.assert_frame_equal(result_df.sort_values(cols.customer_id, ignore_index=True), expected_df)
 
     # Raises ValueError if required columns are missing
     def test_raises_value_error_if_required_columns_missing(self, base_df):
@@ -58,13 +59,8 @@ class TestHMLSegmentation:
         hml_segmentation = HMLSegmentation(base_df, value_col=cols.unit_qty)
         result_df = hml_segmentation.df
 
-        assert dict(zip(result_df[cols.customer_id], result_df["segment_name"], strict=True)) == {
-            1: "Heavy",
-            2: "Light",
-            3: "Zero",
-            4: "Medium",
-            5: "Light",
-        }
+        expected_df = base_df.assign(segment_name=["Heavy", "Light", "Zero", "Medium", "Light"])
+        pd.testing.assert_frame_equal(result_df.sort_values(cols.customer_id, ignore_index=True), expected_df)
 
 
 class TestHMLSegmentationGroupCol:
