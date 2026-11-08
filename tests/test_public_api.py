@@ -60,7 +60,7 @@ class TestSubpackageExports:
         assert exported == _public_definitions(package)
 
     def test_plots_exports_every_chart_module(self) -> None:
-        """A chart module missing from `__all__` is unreachable as `plots.<name>`."""
+        """A chart module missing from `dir(plots)` is unreachable as `plots.<name>`."""
         assert dir(plots) == sorted(module.name for module in pkgutil.iter_modules(plots.__path__))
 
     def test_from_import_surfaces_module_import_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
