@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from openretailscience.plots import cohort
 
-# Cohort data (typically from CohortAnalysis): rows = cohort start periods, cols = periods since start
+# Cohort data shaped like CohortAnalysis.df: a min_period_shopped column, then one column per period since start
 rng = np.random.default_rng(42)
 
 cohort_periods = ["2023-01", "2023-02", "2023-03", "2023-04", "2023-05", "2023-06"]
@@ -17,7 +17,7 @@ cohort_data = {
     for i, cohort_label in enumerate(cohort_periods)
 }
 
-cohort_df = pd.DataFrame(cohort_data, index=periods).T
+cohort_df = pd.DataFrame(cohort_data, index=periods).T.rename_axis("min_period_shopped").reset_index()
 
 # Example 1: Basic cohort retention plot
 cohort.plot(
@@ -37,7 +37,7 @@ revenue_data = {
     for i, cohort_label in enumerate(cohort_periods)
 }
 
-revenue_df = pd.DataFrame(revenue_data, index=periods).T
+revenue_df = pd.DataFrame(revenue_data, index=periods).T.rename_axis("min_period_shopped").reset_index()
 
 cohort.plot(
     df=revenue_df,

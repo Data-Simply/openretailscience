@@ -36,9 +36,6 @@ _NATIVE_GROUPING_SETS_BACKENDS = frozenset(
     {"duckdb", "mssql", "oracle", "snowflake", "bigquery", "pyspark", "databricks"},
 )
 
-# Prefix for the transient GROUPING() flag columns; letter-led so every dialect (incl. Oracle) accepts it.
-_GROUPING_FLAG_PREFIX = "grouping_flag_"
-
 
 def _resolve_group_key(key: exp.Expression, selects: list[exp.Expression]) -> exp.Expression:
     """Resolve a GROUP BY key to a concrete column expression.
@@ -670,7 +667,7 @@ class SegTransactionStats:
         base = data.group_by(segment_col).aggregate(**aggs)
 
         # Lengthen the flag prefix until it can't collide with a real output column (else schema merge breaks).
-        prefix = _GROUPING_FLAG_PREFIX
+        prefix = "grouping_flag_"  # Letter-led so every dialect (incl. Oracle) accepts it
         while any(f"{prefix}{i}" in base.columns for i in range(len(segment_col))):
             prefix = f"_{prefix}"
         flag_names = [f"{prefix}{i}" for i in range(len(segment_col))]

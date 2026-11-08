@@ -15,8 +15,6 @@ from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.font_utils import get_font_properties
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
-
     from matplotlib.axes import Axes
     from matplotlib.axis import XAxis, YAxis
     from matplotlib.text import Annotation
@@ -52,16 +50,6 @@ class _EndOfLineCandidate(TypedDict):
     color: str
     marker_size: float
     zorder: float
-
-
-def _hatches_gen() -> Generator[str, None, None]:
-    """Returns a generator that cycles through predefined hatch patterns.
-
-    Yields:
-        str: The next hatch pattern in the sequence.
-    """
-    _hatches = ["/", "\\", "|", "-", "+", "x", "o", "O", ".", "*"]
-    return cycle(_hatches)
 
 
 def format_shorthand(
@@ -390,7 +378,7 @@ def apply_hatches(ax: Axes, num_segments: int) -> Axes:
     Returns:
         Axes: The modified Axes object with hatches applied to the patches.
     """
-    available_hatches = _hatches_gen()
+    available_hatches = cycle(["/", "\\", "|", "-", "+", "x", "o", "O", ".", "*"])
     patch_groups = np.array_split(ax.patches, num_segments)
     for patch_group in patch_groups:
         hatch = next(available_hatches)

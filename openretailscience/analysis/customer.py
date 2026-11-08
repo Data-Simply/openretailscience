@@ -38,10 +38,6 @@ _COMPARISONS = {
     "greater_than_equal_to": operator.ge,
 }
 
-# Name of the per-transaction-number index column produced by TransactionChurn. Defined once
-# so the aggregation that creates it and the materialized view that indexes on it cannot drift.
-_TRANSACTION_NUMBER_COL = "transaction_number"
-
 
 def _distinct_customer_days(df: ibis.Table, customer_id_col: str, transaction_date_col: str) -> ibis.Table:
     """Project to (customer_id, transaction_day) and dedupe.
@@ -74,8 +70,8 @@ class PurchasesPerCustomer:
     Attributes:
         table (ibis.Table): One row per customer with columns ``customer_id``
             and ``purchase_count``.
-        df (pd.DataFrame): Materialized view of ``table`` indexed by
-            ``customer_id``. Lazily computed on first access.
+        df (pd.DataFrame): Materialized view of ``table``, sorted by ``customer_id``.
+            Lazily computed on first access.
 
     Examples:
         >>> from openretailscience.analysis import PurchasesPerCustomer
@@ -106,8 +102,8 @@ class PurchasesPerCustomer:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Materialized purchase counts indexed by customer_id."""
-        return self.table.execute().set_index(self._customer_id_col).sort_index()
+        """Materialized purchase counts, sorted by customer_id."""
+        return self.table.order_by(self._customer_id_col).execute()
 
     def purchases_percentile(self, percentile: float = 0.5) -> float:
         """Return the purchase count at the given percentile across customers.
@@ -166,8 +162,8 @@ class DaysBetweenPurchases:
     Attributes:
         table (ibis.Table): One row per customer with columns ``customer_id``
             and ``avg_days_between_purchases``.
-        df (pd.DataFrame): Materialized view of ``table`` indexed by
-            ``customer_id``. Lazily computed on first access.
+        df (pd.DataFrame): Materialized view of ``table``, sorted by ``customer_id``.
+            Lazily computed on first access.
 
     Examples:
         >>> from openretailscience.analysis import DaysBetweenPurchases
@@ -197,8 +193,8 @@ class DaysBetweenPurchases:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Materialized per-customer mean gaps indexed by customer_id."""
-        return self.table.execute().set_index(self._customer_id_col).sort_index()
+        """Materialized per-customer mean gaps, sorted by customer_id."""
+        return self.table.order_by(self._customer_id_col).execute()
 
     @staticmethod
     def _calculate(df: ibis.Table, customer_id_col: str, transaction_date_col: str) -> ibis.Table:
@@ -262,19 +258,17 @@ class TransactionChurn:
     Attributes:
         table (ibis.Table): Per-``transaction_number`` ``retained``,
             ``churned``, and ``churned_pct`` columns.
-        df (pd.DataFrame): Materialized view of ``table`` indexed by
-            ``transaction_number`` and sorted ascending. Lazily computed on
-            first access.
+        df (pd.DataFrame): Materialized view of ``table``, sorted by
+            ``transaction_number``. Lazily computed on first access.
         n_unique_customers (int): Distinct customers in the input data.
 
     Examples:
         >>> from openretailscience.analysis import TransactionChurn
         >>> churn = TransactionChurn(df=transactions, churn_period=90)
         >>> churn.df
-                            retained  churned  churned_pct
-        transaction_number
-        1                         77       29     0.273585
-        2                         42       28     0.400000
+           transaction_number  retained  churned  churned_pct
+        0                   1        77       29     0.273585
+        1                   2        42       28     0.400000
         ...
     """
 
@@ -316,8 +310,8 @@ class TransactionChurn:
 
     @functools.cached_property
     def df(self) -> pd.DataFrame:
-        """Materialized churn table indexed by transaction_number."""
-        return self.table.execute().set_index(_TRANSACTION_NUMBER_COL).sort_index()
+        """Materialized churn table, sorted by transaction_number."""
+        return self.table.order_by("transaction_number").execute()
 
     @staticmethod
     def _calculate(
@@ -352,11 +346,11 @@ class TransactionChurn:
         # later transactions outside the window — the opposite of the intended flag.
         annotated = per_customer_day.mutate(
             is_last_transaction=per_customer_day.transaction_day.lead(1).over(cust_window).isnull(),  # noqa: PD003 (ibis API, not pandas)
-            **{_TRANSACTION_NUMBER_COL: ibis.row_number().over(cust_window) + 1},
+            transaction_number=ibis.row_number().over(cust_window) + 1,
         )
 
         in_window = annotated.filter(annotated.transaction_day < churn_boundary)
-        grouped = in_window.group_by(_TRANSACTION_NUMBER_COL).aggregate(
+        grouped = in_window.group_by("transaction_number").aggregate(
             retained=(~in_window.is_last_transaction).cast("int").sum(),
             churned=in_window.is_last_transaction.cast("int").sum(),
         )

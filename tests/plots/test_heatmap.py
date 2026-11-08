@@ -50,6 +50,18 @@ def test_plot_basic_heatmap(sample_heatmap_dataframe):
     assert len(result_ax.texts) == sample_heatmap_dataframe.size
 
 
+@pytest.mark.parametrize("y_col", [None, "day_of_week"])
+def test_plot_takes_y_labels_from_y_col_or_index(sample_heatmap_dataframe, y_col):
+    """Rows are labelled by y_col when given, otherwise by the index; y_col is not drawn as cells."""
+    df = sample_heatmap_dataframe if y_col is None else sample_heatmap_dataframe.rename_axis(y_col).reset_index()
+
+    result_ax = heatmap.plot(df=df, cbar_label="Foot traffic", y_col=y_col)
+
+    assert [t.get_text() for t in result_ax.get_yticklabels()] == ["Mon", "Tue", "Wed", "Thu"]
+    assert [t.get_text() for t in result_ax.get_xticklabels()] == list(sample_heatmap_dataframe.columns)
+    assert [float(t.get_text()) for t in result_ax.texts] == sample_heatmap_dataframe.to_numpy().ravel().tolist()
+
+
 def test_plot_with_source_text(sample_heatmap_dataframe):
     """The heatmap renders source_text as a figure-level text element."""
     source_text = "Source: Test Data"
@@ -311,10 +323,30 @@ def test_text_color_contrast():
     assert text_1_color == "white", f"High-value cell should have white text, got {text_1_color}"
 
 
-def test_plot_raises_on_empty_dataframe():
-    """Empty input should raise a descriptive ValueError at the public boundary."""
-    with pytest.raises(ValueError, match="empty DataFrame"):
-        heatmap.plot(df=pd.DataFrame(), cbar_label="Foot traffic")
+@pytest.mark.parametrize(
+    ("df", "y_col", "error", "match"),
+    [
+        (pd.DataFrame(), None, ValueError, "empty DataFrame"),
+        (
+            pd.DataFrame({"Store_North": [0.42, 0.17]}, index=["Mon", "Tue"]),
+            "day_of_week",
+            ValueError,
+            r"y_col references columns not present in the data: \['day_of_week'\]",
+        ),
+        # A row-label column left in the cells (y_col forgotten), as with any result frame's key column
+        (
+            pd.DataFrame({"day_of_week": ["Mon", "Tue"], "Store_North": [0.42, 0.17]}),
+            None,
+            TypeError,
+            r"columns \['day_of_week'\] are not numeric; pass y_col",
+        ),
+    ],
+    ids=["empty", "missing_y_col", "label_column_without_y_col"],
+)
+def test_plot_raises_on_invalid_input(df, y_col, error, match):
+    """Empty input, a y_col that is not a column, or a non-numeric cell column raises an error naming the problem."""
+    with pytest.raises(error, match=match):
+        heatmap.plot(df=df, cbar_label="Foot traffic", y_col=y_col)
 
 
 def test_plot_raises_on_all_nan_data():

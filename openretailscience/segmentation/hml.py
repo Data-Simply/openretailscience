@@ -18,10 +18,9 @@ class HMLSegmentation(ThresholdSegmentation):
         >>> from openretailscience.segmentation import HMLSegmentation
         >>> hml = HMLSegmentation(df=transactions)
         >>> hml.df
-                     unit_spend segment_name
-        customer_id
-        83                 0.85        Light
-        9                  2.10        Light
+             customer_id  unit_spend segment_name
+        0             83        0.85        Light
+        1              9        2.10        Light
         ...
     """
 
@@ -37,7 +36,7 @@ class HMLSegmentation(ThresholdSegmentation):
 
         The cuts rank customers, not spend values: Light is the lowest-spending 50% of customers,
         Medium the next 30%, Heavy the top 20%, with ties ranked as in `ThresholdSegmentation`.
-        ``.df`` is indexed by customer_id (and ``group_col``), with the aggregated ``value_col``
+        ``.df`` has columns customer_id, ``group_col`` if given, the aggregated ``value_col``
         and ``segment_name``.
 
         Args:

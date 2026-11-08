@@ -20,12 +20,10 @@ transactions = pd.DataFrame({
 })
 
 # Example 1: Basic HML Segment Statistics
-# seg.df is indexed by customer_id with a segment_name column
 seg = HMLSegmentation(df=transactions)
 df_with_segments = transactions.merge(
-    seg.df["segment_name"],
-    left_on="customer_id",
-    right_index=True,
+    seg.df[["customer_id", "segment_name"]],
+    on="customer_id",
     how="left",
 )
 
@@ -76,9 +74,8 @@ transactions_with_unknown.loc[unknown_mask, "customer_id"] = -1
 # Re-segment on the unknown-inclusive data, then merge labels back
 seg_unknown = HMLSegmentation(df=transactions_with_unknown)
 df_with_segments_unknown = transactions_with_unknown.merge(
-    seg_unknown.df["segment_name"],
-    left_on="customer_id",
-    right_index=True,
+    seg_unknown.df[["customer_id", "segment_name"]],
+    on="customer_id",
     how="left",
 )
 
