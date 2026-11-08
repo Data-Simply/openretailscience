@@ -9,6 +9,8 @@
   arguments (group_col=, segment_col=)
 - `experimental`: APIs that may change without notice
 - `skills`: install the bundled AI-agent skill with `install_skills()`
+
+Call help() on a subpackage, such as `help(openretailscience.analysis)`, for its classes and functions.
 """
 
 from __future__ import annotations

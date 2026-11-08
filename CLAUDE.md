@@ -40,8 +40,8 @@ plot module's `plot()`, is the other place agents read the API: an agent without
 from `help()` or `__doc__`. When public API changes, update the affected docstring example along with the skill,
 using the same call pattern as the matching `example_*.py` script. Keep it to about five lines: the call and what a
 user does next with the result, with no display-only steps (`.iloc`, column listings, rounding to fit). Show at most
-a few rows of a printed table and end it with a `...` line (the test runs with ELLIPSIS); `help()` on `analysis`,
-`segmentation` or `utils` renders every one. `tests/test_docstring_examples.py` fails if one of these has no example,
+a few rows of a printed table and end it with a `...` line (the test runs with ELLIPSIS); `help()` on a class or
+function renders its one. `tests/test_docstring_examples.py` fails if one of these has no example,
 and runs each one with `pd`, `ibis` and a sample `transactions` frame in scope.
 
 ## Build & Test Commands
