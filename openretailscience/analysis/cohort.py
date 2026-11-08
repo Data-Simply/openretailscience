@@ -1,6 +1,6 @@
 """Cohort retention matrix from transaction data.
 
-Index = cohort start period; integer columns = periods since start. For churn per
+Column ``min_period_shopped`` = cohort start period; integer columns = periods since start. For churn per
 purchase-day ordinal, use `customer.TransactionChurn`; render with `plots.cohort.plot`.
 """
 
@@ -60,8 +60,8 @@ class CohortAnalysis:
     """Computes a cohort retention matrix from transaction data.
 
     Customers are grouped into cohorts by the period of their first purchase. ``.df``
-    (pandas) has one row per period from the first cohort to the last (index
-    ``min_period_shopped``, the period's start) and integer columns ``period_since`` from 0
+    (pandas) has one row per period from the first cohort to the last: column
+    ``min_period_shopped`` (the period's start), then integer ``period_since`` columns from 0
     to the longest gap observed, so it need not be square. Each cell is ``agg_func`` of
     ``aggregation_column`` over that cohort's transactions in that period. Cells with no
     transactions, including cohorts with no customers and periods past the end of the data,
@@ -73,10 +73,9 @@ class CohortAnalysis:
         ...     df=transactions, aggregation_column="customer_id", period="quarter", percentage=True
         ... )
         >>> cohorts.df
-        period_since          0     1     2     3     4     5
-        min_period_shopped
-        2024-01-01          1.0  0.28  0.38  0.38  0.35  0.28
-        2024-04-01          1.0  0.38  0.38  0.33  0.17  0.00
+        period_since min_period_shopped    0     1     2     3     4     5
+        0                    2024-01-01  1.0  0.28  0.38  0.38  0.35  0.28
+        1                    2024-04-01  1.0  0.38  0.38  0.33  0.17  0.00
         ...
     """
 
@@ -229,4 +228,4 @@ class CohortAnalysis:
         cohort_analysis_table = self._fill_cohort_gaps(cohort_analysis_table, period)
         cohort_analysis_table.index.name = "min_period_shopped"
 
-        return cohort_analysis_table
+        return cohort_analysis_table.reset_index()

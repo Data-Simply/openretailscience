@@ -43,15 +43,14 @@ class TestCohortAnalysis:
         """Expected cohort result DataFrame for comparison."""
         expected_df = pd.DataFrame(
             {
+                "min_period_shopped": pd.date_range("2023-01-01", periods=5, freq="MS"),
                 0: [2.0, 1.0, 0.0, 0.0, 2.0],
                 1: [1.0, 1.0, 0.0, 0.0, 1.0],
                 2: [2.0, 1.0, 0.0, 0.0, 0.0],
                 3: [1.0, 0.0, 0.0, 0.0, 0.0],
             },
-            index=pd.date_range("2023-01-01", periods=5, freq="MS"),
         )
 
-        expected_df.index.name = "min_period_shopped"
         expected_df.columns.name = "period_since"
 
         return expected_df
@@ -94,10 +93,8 @@ class TestCohortAnalysis:
         ).df
 
         expected_df = pd.DataFrame(
-            {0: [1.0, 1.0], 1: [1.0, 0.0]},
-            index=pd.date_range("2023-01-02", periods=2, freq="7D"),
+            {"min_period_shopped": pd.date_range("2023-01-02", periods=2, freq="7D"), 0: [1.0, 1.0], 1: [1.0, 0.0]},
         )
-        expected_df.index.name = "min_period_shopped"
         expected_df.columns.name = "period_since"
 
         pdt.assert_frame_equal(result, expected_df)
@@ -147,14 +144,13 @@ class TestCohortAnalysis:
 
         expected_df = pd.DataFrame(
             {
+                "min_period_shopped": pd.date_range("2023-01-01", periods=5, freq="MS"),
                 0: [1.0, 1.0, 0.0, 0.0, 1.0],
                 1: [0.5, 1.0, 0.0, 0.0, 0.5],
                 2: [1.0, 1.0, 0.0, 0.0, 0.0],
                 3: [0.5, 0.0, 0.0, 0.0, 0.0],
             },
-            index=pd.date_range("2023-01-01", periods=5, freq="MS"),
         )
-        expected_df.index.name = "min_period_shopped"
         expected_df.columns.name = "period_since"
 
         pdt.assert_frame_equal(result, expected_df)
@@ -192,12 +188,11 @@ class TestCohortAnalysis:
 
         expected_df = pd.DataFrame(
             {
+                "min_period_shopped": pd.date_range("2023-01-01", periods=2, freq="MS"),
                 0: [1.0, 0.0],
                 1: [0.17, 0.0],
             },
-            index=pd.date_range("2023-01-01", periods=2, freq="MS"),
         )
-        expected_df.index.name = "min_period_shopped"
         expected_df.columns.name = "period_since"
 
         pdt.assert_frame_equal(result, expected_df)

@@ -10,6 +10,8 @@
 - gaps in data availability → `broken_timeline`
 - colors, axis formatting and trend lines → `styles`
 - the tree layout behind `RevenueTree.draw_tree` → `tree_diagram`
+
+Call help() on a chart's `plot()`, such as `help(openretailscience.plots.bar.plot)`, for its parameters and an example.
 """
 
 from __future__ import annotations

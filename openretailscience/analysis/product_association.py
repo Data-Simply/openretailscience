@@ -287,4 +287,4 @@ class ProductAssociation:
     @functools.cached_property
     def df(self) -> pd.DataFrame:
         """Materialized association rules DataFrame (cached after first execution)."""
-        return self.table.execute().reset_index(drop=True)
+        return self.table.execute()

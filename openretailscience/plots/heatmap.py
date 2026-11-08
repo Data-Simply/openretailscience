@@ -1,4 +1,4 @@
-"""Generic 2D heatmap: index → y-axis, columns → x-axis, cell values shown as-is.
+"""Generic 2D heatmap: y_col (or the index) → y-axis, other columns → x-axis, cell values shown as-is.
 
 cbar_format controls the in-cell text (no percentage formatting is applied); cell text
 auto-contrasts (black/white) at the normalized midpoint; the y-axis is inverted so row 0
@@ -16,6 +16,7 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.patches import FancyBboxPatch
 
+from openretailscience.core.validation import ensure_columns
 from openretailscience.options import PlotStyleHelper
 from openretailscience.plots.styles.colors import get_sequential_cmap
 from openretailscience.plots.styles.font_utils import get_font_properties
@@ -34,6 +35,10 @@ def _resolve_data_range(df: pd.DataFrame) -> tuple[np.ndarray, float, float, boo
     """
     if df.empty:
         raise ValueError("Cannot plot with empty DataFrame")
+    non_numeric = [col for col, dtype in df.dtypes.items() if not pd.api.types.is_numeric_dtype(dtype)]
+    if len(non_numeric) > 0:
+        msg = f"Heatmap columns {non_numeric} are not numeric; pass y_col to use a label column as the row labels."
+        raise TypeError(msg)
     data = df.to_numpy()
     # np.nanmin/nanmax emit RuntimeWarning on all-NaN input; check up-front so the
     # ValueError is the only thing the caller sees.
@@ -62,14 +67,15 @@ def plot(
     cbar_format: str = "{x:g}",
     colormap_style: Literal["discrete", "continuous"] = "discrete",
     x_labels_position: Literal["top", "bottom"] = "bottom",
+    y_col: str | None = None,
 ) -> SubplotBase:
-    """Create a generic heatmap: index → y-axis, columns → x-axis, cell values as text.
+    """Create a generic heatmap: y_col (or the index) → y-axis, other columns → x-axis, cell values as text.
 
     NaN cells are left blank (no fill or text).
 
     Args:
-        df (pd.DataFrame): Frame to visualize; the index becomes the y-axis and the
-            columns the x-axis.
+        df (pd.DataFrame): Frame to visualize; ``y_col`` (or the index) becomes the y-axis and
+            the other columns the x-axis.
         cbar_label (str): Colorbar label.
         x_label (str, optional): X-axis label; omitted means no label.
         y_label (str, optional): Y-axis label; omitted means no label.
@@ -86,12 +92,14 @@ def plot(
             (discrete) or a smooth gradient (continuous).
         x_labels_position ("top", "bottom", optional): Draw x tick labels above or below the
             matrix; cohort charts use "top" so the chronology reads top-to-bottom.
+        y_col (str, optional): Column holding the row labels. Defaults to None, which uses the index.
 
     Returns:
         SubplotBase: The matplotlib axes object.
 
     Raises:
-        ValueError: If df is empty or contains no finite values.
+        ValueError: If df is empty or contains no finite values, or y_col is not a column of df.
+        TypeError: If a column other than y_col is not numeric.
 
     Examples:
         >>> from openretailscience.plots import heatmap
@@ -101,6 +109,7 @@ def plot(
         ...     eyebrow="Stores", title="Spend by store and category", subtitle="January 2024 to June 2025",
         ... )
     """
+    df = df if y_col is None else df.set_index(ensure_columns(df, y_col, "y_col"))
     data, vmin, vmax, is_uniform = _resolve_data_range(df)
 
     if ax is None:

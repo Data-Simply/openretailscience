@@ -11,6 +11,10 @@ from openretailscience.constants import COLORS
 
 OptionTypes = str | int | float | bool | list | dict | None
 
+# Below every measured typo of a real key (lowest 0.83), above most non-standard column names.
+_SUGGESTION_CUTOFF = 0.8
+_LIST_OPTIONS = "openretailscience.options.list_options()"
+
 
 class Options:
     """A class to manage configurable options."""
@@ -274,11 +278,39 @@ class Options:
         self._default_options: dict[str, OptionTypes] = self._options.copy()
 
     def _ensure_known(self, pat: str) -> None:
+        if not isinstance(pat, str):
+            msg = f"Unknown option '{pat}'. See {_LIST_OPTIONS}."
+            raise ValueError(msg)  # noqa: TRY004 - every unknown key raises the same error type
         if pat in self._options:
             return
-        close = difflib.get_close_matches(pat, self._options, n=1) if isinstance(pat, str) else []
-        suggestion = f" Did you mean '{close[0]}'?" if len(close) > 0 else ""
-        msg = f"Unknown option '{pat}'.{suggestion} See list_options()."
+        key = pat.lower()
+        # A key typed under column. names a column, so a plot option is never what it meant (column.source).
+        options = [k for k in self._options if k.startswith("column.")] if key.startswith("column.") else self._options
+        close = difflib.get_close_matches(key, options, n=1, cutoff=_SUGGESTION_CUTOFF)
+        if len(close) == 0:
+            # Tails, so a key typed without its groups (title_size) matches. Whole keys go first, as a tail can outscore
+            # the key meant (difference: color.difference over suffix.difference). A tail shared by several keys
+            # (customer_id) goes to the first, the input column.
+            tails = {".".join(k.split(".")[i:]): k for k in reversed(options) for i in range(1, k.count(".") + 1)}
+            close = [tails[t] for t in difflib.get_close_matches(key, tails, n=1, cutoff=_SUGGESTION_CUTOFF)]
+        msg = f"Unknown option '{pat}'."
+        meant = key
+        if len(close) > 0:
+            meant = close[0]
+            msg += f" Did you mean '{meant}'?"
+        name = pat.rsplit(".", 1)[-1]
+        # A bare name (brand_name) is read as a column. Suffixes are fragments of output names, not columns an
+        # analysis takes. A key that differs from a real one only in case (Column.Customer_ID) names a standard column.
+        is_column = "." not in meant or meant.startswith("column.")
+        if is_column and not meant.startswith("column.suffix.") and key not in self._options and name != "":
+            # Conditional because a suggestion can be wrong (store_name -> store_id) and a short form of a standard
+            # column (date) can match nothing.
+            msg += (
+                f" Options rename only the standard input and output columns ({_LIST_OPTIONS}); if {name!r} isn't "
+                f"one, pass it to analyses as an argument instead, e.g. group_col={name!r}."
+            )
+        else:
+            msg += f" See {_LIST_OPTIONS}."
         raise ValueError(msg)
 
     def set_option(self, pat: str, val: OptionTypes) -> None:
@@ -396,11 +428,11 @@ class Options:
 
         for section, options in toml_data.items():
             for option_name, option_value in Options.flatten_options(section, options).items():
-                if option_name in options_instance._options:
+                try:
                     options_instance.set_option(option_name, option_value)
-                else:
-                    msg = f"Unknown option in TOML file: {option_name}"
-                    raise ValueError(msg)
+                except ValueError as err:
+                    msg = f"{file_path}: {err}"
+                    raise ValueError(msg) from None
 
         return options_instance
 

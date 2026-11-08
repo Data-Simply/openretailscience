@@ -122,12 +122,6 @@ def _categorize_columns(
     return highlighted_cols, context_cols
 
 
-def _generate_colors(highlighted_cols: list[str]) -> list[str]:
-    """Generate colors for highlighted lines."""
-    num_highlighted = len(highlighted_cols) if highlighted_cols else 1
-    return get_plot_colors(num_highlighted)
-
-
 def _render_plot(
     pivot_df: pd.DataFrame,
     highlighted_cols: list[str],
@@ -249,7 +243,7 @@ def plot(  # noqa: PLR0913, PLR0917
     highlight = _validate_highlight_parameter(highlight, value_col, group_col, pivot_df)
 
     highlighted_cols, context_cols = _categorize_columns(pivot_df, highlight)
-    highlighted_colors = _generate_colors(highlighted_cols)
+    highlighted_colors = get_plot_colors(max(len(highlighted_cols), 1))
 
     is_multi_line = (group_col is not None) or (isinstance(value_col, list) and len(value_col) > 1)
 

@@ -47,15 +47,15 @@ class GainLoss:
 
     Results are computed at initialization; there are no ``df``/``table`` attributes.
 
-    ``gain_loss_df`` has one row per customer, indexed by ``customer_id`` (by
-    ``(group_col, customer_id)`` when grouped), so ``customer_id`` is not a column. Its 15
-    columns are ``focus``/``comparison``/``total`` for ``_p1``, ``_p2`` and ``_diff``, then the
-    six components ``new``, ``lost``, ``increased_focus``, ``decreased_focus``,
-    ``switch_from_comparison`` and ``switch_to_comparison``, which sum to ``focus_diff``.
+    ``gain_loss_df`` has one row per customer, or per ``group_col`` value and customer when grouped:
+    ``customer_id`` (after ``group_col``), then ``focus``/``comparison``/``total`` for ``_p1``,
+    ``_p2`` and ``_diff``, then the six components ``new``, ``lost``, ``increased_focus``,
+    ``decreased_focus``, ``switch_from_comparison`` and ``switch_to_comparison``, which sum to
+    ``focus_diff``.
     Customers whose values are all 0 are dropped.
 
-    ``gain_loss_table_df`` has the same columns summed over customers: one row when
-    ungrouped, one row per ``group_col`` value otherwise.
+    ``gain_loss_table_df`` has the same value columns summed over customers: one row when
+    ungrouped, one row per ``group_col`` value (with ``group_col`` first) otherwise.
 
     Examples:
         >>> from openretailscience.analysis import GainLoss
@@ -257,6 +257,7 @@ class GainLoss:
         p1_index, p2_index, focus_group_index, comparison_group_index = (
             mask[in_periods] for mask in (p1_index, p2_index, focus_group_index, comparison_group_index)
         )
+        customer_id_dtype = df[cols.customer_id].dtype
         df[cols.customer_id] = df[cols.customer_id].astype("category")
 
         grp_cols = [cols.customer_id] if group_col is None else [group_col, cols.customer_id]
@@ -296,33 +297,33 @@ class GainLoss:
 
         if len(gl_df) == 0:
             # The zip below has no rows to unpack
-            return gl_df.assign(
+            gl_df = gl_df.assign(
                 new=0, lost=0, increased_focus=0, decreased_focus=0, switch_from_comparison=0, switch_to_comparison=0
             )
-
-        (
-            gl_df["new"],
-            gl_df["lost"],
-            gl_df["increased_focus"],
-            gl_df["decreased_focus"],
-            gl_df["switch_from_comparison"],
-            gl_df["switch_to_comparison"],
-        ) = zip(
-            *gl_df.apply(
-                lambda x: GainLoss.process_customer_group(
-                    focus_p1=x["focus_p1"],
-                    comparison_p1=x["comparison_p1"],
-                    focus_p2=x["focus_p2"],
-                    comparison_p2=x["comparison_p2"],
-                    focus_diff=x["focus_diff"],
-                    comparison_diff=x["comparison_diff"],
+        else:
+            (
+                gl_df["new"],
+                gl_df["lost"],
+                gl_df["increased_focus"],
+                gl_df["decreased_focus"],
+                gl_df["switch_from_comparison"],
+                gl_df["switch_to_comparison"],
+            ) = zip(
+                *gl_df.apply(
+                    lambda x: GainLoss.process_customer_group(
+                        focus_p1=x["focus_p1"],
+                        comparison_p1=x["comparison_p1"],
+                        focus_p2=x["focus_p2"],
+                        comparison_p2=x["comparison_p2"],
+                        focus_diff=x["focus_diff"],
+                        comparison_diff=x["comparison_diff"],
+                    ),
+                    axis=1,
                 ),
-                axis=1,
-            ),
-            strict=False,
-        )
+                strict=False,
+            )
 
-        return gl_df
+        return gl_df.reset_index().astype({cols.customer_id: customer_id_dtype})
 
     @staticmethod
     def _calc_gains_loss_table(
@@ -338,10 +339,11 @@ class GainLoss:
         Returns:
             pd.DataFrame: A single-row frame when ``group_col`` is None, otherwise one row per group.
         """
+        values = gain_loss_df.drop(columns=ColumnHelper().customer_id)
         if group_col is None:
-            return gain_loss_df.sum().to_frame("").T
+            return values.sum().to_frame().T
 
-        return gain_loss_df.groupby(level=0).sum()
+        return values.groupby(group_col, as_index=False, observed=True).sum()
 
     def plot(
         self,
@@ -359,8 +361,8 @@ class GainLoss:
 
         Green segments are ``new`` / ``increased_focus`` / ``switch_from_comparison``; red
         segments are ``lost`` / ``decreased_focus`` / ``switch_to_comparison``. Legend labels
-        use the focus and comparison group names. ``stacked`` and ``color`` kwargs are
-        silently ignored.
+        use the focus and comparison group names. ``stacked``, ``color`` and ``x_col`` kwargs
+        are silently ignored.
 
         Args:
             title (str | None): Plot title; defaults to "Gain Loss from {focus} to {comparison}".
@@ -397,10 +399,14 @@ class GainLoss:
         ]
 
         default_y_label = self.focus_group_name if self.group_col is None else self.group_col
-        plot_data = self.gain_loss_table_df.copy()
+        plot_data = self.gain_loss_table_df
+        if self.group_col is None:
+            # Blank the single bar's tick label, which would otherwise be the row number; the y label names it
+            plot_data = plot_data.set_axis([""])
 
         kwargs.pop("stacked", None)
         kwargs.pop("color", None)
+        kwargs.pop("x_col", None)
 
         resolved_title = (
             title if title is not None else f"Gain Loss from {self.focus_group_name} to {self.comparison_group_name}"
@@ -409,6 +415,7 @@ class GainLoss:
         ax = bar.plot(
             df=plot_data,
             value_col=all_cols,
+            x_col=self.group_col,
             title=resolved_title,
             eyebrow=eyebrow,
             subtitle=subtitle,

@@ -386,12 +386,15 @@ print(info)
 
 **Error:**
 
-```python
-ValueError: Unknown option 'column.custom_field'. Did you mean 'column.customer_id'? See list_options().
+<!-- markdownlint-disable MD013 -->
+```text
+ValueError: Unknown option 'column.brand_name'. Options rename only the standard input and output columns (openretailscience.options.list_options()); if 'brand_name' isn't one, pass it to analyses as an argument instead, e.g. group_col='brand_name'.
 ```
+<!-- markdownlint-enable MD013 -->
 
-**Solution:** Only predefined options can be used. The error suggests the closest real option when there is one;
-`list_options()` lists them all.
+**Solution:** Column options exist only for the standard columns and outputs, listed with every other option by
+`openretailscience.options.list_options()`. A key close to one of them also gets a "Did you mean" suggestion. Pass
+any other column (a brand, a region) to the analysis as an argument such as `group_col` or `segment_col`.
 
 ### TOML Not Loading
 

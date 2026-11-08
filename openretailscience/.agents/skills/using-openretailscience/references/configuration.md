@@ -47,6 +47,8 @@ methods, the last write wins.
 - `plot.color.*`, `plot.font.*`, `plot.style.*`, `plot.spacing.*` — chart styling.
 - `optimization.use_native_sql` — engine optimization toggle.
 
+Other columns (a brand, a region) have no option; pass them to analyses as arguments (`group_col=`, `segment_col=`).
+
 ### ColumnHelper — resolve names in your own code
 
 ```python

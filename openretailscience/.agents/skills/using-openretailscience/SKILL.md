@@ -27,12 +27,13 @@ filtering and aggregation are pushed into the engine.
 `from openretailscience.analysis.cross_shop import CrossShop`. `plots` exports chart modules
 (`from openretailscience.plots import bar`). `experimental` exports nothing: use
 `from openretailscience.experimental.clv import CLVStats`.
-`help(openretailscience.analysis)` (or `segmentation`, `plots`) maps questions to classes or chart modules.
+`help(openretailscience.analysis)` (or `segmentation`, `utils`, `plots`) maps questions to classes, functions or
+chart modules.
 
 ## Core workflow
 
-1. **Configure column names once** with the options system, so analyses find your
-   schema without per-call column arguments.
+1. **Map your column names** with the options system when they differ from the
+   standard ones (customer_id, unit_spend, …); pass other columns to analyses as arguments.
 2. **Instantiate an analysis class** (or call a plot function) with your data.
 3. **Read results** from `.df` (pandas) or `.table` (Ibis), and/or render with
    `.plot()` / `.draw_tree()` or a `plots.*` function.

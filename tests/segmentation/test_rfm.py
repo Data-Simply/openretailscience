@@ -57,7 +57,7 @@ class TestRFMSegmentation:
                 "rfm_segment": [300, 112, 21, 434, 243],
                 "fm_segment": [0, 12, 21, 34, 43],
             },
-        ).set_index("customer_id")
+        )
 
     @pytest.fixture
     def larger_df(self):
@@ -107,8 +107,8 @@ class TestRFMSegmentation:
         expected_df["recency_days"] = expected_df["recency_days"].astype(result_df["recency_days"].dtype)
 
         pd.testing.assert_frame_equal(
-            result_df.sort_index(),
-            expected_df.sort_index(),
+            result_df.sort_values(cols.customer_id, ignore_index=True),
+            expected_df,
             check_like=True,
         )
 
@@ -121,8 +121,8 @@ class TestRFMSegmentation:
         expected_df["recency_days"] = expected_df["recency_days"].astype(result_df["recency_days"].dtype)
 
         pd.testing.assert_frame_equal(
-            result_df.sort_index(),
-            expected_df.sort_index(),
+            result_df.sort_values(cols.customer_id, ignore_index=True),
+            expected_df,
             check_like=True,
         )
 
@@ -161,7 +161,7 @@ class TestRFMSegmentation:
                 "rfm_segment": [0],
                 "fm_segment": [0],
             },
-        ).set_index(cols.customer_id)
+        )
         expected_df["recency_days"] = expected_df["recency_days"].astype(result_df["recency_days"].dtype)
 
         pd.testing.assert_frame_equal(result_df, expected_df, check_like=True)
@@ -172,7 +172,10 @@ class TestRFMSegmentation:
         dataframe_result = RFMSegmentation(df=base_df, current_date=current_date).df
         ibis_result = RFMSegmentation(df=ibis.memtable(base_df), current_date=current_date).df
 
-        pd.testing.assert_frame_equal(ibis_result.sort_index(), dataframe_result.sort_index())
+        pd.testing.assert_frame_equal(
+            ibis_result.sort_values(cols.customer_id, ignore_index=True),
+            dataframe_result.sort_values(cols.customer_id, ignore_index=True),
+        )
 
     @pytest.mark.parametrize(
         ("invalid_input", "expected_error", "error_message"),
@@ -291,12 +294,12 @@ class TestRFMSegmentation:
                 "rfm_segment": [100, 111, 0, 11],
                 "fm_segment": [0, 11, 0, 11],
             },
-        ).set_index(cols.customer_id)
+        )
         expected_df["recency_days"] = expected_df["recency_days"].astype(result_df["recency_days"].dtype)
 
         pd.testing.assert_frame_equal(
-            result_df.sort_index(),
-            expected_df.sort_index(),
+            result_df.sort_values(cols.customer_id, ignore_index=True),
+            expected_df,
             check_like=True,
         )
 
@@ -510,8 +513,8 @@ class TestRFMSegmentation:
         assert len(result_with_filter) == customer_count_with_filter
 
         # Check that segment boundaries are
-        customer_11_no_filter = result_no_filter.loc[11, "m_score"]
-        customer_11_with_filter = result_with_filter.loc[11, "m_score"]
+        customer_11_no_filter = result_no_filter.set_index(cols.customer_id).loc[11, "m_score"]
+        customer_11_with_filter = result_with_filter.set_index(cols.customer_id).loc[11, "m_score"]
         assert customer_11_with_filter < customer_11_no_filter, (
             f"Customer 11 should have lower m_score when filtered. "
             f"No filter: {customer_11_no_filter}, With filter: {customer_11_with_filter}"
@@ -526,7 +529,7 @@ class TestRFMSegmentation:
             )
 
     def test_with_custom_column_names(self, base_df):
-        """Custom column-name options produce the same scores and segments as the default names (index aside)."""
+        """Custom column-name options produce the same scores and segments as the default names."""
         current_date = "2025-03-17"
         default_result = RFMSegmentation(df=base_df, current_date=current_date).df
 
@@ -550,5 +553,4 @@ class TestRFMSegmentation:
         ):
             custom_result = RFMSegmentation(df=custom_df, current_date=current_date).df
 
-        assert custom_result.index.name == "custom_cust_id"
-        pd.testing.assert_frame_equal(custom_result.rename_axis(default_result.index.name), default_result)
+        pd.testing.assert_frame_equal(custom_result, default_result.rename(columns=rename_mapping))

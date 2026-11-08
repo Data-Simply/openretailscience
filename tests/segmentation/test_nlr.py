@@ -30,7 +30,19 @@ class TestNLRSegmentation:
             },
         )
 
-    def test_basic_segmentation(self, transaction_df):
+    @pytest.fixture
+    def expected_df(self):
+        """Return the segments and per-period spend of transaction_df's customers for 2023 vs 2024."""
+        return pd.DataFrame(
+            {
+                cols.customer_id: [1001, 1002, 1003, 1004],
+                "segment_name": [SEGMENT_REPEATING, SEGMENT_LAPSED, SEGMENT_REPEATING, SEGMENT_NEW],
+                f"{cols.unit_spend}_p1": [100.00, 200.00, 150.00, 0.00],
+                f"{cols.unit_spend}_p2": [120.00, 0.00, 180.00, 90.00],
+            },
+        )
+
+    def test_basic_segmentation(self, transaction_df, expected_df):
         """Test customers are classified as New, Repeating, or Lapsed with correct aggregated values."""
         seg = NLRSegmentation(
             df=transaction_df,
@@ -38,20 +50,7 @@ class TestNLRSegmentation:
             p1_value=2023,
             p2_value=2024,
         )
-        result = seg.df.sort_index()
-        p1_col = f"{cols.unit_spend}_p1"
-        p2_col = f"{cols.unit_spend}_p2"
-
-        expected = pd.DataFrame(
-            {
-                cols.customer_id: [1001, 1002, 1003, 1004],
-                "segment_name": [SEGMENT_REPEATING, SEGMENT_LAPSED, SEGMENT_REPEATING, SEGMENT_NEW],
-                p1_col: [100.00, 200.00, 150.00, 0.00],
-                p2_col: [120.00, 0.00, 180.00, 90.00],
-            },
-        ).set_index(cols.customer_id)
-
-        assert_frame_equal(result, expected)
+        assert_frame_equal(seg.df.sort_values(cols.customer_id, ignore_index=True), expected_df)
 
     def test_segment_names_are_exhaustive(self, transaction_df):
         """Test that every customer receives a known segment — no NULLs or unknown values."""
@@ -84,10 +83,16 @@ class TestNLRSegmentation:
         )
         result = seg.df
 
-        # 1001 has zero spend in Q1 but positive in Q2 -> New
-        assert result.loc[1001, "segment_name"] == SEGMENT_NEW
-        # 1002 only in Q1 with positive spend -> Lapsed
-        assert result.loc[1002, "segment_name"] == SEGMENT_LAPSED
+        # 1001 has zero spend in Q1 but positive in Q2 -> New; 1002 only in Q1 with positive spend -> Lapsed
+        expected = pd.DataFrame(
+            {
+                cols.customer_id: [1001, 1002],
+                "segment_name": [SEGMENT_NEW, SEGMENT_LAPSED],
+                f"{cols.unit_spend}_p1": [0.00, 100.00],
+                f"{cols.unit_spend}_p2": [50.00, 0.00],
+            },
+        )
+        assert_frame_equal(result.sort_values(cols.customer_id, ignore_index=True), expected)
 
     def test_zero_spend_both_periods_excluded(self):
         """Test that a customer with zero spend in both periods is excluded from results."""
@@ -106,12 +111,16 @@ class TestNLRSegmentation:
         )
         result = seg.df
 
-        zero_spend_customer = 1001
-        positive_spend_customer = 1002
-        # Customer with zero spend in both periods should not appear
-        assert zero_spend_customer not in result.index
-        # Customer with positive spend in both should be Repeating
-        assert result.loc[positive_spend_customer, "segment_name"] == SEGMENT_REPEATING
+        # 1001 (zero spend in both periods) is absent; 1002 (positive in both) is Repeating
+        expected = pd.DataFrame(
+            {
+                cols.customer_id: [1002],
+                "segment_name": [SEGMENT_REPEATING],
+                f"{cols.unit_spend}_p1": [50.00],
+                f"{cols.unit_spend}_p2": [75.00],
+            },
+        )
+        assert_frame_equal(result.sort_values(cols.customer_id, ignore_index=True), expected)
 
     def test_negative_spend_not_counted_as_bought(self):
         """Test that a customer with negative aggregated spend in a period is not considered to have bought."""
@@ -131,7 +140,15 @@ class TestNLRSegmentation:
         result = seg.df
 
         # 1001 has negative aggregated spend (-50+30=-20) in P1 but positive in P2 -> New
-        assert result.loc[1001, "segment_name"] == SEGMENT_NEW
+        expected = pd.DataFrame(
+            {
+                cols.customer_id: [1001],
+                "segment_name": [SEGMENT_NEW],
+                f"{cols.unit_spend}_p1": [-20.00],
+                f"{cols.unit_spend}_p2": [80.00],
+            },
+        )
+        assert_frame_equal(result.sort_values(cols.customer_id, ignore_index=True), expected)
 
     @pytest.mark.parametrize(
         "columns",
@@ -205,10 +222,10 @@ class TestNLRSegmentation:
         """Mixed-case agg_func produces identical output to the lowercase form."""
         lower = NLRSegmentation(
             df=transaction_df, period_col="year", p1_value=2023, p2_value=2024, agg_func=agg_func.lower()
-        ).df.sort_index()
+        ).df.sort_values(cols.customer_id, ignore_index=True)
         upper = NLRSegmentation(
             df=transaction_df, period_col="year", p1_value=2023, p2_value=2024, agg_func=agg_func
-        ).df.sort_index()
+        ).df.sort_values(cols.customer_id, ignore_index=True)
         assert_frame_equal(upper, lower)
 
     def test_alternate_value_col(self):
@@ -229,8 +246,15 @@ class TestNLRSegmentation:
         )
         result = seg.df
 
-        assert result.loc[1001, "segment_name"] == SEGMENT_REPEATING
-        assert result.loc[1002, "segment_name"] == SEGMENT_LAPSED
+        expected = pd.DataFrame(
+            {
+                cols.customer_id: [1001, 1002],
+                "segment_name": [SEGMENT_REPEATING, SEGMENT_LAPSED],
+                f"{cols.unit_qty}_p1": [5, 10],
+                f"{cols.unit_qty}_p2": [8, 0],
+            },
+        )
+        assert_frame_equal(result.sort_values(cols.customer_id, ignore_index=True), expected)
 
     def test_agg_func_count_segments_by_transaction_count(self):
         """Test that agg_func='count' segments based on transaction counts rather than spend."""
@@ -248,7 +272,7 @@ class TestNLRSegmentation:
             p2_value=2024,
             agg_func="count",
         )
-        result = seg.df.sort_index()
+        result = seg.df.sort_values(cols.customer_id, ignore_index=True)
         p1_col = f"{cols.unit_spend}_p1"
         p2_col = f"{cols.unit_spend}_p2"
 
@@ -259,7 +283,7 @@ class TestNLRSegmentation:
                 p1_col: [2, 1, 0],
                 p2_col: [1, 0, 1],
             },
-        ).set_index(cols.customer_id)
+        )
 
         assert_frame_equal(result, expected)
 
@@ -290,7 +314,7 @@ class TestNLRSegmentation:
         assert f"{cols.unit_spend}_p1" in table.columns
         assert f"{cols.unit_spend}_p2" in table.columns
 
-    def test_accepts_ibis_table_input(self, transaction_df):
+    def test_accepts_ibis_table_input(self, transaction_df, expected_df):
         """Test that an ibis Table can be passed directly as input."""
         table = ibis.memtable(transaction_df)
         seg = NLRSegmentation(
@@ -299,11 +323,8 @@ class TestNLRSegmentation:
             p1_value=2023,
             p2_value=2024,
         )
-        result = seg.df
 
-        assert result.loc[1001, "segment_name"] == SEGMENT_REPEATING
-        assert result.loc[1002, "segment_name"] == SEGMENT_LAPSED
-        assert result.loc[1004, "segment_name"] == SEGMENT_NEW
+        assert_frame_equal(seg.df.sort_values(cols.customer_id, ignore_index=True), expected_df)
 
     @pytest.mark.parametrize(
         ("p1_value", "p2_value"),
@@ -314,7 +335,7 @@ class TestNLRSegmentation:
         ],
         ids=["both_ibis", "mixed_ibis_p1", "mixed_ibis_p2"],
     )
-    def test_ibis_scalar_period_values(self, transaction_df, p1_value, p2_value):
+    def test_ibis_scalar_period_values(self, transaction_df, expected_df, p1_value, p2_value):
         """Test that ibis Scalar and mixed ibis/plain period values produce correct segments."""
         seg = NLRSegmentation(
             df=transaction_df,
@@ -322,11 +343,8 @@ class TestNLRSegmentation:
             p1_value=p1_value,
             p2_value=p2_value,
         )
-        result = seg.df
 
-        assert result.loc[1001, "segment_name"] == SEGMENT_REPEATING
-        assert result.loc[1002, "segment_name"] == SEGMENT_LAPSED
-        assert result.loc[1004, "segment_name"] == SEGMENT_NEW
+        assert_frame_equal(seg.df.sort_values(cols.customer_id, ignore_index=True), expected_df)
 
 
 class TestNLRSegmentationGroupCol:
@@ -358,7 +376,7 @@ class TestNLRSegmentationGroupCol:
             p2_value=2024,
             group_col=group_col,
         )
-        result = seg.df.sort_index()
+        result = seg.df.sort_values([cols.customer_id, cols.store_id], ignore_index=True)
         p1_col = f"{cols.unit_spend}_p1"
         p2_col = f"{cols.unit_spend}_p2"
 
@@ -378,7 +396,7 @@ class TestNLRSegmentationGroupCol:
                 p1_col: [100.00, 120.00, 200.00, 90.00, 0.00, 0.00, 0.00],
                 p2_col: [150.00, 0.00, 0.00, 0.00, 80.00, 70.00, 60.00],
             },
-        ).set_index([cols.customer_id, cols.store_id])
+        )
 
         assert_frame_equal(result, expected)
 

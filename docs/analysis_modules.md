@@ -675,11 +675,10 @@ from openretailscience.plots import area
 
 tc = TransactionChurn(transactions, churn_period=churn_period)
 
-cumulative_churn_rate = (
-    tc.df["churned"].cumsum().div(tc.n_unique_customers).to_frame(name="cumulative_churn_rate")
-)
+cumulative_churn_rate = tc.df.assign(cumulative_churn_rate=tc.df["churned"].cumsum() / tc.n_unique_customers)
 area.plot(
     df=cumulative_churn_rate,
+    x_col="transaction_number",
     value_col="cumulative_churn_rate",
     title="Churn Rate by Number of Purchases",
     x_label="Number of Purchases",

@@ -178,12 +178,13 @@ def regenerate_transaction_churn(transactions: pd.DataFrame) -> None:
     tc = TransactionChurn(transactions, churn_period=churn_window_days)
     # Clip to the first 15 purchases — beyond that the per-bin customer count drops
     # below 20 and the line is noisy.
-    cumulative = tc.df["churned"].cumsum() / tc.n_unique_customers
-    cumulative = cumulative.loc[:15].to_frame(name="cumulative_churn_rate")
+    cumulative = tc.df.assign(cumulative_churn_rate=tc.df["churned"].cumsum() / tc.n_unique_customers)
+    cumulative = cumulative[cumulative["transaction_number"] <= 15]
     plateau_rate = cumulative["cumulative_churn_rate"].iloc[-1]
     fig, ax = plt.subplots(figsize=(6.4, 4.8))
     area.plot(
         df=cumulative,
+        x_col="transaction_number",
         value_col="cumulative_churn_rate",
         ax=ax,
         eyebrow="TRANSACTION CHURN",
