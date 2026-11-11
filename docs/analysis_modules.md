@@ -36,6 +36,8 @@ The following key metrics are used in the analysis:
 - **Cohort Period**: Defines the period granularity (year, quarter, month, week, or day).
 - **Retention Percentage**: Calculates retention rates as a percentage of the first-period cohort.
 
+A period the data covers with no purchases is 0; a period the cohort hasn't reached by the end of the data is NaN.
+
 </div>
 
 Example:
@@ -65,13 +67,13 @@ cohort = CohortAnalysis(
 cohort.df.head()
 ```
 
-| min_period_shopped |    0 |    1 |    2 |    3 |
-|:-------------------|-----:|-----:|-----:|-----:|
-| 2023-01-01         | 1.00 | 0.48 | 1.16 | 0.68 |
-| 2023-02-01         | 1.00 | 1.05 | 1.10 | 0.00 |
-| 2023-03-01         | 0.00 | 0.00 | 0.00 | 0.00 |
-| 2023-04-01         | 0.00 | 0.00 | 0.00 | 0.00 |
-| 2023-05-01         | 1.00 | 0.72 | 0.00 | 0.00 |
+| min_period_shopped |    0 |    1 |    2 |    3 |    4 |    5 |
+|:-------------------|-----:|-----:|-----:|-----:|-----:|-----:|
+| 2023-01-01         | 1.00 | 0.48 | 1.16 | 0.68 | 0.00 | 0.00 |
+| 2023-02-01         | 1.00 | 1.05 | 1.10 | 0.00 | 0.00 |  NaN |
+| 2023-03-01         | 0.00 | 0.00 | 0.00 | 0.00 |  NaN |  NaN |
+| 2023-04-01         | 0.00 | 0.00 | 0.00 |  NaN |  NaN |  NaN |
+| 2023-05-01         | 1.00 | 0.72 |  NaN |  NaN |  NaN |  NaN |
 
 ### Product Association Rules
 
