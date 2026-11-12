@@ -96,7 +96,7 @@ from openretailscience.analysis.haversine import haversine_distance
   `period` ∈ year/quarter/month/week/day; `transaction_date` must be date or datetime (string
   columns are rejected). For retention use
   `aggregation_column="customer_id"` (nunique on a value column counts distinct values). `.df` is the cohort
-  matrix: `min_period_shopped` column = first-purchase period, then int columns = periods since, from 0
+  matrix: `min_period_shopped` column = first-purchase period, then integer-labelled columns = periods since, from 0
   to the first cohort's age at the end of the data. A covered period with no buyers is 0; one past the end of
   the data is NaN, so `.melt(id_vars="min_period_shopped").dropna()` gives one row per covered cohort and period;
   `percentage=True` gives fractions of period 0 rounded to 2 (pair with `plots.cohort.plot`).
