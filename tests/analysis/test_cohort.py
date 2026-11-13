@@ -111,6 +111,18 @@ class TestCohortAnalysis:
                 aggregation_column="unit_spend",
             )
 
+    def test_all_null_customer_ids_raise(self):
+        """Anonymous sales alone leave nothing to build cohorts from."""
+        df = pd.DataFrame(
+            {
+                "customer_id": pd.Series([None, None], dtype="Int64"),
+                "transaction_date": [dt.date(2024, 1, 5), dt.date(2024, 2, 10)],
+                "unit_spend": [12.50, 30.00],
+            },
+        )
+        with pytest.raises(ValueError, match="no rows with a non-null customer_id"):
+            CohortAnalysis(df=df, aggregation_column="unit_spend")
+
     def test_invalid_period(self, transactions_df):
         """Test if an invalid period raises an error."""
         with pytest.raises(ValueError, match=r"period must be one of .*'fortnight'"):
