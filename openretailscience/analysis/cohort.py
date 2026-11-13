@@ -62,10 +62,12 @@ class CohortAnalysis:
     Customers are grouped into cohorts by the period of their first purchase. ``.df``
     (pandas) has one row per period from the first cohort to the last: column
     ``min_period_shopped`` (the period's start), then integer ``period_since`` columns from 0
-    to the longest gap observed, so it need not be square. Each cell is ``agg_func`` of
-    ``aggregation_column`` over that cohort's transactions in that period. Cells with no
-    transactions, including cohorts with no customers and periods past the end of the data,
-    are 0, the same as a genuine 0. The query runs at construction; there is no ``.table``.
+    to the number of periods from the first cohort to the end of the data. Each cell is
+    ``agg_func`` of ``aggregation_column`` over that cohort's transactions in that period. A
+    period the data covers with no transactions, including in a cohort with no customers, is 0.
+    A period the cohort hasn't reached by the end of the data is NaN;
+    ``.melt(id_vars="min_period_shopped").dropna()`` gives one row per covered cell. The
+    query runs at construction; there is no ``.table``.
 
     Examples:
         >>> from openretailscience.analysis import CohortAnalysis
@@ -75,7 +77,7 @@ class CohortAnalysis:
         >>> cohorts.df
         period_since min_period_shopped    0     1     2     3     4     5
         0                    2024-01-01  1.0  0.28  0.38  0.38  0.35  0.28
-        1                    2024-04-01  1.0  0.38  0.38  0.33  0.17  0.00
+        1                    2024-04-01  1.0  0.38  0.38  0.33  0.17   NaN
         ...
     """
 
@@ -102,7 +104,8 @@ class CohortAnalysis:
             period (str): Period for cohort analysis: "year", "quarter", "month", "week", or "day"
                 (case-insensitive; short forms like "m"/"d" accepted).
             percentage (bool): If True, each row is divided by its period-0 value, giving
-                fractions (1.0 = 100%) rounded to 2 decimals. A cohort with 0 in period 0 is all 0.
+                fractions (1.0 = 100%) rounded to 2 decimals. A cohort with 0 in period 0 is 0 in
+                every period the data covers.
 
         Raises:
             TypeError: If `df` is not a pandas DataFrame or an Ibis Table.
@@ -114,6 +117,7 @@ class CohortAnalysis:
             ValueError: If `agg_func` is not an aggregation available for `aggregation_column`
                 with a numeric result.
             ValueError: If `transaction_date` is timezone-aware.
+            ValueError: If `df` has no rows with a non-null `customer_id` (e.g. empty or anonymous-only data).
         """
         cols = ColumnHelper()
 
@@ -141,15 +145,17 @@ class CohortAnalysis:
         self,
         cohort_analysis_table: pd.DataFrame,
         period: str,
+        last_period: pd.Timestamp,
     ) -> pd.DataFrame:
-        """Fills gaps in the cohort analysis table for missing periods.
+        """Adds the cohorts and periods missing from the pivot: 0 up to ``last_period``, NaN after it.
 
         Args:
-            cohort_analysis_table (pd.DataFrame): The cohort analysis table to fill gaps in.
+            cohort_analysis_table (pd.DataFrame): The pivoted cohort matrix, indexed by cohort period.
             period (str): The period of analysis (year, quarter, month, week, or day).
+            last_period (pd.Timestamp): The last period in the data.
 
         Returns:
-            pd.DataFrame: Cohort table with missing periods filled.
+            pd.DataFrame: The cohort matrix with every cohort and period filled.
         """
         cohort_analysis_table.index = pd.to_datetime(cohort_analysis_table.index)
 
@@ -160,12 +166,12 @@ class CohortAnalysis:
         # anchors on Sunday and would miss the Monday week-starts that truncate("week") yields.
         period_lookup = {"year": "YS", "quarter": "QS", "month": "MS", "week": "7D", "day": "D"}
         full_range = pd.date_range(start=min_period, end=max_period, freq=period_lookup[period])
-        cohort_analysis_table = cohort_analysis_table.reindex(full_range, fill_value=0)
-        if cohort_analysis_table.shape[1] > 0:
-            max_period_since = cohort_analysis_table.columns.max()
-            all_periods = range(max_period_since + 1)
-            cohort_analysis_table = cohort_analysis_table.reindex(columns=all_periods, fill_value=0)
-        return cohort_analysis_table
+        first_cohort_age = _periods_between(pd.Series([min_period]), pd.Series([last_period]), period).iloc[0]
+        all_periods = range(first_cohort_age + 1)
+        cohort_analysis_table = cohort_analysis_table.reindex(index=full_range, columns=all_periods).fillna(0)
+        # Row i starts i periods after the first cohort, so it reaches the end of the data i periods sooner
+        observed = np.add.outer(np.arange(len(full_range)), all_periods) <= first_cohort_age
+        return cohort_analysis_table.where(observed)
 
     def _calculate_cohorts(
         self,
@@ -205,8 +211,9 @@ class CohortAnalysis:
         )
 
         cohort_df = cohort_table.execute()
-        # period_since is computed in pandas (see _periods_between) rather than via Ibis
-        # .delta(unit=period); the truncate and group-by above still execute in the database.
+        if len(cohort_df) == 0:
+            msg = f"df has no rows with a non-null {cols.customer_id}, so there are no customers to build cohorts from."
+            raise ValueError(msg)
         cohort_df["period_since"] = _periods_between(
             cohort_df["min_period_shopped"],
             cohort_df["period_shopped"],
@@ -224,8 +231,8 @@ class CohortAnalysis:
             first_period = cohort_analysis_table[0].replace(0, np.nan)
             cohort_analysis_table = cohort_analysis_table.div(first_period, axis=0).round(2)
 
-        cohort_analysis_table = cohort_analysis_table.fillna(0)
-        cohort_analysis_table = self._fill_cohort_gaps(cohort_analysis_table, period)
+        last_period = pd.Timestamp(cohort_df["period_shopped"].max())
+        cohort_analysis_table = self._fill_cohort_gaps(cohort_analysis_table, period, last_period)
         cohort_analysis_table.index.name = "min_period_shopped"
 
         return cohort_analysis_table.reset_index()
