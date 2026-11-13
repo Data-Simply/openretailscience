@@ -117,6 +117,7 @@ class CohortAnalysis:
             ValueError: If `agg_func` is not an aggregation available for `aggregation_column`
                 with a numeric result.
             ValueError: If `transaction_date` is timezone-aware.
+            ValueError: If `df` has no rows with a non-null `customer_id` (e.g. empty or anonymous-only data).
         """
         cols = ColumnHelper()
 
@@ -210,6 +211,9 @@ class CohortAnalysis:
         )
 
         cohort_df = cohort_table.execute()
+        if len(cohort_df) == 0:
+            msg = f"df has no rows with a non-null {cols.customer_id}, so there are no customers to build cohorts from."
+            raise ValueError(msg)
         cohort_df["period_since"] = _periods_between(
             cohort_df["min_period_shopped"],
             cohort_df["period_shopped"],
