@@ -92,6 +92,8 @@ artifacts = [ "openretailscience/.agents/**" ]
 [tool.uv]
 default-groups   = [ "dev", "docs", "examples" ]
 required-version = ">=0.10.0,<0.13.0"
+# soupsieve (docs/examples only) has no fixed release for Python <3.11.5; the published requires-python is unaffected.
+environments = [ "python_full_version >= '3.11.5'" ]
 
 [tool.ruff]
 line-length    = 120
