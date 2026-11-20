@@ -28,7 +28,8 @@ class IndexAnalysis:
     group, ``index = 100 * subset_share / baseline_share``.
 
     ``table`` (Ibis) and ``df`` (pandas, sorted by the group columns) have one row per group found in the
-    baseline, or per ``subgroup_col`` and group pair: the group columns, then ``subset_value`` and
+    baseline, or per ``subgroup_col`` and group pair found in it; a group with no rows in a subgroup gets no
+    row there, not one at 0. The columns are the group columns, then ``subset_value`` and
     ``baseline_value`` (``value_col`` aggregated with ``agg_func``), ``subset_share`` and ``baseline_share``
     (fractions of the subset's and baseline's totals, within each subgroup when one is set) and ``index``.
     A group the subset has no rows in has a ``subset_value``, ``subset_share`` and ``index`` of 0; one whose

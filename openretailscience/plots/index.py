@@ -33,7 +33,7 @@ DEFAULT_BAR_WIDTH = 0.8
 VALID_SORT_BY = ("group", "value")
 
 
-def plot(  # noqa: C901, PLR0912, PLR0913, PLR0917
+def plot(  # noqa: PLR0913, PLR0917
     df: pd.DataFrame | ibis.Table,
     value_col: str,
     group_col: str,
@@ -150,38 +150,22 @@ def plot(  # noqa: C901, PLR0912, PLR0913, PLR0917
         ... )
     """
     table = ensure_ibis_table(df)
-    if series_col is not None:
-        ensure_columns(table, series_col, "series_col")
-        if series_col == group_col:
-            raise ValueError("series_col must differ from group_col")
-    if sort_by is not None:
-        sort_by = ensure_value_choice(sort_by, VALID_SORT_BY, "sort_by")
-    if series_col is not None and sort_by == "value":
-        raise ValueError("sort_by cannot be 'value' when series_col is provided")
-    sort_order = ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
+    sort_by, sort_order = _validate_display_args(
+        table=table,
+        group_col=group_col,
+        series_col=series_col,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        exclude_groups=exclude_groups,
+        include_only_groups=include_only_groups,
+        top_n=top_n,
+        bottom_n=bottom_n,
+        filter_above=filter_above,
+        filter_below=filter_below,
+        highlight_range=highlight_range,
+        color_by_threshold=color_by_threshold,
+    )
     ascending = sort_order in ("asc", "ascending")
-    if exclude_groups is not None and include_only_groups is not None:
-        raise ValueError("exclude_groups and include_only_groups cannot be used together")
-    if series_col is not None and (
-        top_n is not None or bottom_n is not None or filter_above is not None or filter_below is not None
-    ):
-        raise ValueError(
-            "top_n, bottom_n, filter_above, and filter_below cannot be used when series_col is provided",
-        )
-    if (top_n is not None and top_n < 0) or (bottom_n is not None and bottom_n < 0):
-        error_msg = f"top_n ({top_n}) and bottom_n ({bottom_n}) must not be negative"
-        raise ValueError(error_msg)
-    if filter_above is not None and filter_below is not None and filter_above >= filter_below:
-        error_msg = (
-            f"filter_above ({filter_above}) must be < filter_below ({filter_below}); "
-            f"otherwise the filter excludes every row."
-        )
-        raise ValueError(error_msg)
-    if color_by_threshold:
-        if highlight_range is None:
-            raise ValueError("color_by_threshold requires highlight_range to be set (not None)")
-        if series_col is not None:
-            raise ValueError("color_by_threshold cannot be used when series_col is provided")
 
     if highlight_range == "default":
         highlight_range = DEFAULT_HIGHLIGHT_RANGE
@@ -275,6 +259,75 @@ def plot(  # noqa: C901, PLR0912, PLR0913, PLR0917
         # Index plots are horizontal bars; gridlines belong on the value (x) axis.
         grid_axis="x",
     )
+
+
+def _validate_display_args(
+    *,
+    table: ibis.Table,
+    group_col: str,
+    series_col: str | None,
+    sort_by: str | None,
+    sort_order: str,
+    exclude_groups: list[Any] | None,
+    include_only_groups: list[Any] | None,
+    top_n: int | None,
+    bottom_n: int | None,
+    filter_above: float | None,
+    filter_below: float | None,
+    highlight_range: Literal["default"] | tuple[float, float] | None,
+    color_by_threshold: bool,
+) -> tuple[str | None, str]:
+    """Check plot's display arguments before any query runs, and return the canonical sort options.
+
+    Args:
+        table (ibis.Table): The plot's data, for checking that ``series_col`` exists.
+        group_col (str): plot's ``group_col``.
+        series_col (str | None): plot's ``series_col``.
+        sort_by (str | None): plot's ``sort_by``, any case.
+        sort_order (str): plot's ``sort_order``, any case or form.
+        exclude_groups (list[Any] | None): plot's ``exclude_groups``.
+        include_only_groups (list[Any] | None): plot's ``include_only_groups``.
+        top_n (int | None): plot's ``top_n``.
+        bottom_n (int | None): plot's ``bottom_n``.
+        filter_above (float | None): plot's ``filter_above``.
+        filter_below (float | None): plot's ``filter_below``.
+        highlight_range (Literal["default"] | tuple[float, float] | None): plot's ``highlight_range``.
+        color_by_threshold (bool): plot's ``color_by_threshold``.
+
+    Returns:
+        tuple[str | None, str]: ``sort_by`` and ``sort_order`` as spelled in their valid choices.
+
+    Raises:
+        ValueError: For the invalid or conflicting arguments listed in plot's Raises section.
+    """
+    sort_by = None if sort_by is None else ensure_value_choice(sort_by, VALID_SORT_BY, "sort_by")
+    sort_order = ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
+    if series_col is not None:
+        ensure_columns(table, series_col, "series_col")
+        if series_col == group_col:
+            raise ValueError("series_col must differ from group_col")
+        if sort_by == "value":
+            raise ValueError("sort_by cannot be 'value' when series_col is provided")
+        if any(value is not None for value in (top_n, bottom_n, filter_above, filter_below)):
+            raise ValueError(
+                "top_n, bottom_n, filter_above, and filter_below cannot be used when series_col is provided",
+            )
+        if color_by_threshold:
+            raise ValueError("color_by_threshold cannot be used when series_col is provided")
+    if exclude_groups is not None and include_only_groups is not None:
+        raise ValueError("exclude_groups and include_only_groups cannot be used together")
+    if (top_n is not None and top_n < 0) or (bottom_n is not None and bottom_n < 0):
+        error_msg = f"top_n ({top_n}) and bottom_n ({bottom_n}) must not be negative"
+        raise ValueError(error_msg)
+    if filter_above is not None and filter_below is not None and filter_above >= filter_below:
+        error_msg = (
+            f"filter_above ({filter_above}) must be < filter_below ({filter_below}); "
+            f"otherwise the filter excludes every row."
+        )
+        raise ValueError(error_msg)
+    if color_by_threshold and highlight_range is None:
+        raise ValueError("color_by_threshold requires highlight_range to be set (not None)")
+    return sort_by, sort_order
 
 
 def _filter_by_groups(

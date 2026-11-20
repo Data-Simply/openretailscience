@@ -97,7 +97,8 @@ from openretailscience.analysis.haversine import haversine_distance
   how over- or under-represented each `group_col` value is among the rows where `index_col == value_to_index`,
   against all rows: `index = 100 * subset_share / baseline_share`. Use it instead of computing shares and
   indexes by hand. For customers, pass `value_col="customer_id", agg_func="nunique"`. `.df` / `.table` have one
-  row per baseline group (per `subgroup_col` and group pair; shares are then within each subgroup):
+  row per baseline group (per `subgroup_col` and group pair present in the data, with no row for a pair that has
+  no rows; shares are then within each subgroup):
   `subset_value`, `baseline_value`, `subset_share`, `baseline_share`, `index`. A group with no subset rows has
   index 0; one whose subset rows all have a null `value_col` has a null index, as does one whose baseline share
   or subset total is 0. If no row with a group matches
