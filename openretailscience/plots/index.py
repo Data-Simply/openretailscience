@@ -201,7 +201,7 @@ def plot(  # noqa: PLR0913, PLR0917
     else:
         if sort_by == "group":
             index_df = index_df.sort_values(by=[group_col, series_col], ascending=ascending)
-        index_df = index_df.pivot_table(index=group_col, columns=series_col, values="index", sort=False)
+        index_df = index_df.pivot_table(index=group_col, columns=series_col, values="index", sort=False, dropna=False)
         default_colors = get_plot_colors(len(index_df.columns))
         show_legend = True
 

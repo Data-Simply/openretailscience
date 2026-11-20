@@ -97,6 +97,7 @@ class TestIndexPlot:
 
         assert _y_labels(ax) == ["Bakery", "Dairy"]
 
+    @pytest.mark.parametrize("series_col", [None, "region"])
     @pytest.mark.parametrize(
         ("drop_na", "expected_departments"),
         [
@@ -104,17 +105,18 @@ class TestIndexPlot:
             (False, ["Bakery", "Dairy", "Meat", "Snacks"]),
         ],
     )
-    def test_drop_na_drops_groups_with_a_null_index(self, drop_na, expected_departments):
-        """A group with no baseline spend has a null index; drop_na removes its bar."""
+    def test_drop_na_drops_groups_with_a_null_index(self, series_col, drop_na, expected_departments):
+        """A group with no baseline spend has a null index; only drop_na removes its row, with or without series."""
         df = pd.DataFrame(
             {
                 "department": ["Dairy", "Bakery", "Meat", "Snacks"] * 2,
+                "region": ["North", "South"] * 4,
                 "cust_type": ["Loyalty"] * 4 + ["Regular"] * 4,
                 "spend": [100, 200, 150, 0, 120, 80, 200, 0],
             },
         )
 
-        ax = _plot_loyalty_index(df, drop_na=drop_na)
+        ax = _plot_loyalty_index(df, series_col=series_col, drop_na=drop_na)
 
         assert _y_labels(ax) == expected_departments
 
