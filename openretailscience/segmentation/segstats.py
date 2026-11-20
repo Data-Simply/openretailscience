@@ -14,6 +14,7 @@ import ibis
 import ibis.expr.operations as ops
 import pandas as pd
 from ibis.backends.sql import compilers as sql_compilers
+from ibis.common.exceptions import IbisTypeError
 from sqlglot import exp
 
 from openretailscience.core.validation import (
@@ -194,6 +195,10 @@ class SegTransactionStats:
     set leaves out holds that column's `rollup_value`. Row order is unspecified unless
     `sort_by=True`. A ratio whose denominator is 0 is null.
 
+    With the ``data.unknown_customer_value`` option set, the plain metrics cover identified
+    customers only (null IDs count as unknown), and spend, transactions, units, their per-transaction
+    and per-unit ratios and each extra_aggs column also get `_unknown` and `_total` variants.
+
     Examples:
         >>> from openretailscience.segmentation import SegTransactionStats
         >>> stats = SegTransactionStats(data=transactions, segment_col="category", grouping_sets="total")
@@ -206,7 +211,6 @@ class SegTransactionStats:
         segment_col: str | list[str] = "segment_name",
         extra_aggs: dict[str, tuple[str, str]] | None = None,
         rollup_value: Any | list[Any] | None = None,  # noqa: ANN401 - Any is required for ibis.literal typing
-        unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None = None,
         grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None = None,
         sort_by: bool = False,
     ) -> None:
@@ -226,13 +230,6 @@ class SegTransactionStats:
                 value applies to all columns, or a list with one value per segment_col column,
                 each cast to the corresponding column's type. Requires grouping_sets. None (default)
                 labels them "Total".
-            unknown_customer_value (int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None, optional):
-                Value, ibis literal, or boolean expression identifying unknown customers
-                (requires the customer_id column). When set, the plain metrics cover identified
-                customers only; spend, transactions, units, their per-transaction and per-unit
-                ratios, and each extra_aggs column also get `_unknown` and `_total` variants
-                (suffixes from the options column.suffix.unknown_customer / column.suffix.total).
-                Customers and the per-customer ratios have no variants.
             grouping_sets (Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None, optional):
                 Grouping sets mode:
                 - "rollup": SQL ROLLUP — [A,B,C], [A,B], [A], ().
@@ -251,15 +248,17 @@ class SegTransactionStats:
                 more than one or an empty cube()/rollup() result; if the grouping sets and
                 segment_col do not cover each other; if rollup_value is set without grouping_sets, or
                 is a list whose length does not match segment_col; if rollup_value can't be cast to its
-                segment_col column's type; or if unknown_customer_value is set without a customer_id column, or with an
-                extra_aggs aggregation whose result isn't numeric.
+                segment_col column's type; or if the data.unknown_customer_value option is set and the data has
+                no customer_id column, or an extra_aggs aggregation's result isn't numeric.
             TypeError: If grouping_sets is not a str, list or None; if a grouping_sets list element is not a
                 tuple, or holds a column that isn't a str, or a spec tuple holds a list that isn't a list of tuples;
-                or if unit_spend or unit_quantity is not numeric.
+                if unit_spend or unit_quantity is not numeric; or if the data.unknown_customer_value option
+                can't be compared with customer_id.
         """
         data = ensure_ibis_table(data, "data")
 
         cols = ColumnHelper()
+        unknown_customer_value = get_option("data.unknown_customer_value")
 
         segment_col = ensure_columns(data, segment_col, "segment_col")
 
@@ -291,7 +290,7 @@ class SegTransactionStats:
         self.segment_col = segment_col
         self.extra_aggs = {} if extra_aggs is None else extra_aggs
         self.rollup_value = rollup_value
-        self.unknown_customer_value = unknown_customer_value
+        self._split_unknown_customers = unknown_customer_value is not None
 
         self._validate_grouping_sets_params(grouping_sets)
 
@@ -701,33 +700,6 @@ class SegTransactionStats:
         return labelled.drop(*flag_names)
 
     @staticmethod
-    def _create_unknown_flag(
-        data: ibis.Table,
-        unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn,
-    ) -> ibis.expr.types.BooleanColumn:
-        """Create a boolean flag identifying unknown customers.
-
-        A BooleanColumn is used as-is; an ibis.Scalar or plain value compares customer_id
-        against it.
-
-        Args:
-            data (ibis.Table): The data table.
-            unknown_customer_value (int | str | ibis.Scalar | ibis.expr.types.BooleanColumn):
-                The value or expression identifying unknown customers.
-
-        Returns:
-            ibis.expr.types.BooleanColumn: Boolean expression identifying unknown customers.
-        """
-        cols = ColumnHelper()
-
-        if isinstance(unknown_customer_value, ibis.expr.types.BooleanColumn):
-            return unknown_customer_value
-        if isinstance(unknown_customer_value, ibis.Scalar):
-            return data[cols.customer_id] == unknown_customer_value
-        # Simple value (int/str)
-        return data[cols.customer_id] == ibis.literal(unknown_customer_value)
-
-    @staticmethod
     def _build_standard_aggs(
         data: ibis.Table,
         extra_aggs: dict[str, tuple[str, str]] | None = None,
@@ -824,7 +796,7 @@ class SegTransactionStats:
         segment_col: list[str],
         extra_aggs: dict[str, tuple[str, str]],
         rollup_value: Any | list[Any],  # noqa: ANN401 - Any is required for ibis.literal typing
-        unknown_customer_value: int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None,
+        unknown_customer_value: int | str | ibis.expr.types.NullScalar | None,
         grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None,
     ) -> ibis.Table:
         """Calculate the transaction statistics by segment as a lazy ibis expression.
@@ -840,8 +812,8 @@ class SegTransactionStats:
             segment_col (list[str]): The columns to use for the segmentation.
             extra_aggs (dict[str, tuple[str, str]]): Additional aggregations (see __init__).
             rollup_value (Any | list[Any]): Rollup label(s); a list must match the segment_col length.
-            unknown_customer_value (int | str | ibis.Scalar | ibis.expr.types.BooleanColumn | None):
-                Value or expression identifying unknown customers (see __init__).
+            unknown_customer_value (int | str | ibis.expr.types.NullScalar | None): The
+                data.unknown_customer_value option's value; None splits out no unknown customers.
             grouping_sets (Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None): Grouping sets mode.
 
         Returns:
@@ -850,6 +822,7 @@ class SegTransactionStats:
         Raises:
             ValueError: If rollup_value is a list whose length does not match segment_col, or if
                 unknown_customer_value is set but the customer_id column is missing.
+            TypeError: If unknown_customer_value can't be compared with the customer_id column.
         """
         cols = ColumnHelper()
 
@@ -865,13 +838,27 @@ class SegTransactionStats:
             )
             raise ValueError(msg)
 
-        # Validate and create unknown flag if unknown_customer_value is provided
         unknown_flag = None
         if unknown_customer_value is not None:
             if cols.customer_id not in data.columns:
-                msg = f"Column '{cols.customer_id}' is required when unknown_customer_value parameter is specified"
+                msg = (
+                    f"Column '{cols.customer_id}' is required when the data.unknown_customer_value option is set. "
+                    "Add the column, or switch the option off with "
+                    "option_context('data.unknown_customer_value', None)."
+                )
                 raise ValueError(msg)
-            unknown_flag = SegTransactionStats._create_unknown_flag(data, unknown_customer_value)
+            customer_id = data[cols.customer_id]
+            # NULL = -1 is NULL, so a null ID would drop out of both the identified and unknown sums; count it unknown
+            unknown_flag = customer_id.isnull()  # noqa: PD003 (ibis API, not pandas)
+            if not isinstance(unknown_customer_value, ibis.expr.types.NullScalar):
+                try:
+                    unknown_flag |= customer_id == unknown_customer_value
+                except IbisTypeError as err:
+                    msg = (
+                        f"data.unknown_customer_value {unknown_customer_value!r} can't be compared with column "
+                        f"'{cols.customer_id}' ({customer_id.type()}). Set the option to an ID of that type."
+                    )
+                    raise TypeError(msg) from err
 
         # Build aggregations based on unknown customer tracking
         aggs = (
@@ -974,7 +961,7 @@ class SegTransactionStats:
         cols = ColumnHelper()
         include_quantity = cols.agg.unit_qty in self.table.columns
         include_customer = cols.agg.customer_id in self.table.columns
-        include_unknown = self.unknown_customer_value is not None
+        include_unknown = self._split_unknown_customers
         col_order = [
             *self.segment_col,
             *SegTransactionStats._get_col_order(

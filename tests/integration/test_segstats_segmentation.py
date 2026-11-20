@@ -2,6 +2,7 @@
 
 import pytest
 
+from openretailscience.options import option_context
 from openretailscience.segmentation.segstats import SegTransactionStats
 
 
@@ -46,7 +47,7 @@ def test_seg_transaction_stats_integration(
 
 
 def test_seg_transaction_stats_with_unknown_customer_integration(transactions_table):
-    """Integration test for SegTransactionStats with unknown_customer_value using parameterized database backends.
+    """Integration test for SegTransactionStats with the data.unknown_customer_value option on each backend.
 
     This test runs against both BigQuery and PySpark backends automatically
     via pytest parameterization. The same test logic validates functionality
@@ -58,12 +59,12 @@ def test_seg_transaction_stats_with_unknown_customer_integration(transactions_ta
     """
     limited_table = transactions_table.limit(10000)
 
-    seg_transaction_stats = SegTransactionStats(
-        data=limited_table,
-        segment_col=["category_0_name", "category_1_name"],
-        grouping_sets="total",
-        unknown_customer_value=-1,
-    )
+    with option_context("data.unknown_customer_value", -1):
+        seg_transaction_stats = SegTransactionStats(
+            data=limited_table,
+            segment_col=["category_0_name", "category_1_name"],
+            grouping_sets="total",
+        )
 
     result = seg_transaction_stats.df
     grand_total_rows = (result["category_0_name"] == "Total") & (result["category_1_name"] == "Total")

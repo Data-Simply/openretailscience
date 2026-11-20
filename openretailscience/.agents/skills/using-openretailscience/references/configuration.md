@@ -46,6 +46,10 @@ methods, the last write wins.
   `percent_difference`→"pct_diff", `contribution`→"contrib", `total`→"total".
 - `plot.color.*`, `plot.font.*`, `plot.style.*`, `plot.spacing.*` — chart styling.
 - `optimization.use_native_sql` — engine optimization toggle.
+- `data.unknown_customer_value` — the customer ID that marks rows with no identified customer (e.g. `-1`), or
+  `ibis.null()`/`pd.NA` when null IDs mark them (`"<NULL>"` in TOML). Default `None` (off). When set,
+  analyses that support it count customers from identified rows only and report unknown-customer sales in
+  `_unknown`/`_total` columns.
 
 Other columns (a brand, a region) have no option; pass them to analyses as arguments (`group_col=`, `segment_col=`).
 

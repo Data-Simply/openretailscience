@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 
+from openretailscience.options import option_context
 from openretailscience.segmentation.hml import HMLSegmentation
 from openretailscience.segmentation.segstats import SegTransactionStats
 
@@ -79,12 +80,13 @@ df_with_segments_unknown = transactions_with_unknown.merge(
     how="left",
 )
 
-stats_unknown = SegTransactionStats(
-    data=df_with_segments_unknown,
-    segment_col="segment_name",
-    unknown_customer_value=-1,
-    grouping_sets="total"
-)
+# Set once per dataset (in openretailscience.toml for a project); option_context scopes it here
+with option_context("data.unknown_customer_value", -1):
+    stats_unknown = SegTransactionStats(
+        data=df_with_segments_unknown,
+        segment_col="segment_name",
+        grouping_sets="total"
+    )
 results_unknown = stats_unknown.df
 # results_unknown adds spend_unknown/spend_total and transactions_unknown/transactions_total
 # columns alongside the regular (known-customer) spend/transactions columns

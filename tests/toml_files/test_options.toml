@@ -40,3 +40,6 @@ percent            = "new_pct"
 percent_difference = "new_pct_diff"
 period_1           = "new_p1"
 period_2           = "new_p2"
+
+[data]
+unknown_customer_value = "<NULL>"
