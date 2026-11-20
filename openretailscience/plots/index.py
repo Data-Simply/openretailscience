@@ -1,153 +1,40 @@
-"""Index plots comparing group performance against a baseline, where a raw index of 100 is parity.
+"""Index plots comparing group performance against a baseline, where an index of 100 is parity.
 
 Use ``index.plot`` for relative performance against a reference category; ``plots.time`` for raw
-values over time; ``plots.bar`` for categorical comparison. ``plot()`` draws the bars;
-``get_indexes()`` computes the index values.
+values over time; ``plots.bar`` for categorical comparison. For the counts and shares behind each
+index as a table, use ``openretailscience.analysis.IndexAnalysis``.
 """
 
-from typing import Any, Literal
+from __future__ import annotations
 
-import ibis
+from typing import TYPE_CHECKING, Any, Literal
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
 
-from openretailscience.core.validation import VALID_SORT_ORDERS, ensure_ibis_table, ensure_value_choice
+from openretailscience.analysis.index_analysis import BASELINE_INDEX, IndexAnalysis
+from openretailscience.core.validation import (
+    VALID_SORT_ORDERS,
+    ensure_columns,
+    ensure_ibis_table,
+    ensure_value_choice,
+)
 from openretailscience.plots.styles.colors import get_named_color, get_plot_colors
 from openretailscience.plots.styles.styling_helpers import standard_graph_styles
 
-BASELINE_INDEX = 100
+if TYPE_CHECKING:
+    import ibis
+    from matplotlib.axes import Axes, SubplotBase
+
 DEFAULT_HIGHLIGHT_RANGE = (80, 120)
+DEFAULT_BAR_WIDTH = 0.8
 
 VALID_SORT_BY = ("group", "value")
-VALID_AGG_FUNCS = ("sum", "mean", "max", "min", "nunique")
 
 
-def filter_by_groups(
-    df: pd.DataFrame,
-    group_col: str,
-    exclude_groups: list[Any] | None = None,
-    include_only_groups: list[Any] | None = None,
-) -> pd.DataFrame:
-    """Filter dataframe by groups.
-
-    Args:
-        df (pd.DataFrame): The dataframe to filter.
-        group_col (str): The column name for grouping.
-        exclude_groups (list[Any], optional): Groups to exclude. Defaults to None.
-        include_only_groups (list[Any], optional): Groups to include. Defaults to None.
-
-    Returns:
-        pd.DataFrame: The filtered dataframe.
-    """
-    result_df = df.copy()
-    if exclude_groups is not None:
-        result_df = result_df[~result_df[group_col].isin(exclude_groups)]
-    if include_only_groups is not None:
-        result_df = result_df[result_df[group_col].isin(include_only_groups)]
-    return result_df
-
-
-def filter_by_value_thresholds(
-    df: pd.DataFrame,
-    filter_above: float | None = None,
-    filter_below: float | None = None,
-) -> pd.DataFrame:
-    """Filter a dataframe by index value thresholds.
-
-    Expects the ``index`` column in delta-from-baseline form (raw index minus 100), as ``plot`` uses;
-    thresholds are in raw-index units (``filter_above=120`` keeps rows whose raw index exceeds 120).
-
-    Args:
-        df (pd.DataFrame): The dataframe to filter.
-        filter_above (float, optional): Only keep rows whose raw index exceeds this value.
-        filter_below (float, optional): Only keep rows whose raw index is below this value.
-
-    Returns:
-        pd.DataFrame: The filtered dataframe.
-
-    Raises:
-        ValueError: If ``filter_above`` is not strictly less than ``filter_below``.
-        ValueError: If filtering results in an empty dataset.
-    """
-    if filter_above is not None and filter_below is not None and filter_above >= filter_below:
-        error_msg = (
-            f"filter_above ({filter_above}) must be < filter_below ({filter_below}); "
-            f"otherwise the filter excludes every row."
-        )
-        raise ValueError(error_msg)
-
-    result_df = df.copy()
-    if filter_above is not None:
-        result_df = result_df[result_df["index"] + BASELINE_INDEX > filter_above]
-    if filter_below is not None:
-        result_df = result_df[result_df["index"] + BASELINE_INDEX < filter_below]
-
-    # Check if filtering resulted in an empty dataframe
-    if len(result_df) == 0:
-        raise ValueError(
-            "Filtering resulted in an empty dataset. Consider adjusting filter parameters.",
-        )
-
-    return result_df
-
-
-def filter_top_bottom_n(df: pd.DataFrame, top_n: int | None = None, bottom_n: int | None = None) -> pd.DataFrame:
-    """Filter a dataframe to the top N and/or bottom N rows by index value.
-
-    Rows are ranked by the ``index`` column, descending. ``0`` is treated as ``None`` for both
-    parameters; an empty ``df`` is returned unchanged.
-
-    Args:
-        df (pd.DataFrame): The dataframe to filter.
-        top_n (int, optional): Number of top rows to include.
-        bottom_n (int, optional): Number of bottom rows to include.
-
-    Returns:
-        pd.DataFrame: The filtered dataframe.
-
-    Raises:
-        ValueError: If top_n or bottom_n exceeds the number of available groups.
-        ValueError: If the sum of top_n and bottom_n exceeds the number of groups.
-    """
-    top_n = None if top_n == 0 else top_n
-    bottom_n = None if bottom_n == 0 else bottom_n
-
-    if (top_n is None and bottom_n is None) or len(df) == 0:
-        return df
-
-    # Check if top_n or bottom_n exceed the dataframe length
-    df_length = len(df)
-    if top_n is not None and top_n > df_length:
-        error_msg = f"top_n ({top_n}) cannot exceed the number of available groups ({df_length})"
-        raise ValueError(error_msg)
-    if bottom_n is not None and bottom_n > df_length:
-        error_msg = f"bottom_n ({bottom_n}) cannot exceed the number of available groups ({df_length})"
-        raise ValueError(error_msg)
-
-    # Check if top_n + bottom_n exceeds total groups
-    if top_n is not None and bottom_n is not None and top_n + bottom_n > df_length:
-        error_msg = (
-            f"The sum of top_n ({top_n}) and bottom_n ({bottom_n}) cannot exceed"
-            f" the total number of groups ({df_length})"
-        )
-        raise ValueError(error_msg)
-
-    # Create a temporary dataframe sorted by index value
-    temp_df = df.copy().sort_values(by="index", ascending=False)
-
-    selected_rows = pd.DataFrame()
-    if top_n is not None:
-        selected_rows = pd.concat([selected_rows, temp_df.head(top_n)])
-    if bottom_n is not None:
-        selected_rows = pd.concat([selected_rows, temp_df.tail(bottom_n)])
-
-    return selected_rows
-
-
-def plot(  # noqa: C901, PLR0913, PLR0917
-    df: pd.DataFrame,
+def plot(  # noqa: C901, PLR0912, PLR0913, PLR0917
+    df: pd.DataFrame | ibis.Table,
     value_col: str,
     group_col: str,
     index_col: str,
@@ -178,18 +65,17 @@ def plot(  # noqa: C901, PLR0913, PLR0917
 ) -> SubplotBase:
     """Create a horizontal bar index plot comparing each group's performance against a baseline.
 
-    The index for each group is
-    ``100 * (group share of the aggregated value_col among rows where index_col ==
-    value_to_index) / (group share of the aggregated value_col overall) - 100``,
-    so a delta of 0 is parity; bars are drawn from the 100 baseline outward, with a vertical
-    baseline line at 100.
+    Each group's index is ``100 * (its share of the aggregated value_col among rows where
+    index_col == value_to_index) / (its share of the aggregated value_col over all rows)``; bars run
+    from a baseline line at 100 to the index. Every group in the data gets a bar, at 0 when no
+    ``value_to_index`` row has it. Rows with a null ``group_col`` are left out of both totals.
 
     Args:
-        df (pd.DataFrame): The dataframe to plot.
-        value_col (str): The column to plot.
-        group_col (str): The column to group the data by.
-        index_col (str): The column to calculate the index on (e.g., "category").
-        value_to_index (str | int): The baseline category or value to index against (e.g., "A").
+        df (pd.DataFrame | ibis.Table): The data to plot.
+        value_col (str): The column to aggregate.
+        group_col (str): The column whose values get a bar each.
+        index_col (str): The column that defines the subset (e.g., "brand").
+        value_to_index (str | int): The ``index_col`` value whose rows form the subset (e.g., "Meadow Farm").
         agg_func (str, optional): How to aggregate ``value_col``: "sum", "mean", "max", "min" or "nunique".
         series_col (str, optional): The column to use as the series; when set, a legend is rendered
             and each series value gets its own bar per group. ``top_n``, ``bottom_n``,
@@ -219,11 +105,11 @@ def plot(  # noqa: C901, PLR0913, PLR0917
             is None.
         bottom_n (int, optional): Display only the bottom N indexes. Only applicable when
             ``series_col`` is None.
-        filter_above (float, optional): Only display groups whose raw index exceeds this value.
+        filter_above (float, optional): Only display groups whose index exceeds this value.
             Only applicable when ``series_col`` is None.
-        filter_below (float, optional): Only display groups whose raw index is below this value.
+        filter_below (float, optional): Only display groups whose index is below this value.
             Only applicable when ``series_col`` is None.
-        color_by_threshold (bool, optional): Color bars by the ``highlight_range`` thresholds: raw
+        color_by_threshold (bool, optional): Color bars by the ``highlight_range`` thresholds: an
             index >= the upper bound uses the ``plot.color.positive`` option, <= the lower bound
             uses ``plot.color.negative``, and values in between use ``plot.color.neutral``. Requires
             ``highlight_range`` to be set (not None); cannot be used with ``series_col``.
@@ -239,7 +125,10 @@ def plot(  # noqa: C901, PLR0913, PLR0917
 
     Raises:
         ValueError: If sort_by is not "group", "value", or None.
-        ValueError: If agg_func is not one of "sum", "mean", "max", "min", or "nunique".
+        TypeError: If df is not a pandas DataFrame or an Ibis Table.
+        ValueError: If a column is missing or series_col is group_col.
+        ValueError: If agg_func is not one of "sum", "mean", "max", "min", or "nunique", or has no numeric
+            result for value_col.
         ValueError: If sort_by is "value" and series_col is provided.
         ValueError: If sort_order is not one of "asc", "ascending", "desc", or "descending".
         ValueError: If exclude_groups and include_only_groups are used together.
@@ -247,8 +136,10 @@ def plot(  # noqa: C901, PLR0913, PLR0917
         ValueError: If color_by_threshold is True but highlight_range is None.
         ValueError: If color_by_threshold is True when series_col is provided.
         ValueError: If filter_above is not strictly less than filter_below.
+        ValueError: If no row with a non-null group has index_col == value_to_index.
+        ibis.common.exceptions.IbisTypeError: If value_to_index can't be compared with index_col.
         ValueError: If filtering results in an empty dataset.
-        ValueError: If top_n or bottom_n exceeds the number of available groups.
+        ValueError: If top_n or bottom_n is negative or exceeds the number of available groups.
         ValueError: If top_n and bottom_n together exceed the number of available groups.
 
     Examples:
@@ -258,11 +149,17 @@ def plot(  # noqa: C901, PLR0913, PLR0917
         ...     eyebrow="Store 101", title="Category mix against the chain", subtitle="Index, 100 = chain average",
         ... )
     """
+    table = ensure_ibis_table(df)
+    if series_col is not None:
+        ensure_columns(table, series_col, "series_col")
+        if series_col == group_col:
+            raise ValueError("series_col must differ from group_col")
     if sort_by is not None:
         sort_by = ensure_value_choice(sort_by, VALID_SORT_BY, "sort_by")
     if series_col is not None and sort_by == "value":
         raise ValueError("sort_by cannot be 'value' when series_col is provided")
     sort_order = ensure_value_choice(sort_order, VALID_SORT_ORDERS, "sort_order")
+    ascending = sort_order in ("asc", "ascending")
     if exclude_groups is not None and include_only_groups is not None:
         raise ValueError("exclude_groups and include_only_groups cannot be used together")
     if series_col is not None and (
@@ -271,6 +168,15 @@ def plot(  # noqa: C901, PLR0913, PLR0917
         raise ValueError(
             "top_n, bottom_n, filter_above, and filter_below cannot be used when series_col is provided",
         )
+    if (top_n is not None and top_n < 0) or (bottom_n is not None and bottom_n < 0):
+        error_msg = f"top_n ({top_n}) and bottom_n ({bottom_n}) must not be negative"
+        raise ValueError(error_msg)
+    if filter_above is not None and filter_below is not None and filter_above >= filter_below:
+        error_msg = (
+            f"filter_above ({filter_above}) must be < filter_below ({filter_below}); "
+            f"otherwise the filter excludes every row."
+        )
+        raise ValueError(error_msg)
     if color_by_threshold:
         if highlight_range is None:
             raise ValueError("color_by_threshold requires highlight_range to be set (not None)")
@@ -280,21 +186,18 @@ def plot(  # noqa: C901, PLR0913, PLR0917
     if highlight_range == "default":
         highlight_range = DEFAULT_HIGHLIGHT_RANGE
 
-    index_df = get_indexes(
-        df=df,
+    index_df = IndexAnalysis(
+        table,
+        value_col=value_col,
+        group_col=group_col,
         index_col=index_col,
         value_to_index=value_to_index,
-        index_subgroup_col=series_col,
-        value_col=value_col,
         agg_func=agg_func,
-        offset=BASELINE_INDEX,
-        group_col=group_col,
-    )
-
+        subgroup_col=series_col,
+    ).df
     if drop_na:
         index_df = index_df.dropna(subset=["index"])
-
-    index_df = filter_by_groups(
+    index_df = _filter_by_groups(
         df=index_df,
         group_col=group_col,
         exclude_groups=exclude_groups,
@@ -302,63 +205,39 @@ def plot(  # noqa: C901, PLR0913, PLR0917
     )
 
     if series_col is None:
-        index_df = filter_by_value_thresholds(
-            df=index_df,
-            filter_above=filter_above,
-            filter_below=filter_below,
-        )
-
+        index_df = _filter_by_value_thresholds(df=index_df, filter_above=filter_above, filter_below=filter_below)
+        index_df = index_df[[group_col, "index"]].set_index(group_col)
+        index_df = _filter_top_bottom_n(df=index_df, top_n=top_n, bottom_n=bottom_n)
+        if sort_by is not None:
+            index_df = index_df.sort_values(by=group_col if sort_by == "group" else "index", ascending=ascending)
         default_colors = get_named_color("primary")
         show_legend = False
-        index_df = index_df[[group_col, "index"]].set_index(group_col)
-        index_df = filter_top_bottom_n(
-            df=index_df,
-            top_n=top_n,
-            bottom_n=bottom_n,
-        )
-
-        if sort_by in ["group", "value"]:
-            index_df = index_df.sort_values(
-                by=group_col if sort_by == "group" else "index",
-                ascending=sort_order in ("asc", "ascending"),
-            )
-
     else:
-        show_legend = True
-        default_colors = get_plot_colors(int(df[series_col].nunique()))
-
         if sort_by == "group":
-            index_df = index_df.sort_values(by=[group_col, series_col], ascending=sort_order in ("asc", "ascending"))
+            index_df = index_df.sort_values(by=[group_col, series_col], ascending=ascending)
+        index_df = index_df.pivot_table(index=group_col, columns=series_col, values="index", sort=False)
+        default_colors = get_plot_colors(len(index_df.columns))
+        show_legend = True
 
-        index_df = index_df.pivot_table(
-            index=group_col,
-            columns=series_col,
-            values="index",
-            sort=False,
-        )
-
-    width = kwargs.pop("width", 0.8)
+    bar_widths = index_df - BASELINE_INDEX
+    width = kwargs.pop("width", DEFAULT_BAR_WIDTH)
     color = kwargs.pop("color", default_colors)
 
     if color_by_threshold:
-        positive_color = get_named_color("positive")
-        negative_color = get_named_color("negative")
-        neutral_color = get_named_color("neutral")
-
-        values = index_df["index"].to_numpy() + BASELINE_INDEX
+        values = index_df["index"].to_numpy()
         bar_colors = np.select(
             [values >= highlight_range[1], values <= highlight_range[0]],
-            [positive_color, negative_color],
-            default=neutral_color,
+            [get_named_color("positive"), get_named_color("negative")],
+            default=get_named_color("neutral"),
         )
         if ax is None:
-            figsize = kwargs.get("figsize")
-            _, ax = plt.subplots(figsize=figsize)
-        _pandas_only_kwargs = {"figsize", "stacked", "legend", "subplots", "layout"}
-        mpl_kwargs = {k: v for k, v in kwargs.items() if k not in _pandas_only_kwargs}
+            _, ax = plt.subplots(figsize=kwargs.get("figsize"))
+        pandas_only_kwargs = {"figsize", "stacked", "legend", "subplots", "layout"}
+        mpl_kwargs = {k: v for k, v in kwargs.items() if k not in pandas_only_kwargs}
         ax.barh(
-            y=index_df.index,
-            width=index_df["index"].to_numpy(),
+            # Strings make matplotlib place numeric groups (store ids) as categories, like pandas' barh
+            y=bar_widths.index.astype(str),
+            width=bar_widths["index"].to_numpy(),
             left=BASELINE_INDEX,
             color=bar_colors,
             height=width,
@@ -366,7 +245,7 @@ def plot(  # noqa: C901, PLR0913, PLR0917
             **mpl_kwargs,
         )
     else:
-        ax = index_df.plot.barh(
+        ax = bar_widths.plot.barh(
             left=BASELINE_INDEX,
             legend=show_legend,
             ax=ax,
@@ -393,88 +272,104 @@ def plot(  # noqa: C901, PLR0913, PLR0917
         move_legend_outside=move_legend_outside,
         show_legend=show_legend,
         source_text=source_text,
-        # Index plots are horizontal bars (`barh`/`hlines`); gridlines belong on the value (x) axis.
+        # Index plots are horizontal bars; gridlines belong on the value (x) axis.
         grid_axis="x",
     )
 
 
-def get_indexes(
-    df: pd.DataFrame | ibis.Table,
-    value_to_index: str | int,
-    index_col: str,
-    value_col: str,
+def _filter_by_groups(
+    df: pd.DataFrame,
     group_col: str,
-    index_subgroup_col: str | None = None,
-    agg_func: str = "sum",
-    offset: int = 0,
+    exclude_groups: list[Any] | None = None,
+    include_only_groups: list[Any] | None = None,
 ) -> pd.DataFrame:
-    """Calculate each group's index of ``value_col`` against a baseline category.
-
-    Index = ``100 * (group share of the aggregated value_col among rows where index_col ==
-    value_to_index) / (group share of the aggregated value_col overall) - offset``. When
-    ``index_subgroup_col`` is set, shares are computed within each subgroup instead of
-    overall.
+    """Drop the excluded groups, or keep only the included ones.
 
     Args:
-        df (pd.DataFrame | ibis.Table): The dataframe or Ibis table to calculate the index on.
-        value_to_index (str | int): The baseline category or value to index against (e.g., "A").
-        index_col (str): The column to calculate the index on (e.g., "category").
-        value_col (str): The column to calculate the index of (e.g., "sales").
-        group_col (str): The column to group the data by (e.g., "region").
-        index_subgroup_col (str, optional): The column to subgroup the index by (e.g., "store_type").
-        agg_func (str, optional): The aggregation function to apply to ``value_col``. Valid options
-            are "sum", "mean", "max", "min", or "nunique".
-        offset (int, optional): Subtracted from the computed index. Defaults to 0; ``plot`` passes
-            100 so its result is delta-from-baseline.
+        df (pd.DataFrame): The index table.
+        group_col (str): The column holding the groups.
+        exclude_groups (list[Any], optional): Groups to drop.
+        include_only_groups (list[Any], optional): The only groups to keep.
 
     Returns:
-        pd.DataFrame: The group columns plus an ``index`` column.
+        pd.DataFrame: The filtered table.
+    """
+    if exclude_groups is not None:
+        df = df[~df[group_col].isin(exclude_groups)]
+    if include_only_groups is not None:
+        df = df[df[group_col].isin(include_only_groups)]
+    return df
+
+
+def _filter_by_value_thresholds(
+    df: pd.DataFrame,
+    filter_above: float | None = None,
+    filter_below: float | None = None,
+) -> pd.DataFrame:
+    """Keep the rows whose ``index`` is strictly above ``filter_above`` and below ``filter_below``.
+
+    Args:
+        df (pd.DataFrame): The index table.
+        filter_above (float, optional): Keep only rows whose index exceeds this value.
+        filter_below (float, optional): Keep only rows whose index is below this value.
+
+    Returns:
+        pd.DataFrame: The filtered table.
 
     Raises:
-        ValueError: If agg_func is not one of "sum", "mean", "max", "min", or "nunique".
+        ValueError: If filtering leaves no rows.
     """
-    table = ensure_ibis_table(df)
+    if filter_above is not None:
+        df = df[df["index"] > filter_above]
+    if filter_below is not None:
+        df = df[df["index"] < filter_below]
 
-    agg_func = ensure_value_choice(agg_func, VALID_AGG_FUNCS, "agg_func")
+    if len(df) == 0:
+        raise ValueError("Filtering resulted in an empty dataset. Consider adjusting filter parameters.")
 
-    agg_fn = lambda x: getattr(x, agg_func)()  # noqa: E731
+    return df
 
-    group_cols = [group_col] if index_subgroup_col is None else [index_subgroup_col, group_col]
 
-    overall_agg = table.group_by(group_cols).aggregate(value=agg_fn(table[value_col]))
+def _filter_top_bottom_n(df: pd.DataFrame, top_n: int | None = None, bottom_n: int | None = None) -> pd.DataFrame:
+    """Keep the top N and/or bottom N rows by ``index``, ranking only rows whose index is not null.
 
-    if index_subgroup_col is None:
-        overall_total = overall_agg.value.sum()
-        overall_props = overall_agg.mutate(proportion_overall=overall_agg.value / overall_total.nullif(0))
-    else:
-        overall_total = overall_agg.group_by(index_subgroup_col).aggregate(total=lambda t: t.value.sum())
-        overall_props = (
-            overall_agg.join(overall_total, index_subgroup_col)
-            .mutate(proportion_overall=lambda t: t.value / t.total.nullif(0))
-            .drop("total")
+    ``0`` is treated as None for both parameters.
+
+    Args:
+        df (pd.DataFrame): The index table.
+        top_n (int, optional): Number of highest-index rows to keep.
+        bottom_n (int, optional): Number of lowest-index rows to keep.
+
+    Returns:
+        pd.DataFrame: The selected rows, highest index first.
+
+    Raises:
+        ValueError: If top_n or bottom_n, or their sum, exceeds the number of rows.
+    """
+    top_n = None if top_n == 0 else top_n
+    bottom_n = None if bottom_n == 0 else bottom_n
+
+    if top_n is None and bottom_n is None:
+        return df
+
+    sorted_df = df.dropna(subset=["index"]).sort_values(by="index", ascending=False)
+    df_length = len(sorted_df)
+    if top_n is not None and top_n > df_length:
+        error_msg = f"top_n ({top_n}) cannot exceed the number of available groups ({df_length})"
+        raise ValueError(error_msg)
+    if bottom_n is not None and bottom_n > df_length:
+        error_msg = f"bottom_n ({bottom_n}) cannot exceed the number of available groups ({df_length})"
+        raise ValueError(error_msg)
+    if top_n is not None and bottom_n is not None and top_n + bottom_n > df_length:
+        error_msg = (
+            f"The sum of top_n ({top_n}) and bottom_n ({bottom_n}) cannot exceed"
+            f" the total number of groups ({df_length})"
         )
+        raise ValueError(error_msg)
 
-    table = table.filter(table[index_col] == value_to_index)
-    subset_agg = table.group_by(group_cols).aggregate(value=agg_fn(table[value_col]))
-
-    if index_subgroup_col is None:
-        subset_total = subset_agg.value.sum().name("total")
-        subset_props = subset_agg.mutate(proportion=subset_agg.value / subset_total.nullif(0))
-    else:
-        subset_total = subset_agg.group_by(index_subgroup_col).aggregate(total=lambda t: t.value.sum())
-        subset_props = (
-            subset_agg.join(subset_total, index_subgroup_col)
-            .filter(lambda t: t.total != 0)
-            .mutate(proportion=lambda t: t.value / t.total)
-            .drop("total")
-        )
-
-    result = (
-        subset_props.join(overall_props, group_cols)
-        .mutate(
-            index=lambda t: (t.proportion / t.proportion_overall.nullif(0) * 100) - offset,
-        )
-        .order_by(group_cols)
-    )
-
-    return result[[*group_cols, "index"]].execute()
+    selected = []
+    if top_n is not None:
+        selected.append(sorted_df.head(top_n))
+    if bottom_n is not None:
+        selected.append(sorted_df.tail(bottom_n))
+    return pd.concat(selected)

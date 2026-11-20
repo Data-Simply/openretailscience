@@ -52,9 +52,8 @@ distinctive arguments are listed below; see each function's docstring for the re
   option (not a parameter).
 - `price.plot(df, value_col, group_col, bins, ...)` — price-band bubble distribution.
 - `index.plot(df, value_col, group_col, index_col, value_to_index, top_n=None, bottom_n=None, ...)` —
-  index plot (baseline 100). Same-module helpers: `index.get_indexes(...)`,
-  `index.filter_by_groups(...)`, `index.filter_by_value_thresholds(...)`,
-  `index.filter_top_bottom_n(...)`.
+  index plot (baseline 100). For the counts and shares behind the bars as a table, use
+  `analysis.IndexAnalysis` with the same arguments (`references/analysis.md`).
 
 ## Trendlines
 

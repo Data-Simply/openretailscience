@@ -4,6 +4,7 @@
   (`calc_tree_kpis` is its KPI math as a function)
 - customers gained, lost and switched between brands or stores across two periods → `GainLoss`
 - customer overlap between 2-3 segments (Venn) → `CrossShop`
+- how over- or under-represented each group (e.g. age band) is among a brand's buyers → `IndexAnalysis`
 - retention of customers by first-purchase cohort → `CohortAnalysis`
 - products bought together (market-basket rules) → `ProductAssociation`
 - which products customers treat as substitutes → `CustomerDecisionHierarchy`
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
     )
     from openretailscience.analysis.gain_loss import GainLoss as GainLoss
     from openretailscience.analysis.haversine import haversine_distance as haversine_distance
+    from openretailscience.analysis.index_analysis import IndexAnalysis as IndexAnalysis
     from openretailscience.analysis.product_association import ProductAssociation as ProductAssociation
     from openretailscience.analysis.revenue_tree import RevenueTree as RevenueTree
     from openretailscience.analysis.revenue_tree import calc_tree_kpis as calc_tree_kpis
@@ -59,6 +61,7 @@ _EXPORTS = {
     "CustomerDecisionHierarchy": "customer_decision_hierarchy",
     "GainLoss": "gain_loss",
     "haversine_distance": "haversine",
+    "IndexAnalysis": "index_analysis",
     "ProductAssociation": "product_association",
     "RevenueTree": "revenue_tree",
     "calc_tree_kpis": "revenue_tree",
