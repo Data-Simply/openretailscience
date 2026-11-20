@@ -33,9 +33,9 @@ class IndexAnalysis:
     ``baseline_value`` (``value_col`` aggregated with ``agg_func``), ``subset_share`` and ``baseline_share``
     (fractions of the subset's and baseline's totals, within each subgroup when one is set) and ``index``.
     A group the subset has no rows in has a ``subset_value``, ``subset_share`` and ``index`` of 0; one whose
-    subset rows all have a null ``value_col`` has them null. ``index`` is also null when the group's baseline
-    share or the subset's total is 0. Reading ``df`` raises a ValueError when no row with a non-null group is
-    in the subset.
+    subset rows all have a null ``value_col`` has them null (0 under "nunique"). ``index`` is also null when
+    the group's baseline share or the subset's total is 0. Reading ``df`` raises a ValueError when no row with
+    a non-null group is in the subset.
 
     Rows with a null ``group_col`` or ``subgroup_col`` are left out of both totals, as if filtered out first; to
     count them, fill the nulls with a label such as "Unknown" before passing the data.

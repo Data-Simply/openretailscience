@@ -100,8 +100,8 @@ from openretailscience.analysis.haversine import haversine_distance
   row per baseline group (per `subgroup_col` and group pair present in the data, with no row for a pair that has
   no rows; shares are then within each subgroup):
   `subset_value`, `baseline_value`, `subset_share`, `baseline_share`, `index`. A group with no subset rows has
-  index 0; one whose subset rows all have a null `value_col` has a null index, as does one whose baseline share
-  or subset total is 0. If no row with a group matches
+  index 0; one whose subset rows all have a null `value_col` has a null index (0 under "nunique"), as does one
+  whose baseline share or subset total is 0. If no row with a group matches
   `value_to_index`, reading `.df` raises a ValueError: the value must exist in `index_col` exactly (case,
   spacing), or its rows have null groups to fill; a value of the wrong type (int on a text column) raises
   `IbisTypeError` on construction. Null `group_col`/`subgroup_col` rows leave both totals; fill
