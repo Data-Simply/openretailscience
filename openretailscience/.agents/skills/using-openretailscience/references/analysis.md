@@ -73,6 +73,7 @@ from openretailscience.segmentation.nlr import NLRSegmentation
 ```python
 from openretailscience.analysis.cross_shop import CrossShop
 from openretailscience.analysis.gain_loss import GainLoss
+from openretailscience.analysis.index_analysis import IndexAnalysis
 from openretailscience.analysis.cohort import CohortAnalysis
 from openretailscience.analysis.product_association import ProductAssociation
 from openretailscience.analysis.revenue_tree import RevenueTree, calc_tree_kpis
@@ -92,6 +93,20 @@ from openretailscience.analysis.haversine import haversine_distance
   position; a Series must have `df`'s index, so build it from `df`). `.gain_loss_df` has one row per
   `customer_id` (per `group_col` and `customer_id` when grouped); its six components sum to `focus_diff`.
   `.gain_loss_table_df` is one row ungrouped, else one per `group_col` value; `.plot(...)`.
+- `IndexAnalysis(df, value_col, group_col, index_col, value_to_index, agg_func="sum", subgroup_col=None)` —
+  how over- or under-represented each `group_col` value is among the rows where `index_col == value_to_index`,
+  against all rows: `index = 100 * subset_share / baseline_share`. Use it instead of computing shares and
+  indexes by hand. For customers, pass `value_col="customer_id", agg_func="nunique"`. `.df` / `.table` have one
+  row per baseline group (per `subgroup_col` and group pair present in the data, with no row for a pair that has
+  no rows; shares are then within each subgroup):
+  `subset_value`, `baseline_value`, `subset_share`, `baseline_share`, `index`. A group with no subset rows has
+  index 0; one whose subset rows all have a null `value_col` has a null index (0 under "nunique"), as does one
+  whose baseline share or subset total is 0. If no row with a group matches
+  `value_to_index`, reading `.df` raises a ValueError: the value must exist in `index_col` exactly (case,
+  spacing), or its rows have null groups to fill; a value of the wrong type (int on a text column) raises
+  `IbisTypeError` on construction. Null `group_col`/`subgroup_col` rows leave both totals; fill
+  them with a label first to count them. There is no `.plot()`; chart it with `plots.index.plot` and the same
+  arguments (`series_col` for `subgroup_col`).
 - `CohortAnalysis(df, aggregation_column, agg_func="nunique", period="month", percentage=False)` —
   `period` ∈ year/quarter/month/week/day; `transaction_date` must be date or datetime (string
   columns are rejected). For retention use

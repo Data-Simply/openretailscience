@@ -65,6 +65,7 @@ nav:
           - Customer Retention: api/analysis/customer.md
           - Gain Loss: api/analysis/gain_loss.md
           - Haversine Distance: api/analysis/haversine.md
+          - Index Analysis: api/analysis/index_analysis.md
           - Product Association: api/analysis/product_association.md
           - Customer Decision Hierarchy: api/analysis/customer_decision_hierarchy.md
           - Revenue Tree: api/analysis/revenue_tree.md

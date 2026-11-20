@@ -5,6 +5,7 @@ description: >-
   openretailscience Python package. Use when a task involves customer, basket,
   or transaction data and mentions any openretailscience analysis (RFM / HML /
   NLR / threshold segmentation, cross-shop Venn overlap, gain-loss switching,
+  index (over/under-representation against a baseline),
   cohort retention, product association / market-basket, revenue-tree KPI
   decomposition, customer decision hierarchy, composite rank, haversine,
   customer-lifetime-value / Pareto-NBD / BTYD model-input prep), any of
@@ -86,6 +87,7 @@ Prefer reading the relevant script over assembling calls from signatures alone.
 | RFM / HML / threshold / NLR customer segments | `segmentation.rfm` / `.hml` / `.threshold` / `.nlr` |
 | Category/brand overlap (Venn) | `analysis.cross_shop.CrossShop` |
 | Customers/spend gained, lost, switched between periods | `analysis.gain_loss.GainLoss` |
+| Group over/under-representation in a subset vs all (index) | `analysis.index_analysis.IndexAnalysis` |
 | Retention by acquisition cohort | `analysis.cohort.CohortAnalysis` |
 | Market-basket / co-purchase rules | `analysis.product_association.ProductAssociation` |
 | KPI decomposition tree (spend = customers × visits × ...) | `analysis.revenue_tree.RevenueTree` |
