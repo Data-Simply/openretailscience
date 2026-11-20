@@ -258,6 +258,13 @@ Standard suffixes for period comparisons and calculations:
 - `column.suffix.period_1` → `"p1"`
 - `column.suffix.period_2` → `"p2"`
 
+### Dataset facts (`data.*`)
+
+- `data.unknown_customer_value` → `None` (off). The customer ID that marks rows with no identified customer, such as
+  `-1`, or `ibis.null()` (or `pd.NA`) when null IDs mark them; write `"<NULL>"` in TOML. When set,
+  analyses that support it count customers from identified rows only and report unknown-customer sales in `_unknown`
+  and `_total` columns.
+
 ## Advanced Reference
 
 !!! note "Rarely Used by End Users"

@@ -3,13 +3,19 @@
 import difflib
 from collections.abc import Generator
 from contextlib import contextmanager
+from numbers import Integral
 from pathlib import Path
 
+import ibis
+import pandas as pd
 import toml
 
 from openretailscience.constants import COLORS
 
-OptionTypes = str | int | float | bool | list | dict | None
+OptionTypes = str | int | float | bool | list | dict | ibis.expr.types.NullScalar | None
+
+# TOML has no null, so this placeholder in openretailscience.toml stands for ibis.null()
+TOML_NULL = "<NULL>"
 
 # Below every measured typo of a real key (lowest 0.83), above most non-standard column names.
 _SUGGESTION_CUTOFF = 0.8
@@ -66,6 +72,8 @@ class Options:
             "column.suffix.total": "total",
             # Performance / query optimization
             "optimization.use_native_sql": True,
+            # Facts about the dataset
+            "data.unknown_customer_value": None,
             # Color palettes
             # 27-color rotation: 9 curated hues at 3 shades. First 5 hues are max-separated on the
             # hue wheel (~70 degrees apart) for 3-5 series. Order: primaries (500), lights (200),
@@ -199,6 +207,12 @@ class Options:
                 "When False, or on backends without support, the portable fallback path is used. "
                 "Results are identical either way."
             ),
+            "data.unknown_customer_value": (
+                "The customer ID that marks rows with no identified customer (guest checkouts, shoppers without a "
+                "loyalty card), e.g. -1. Set ibis.null() or pd.NA when null IDs mark them; in openretailscience.toml "
+                f'write "{TOML_NULL}". None (default) switches it off. Analyses that support it count '
+                "customers from identified rows only and report unknown-customer sales in _unknown and _total columns."
+            ),
             # Color options
             "plot.color.multi_color_palette": (
                 "Multi-color palette for plots with many series (default: 27 Tailwind colors, "
@@ -322,8 +336,12 @@ class Options:
 
         Raises:
             ValueError: If the option name is unknown.
+            TypeError: If data.unknown_customer_value is set to something other than an int or str ID,
+                ibis.null(), pd.NA or None.
         """
         self._ensure_known(pat)
+        if pat == "data.unknown_customer_value":
+            val = _normalize_unknown_customer_value(val)
         self._options[pat] = val
 
     def get_option(self, pat: str) -> OptionTypes:
@@ -374,7 +392,10 @@ class Options:
             ValueError: If the option name is unknown.
         """
         self._ensure_known(pat)
-        return f"{pat}: {self._descriptions[pat]} (current value: {self._options[pat]})"
+        value = self._options[pat]
+        # ibis.null() prints as None, which would read as the option being off
+        shown = "ibis.null()" if isinstance(value, ibis.expr.types.NullScalar) else value
+        return f"{pat}: {self._descriptions[pat]} (current value: {shown})"
 
     @staticmethod
     def flatten_options(k: str, v: OptionTypes, parent_key: str = "") -> dict[str, OptionTypes]:
@@ -420,6 +441,7 @@ class Options:
 
         Raises:
             ValueError: If the TOML file contains unknown options.
+            TypeError: If the TOML file sets an option to a value of the wrong type.
         """
         options_instance = cls()
 
@@ -428,13 +450,40 @@ class Options:
 
         for section, options in toml_data.items():
             for option_name, option_value in Options.flatten_options(section, options).items():
+                is_null = option_name == "data.unknown_customer_value" and option_value == TOML_NULL
                 try:
-                    options_instance.set_option(option_name, option_value)
-                except ValueError as err:
+                    options_instance.set_option(option_name, ibis.null() if is_null else option_value)
+                except (ValueError, TypeError) as err:
                     msg = f"{file_path}: {err}"
-                    raise ValueError(msg) from None
+                    raise type(err)(msg) from None
 
         return options_instance
+
+
+def _normalize_unknown_customer_value(val: OptionTypes) -> OptionTypes:
+    """Return the value to store for data.unknown_customer_value, with pd.NA as ibis.null().
+
+    Args:
+        val (OptionTypes): The value being set.
+
+    Returns:
+        OptionTypes: ``val``, or ``ibis.null()`` for ``pd.NA``.
+
+    Raises:
+        TypeError: If ``val`` is not an int or str ID, ibis.null(), pd.NA or None.
+    """
+    if val is pd.NA:
+        return ibis.null()
+    if val is None or isinstance(val, ibis.expr.types.NullScalar):
+        return val
+    if isinstance(val, Integral | str) and not isinstance(val, bool):
+        return val
+    msg = (
+        f"data.unknown_customer_value must be the customer ID that marks unknown customers (an int or str), "
+        "ibis.null() or pd.NA if null IDs mark them, or None to switch it off. "
+        f"Got {type(val).__name__}."
+    )
+    raise TypeError(msg)
 
 
 def find_project_root() -> str | None:
@@ -470,6 +519,8 @@ def set_option(pat: str, val: OptionTypes) -> None:
 
     Raises:
         ValueError: If the option name is unknown.
+        TypeError: If data.unknown_customer_value is set to something other than an int or str ID,
+            ibis.null(), pd.NA or None.
     """
     _global_options.set_option(pat, val)
 
@@ -540,6 +591,7 @@ def option_context(*args: OptionTypes) -> Generator[None, None, None]:
     Raises:
         ValueError: If an odd number of arguments is supplied (positional form), or if an
             unknown option name is supplied (either form).
+        TypeError: If a value doesn't fit its option (see set_option).
     """
     if len(args) == 1 and isinstance(args[0], dict):
         items = args[0].items()

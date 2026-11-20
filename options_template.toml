@@ -49,6 +49,12 @@ unknown_customer   = "unknown"
 # Use backend-native SQL features for faster queries where supported (portable fallback otherwise).
 use_native_sql = true
 
+# Facts about the dataset
+[data]
+# The customer ID that marks rows with no identified customer (guest checkouts). Off unless set.
+# unknown_customer_value = -1          # a sentinel ID
+# unknown_customer_value = "<NULL>"    # null customer IDs are unknown
+
 # Plot Color Options
 [plot.color]
 # Multi-color rotation (27 colors): 9 curated hues x 3 shades.

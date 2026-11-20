@@ -3,6 +3,9 @@
 import re
 from pathlib import Path
 
+import ibis
+import numpy as np
+import pandas as pd
 import pytest
 import toml
 
@@ -253,11 +256,48 @@ class TestOptions:
         assert opt.get_option("column.customer_id") == original_customer
         assert "column.brand_name" not in opt.list_options()
 
-    def test_set_option_updates_value(self):
+    @pytest.mark.parametrize(
+        ("pat", "value"),
+        [
+            ("column.customer_id", "new_customer_id"),
+            ("data.unknown_customer_value", -1),
+            ("data.unknown_customer_value", np.int64(-1)),
+            # Set from Python, the TOML null placeholder is a literal ID
+            ("data.unknown_customer_value", "<NULL>"),
+        ],
+    )
+    def test_set_option_updates_value(self, pat, value):
         """Test setting an option updates the option value correctly."""
         options = opt.Options()
-        options.set_option("column.customer_id", "new_customer_id")
-        assert options.get_option("column.customer_id") == "new_customer_id"
+        options.set_option(pat, value)
+        assert options.get_option(pat) == value
+
+    @pytest.mark.parametrize("value", [ibis.null(), pd.NA], ids=["ibis_null", "pd_na"])
+    def test_unknown_customer_null_markers_are_stored_as_ibis_null(self, value):
+        """ibis.null() and pd.NA both mean null customer IDs are unknown."""
+        options = opt.Options()
+        options.set_option("data.unknown_customer_value", value)
+        assert options.get_option("data.unknown_customer_value").equals(ibis.null())
+
+    @pytest.mark.parametrize(
+        ("value", "type_name"),
+        [
+            pytest.param(True, "bool", id="bool"),
+            pytest.param(1.5, "float", id="float"),
+            pytest.param(ibis.literal(-1), "IntegerScalar", id="ibis_literal"),
+            pytest.param(
+                ibis.table({"customer_id": "int64"}).customer_id < 0, "BooleanColumn", id="boolean_expression"
+            ),
+        ],
+    )
+    def test_unknown_customer_rejects_values_that_are_not_an_id_or_null(self, value, type_name):
+        """Anything but an int or str ID, a null marker or None raises, naming what it accepts."""
+        expected = (
+            "data.unknown_customer_value must be the customer ID that marks unknown customers (an int or str), "
+            f"ibis.null() or pd.NA if null IDs mark them, or None to switch it off. Got {type_name}."
+        )
+        with pytest.raises(TypeError, match=f"^{re.escape(expected)}$"):
+            opt.Options().set_option("data.unknown_customer_value", value)
 
     def test_reset_option_restores_default_value(self):
         """Test resetting an option restores its default value."""
@@ -329,6 +369,12 @@ class TestOptions:
         assert "column containing customer IDs" in description
         assert description.endswith(f"(current value: {opt.get_option(option)})")
 
+    def test_describe_option_tells_the_null_marker_from_off(self):
+        """ibis.null() prints as None, so the null marker is described as ibis.null(), not as the off value."""
+        options = opt.Options()
+        options.set_option("data.unknown_customer_value", ibis.null())
+        assert options.describe_option("data.unknown_customer_value").endswith("(current value: ibis.null())")
+
     def test_load_invalid_format_toml(self):
         """Test loading an invalid TOML file raises a TomlDecodeError."""
         test_file_path = Path("tests/toml_files/corrupt.toml").resolve()
@@ -345,11 +391,28 @@ class TestOptions:
         assert options.get_option("column.calc.price_per_unit") == "new_price_per_unit"
         assert options.get_option("column.suffix.count") == "new_cnt"
 
-    def test_load_invalid_option_toml(self):
-        """An unknown key in a TOML file raises the unknown-option error, prefixed with the file's path."""
-        test_file_path = Path("tests/toml_files/invalid_option.toml").resolve()
-        expected = f"{test_file_path}: Unknown option 'column.brand_name'. " + COLUMN_HINT.format(name="brand_name")
-        with pytest.raises(ValueError, match=f"^{re.escape(expected)}$"):
+    @pytest.mark.parametrize(
+        ("file_name", "error", "message"),
+        [
+            pytest.param(
+                "invalid_option.toml",
+                ValueError,
+                "Unknown option 'column.brand_name'. " + COLUMN_HINT.format(name="brand_name"),
+                id="unknown_key",
+            ),
+            pytest.param(
+                "invalid_unknown_customer_value.toml",
+                TypeError,
+                "data.unknown_customer_value must be the customer ID that marks unknown customers (an int or str), "
+                "ibis.null() or pd.NA if null IDs mark them, or None to switch it off. Got float.",
+                id="wrong_value_type",
+            ),
+        ],
+    )
+    def test_load_invalid_option_toml(self, file_name, error, message):
+        """A bad key or value type in a TOML file raises the option's error, prefixed with the file's path."""
+        test_file_path = Path("tests/toml_files", file_name).resolve()
+        with pytest.raises(error, match=f"^{re.escape(f'{test_file_path}: {message}')}$"):
             opt.Options.load_from_toml(test_file_path)
 
     def test_options_template_matches_defaults(self):
@@ -369,7 +432,10 @@ class TestOptions:
             flat_template.update(opt.Options.flatten_options(section, options))
 
         defaults = opt.Options()
-        expected = {name: defaults.get_option(name) for name in defaults.list_options()}
+        # TOML has no null, so an option that defaults to None appears only as a commented-out example
+        expected = {
+            name: defaults.get_option(name) for name in defaults.list_options() if defaults.get_option(name) is not None
+        }
         assert flat_template == expected
 
     def test_flatten_options(self):
@@ -486,3 +552,5 @@ class TestOptions:
         assert options.get_option("column.suffix.contribution") == "new_contrib"
         assert options.get_option("column.suffix.period_1") == "new_p1"
         assert options.get_option("column.suffix.period_2") == "new_p2"
+        # TOML has no null, so "<NULL>" stands for it
+        assert options.get_option("data.unknown_customer_value").equals(ibis.null())

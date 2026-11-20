@@ -274,36 +274,34 @@ class TestInputValidation:
         )
 
     @pytest.mark.parametrize(
-        ("kwargs", "match"),
+        ("kwargs", "options", "match"),
         [
             pytest.param(
                 {"segment_col": "segment_name"},
+                {},
                 r"segment_col references columns not present in the data: \['segment_name'\]",
                 id="missing_segment_col",
             ),
-            pytest.param({"segment_col": []}, "segment_col must not be an empty list", id="empty_segment_col"),
+            pytest.param({"segment_col": []}, {}, "segment_col must not be an empty list", id="empty_segment_col"),
             # Exhaustive extra_aggs cases live in tests/core/test_validation.py; this pins the constructor wiring.
             pytest.param(
                 {"segment_col": cols.store_id, "extra_aggs": {"stores": ("nonexistent_column", "nunique")}},
+                {},
                 r"Column 'nonexistent_column' specified in extra_aggs does not exist in the data",
                 id="extra_agg_column_missing",
             ),
-            # unknown_customer_value coalesces each extra_aggs result to 0, so a text result is rejected up front.
+            # The unknown/total split coalesces each extra_aggs result to 0, so a text result is rejected up front.
             pytest.param(
-                {
-                    "segment_col": cols.store_id,
-                    "grouping_sets": "total",
-                    "extra_aggs": {"top_brand": ("brand", "max")},
-                    "unknown_customer_value": -1,
-                },
+                {"segment_col": cols.store_id, "grouping_sets": "total", "extra_aggs": {"top_brand": ("brand", "max")}},
+                {"data.unknown_customer_value": -1},
                 r"extra_aggs\['top_brand'\] 'max' is not an aggregation .* with a numeric result",
                 id="text_extra_agg_with_unknown_customers",
             ),
         ],
     )
-    def test_rejects_invalid_input(self, transactions, kwargs, match):
+    def test_rejects_invalid_input(self, transactions, kwargs, options, match):
         """A bad segment_col or extra_aggs raises a ValueError that names the problem."""
-        with pytest.raises(ValueError, match=match):
+        with option_context(options), pytest.raises(ValueError, match=match):
             SegTransactionStats(transactions, **kwargs)
 
     @pytest.mark.parametrize("measure_col", [cols.unit_spend, cols.unit_qty])
@@ -846,13 +844,15 @@ class TestUnknownCustomerTracking:
     @pytest.mark.parametrize(
         ("unknown_value", "customer_ids"),
         [
-            (-1, [1, 2, -1, 3]),  # int value
-            ("UNKNOWN", ["C1", "C2", "UNKNOWN", "C3"]),  # string value
-            (ibis.literal(-1), [1, 2, -1, 3]),  # ibis literal expression
+            pytest.param(-1, [1, 2, -1, 3], id="int"),
+            pytest.param("GUEST", ["C1", "C2", "GUEST", "C3"], id="str"),
+            pytest.param(ibis.null(), pd.array([1, 2, None, 3], dtype="Int64"), id="ibis_null"),
+            pytest.param(pd.NA, pd.array([1, 2, None, 3], dtype="Int64"), id="pd_na"),
+            pytest.param(-1, pd.array([1, 2, None, 3], dtype="Int64"), id="null_id_under_sentinel"),
         ],
     )
     def test_unknown_customer_input_types(self, unknown_value, customer_ids):
-        """Test unknown customer tracking with different input value types."""
+        """A sentinel ID or a null marker splits spend into identified, unknown and total; null IDs are unknown."""
         df = pd.DataFrame(
             {
                 cols.customer_id: customer_ids,
@@ -862,9 +862,8 @@ class TestUnknownCustomerTracking:
             },
         )
 
-        seg_stats = SegTransactionStats(
-            df, segment_col="segment_name", unknown_customer_value=unknown_value, grouping_sets="total"
-        )
+        with option_context("data.unknown_customer_value", unknown_value):
+            seg_stats = SegTransactionStats(df, segment_col="segment_name", grouping_sets="total")
         result_df = seg_stats.df.sort_values("segment_name").reset_index(drop=True)
 
         expected_output = pd.DataFrame(
@@ -887,46 +886,6 @@ class TestUnknownCustomerTracking:
 
         pd.testing.assert_frame_equal(result_df, expected_output)
 
-    def test_unknown_customer_with_boolean_expression(self):
-        """Test unknown customer tracking with boolean expression."""
-        df = pd.DataFrame(
-            {
-                cols.customer_id: [1, 2, -1, -2, 3],
-                cols.unit_spend: [100.0, 200.0, 150.0, 250.0, 300.0],
-                cols.transaction_id: [101, 102, 103, 104, 105],
-                "segment_name": ["Premium", "Premium", "Premium", "Premium", "Standard"],
-            },
-        )
-
-        data_table = ibis.memtable(df)
-        seg_stats = SegTransactionStats(
-            data_table,
-            segment_col="segment_name",
-            unknown_customer_value=data_table[cols.customer_id] < 0,
-            grouping_sets="total",
-        )
-        result_df = seg_stats.df.sort_values("segment_name").reset_index(drop=True)
-
-        expected_output = pd.DataFrame(
-            {
-                "segment_name": ["Premium", "Standard", "Total"],
-                cols.agg.unit_spend: [300.0, 300.0, 600.0],
-                cols.agg.transaction_id: [2, 1, 3],
-                cols.agg.customer_id: [2, 1, 3],
-                cols.calc.spend_per_cust: [150.0, 300.0, 200.0],
-                cols.calc.spend_per_trans: [150.0, 300.0, 200.0],
-                cols.calc.trans_per_cust: [1.0, 1.0, 1.0],
-                cols.agg.unit_spend_unknown: [400.0, 0.0, 400.0],
-                cols.agg.transaction_id_unknown: [2, 0, 2],
-                cols.calc.spend_per_trans_unknown: [200.0, np.nan, 200.0],
-                cols.agg.unit_spend_total: [700.0, 300.0, 1000.0],
-                cols.agg.transaction_id_total: [4, 1, 5],
-                cols.calc.spend_per_trans_total: [175.0, 300.0, 200.0],
-            },
-        )
-
-        pd.testing.assert_frame_equal(result_df, expected_output)
-
     def test_unknown_customer_with_quantity(self):
         """Test unknown customer tracking with quantity columns."""
         df = pd.DataFrame(
@@ -939,9 +898,8 @@ class TestUnknownCustomerTracking:
             },
         )
 
-        seg_stats = SegTransactionStats(
-            df, segment_col="segment_name", unknown_customer_value=-1, grouping_sets="total"
-        )
+        with option_context("data.unknown_customer_value", -1):
+            seg_stats = SegTransactionStats(df, segment_col="segment_name", grouping_sets="total")
         result_df = seg_stats.df.sort_values("segment_name").reset_index(drop=True)
 
         expected_output = pd.DataFrame(
@@ -973,20 +931,37 @@ class TestUnknownCustomerTracking:
 
         pd.testing.assert_frame_equal(result_df, expected_output)
 
-    def test_unknown_customer_error_when_customer_id_missing(self):
-        """Test that error is raised when customer_id column is missing."""
+    @pytest.mark.parametrize(
+        ("customer_ids", "error", "match"),
+        [
+            pytest.param(
+                None,
+                ValueError,
+                f"^Column '{cols.customer_id}' is required when the data.unknown_customer_value option is set",
+                id="no_customer_id_column",
+            ),
+            pytest.param(
+                ["C1001", "GUEST"],
+                TypeError,
+                rf"^data.unknown_customer_value -1 can't be compared with column '{cols.customer_id}' \(string\)\.",
+                id="customer_id_of_another_type",
+            ),
+        ],
+    )
+    def test_unknown_customer_value_that_cant_apply_raises(self, customer_ids, error, match):
+        """A sentinel set for data without a comparable customer_id column raises an error naming the option."""
         df = pd.DataFrame(
             {
-                cols.unit_spend: [100.0, 200.0],
-                cols.transaction_id: [101, 102],
+                cols.unit_spend: [24.99, 61.50],
+                cols.transaction_id: [9001, 9002],
                 "segment_name": ["Premium", "Standard"],
             },
         )
+        if customer_ids is not None:
+            df[cols.customer_id] = customer_ids
 
-        with pytest.raises(ValueError) as excinfo:
-            SegTransactionStats(df, segment_col="segment_name", unknown_customer_value=-1)
-
-        assert "required when unknown_customer_value parameter is specified" in str(excinfo.value)
+        with option_context("data.unknown_customer_value", -1), pytest.raises(error, match=match):
+            SegTransactionStats(df, segment_col="segment_name")
 
     def test_unknown_customer_with_rollups(self):
         """Subtotal and total rows split spend and transactions into identified, unknown and total."""
@@ -1000,13 +975,13 @@ class TestUnknownCustomerTracking:
             },
         )
 
-        result = SegTransactionStats(
-            df,
-            segment_col=["category", "subcategory"],
-            grouping_sets="rollup",
-            unknown_customer_value=-1,
-            sort_by=True,
-        ).df
+        with option_context("data.unknown_customer_value", -1):
+            result = SegTransactionStats(
+                df,
+                segment_col=["category", "subcategory"],
+                grouping_sets="rollup",
+                sort_by=True,
+            ).df
 
         expected = pd.DataFrame(
             {
@@ -1044,13 +1019,13 @@ class TestUnknownCustomerTracking:
         stores_unknown = ColumnHelper.join_options("column.agg.store_id", "column.suffix.unknown_customer")
         stores_total = ColumnHelper.join_options("column.agg.store_id", "column.suffix.total")
 
-        result = SegTransactionStats(
-            df,
-            segment_col="segment_name",
-            unknown_customer_value=-1,
-            extra_aggs={stores_agg: (cols.store_id, "nunique")},
-            sort_by=True,
-        ).df
+        with option_context("data.unknown_customer_value", -1):
+            result = SegTransactionStats(
+                df,
+                segment_col="segment_name",
+                extra_aggs={stores_agg: (cols.store_id, "nunique")},
+                sort_by=True,
+            ).df
 
         expected = pd.DataFrame(
             {
@@ -1097,14 +1072,13 @@ class TestDivisionByZeroHandling:
             },
         )
 
-        # Using grouping_sets="rollup" with multi-dimensional segments and unknown_customer_value
         # This is the exact scenario that caused the production error
-        result = SegTransactionStats(
-            df,
-            segment_col=[cols.store_id, "week"],
-            grouping_sets="rollup",
-            unknown_customer_value=-1,
-        ).df
+        with option_context("data.unknown_customer_value", -1):
+            result = SegTransactionStats(
+                df,
+                segment_col=[cols.store_id, "week"],
+                grouping_sets="rollup",
+            ).df
 
         expected_segments = {
             ("S1", "W1"),
@@ -1134,16 +1108,16 @@ class TestDivisionByZeroHandling:
             },
         )
 
-        result = (
-            SegTransactionStats(
-                df,
-                segment_col="category",
-                unknown_customer_value=-1,  # No customer has this value
-                grouping_sets="total",
+        with option_context("data.unknown_customer_value", -1):
+            result = (
+                SegTransactionStats(
+                    df,
+                    segment_col="category",
+                    grouping_sets="total",
+                )
+                .df.sort_values("category")
+                .reset_index(drop=True)
             )
-            .df.sort_values("category")
-            .reset_index(drop=True)
-        )
 
         # Verify expected structure: 2 detail rows + 1 total = 3 rows
         expected_row_count = 3
@@ -1162,7 +1136,7 @@ class TestDivisionByZeroHandling:
         raised 'Divide by zero error encountered' when using:
         - segment_col with multiple dimensions
         - grouping_sets="rollup"
-        - unknown_customer_value=-1
+        - the data.unknown_customer_value option set to -1
         """
         df = pd.DataFrame(
             {
@@ -1176,12 +1150,12 @@ class TestDivisionByZeroHandling:
         )
 
         # This exact combination caused the production error
-        result = SegTransactionStats(
-            df,
-            segment_col=[cols.store_id, "week"],
-            grouping_sets="rollup",
-            unknown_customer_value=-1,
-        ).df
+        with option_context("data.unknown_customer_value", -1):
+            result = SegTransactionStats(
+                df,
+                segment_col=[cols.store_id, "week"],
+                grouping_sets="rollup",
+            ).df
 
         # ROLLUP(store_id, week) generates:
         # - 6 detail rows (S1/W1, S1/W2, S2/W1, S2/W2, S3/W1, S3/W2)
@@ -1212,15 +1186,15 @@ class TestDivisionByZeroHandling:
             },
         )
 
-        result = (
-            SegTransactionStats(
-                df,
-                segment_col="customer_type",
-                unknown_customer_value=-1,
+        with option_context("data.unknown_customer_value", -1):
+            result = (
+                SegTransactionStats(
+                    df,
+                    segment_col="customer_type",
+                )
+                .df.sort_values("customer_type")
+                .reset_index(drop=True)
             )
-            .df.sort_values("customer_type")
-            .reset_index(drop=True)
-        )
 
         # Loyalty segment (known customers) should have valid spend_per_cust
         loyalty_segment = result[result["customer_type"] == "Loyalty"]
@@ -1290,7 +1264,7 @@ class TestNativeGroupingSets:
             (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": "cube"}),
             (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": "total"}),
             (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": [("region", "category"), ("region",), ()]}),
-            (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": "rollup", "unknown_customer_value": -1}),
+            (_native_sample_df(), _NATIVE_SEGMENTS, {"grouping_sets": "rollup", "unknown_customer": True}),
             (
                 _native_sample_df(),
                 _NATIVE_SEGMENTS,
@@ -1301,7 +1275,7 @@ class TestNativeGroupingSets:
                 _NATIVE_SEGMENTS,
                 {
                     "grouping_sets": "rollup",
-                    "unknown_customer_value": -1,
+                    "unknown_customer": True,
                     "extra_aggs": {"unique_stores": (cols.store_id, "nunique")},
                 },
             ),
@@ -1339,14 +1313,17 @@ class TestNativeGroupingSets:
     def test_native_output_matches_union_fallback(self, df, segments, kwargs):
         """The native single-scan output is identical to the portable union fallback across configurations."""
         table = ibis.duckdb.connect().create_table("transactions", df)
-        with option_context("optimization.use_native_sql", True):
-            native_stats = SegTransactionStats(table, segment_col=segments, **kwargs)
-            native = native_stats.df
-        # Guard against a vacuous pass: confirm the native path actually engaged. Without this, a regression
-        # that silently routed the "native" run through the fallback would compare the fallback to itself.
-        assert "GROUPING SETS" in ibis.to_sql(native_stats.table).upper()
-        with option_context("optimization.use_native_sql", False):
-            fallback = SegTransactionStats(table, segment_col=segments, **kwargs).df
+        kwargs = dict(kwargs)
+        unknown_customer_value = -1 if kwargs.pop("unknown_customer", False) else None
+        with option_context("data.unknown_customer_value", unknown_customer_value):
+            with option_context("optimization.use_native_sql", True):
+                native_stats = SegTransactionStats(table, segment_col=segments, **kwargs)
+                native = native_stats.df
+            # Guard against a vacuous pass: confirm the native path actually engaged. Without this, a regression
+            # that silently routed the "native" run through the fallback would compare the fallback to itself.
+            assert "GROUPING SETS" in ibis.to_sql(native_stats.table).upper()
+            with option_context("optimization.use_native_sql", False):
+                fallback = SegTransactionStats(table, segment_col=segments, **kwargs).df
         native = native.sort_values(segments).reset_index(drop=True)
         fallback = fallback.sort_values(segments).reset_index(drop=True)
         pd.testing.assert_frame_equal(native, fallback)

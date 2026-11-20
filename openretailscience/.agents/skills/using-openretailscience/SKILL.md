@@ -102,6 +102,8 @@ Prefer reading the relevant script over assembling calls from signatures alone.
 - Assume 1B–10B rows. Pass an Ibis table; let the engine aggregate and filter.
   Don't call `.execute()` / `.to_pandas()` until you need the (small) result.
 - Avoid redundant work (e.g. no `.nunique()` on already-deduplicated data).
+- If `customer_id` is null or a sentinel (e.g. `-1`) for guest rows, set `data.unknown_customer_value`;
+  otherwise spend per customer is overstated.
 - Timestamps must be timezone-naive; convert before analysis.
 - Configure column names through the options system rather than hardcoding — the
   package owns a canonical name for each column (see `references/configuration.md`).

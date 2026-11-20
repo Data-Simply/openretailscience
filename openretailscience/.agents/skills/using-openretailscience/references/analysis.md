@@ -24,9 +24,9 @@ from openretailscience.segmentation.segstats import SegTransactionStats, cube, r
   unless `sort_by=True`; columns a grouping set omits hold `rollup_value`; zero-denominator ratios are null).
   Rolled-up rows are labeled `"Total"` by default, which only fits string columns: a rolled-up int or boolean
   segment column raises unless you pass a `rollup_value` of its type. `rollup_value` requires `grouping_sets`.
-  With `unknown_customer_value`, plain metrics cover identified customers only, and spend/transactions/units
-  (+ their ratios and extra_aggs) gain `_unknown`/`_total` variants; customers do not. Each extra_aggs
-  result must then be numeric (`"max"` of a text column raises).
+  With the `data.unknown_customer_value` option set (`references/configuration.md`), plain metrics cover identified
+  customers only, and spend/transactions/units (+ their ratios and extra_aggs) gain `_unknown`/`_total` variants;
+  customers do not. Each extra_aggs result must then be numeric (`"max"` of a text column raises).
 - `cube(*columns)` → all 2ⁿ grouping-set tuples; `rollup(*columns)` → n+1
   hierarchical tuples.
 
