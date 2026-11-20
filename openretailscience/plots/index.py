@@ -187,9 +187,11 @@ def plot(  # noqa: PLR0913, PLR0917
         exclude_groups=exclude_groups,
         include_only_groups=include_only_groups,
     )
+    index_df = _filter_by_value_thresholds(df=index_df, filter_above=filter_above, filter_below=filter_below)
+    if len(index_df) == 0:
+        raise ValueError("Filtering resulted in an empty dataset. Consider adjusting filter parameters.")
 
     if series_col is None:
-        index_df = _filter_by_value_thresholds(df=index_df, filter_above=filter_above, filter_below=filter_below)
         index_df = index_df[[group_col, "index"]].set_index(group_col)
         index_df = _filter_top_bottom_n(df=index_df, top_n=top_n, bottom_n=bottom_n)
         if sort_by is not None:
@@ -368,18 +370,11 @@ def _filter_by_value_thresholds(
 
     Returns:
         pd.DataFrame: The filtered table.
-
-    Raises:
-        ValueError: If filtering leaves no rows.
     """
     if filter_above is not None:
         df = df[df["index"] > filter_above]
     if filter_below is not None:
         df = df[df["index"] < filter_below]
-
-    if len(df) == 0:
-        raise ValueError("Filtering resulted in an empty dataset. Consider adjusting filter parameters.")
-
     return df
 
 

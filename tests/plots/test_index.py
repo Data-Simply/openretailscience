@@ -220,6 +220,19 @@ class TestIndexPlot:
         with pytest.raises(ValueError, match=match):
             _plot_loyalty_index(department_spend, **kwargs)
 
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            pytest.param({"filter_above": 1000}, id="threshold"),
+            pytest.param({"include_only_groups": ["Frozen"]}, id="groups"),
+            pytest.param({"include_only_groups": ["Frozen"], "series_col": "store_format"}, id="groups_with_series"),
+        ],
+    )
+    def test_filters_that_leave_no_groups_raise(self, department_spend, kwargs):
+        """Filters that leave nothing to draw raise the same clear error, with or without series_col."""
+        with pytest.raises(ValueError, match="Filtering resulted in an empty dataset"):
+            _plot_loyalty_index(department_spend, **kwargs)
+
     def test_rejects_data_that_is_not_a_table_with_series_col(self, department_spend):
         """Data that is neither a DataFrame nor an Ibis Table raises a TypeError, also when series_col is set."""
         with pytest.raises(TypeError, match="df must be either a pandas DataFrame or an Ibis Table"):
@@ -356,11 +369,6 @@ class TestFilterHelpers:
         result = _filter_by_value_thresholds(df=departments_around_baseline, **kwargs)
 
         assert result["department"].tolist() == expected_departments
-
-    def test_value_thresholds_reject_filters_that_keep_nothing(self, departments_around_baseline):
-        """Thresholds no row passes raise."""
-        with pytest.raises(ValueError, match="Filtering resulted in an empty dataset"):
-            _filter_by_value_thresholds(df=departments_around_baseline, filter_above=1000)
 
     def test_exclude_groups_drops_only_those_groups(self, departments_around_baseline):
         """exclude_groups removes the listed groups and keeps the rest."""
