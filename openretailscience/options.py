@@ -58,8 +58,6 @@ class Options:
             "column.calc.spend_per_customer": "spend_per_customer",
             "column.calc.spend_per_transaction": "spend_per_transaction",
             "column.calc.transactions_per_customer": "transactions_per_customer",
-            "column.calc.price_elasticity": "price_elasticity",
-            "column.calc.frequency_elasticity": "frequency_elasticity",
             # Abbreviation suffix
             "column.suffix.count": "cnt",
             "column.suffix.percent": "pct",
@@ -183,10 +181,6 @@ class Options:
             "column.calc.spend_per_customer": "The name of the column containing the spend per customer.",
             "column.calc.spend_per_transaction": "The name of the column containing the spend per transaction.",
             "column.calc.transactions_per_customer": "The name of the column containing the transactions per customer.",
-            "column.calc.price_elasticity": "The name of the column containing the price elasticity calculation.",
-            "column.calc.frequency_elasticity": (
-                "The name of the column containing the frequency elasticity calculation."
-            ),
             # Abbreviation suffixes
             "column.suffix.count": "The suffix to use for count columns.",
             "column.suffix.percent": "The suffix to use for percentage columns.",
@@ -743,8 +737,6 @@ class CalcColumns:
         self.spend_per_trans: str = get_option("column.calc.spend_per_transaction")
         self.units_per_trans: str = get_option("column.calc.units_per_transaction")
         self.price_per_unit: str = get_option("column.calc.price_per_unit")
-        self.price_elasticity: str = get_option("column.calc.price_elasticity")
-        self.frequency_elasticity: str = get_option("column.calc.frequency_elasticity")
 
         # Period variants
         self.spend_per_cust_p1: str = ColumnHelper.join_options(

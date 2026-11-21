@@ -6,6 +6,7 @@ import datetime as dt
 import math
 from typing import TYPE_CHECKING
 
+import ibis
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -211,6 +212,7 @@ class TestRevenueTree:
                 expected_df[cols.agg.unit_qty] = [qty for _, _, qty in expected.values()]
             pd.testing.assert_frame_equal(result.sort_values(cols.store_id, ignore_index=True), expected_df)
 
+    @pytest.mark.parametrize("unknown_customer_value", [None, -1])
     @pytest.mark.parametrize("include_quantity", [True, False])
     @pytest.mark.parametrize(
         ("store_ids", "row"),
@@ -227,11 +229,17 @@ class TestRevenueTree:
         include_quantity: bool,
         store_ids: list[int] | None,
         row: int,
+        unknown_customer_value: int | None,
     ) -> None:
-        """Sibling contributions sum to their parent's, and every ``_diff`` is p2 minus p1."""
+        """Sibling contributions sum to their parent's, and every ``_diff`` is p2 minus p1.
+
+        With the unknown-customer option set, the identified and unknown sales sum to the total, and the unknown and
+        total transaction trees sum the same way. Store 103 has no unknown rows, so its unknown factors contribute 0.
+        """
         df = pd.DataFrame(
             {
-                cols.customer_id: [1, 2, 3, 4, 5, 6, 7],
+                # -1 marks a guest checkout
+                cols.customer_id: [1, -1, 3, 4, -1, 6, 7],
                 cols.transaction_id: [1, 2, 3, 4, 5, 6, 7],
                 cols.unit_spend: [150.0, 75.5, 220.0, 310.0, 450.0, 120.0, 700.0],
                 "period": ["P1", "P2", "P1", "P2", "P1", "P2", "P1"],
@@ -244,7 +252,8 @@ class TestRevenueTree:
             df[cols.store_id] = store_ids
             group_col = cols.store_id
 
-        rt = RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2", group_col=group_col)
+        with option_context("data.unknown_customer_value", unknown_customer_value):
+            rt = RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2", group_col=group_col)
         tree = rt.df.iloc[row]
 
         assert math.isclose(
@@ -274,15 +283,38 @@ class TestRevenueTree:
             assert cols.calc.price_per_unit_contrib not in rt.df.columns
 
         p1, p2, diff = (get_option(f"column.suffix.{s}") for s in ("period_1", "period_2", "difference"))
+        contrib = get_option("column.suffix.contribution")
+        if unknown_customer_value is not None:
+            unknown, total = get_option("column.suffix.unknown_customer"), get_option("column.suffix.total")
+            assert math.isclose(
+                tree[cols.agg.unit_spend_diff] + tree[f"{cols.agg.unit_spend_unknown}_{diff}"],
+                tree[f"{cols.agg.unit_spend_total}_{diff}"],
+            )
+            for variant in (unknown, total):
+                spend, trans = f"{cols.agg.unit_spend}_{variant}", f"{cols.agg.transaction_id}_{variant}"
+                spend_per_trans = f"{cols.calc.spend_per_trans}_{variant}"
+                assert math.isclose(
+                    tree[f"{trans}_{contrib}"] + tree[f"{spend_per_trans}_{contrib}"],
+                    tree[f"{spend}_{diff}"],
+                )
+                metrics += [spend, trans, spend_per_trans]
+                if include_quantity:
+                    units, price = f"{cols.calc.units_per_trans}_{variant}", f"{cols.calc.price_per_unit}_{variant}"
+                    assert math.isclose(
+                        tree[f"{units}_{contrib}"] + tree[f"{price}_{contrib}"],
+                        tree[f"{spend_per_trans}_{contrib}"],
+                    )
+                    metrics += [f"{cols.agg.unit_qty}_{variant}", units, price]
         # assert_series_equal treats NaN == NaN, which store 103's undefined P2 ratios need
         pd.testing.assert_series_equal(
             pd.Series({metric: tree[f"{metric}_{diff}"] for metric in metrics}),
             pd.Series({metric: tree[f"{metric}_{p2}"] - tree[f"{metric}_{p1}"] for metric in metrics}),
         )
 
+    @pytest.mark.parametrize("include_unknown", [False, True])
     @pytest.mark.parametrize("include_quantity", [True, False])
-    def test_calc_tree_kpis_basic(self, cols: ColumnHelper, include_quantity: bool):
-        """Test basic KPI calculations."""
+    def test_calc_tree_kpis_columns(self, cols: ColumnHelper, include_quantity: bool, include_unknown: bool):
+        """The output has p1, p2, diff and pct_diff per metric, plus contrib for each tree factor, in tree order."""
         df = pd.DataFrame(
             {
                 cols.agg.customer_id: [3, 3],
@@ -291,38 +323,50 @@ class TestRevenueTree:
             },
             index=["p1", "p2"],
         )
-
+        metrics = [
+            (cols.agg.customer_id, True),
+            (cols.agg.transaction_id, False),
+            (cols.agg.unit_spend, False),
+            (cols.calc.spend_per_cust, True),
+            (cols.calc.trans_per_cust, True),
+            (cols.calc.spend_per_trans, True),
+        ]
         if include_quantity:
             df[cols.agg.unit_qty] = [10, 12]
+            metrics += [(cols.agg.unit_qty, False), (cols.calc.units_per_trans, True), (cols.calc.price_per_unit, True)]
+        if include_unknown:
+            df[cols.agg.transaction_id_unknown] = [2, 1]
+            df[cols.agg.unit_spend_unknown] = [80.0, 45.0]
+            df[cols.agg.transaction_id_total] = [5, 4]
+            df[cols.agg.unit_spend_total] = [980.0, 1145.0]
+            if include_quantity:
+                df[cols.agg.unit_qty_unknown] = [3, 2]
+                df[cols.agg.unit_qty_total] = [13, 14]
+            for variant in (get_option("column.suffix.unknown_customer"), get_option("column.suffix.total")):
+                metrics += [
+                    (f"{cols.agg.transaction_id}_{variant}", True),
+                    (f"{cols.agg.unit_spend}_{variant}", False),
+                    (f"{cols.calc.spend_per_trans}_{variant}", True),
+                ]
+                if include_quantity:
+                    metrics += [
+                        (f"{cols.agg.unit_qty}_{variant}", False),
+                        (f"{cols.calc.units_per_trans}_{variant}", True),
+                        (f"{cols.calc.price_per_unit}_{variant}", True),
+                    ]
 
         result = calc_tree_kpis(*_ungrouped_periods(df))
 
-        assert isinstance(result, pd.DataFrame)
-
-        expected_columns = [
-            "customers_diff",
-            "customers_pct_diff",
-            "transactions_diff",
-            "transactions_pct_diff",
-            "spend_diff",
-            "spend_pct_diff",
-            "spend_per_transaction_diff",
-            "spend_per_transaction_pct_diff",
-            "transactions_per_customer_diff",
-            "transactions_per_customer_pct_diff",
-            "spend_per_customer_diff",
-            "spend_per_customer_pct_diff",
-            "frequency_elasticity",
+        suffixes = [
+            get_option(f"column.suffix.{s}") for s in ("period_1", "period_2", "difference", "percent_difference")
         ]
-        for col in expected_columns:
-            assert col in result.columns
-
-        if include_quantity:
-            q1, q2 = 10, 12
-            p1, p2 = 900.0 / q1, 1100.0 / q2
-            expected_elasticity = ((q2 - q1) / ((q2 + q1) / 2)) / ((p2 - p1) / ((p2 + p1) / 2))
-
-            assert round(result["price_elasticity"].iloc[0], 6) == round(expected_elasticity, 6)
+        contrib = get_option("column.suffix.contribution")
+        expected_columns = [
+            f"{metric}_{suffix}"
+            for metric, has_contrib in metrics
+            for suffix in (*suffixes, *([contrib] if has_contrib else []))
+        ]
+        assert list(result.columns) == expected_columns
 
     def test_calc_tree_kpis_pairs_periods_by_group_col(self, cols: ColumnHelper) -> None:
         """Rows are paired by group_col, so a store that closed and one that opened stay separate."""
@@ -380,6 +424,22 @@ class TestRevenueTree:
                 ValueError,
                 "p2_df has 2 rows; pass group_col",
             ),
+            # Unknown-customer sales in P2 only: dropping them silently would hide the split
+            (
+                lambda cols: pd.DataFrame(
+                    {
+                        cols.store_id: ["Store_101"],
+                        cols.agg.customer_id: [1],
+                        cols.agg.transaction_id: [1],
+                        cols.agg.unit_spend: [80.0],
+                        cols.agg.transaction_id_unknown: [2],
+                        cols.agg.unit_spend_unknown: [35.0],
+                    },
+                ),
+                True,
+                ValueError,
+                "both have .* or neither",
+            ),
             # Units in P2 only: dropping them silently would hide the units and price nodes
             (
                 lambda cols: pd.DataFrame(
@@ -424,6 +484,8 @@ class TestRevenueTree:
             (*ALL_FACTORS_MOVE_TOTALS, (140.0, 360.0, 247.5, 112.5, 295.3125, -182.8125)),
             # Visits per customer (T=1) and units per basket (U=2) are flat, so both contribute nothing
             ((2, 2, 20.0, 4), (4, 4, 60.0, 8), (25.0, 15.0, 0.0, 15.0, 0.0, 15.0)),
+            # Nothing in either period (e.g. a store with only guest checkouts): every factor contributes 0
+            ((0, 0, 0.0, 0), (0, 0, 0.0, 0), (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)),
             # P1 spend recorded against zero units can't be split into units x price, so both are NaN
             (
                 (*ALL_FACTORS_MOVE_TOTALS[0][:3], 0),
@@ -444,6 +506,61 @@ class TestRevenueTree:
 
         expected = pd.DataFrame([expected_contribs], columns=contrib_cols)
         pd.testing.assert_frame_equal(result[contrib_cols], expected)
+
+    @pytest.mark.parametrize(
+        ("customer_ids", "unknown_customer_value"),
+        [
+            pytest.param(
+                [1001, 1001, 1002, None, None, None, None, 1001, 1002, 1003, None, None], ibis.null(), id="null_ids"
+            ),
+            # A null ID is unknown even when a sentinel marks guest checkouts
+            pytest.param(
+                [1001, 1001, 1002, -1, -1, None, -1, 1001, 1002, 1003, -1, None], -1, id="sentinel_and_null_ids"
+            ),
+        ],
+    )
+    def test_unknown_customer_value_splits_identified_and_unknown_sales(
+        self, cols: ColumnHelper, customer_ids: list[int | None], unknown_customer_value: int | ibis.Value
+    ) -> None:
+        """With the option set, the plain metrics cover identified customers; unknown and total sales get columns."""
+        df = pd.DataFrame(
+            {
+                cols.customer_id: customer_ids,
+                # Transaction 3 also has a guest line, so the total counts it once
+                cols.transaction_id: [1, 2, 3, 4, 5, 6, 3, 7, 8, 9, 10, 11],
+                cols.unit_spend: [20.0, 10.0, 15.0, 12.0, 8.0, 10.0, 5.0, 25.0, 15.0, 20.0, 12.0, 9.0],
+                cols.unit_qty: [4, 2, 3, 3, 2, 2, 1, 5, 3, 4, 3, 2],
+                "period": ["2025Q1"] * 7 + ["2025Q2"] * 5,
+            },
+        )
+
+        with option_context("data.unknown_customer_value", unknown_customer_value):
+            rt = RevenueTree(df=df, period_col="period", p1_value="2025Q1", p2_value="2025Q2")
+
+        p1, p2 = get_option("column.suffix.period_1"), get_option("column.suffix.period_2")
+        expected = pd.DataFrame(
+            {
+                cols.agg.customer_id_p1: [2],
+                cols.agg.customer_id_p2: [3],
+                cols.agg.unit_spend_p1: [45.0],
+                cols.agg.unit_spend_p2: [60.0],
+                cols.calc.spend_per_cust_p1: [22.5],
+                cols.calc.spend_per_cust_p2: [20.0],
+                cols.calc.trans_per_cust_p1: [1.5],
+                cols.calc.trans_per_cust_p2: [1.0],
+                f"{cols.agg.transaction_id_unknown}_{p1}": [4],
+                f"{cols.agg.transaction_id_unknown}_{p2}": [2],
+                f"{cols.agg.unit_spend_unknown}_{p1}": [35.0],
+                f"{cols.agg.unit_spend_unknown}_{p2}": [21.0],
+                f"{cols.agg.unit_qty_unknown}_{p1}": [8],
+                f"{cols.agg.unit_qty_unknown}_{p2}": [5],
+                f"{cols.agg.transaction_id_total}_{p1}": [6],
+                f"{cols.agg.transaction_id_total}_{p2}": [5],
+                f"{cols.agg.unit_spend_total}_{p1}": [80.0],
+                f"{cols.agg.unit_spend_total}_{p2}": [81.0],
+            },
+        )
+        pd.testing.assert_frame_equal(rt.df[expected.columns], expected)
 
     def test_store_missing_from_a_period_credits_its_change_to_customers(
         self, cols: ColumnHelper, contrib_cols: list[str]
@@ -518,17 +635,6 @@ class TestRevenueTree:
 
         expected = pd.DataFrame({cols.agg.unit_spend_p1: [250.0], cols.agg.unit_spend_p2: [200.0]})
         pd.testing.assert_frame_equal(rt.df[[cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected)
-
-    def test_elasticities_use_arc_percent_changes(self, cols: ColumnHelper) -> None:
-        """Elasticities divide arc (midpoint) percent changes, so swapping P1 and P2 leaves them unchanged."""
-        elasticity_cols = [cols.calc.frequency_elasticity, cols.calc.price_elasticity]
-
-        result = calc_tree_kpis(*_period_totals(*ALL_FACTORS_MOVE_TOTALS))
-
-        # Frequency: visits/customer 2->3 (+1/2.5) over spend/customer 100->180 (+80/140) = 0.7
-        # Price: units 40->120 (+80/80) over price/unit 10->7.5 (-2.5/8.75) = -3.5
-        expected = pd.DataFrame([(0.7, -3.5)], columns=elasticity_cols)
-        pd.testing.assert_frame_equal(result[elasticity_cols], expected)
 
     def test_with_custom_column_names(self, cols: ColumnHelper):
         """Test RevenueTree with custom column names."""
@@ -728,10 +834,15 @@ class TestRevenueTree:
         pd.testing.assert_frame_equal(rt.df[[cols.store_id, cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected)
 
     @pytest.mark.parametrize("include_qty", [True, False])
-    def test_draw_tree_matplotlib(self, cols: ColumnHelper, include_qty: bool):
-        """Test that draw_tree() returns a matplotlib Axes and renders correctly."""
+    @pytest.mark.parametrize("unknown_customer_value", [None, -1])
+    def test_draw_tree_matplotlib(self, cols: ColumnHelper, include_qty: bool, unknown_customer_value: int | None):
+        """Test that draw_tree() returns a matplotlib Axes and renders correctly.
+
+        The identified and unidentified revenue nodes appear only when the unknown-customer option was set.
+        """
         data = {
-            cols.customer_id: [1, 2, 3, 1, 2, 3],
+            # -1 marks a guest checkout
+            cols.customer_id: [1, -1, 3, 1, 2, -1],
             cols.transaction_id: [1, 2, 3, 4, 5, 6],
             cols.unit_spend: [100.0, 150.0, 200.0, 120.0, 180.0, 240.0],
             "period": ["P1", "P1", "P1", "P2", "P2", "P2"],
@@ -742,12 +853,8 @@ class TestRevenueTree:
 
         df = pd.DataFrame(data)
 
-        rt = RevenueTree(
-            df=df,
-            period_col="period",
-            p1_value="P1",
-            p2_value="P2",
-        )
+        with option_context("data.unknown_customer_value", unknown_customer_value):
+            rt = RevenueTree(df=df, period_col="period", p1_value="P1", p2_value="P2")
 
         # Test with default parameters
         ax = rt.draw_tree()
@@ -776,9 +883,16 @@ class TestRevenueTree:
             spend_per_transaction_label=custom_node_labels[4],
             units_per_transaction_label="Items / Trip",
             price_per_unit_label="Price / Item",
+            identified_spend_label="Member Sales",
+            unknown_spend_label="Guest Sales",
         )
         rendered_labels = {t.get_text() for t in ax.texts}
         assert set(custom_node_labels).issubset(rendered_labels)
+        split_labels = {"Member Sales", "Guest Sales"}
+        if unknown_customer_value is None:
+            assert split_labels.isdisjoint(rendered_labels)
+        else:
+            assert split_labels.issubset(rendered_labels)
 
     def test_draw_tree_with_row_index(self, cols: ColumnHelper):
         """Test that draw_tree() can visualize a specific row from a multi-group RevenueTree."""
@@ -864,43 +978,6 @@ class TestRevenueTree:
                 val = result[pct_col].iloc[0]
                 assert math.isnan(val), f"{pct_col} should be NaN when p1 is zero, got {val}"
 
-    @pytest.mark.parametrize(
-        ("customer_id", "transaction_id", "unit_spend", "unit_qty"),
-        [
-            pytest.param([3, 3], [3, 3], [900.0, 900.0], [10, 10], id="identical_periods"),
-            pytest.param([0, 0], [0, 0], [0.0, 0.0], [0, 0], id="all_zeros"),
-        ],
-    )
-    def test_elasticity_returns_nan_for_zero_divisors(
-        self,
-        cols: ColumnHelper,
-        customer_id,
-        transaction_id,
-        unit_spend,
-        unit_qty,
-    ):
-        """Test that elasticity produces NaN instead of inf when divisors are zero.
-
-        Covers identical periods (0/0 from zero pct change) and all-zero values (zero midpoint averages).
-        """
-        df = pd.DataFrame(
-            {
-                cols.agg.customer_id: customer_id,
-                cols.agg.transaction_id: transaction_id,
-                cols.agg.unit_spend: unit_spend,
-                cols.agg.unit_qty: unit_qty,
-            },
-            index=["p1", "p2"],
-        )
-
-        result = calc_tree_kpis(*_ungrouped_periods(df))
-
-        freq_elasticity = result[cols.calc.frequency_elasticity].iloc[0]
-        assert math.isnan(freq_elasticity), f"frequency_elasticity should be NaN, got {freq_elasticity}"
-
-        price_elasticity = result[cols.calc.price_elasticity].iloc[0]
-        assert math.isnan(price_elasticity), f"price_elasticity should be NaN, got {price_elasticity}"
-
     def test_no_inf_values_with_p2_only_group(self, cols: ColumnHelper):
         """Test that a group with data only in P2 (new product) produces NaN, not inf."""
         df = pd.DataFrame(
@@ -922,12 +999,10 @@ class TestRevenueTree:
             group_col="group_id",
         )
 
-        # Group 2 has no P1 data, so every pct_diff, P1 ratio and elasticity built from them is undefined
+        # Group 2 has no P1 data, so every pct_diff and P1 ratio built from them is undefined
         group2_data = rt.df.set_index("group_id").loc[2]
 
         expected_nan_cols = [
-            cols.calc.frequency_elasticity,
-            cols.calc.price_elasticity,
             cols.agg.customer_id_pct_diff,
             cols.agg.transaction_id_pct_diff,
             cols.agg.unit_spend_pct_diff,
