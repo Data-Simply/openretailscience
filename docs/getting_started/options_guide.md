@@ -244,7 +244,6 @@ Names for calculated metrics:
 - `column.calc.transactions_per_customer` → `"transactions_per_customer"`
 - `column.calc.spend_per_transaction` → `"spend_per_transaction"`
 - `column.calc.units_per_transaction` → `"units_per_transaction"`
-- `column.calc.price_elasticity` → `"price_elasticity"`
 
 ### Column Suffixes (`column.suffix.*`)
 

@@ -41,8 +41,7 @@ df = generate_sample_data()
 revenue_tree = RevenueTree(df=df, period_col="period", p1_value="2023-Q1", p2_value="2023-Q2")
 # revenue_tree.df has *_p1/_p2/_diff/_pct_diff columns per driver, plus *_contrib columns giving each
 # driver's spend contribution; sibling drivers sum to their parent, the top pair to spend_diff.
-# frequency_elasticity is always present; unit_quantity in the input adds units, units_per_transaction,
-# price_per_unit, and price_elasticity.
+# unit_quantity in the input adds units, units_per_transaction and price_per_unit.
 
 # Example 2: Category-Level Analysis
 categories = ["Electronics", "Clothing", "Home & Garden"]

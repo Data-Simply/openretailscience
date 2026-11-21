@@ -99,11 +99,8 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame, group_col: str | li
 
     Output columns are ``{metric}_p1`` / ``_p2`` / ``_diff`` / ``_pct_diff`` (suffixes
     from the ``column.suffix.*`` options) plus ``{metric}_contrib`` contribution
-    columns (quantity/price columns present only when units were) and the elasticity
-    columns (``price_elasticity`` only with units). ``pct_diff = diff / p1``, with p1 = 0
-    giving NaN. The elasticity columns use ARC (midpoint) percentage changes: price =
-    %delta units / %delta price per unit, frequency = %delta transactions per customer /
-    %delta spend per customer.
+    columns (quantity/price columns present only when units were). ``pct_diff = diff / p1``,
+    with p1 = 0 giving NaN.
 
     Each ``_contrib`` is in spend units: the factor's change times the period midpoints
     of its sibling and of each ancestor's sibling. With C = customers, S = spend per customer,
@@ -196,13 +193,6 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame, group_col: str | li
         df[f"{col}_{pct_diff}"] = df[f"{col}_{diff}"] / df[f"{col}_{p1}"].replace(0, np.nan)
 
     cust_mid = (df[cols.agg.customer_id_p1] + df[cols.agg.customer_id_p2]) / 2
-    trans_per_cust_mid = (df[cols.calc.trans_per_cust_p1] + df[cols.calc.trans_per_cust_p2]) / 2
-    spend_per_cust_mid = (df[cols.calc.spend_per_cust_p1] + df[cols.calc.spend_per_cust_p2]) / 2
-
-    freq_pct_change = df[cols.calc.trans_per_cust_diff] / trans_per_cust_mid.replace(0, np.nan)
-    spend_pct_change = df[cols.calc.spend_per_cust_diff] / spend_per_cust_mid.replace(0, np.nan)
-    df[cols.calc.frequency_elasticity] = freq_pct_change / spend_pct_change.replace(0, np.nan)
-
     s1, s2 = _contribution_ratio(df, cols.calc.spend_per_cust, *ratio_parts[cols.calc.spend_per_cust])
     t1, t2 = _contribution_ratio(df, cols.calc.trans_per_cust, *ratio_parts[cols.calc.trans_per_cust])
     a1, a2 = _contribution_ratio(df, cols.calc.spend_per_trans, *ratio_parts[cols.calc.spend_per_trans])
@@ -212,13 +202,6 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame, group_col: str | li
     df[cols.calc.spend_per_trans_contrib] = (a2 - a1) * (t1 + t2) / 2 * cust_mid
 
     if has_quantity:
-        qty_mid = (df[cols.agg.unit_qty_p1] + df[cols.agg.unit_qty_p2]) / 2
-        price_per_unit_mid = (df[cols.calc.price_per_unit_p1] + df[cols.calc.price_per_unit_p2]) / 2
-
-        qty_pct_change = df[cols.agg.unit_qty_diff] / qty_mid.replace(0, np.nan)
-        price_pct_change = df[cols.calc.price_per_unit_diff] / price_per_unit_mid.replace(0, np.nan)
-        df[cols.calc.price_elasticity] = qty_pct_change / price_pct_change.replace(0, np.nan)
-
         u1, u2 = _contribution_ratio(df, cols.calc.units_per_trans, *ratio_parts[cols.calc.units_per_trans])
         pr1, pr2 = _contribution_ratio(df, cols.calc.price_per_unit, *ratio_parts[cols.calc.price_per_unit])
         trans_per_cust_weight = (t1 + t2) / 2 * cust_mid
@@ -236,10 +219,9 @@ class RevenueTree:
     ``group_col`` columns (Categorical for a single one), then ``{metric}_p1`` / ``_p2`` /
     ``_diff`` / ``_pct_diff`` for ``customers``, ``transactions``, ``spend``,
     ``spend_per_customer``, ``transactions_per_customer`` and ``spend_per_transaction`` (plus
-    ``units``, ``units_per_transaction`` and ``price_per_unit`` with quantity data),
-    ``{metric}_contrib`` for the tree's factors, and ``frequency_elasticity`` /
-    ``price_elasticity``. ``_pct_diff`` is a fraction (0.1 = +10%). See `calc_tree_kpis` for the
-    formulas. ``draw_tree()`` renders one row as a diagram.
+    ``units``, ``units_per_transaction`` and ``price_per_unit`` with quantity data), and
+    ``{metric}_contrib`` for the tree's factors. ``_pct_diff`` is a fraction (0.1 = +10%). See
+    `calc_tree_kpis` for the formulas. ``draw_tree()`` renders one row as a diagram.
 
     Examples:
         >>> from openretailscience.analysis import RevenueTree
@@ -258,7 +240,7 @@ class RevenueTree:
         """Initialize the Revenue Tree and compute the KPI table immediately.
 
         If the input contains the option-derived ``column.unit_quantity`` column,
-        units/price/price-elasticity metrics are added.
+        units and price per unit metrics are added.
 
         Args:
             df (pd.DataFrame | ibis.Table): Transaction data with the option-derived
@@ -411,8 +393,6 @@ class RevenueTree:
             cols.calc.spend_per_trans_diff,
             cols.calc.spend_per_trans_pct_diff,
             cols.calc.spend_per_trans_contrib,
-            # Elasticity
-            cols.calc.frequency_elasticity,
         ]
 
         if include_quantity:
@@ -435,8 +415,6 @@ class RevenueTree:
                     cols.calc.price_per_unit_diff,
                     cols.calc.price_per_unit_pct_diff,
                     cols.calc.price_per_unit_contrib,
-                    # Price Elasticity
-                    cols.calc.price_elasticity,
                 ],
             )
 

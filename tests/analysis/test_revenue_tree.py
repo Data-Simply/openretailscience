@@ -281,8 +281,8 @@ class TestRevenueTree:
         )
 
     @pytest.mark.parametrize("include_quantity", [True, False])
-    def test_calc_tree_kpis_basic(self, cols: ColumnHelper, include_quantity: bool):
-        """Test basic KPI calculations."""
+    def test_calc_tree_kpis_columns(self, cols: ColumnHelper, include_quantity: bool):
+        """The output has p1, p2, diff and pct_diff per metric, plus contrib for each tree factor, in tree order."""
         df = pd.DataFrame(
             {
                 cols.agg.customer_id: [3, 3],
@@ -291,38 +291,26 @@ class TestRevenueTree:
             },
             index=["p1", "p2"],
         )
-
+        metrics = [
+            ("customers", True),
+            ("transactions", False),
+            ("spend", False),
+            ("spend_per_customer", True),
+            ("transactions_per_customer", True),
+            ("spend_per_transaction", True),
+        ]
         if include_quantity:
             df[cols.agg.unit_qty] = [10, 12]
+            metrics += [("units", False), ("units_per_transaction", True), ("price_per_unit", True)]
 
         result = calc_tree_kpis(*_ungrouped_periods(df))
 
-        assert isinstance(result, pd.DataFrame)
-
         expected_columns = [
-            "customers_diff",
-            "customers_pct_diff",
-            "transactions_diff",
-            "transactions_pct_diff",
-            "spend_diff",
-            "spend_pct_diff",
-            "spend_per_transaction_diff",
-            "spend_per_transaction_pct_diff",
-            "transactions_per_customer_diff",
-            "transactions_per_customer_pct_diff",
-            "spend_per_customer_diff",
-            "spend_per_customer_pct_diff",
-            "frequency_elasticity",
+            f"{metric}_{suffix}"
+            for metric, has_contrib in metrics
+            for suffix in ("p1", "p2", "diff", "pct_diff", *(["contrib"] if has_contrib else []))
         ]
-        for col in expected_columns:
-            assert col in result.columns
-
-        if include_quantity:
-            q1, q2 = 10, 12
-            p1, p2 = 900.0 / q1, 1100.0 / q2
-            expected_elasticity = ((q2 - q1) / ((q2 + q1) / 2)) / ((p2 - p1) / ((p2 + p1) / 2))
-
-            assert round(result["price_elasticity"].iloc[0], 6) == round(expected_elasticity, 6)
+        assert list(result.columns) == expected_columns
 
     def test_calc_tree_kpis_pairs_periods_by_group_col(self, cols: ColumnHelper) -> None:
         """Rows are paired by group_col, so a store that closed and one that opened stay separate."""
@@ -518,17 +506,6 @@ class TestRevenueTree:
 
         expected = pd.DataFrame({cols.agg.unit_spend_p1: [250.0], cols.agg.unit_spend_p2: [200.0]})
         pd.testing.assert_frame_equal(rt.df[[cols.agg.unit_spend_p1, cols.agg.unit_spend_p2]], expected)
-
-    def test_elasticities_use_arc_percent_changes(self, cols: ColumnHelper) -> None:
-        """Elasticities divide arc (midpoint) percent changes, so swapping P1 and P2 leaves them unchanged."""
-        elasticity_cols = [cols.calc.frequency_elasticity, cols.calc.price_elasticity]
-
-        result = calc_tree_kpis(*_period_totals(*ALL_FACTORS_MOVE_TOTALS))
-
-        # Frequency: visits/customer 2->3 (+1/2.5) over spend/customer 100->180 (+80/140) = 0.7
-        # Price: units 40->120 (+80/80) over price/unit 10->7.5 (-2.5/8.75) = -3.5
-        expected = pd.DataFrame([(0.7, -3.5)], columns=elasticity_cols)
-        pd.testing.assert_frame_equal(result[elasticity_cols], expected)
 
     def test_with_custom_column_names(self, cols: ColumnHelper):
         """Test RevenueTree with custom column names."""
@@ -864,43 +841,6 @@ class TestRevenueTree:
                 val = result[pct_col].iloc[0]
                 assert math.isnan(val), f"{pct_col} should be NaN when p1 is zero, got {val}"
 
-    @pytest.mark.parametrize(
-        ("customer_id", "transaction_id", "unit_spend", "unit_qty"),
-        [
-            pytest.param([3, 3], [3, 3], [900.0, 900.0], [10, 10], id="identical_periods"),
-            pytest.param([0, 0], [0, 0], [0.0, 0.0], [0, 0], id="all_zeros"),
-        ],
-    )
-    def test_elasticity_returns_nan_for_zero_divisors(
-        self,
-        cols: ColumnHelper,
-        customer_id,
-        transaction_id,
-        unit_spend,
-        unit_qty,
-    ):
-        """Test that elasticity produces NaN instead of inf when divisors are zero.
-
-        Covers identical periods (0/0 from zero pct change) and all-zero values (zero midpoint averages).
-        """
-        df = pd.DataFrame(
-            {
-                cols.agg.customer_id: customer_id,
-                cols.agg.transaction_id: transaction_id,
-                cols.agg.unit_spend: unit_spend,
-                cols.agg.unit_qty: unit_qty,
-            },
-            index=["p1", "p2"],
-        )
-
-        result = calc_tree_kpis(*_ungrouped_periods(df))
-
-        freq_elasticity = result[cols.calc.frequency_elasticity].iloc[0]
-        assert math.isnan(freq_elasticity), f"frequency_elasticity should be NaN, got {freq_elasticity}"
-
-        price_elasticity = result[cols.calc.price_elasticity].iloc[0]
-        assert math.isnan(price_elasticity), f"price_elasticity should be NaN, got {price_elasticity}"
-
     def test_no_inf_values_with_p2_only_group(self, cols: ColumnHelper):
         """Test that a group with data only in P2 (new product) produces NaN, not inf."""
         df = pd.DataFrame(
@@ -922,12 +862,10 @@ class TestRevenueTree:
             group_col="group_id",
         )
 
-        # Group 2 has no P1 data, so every pct_diff, P1 ratio and elasticity built from them is undefined
+        # Group 2 has no P1 data, so every pct_diff and P1 ratio built from them is undefined
         group2_data = rt.df.set_index("group_id").loc[2]
 
         expected_nan_cols = [
-            cols.calc.frequency_elasticity,
-            cols.calc.price_elasticity,
             cols.agg.customer_id_pct_diff,
             cols.agg.transaction_id_pct_diff,
             cols.agg.unit_spend_pct_diff,

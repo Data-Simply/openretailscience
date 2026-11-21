@@ -25,7 +25,6 @@ unit_quantity       = "new_units"
 unit_spend          = "new_spend"
 
 [column.calc]
-price_elasticity          = "new_price_elasticity"
 price_per_unit            = "new_price_per_unit"
 spend_per_customer        = "new_spend_per_customer"
 spend_per_transaction     = "new_spend_per_transaction"

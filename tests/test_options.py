@@ -543,7 +543,6 @@ class TestOptions:
         assert options.get_option("column.calc.spend_per_customer") == "new_spend_per_customer"
         assert options.get_option("column.calc.spend_per_transaction") == "new_spend_per_transaction"
         assert options.get_option("column.calc.transactions_per_customer") == "new_transactions_per_customer"
-        assert options.get_option("column.calc.price_elasticity") == "new_price_elasticity"
 
         assert options.get_option("column.suffix.count") == "new_cnt"
         assert options.get_option("column.suffix.percent") == "new_pct"

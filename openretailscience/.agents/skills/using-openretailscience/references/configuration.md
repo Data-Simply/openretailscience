@@ -40,8 +40,7 @@ methods, the last write wins.
 - `column.agg.*` — output aggregate names (e.g. `unit_spend`→"spend",
   `customer_id`→"customers", `transaction_id`→"transactions", `unit_quantity`→"units").
 - `column.calc.*` — derived metric names: `spend_per_customer`, `spend_per_transaction`,
-  `transactions_per_customer`, `units_per_transaction`, `price_per_unit`,
-  `price_elasticity`, `frequency_elasticity`.
+  `transactions_per_customer`, `units_per_transaction`, `price_per_unit`.
 - `column.suffix.*` — suffixes: `period_1`→"p1", `period_2`→"p2", `difference`→"diff",
   `percent_difference`→"pct_diff", `contribution`→"contrib", `total`→"total".
 - `plot.color.*`, `plot.font.*`, `plot.style.*`, `plot.spacing.*` — chart styling.
