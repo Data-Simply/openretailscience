@@ -937,7 +937,7 @@ class TestUnknownCustomerTracking:
             pytest.param(
                 None,
                 ValueError,
-                f"^Column '{cols.customer_id}' is required when the data.unknown_customer_value option is set",
+                rf"^Input data is missing required columns: \['{cols.customer_id}'\]",
                 id="no_customer_id_column",
             ),
             pytest.param(

@@ -10,8 +10,8 @@ import ibis
 import ibis.expr.operations as ops
 import pandas as pd
 from ibis.common.annotations import ValidationError
-from ibis.common.exceptions import IbisError
-from ibis.expr.types import Expr, Scalar
+from ibis.common.exceptions import IbisError, IbisTypeError
+from ibis.expr.types import Expr, NullScalar, Scalar
 
 from openretailscience.options import get_option
 
@@ -355,6 +355,40 @@ def ensure_date(value: str | dt.date, param_name: str) -> dt.date:
         return value
     msg = f"{param_name} must be an ISO 'YYYY-MM-DD' date string or a datetime.date. Got {type(value).__name__}."
     raise TypeError(msg)
+
+
+def unknown_customer_flag(
+    data: ibis.Table,
+    unknown_customer_value: int | str | NullScalar,
+) -> ibis.expr.types.BooleanColumn:
+    """Flag the rows the ``data.unknown_customer_value`` option marks as unknown customers.
+
+    A null customer_id is always unknown: ``NULL = -1`` is NULL, so under a sentinel a null ID would otherwise fall
+    out of both the identified and the unknown totals.
+
+    Args:
+        data (ibis.Table): The transaction data, with a customer_id column.
+        unknown_customer_value (int | str | NullScalar): The option's value, which must not be None.
+
+    Returns:
+        ibis.expr.types.BooleanColumn: True on unknown-customer rows.
+
+    Raises:
+        TypeError: If ``unknown_customer_value`` can't be compared with the customer_id column.
+    """
+    customer_col = get_option("column.customer_id")
+    customer_id = data[customer_col]
+    flag = customer_id.isnull()  # noqa: PD003 (ibis API, not pandas)
+    if isinstance(unknown_customer_value, NullScalar):
+        return flag
+    try:
+        return flag | (customer_id == unknown_customer_value)
+    except IbisTypeError as err:
+        msg = (
+            f"data.unknown_customer_value {unknown_customer_value!r} can't be compared with column "
+            f"'{customer_col}' ({customer_id.type()}). Set the option to an ID of that type."
+        )
+        raise TypeError(msg) from err
 
 
 def ensure_valid_extra_aggs(

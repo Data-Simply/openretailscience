@@ -14,7 +14,6 @@ import ibis
 import ibis.expr.operations as ops
 import pandas as pd
 from ibis.backends.sql import compilers as sql_compilers
-from ibis.common.exceptions import IbisTypeError
 from sqlglot import exp
 
 from openretailscience.core.validation import (
@@ -22,6 +21,7 @@ from openretailscience.core.validation import (
     ensure_data_has_columns,
     ensure_ibis_table,
     ensure_valid_extra_aggs,
+    unknown_customer_flag,
 )
 from openretailscience.options import ColumnHelper, get_option
 
@@ -268,7 +268,7 @@ class SegTransactionStats:
             [
                 cols.unit_spend,
                 cols.transaction_id,
-                *filter(lambda x: x in data.columns, [cols.unit_qty, cols.customer_id]),
+                *([cols.customer_id] if unknown_customer_value is not None else []),
             ],
         )
 
@@ -820,8 +820,7 @@ class SegTransactionStats:
             ibis.Table: The transaction statistics by segment.
 
         Raises:
-            ValueError: If rollup_value is a list whose length does not match segment_col, or if
-                unknown_customer_value is set but the customer_id column is missing.
+            ValueError: If rollup_value is a list whose length does not match segment_col.
             TypeError: If unknown_customer_value can't be compared with the customer_id column.
         """
         cols = ColumnHelper()
@@ -838,27 +837,7 @@ class SegTransactionStats:
             )
             raise ValueError(msg)
 
-        unknown_flag = None
-        if unknown_customer_value is not None:
-            if cols.customer_id not in data.columns:
-                msg = (
-                    f"Column '{cols.customer_id}' is required when the data.unknown_customer_value option is set. "
-                    "Add the column, or switch the option off with "
-                    "option_context('data.unknown_customer_value', None)."
-                )
-                raise ValueError(msg)
-            customer_id = data[cols.customer_id]
-            # NULL = -1 is NULL, so a null ID would drop out of both the identified and unknown sums; count it unknown
-            unknown_flag = customer_id.isnull()  # noqa: PD003 (ibis API, not pandas)
-            if not isinstance(unknown_customer_value, ibis.expr.types.NullScalar):
-                try:
-                    unknown_flag |= customer_id == unknown_customer_value
-                except IbisTypeError as err:
-                    msg = (
-                        f"data.unknown_customer_value {unknown_customer_value!r} can't be compared with column "
-                        f"'{cols.customer_id}' ({customer_id.type()}). Set the option to an ID of that type."
-                    )
-                    raise TypeError(msg) from err
+        unknown_flag = None if unknown_customer_value is None else unknown_customer_flag(data, unknown_customer_value)
 
         # Build aggregations based on unknown customer tracking
         aggs = (
