@@ -129,7 +129,7 @@ from openretailscience.analysis.haversine import haversine_distance
   `_unknown` and `_total` sets of transactions, spend[, units] and their per-transaction ratios follow, each
   with its own `_contrib` columns; `draw_tree` splits Revenue into Unidentified and Identified Revenue.
   `calc_tree_kpis` does the same when both frames also have the `_unknown` and `_total` transactions, spend[,
-  units] columns, as `SegTransactionStats` returns them.
+  units] columns.
 - `CustomerDecisionHierarchy(df, product_col, method="yules_q", ...)` —
   `.pairs_df`, `.distances` ([0, 1], ordered by `pairs_df[product_col].cat.categories`; 0 = every buyer of
   one also buys the other, 1 = never the same buyer, or no customer bought neither; by default near =

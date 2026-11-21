@@ -213,7 +213,7 @@ def calc_tree_kpis(p1_df: pd.DataFrame, p2_df: pd.DataFrame, group_col: str | li
     To split out unknown customers, both frames also carry the transactions, spend and (with units)
     units of unknown-customer rows and of all rows, as ``{column}_unknown`` and ``{column}_total``
     (``column.suffix.unknown_customer`` and ``column.suffix.total``), with the plain columns covering
-    identified customers only, as ``SegTransactionStats`` returns them.
+    identified customers only.
 
     Output columns are ``{metric}_p1`` / ``_p2`` / ``_diff`` / ``_pct_diff`` (suffixes
     from the ``column.suffix.*`` options) plus ``{metric}_contrib`` contribution
