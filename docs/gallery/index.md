@@ -38,6 +38,13 @@ use a consistent API and come pre-styled with retail-friendly color schemes and 
     </div>
     <div class="orsg-card__thumb"><img src="../assets/images/gallery/time_thumbnail.png" alt="Time Plot" loading="lazy"></div>
   </a>
+  <a class="orsg-card" href="plots/callout_line/">
+    <div class="orsg-card__body">
+      <h4 class="orsg-card__title">Callout Line Plot</h4>
+      <p class="orsg-card__desc">A line with the events that explain it called out</p>
+    </div>
+    <div class="orsg-card__thumb"><img src="../assets/images/gallery/callout_line_thumbnail.png" alt="Callout Line Plot" loading="lazy"></div>
+  </a>
   <a class="orsg-card" href="plots/period_on_period/">
     <div class="orsg-card__body">
       <h4 class="orsg-card__title">Period on Period Plot</h4>

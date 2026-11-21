@@ -6,7 +6,7 @@ that returns a matplotlib `Axes`. Import the module and call `.plot`:
 ```python
 from openretailscience.plots import bar, line, area, scatter, histogram
 from openretailscience.plots import waterfall, venn, heatmap, cohort
-from openretailscience.plots import time, period_on_period, broken_timeline, price, index
+from openretailscience.plots import time, period_on_period, broken_timeline, callout_line, price, index
 ```
 
 Most `plot()` functions share these chrome keywords: `title`, `eyebrow`,
@@ -50,6 +50,12 @@ distinctive arguments are listed below; see each function's docstring for the re
 - `broken_timeline.plot(df, category_col, value_col, period="D", threshold_value=None, ...)` —
   data-availability / gaps timeline; the date column comes from the `column.transaction_date`
   option (not a parameter).
+- `callout_line.plot(df, value_col, callouts, callout_title_col=None, callout_text_col=None, x_col=None,
+  callout_x_col=None, figsize=None, show_markers=True, ...)` — one line with events called out on it;
+  `callouts` is a frame with one row per event (x value, plus a bold title, wrapped text or both). Its x
+  column is `callout_x_col`, which defaults to `x_col` and is required when the line's x is the index.
+  Raises `ValueError` if the callouts cannot all fit without overlapping. The layout is fixed at call time:
+  do not resize the figure or change the axis limits afterwards.
 - `price.plot(df, value_col, group_col, bins, ...)` — price-band bubble distribution.
 - `index.plot(df, value_col, group_col, index_col, value_to_index, top_n=None, bottom_n=None, ...)` —
   index plot (baseline 100). For the counts and shares behind the bars as a table, use

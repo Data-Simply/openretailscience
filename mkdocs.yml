@@ -37,6 +37,7 @@ nav:
       - Area Plot: gallery/plots/area.ipynb
       - Bar Plot: gallery/plots/bar.ipynb
       - Broken Timeline Plot: gallery/plots/broken_timeline.ipynb
+      - Callout Line Plot: gallery/plots/callout_line.ipynb
       - Cohort Plot: gallery/plots/cohort.ipynb
       - Customer Decision Hierarchy: gallery/plots/customer_decision_hierarchy.ipynb
       - Heatmap Plot: gallery/plots/heatmap.ipynb
@@ -80,6 +81,7 @@ nav:
           - Area Plot: api/plots/area.md
           - Bar Plot: api/plots/bar.md
           - Broken Timeline Plot: api/plots/broken_timeline.md
+          - Callout Line Plot: api/plots/callout_line.md
           - Cohort Plot: api/plots/cohort.md
           - Histogram Plot: api/plots/histogram.md
           - Heatmap Plot: api/plots/heatmap.md

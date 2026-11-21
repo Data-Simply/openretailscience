@@ -10,7 +10,8 @@ description: >-
   decomposition, customer decision hierarchy, composite rank, haversine,
   customer-lifetime-value / Pareto-NBD / BTYD model-input prep), any of
   its plots (bar, line, area, scatter, histogram, waterfall, venn, heatmap,
-  cohort, time, period-on-period, broken-timeline, price, index) or trendlines,
+  cohort, time, period-on-period, broken-timeline, callout-line, price,
+  index) or trendlines,
   its options/ColumnHelper configuration system, or connecting analyses to a
   database via Ibis. Also use whenever the user imports `openretailscience`.
 ---
