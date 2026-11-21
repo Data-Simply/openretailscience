@@ -2,6 +2,7 @@
 
 - general charts of pre-aggregated data → `bar`, `line`, `area`, `scatter`, `histogram`
 - a value over time from raw transactions → `time`; several periods overlaid → `period_on_period`
+- one line with events called out on it → `callout_line`
 - what added up to a change → `waterfall`
 - overlap between 2-3 sets → `venn`
 - a 2D grid of values → `heatmap`; a cohort retention matrix → `cohort`
@@ -27,6 +28,7 @@ __all__ = [
     "area",
     "bar",
     "broken_timeline",
+    "callout_line",
     "cohort",
     "heatmap",
     "histogram",
