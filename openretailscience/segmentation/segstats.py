@@ -268,7 +268,7 @@ class SegTransactionStats:
             [
                 cols.unit_spend,
                 cols.transaction_id,
-                *([cols.customer_id] if unknown_customer_value is not None else []),
+                *filter(lambda x: x in data.columns, [cols.unit_qty, cols.customer_id]),
             ],
         )
 
@@ -820,7 +820,8 @@ class SegTransactionStats:
             ibis.Table: The transaction statistics by segment.
 
         Raises:
-            ValueError: If rollup_value is a list whose length does not match segment_col.
+            ValueError: If rollup_value is a list whose length does not match segment_col, or if
+                unknown_customer_value is set but the customer_id column is missing.
             TypeError: If unknown_customer_value can't be compared with the customer_id column.
         """
         cols = ColumnHelper()

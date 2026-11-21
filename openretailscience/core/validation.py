@@ -367,16 +367,23 @@ def unknown_customer_flag(
     out of both the identified and the unknown totals.
 
     Args:
-        data (ibis.Table): The transaction data, with a customer_id column.
+        data (ibis.Table): The transaction data.
         unknown_customer_value (int | str | NullScalar): The option's value, which must not be None.
 
     Returns:
         ibis.expr.types.BooleanColumn: True on unknown-customer rows.
 
     Raises:
+        ValueError: If ``data`` has no customer_id column.
         TypeError: If ``unknown_customer_value`` can't be compared with the customer_id column.
     """
     customer_col = get_option("column.customer_id")
+    if customer_col not in data.columns:
+        msg = (
+            f"Column '{customer_col}' is required when the data.unknown_customer_value option is set. "
+            "Add the column, or switch the option off with option_context('data.unknown_customer_value', None)."
+        )
+        raise ValueError(msg)
     customer_id = data[customer_col]
     flag = customer_id.isnull()  # noqa: PD003 (ibis API, not pandas)
     if isinstance(unknown_customer_value, NullScalar):
