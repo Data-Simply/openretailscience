@@ -401,8 +401,6 @@ def unknown_customer_flag(
 def ensure_valid_extra_aggs(
     data: ibis.Table,
     extra_aggs: dict[str, tuple[str, str]] | None,
-    *,
-    numeric: bool = False,
 ) -> None:
     """Validate an ``extra_aggs`` mapping of ``{output_col: (source_col, agg_func)}``.
 
@@ -414,12 +412,11 @@ def ensure_valid_extra_aggs(
         data (ibis.Table): The table the aggregations will run against.
         extra_aggs (dict[str, tuple[str, str]] | None): The aggregation spec to validate.
             ``None`` is a no-op.
-        numeric (bool): Also require each aggregation to have a numeric result. Defaults to False.
 
     Raises:
         ValueError: If a spec value is not a ``(source_col, agg_func)`` tuple, if a source
             column is absent from ``data``, or if ``agg_func`` is not a no-argument aggregation
-            that reduces that column to a scalar (with a numeric result when ``numeric`` is True).
+            that reduces that column to a scalar.
     """
     if extra_aggs is None:
         return
@@ -431,7 +428,7 @@ def ensure_valid_extra_aggs(
         if col not in data.columns:
             msg = f"Column '{col}' specified in extra_aggs does not exist in the data"
             raise ValueError(msg)
-        ensure_agg_func(data, col, func, f"extra_aggs['{output_col}']", numeric=numeric)
+        ensure_agg_func(data, col, func, f"extra_aggs['{output_col}']")
 
 
 def _is_aggregation(column: ibis.Column, func: str, numeric: bool) -> bool:

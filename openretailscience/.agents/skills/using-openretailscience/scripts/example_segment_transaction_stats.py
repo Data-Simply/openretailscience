@@ -94,3 +94,19 @@ results_unknown = stats_unknown.df
 # Example 6: Segment Stats Without Total Row (the default)
 stats_no_total = SegTransactionStats(data=df_with_segments, segment_col="segment_name")
 results_no_total = stats_no_total.df
+
+# Example 7: Weekly Trend With Every Week Present
+# A week with no sales has no row unless it's listed; take the weeks from a calendar, not the data
+weekly = transactions.assign(week_id=rng.choice([202601, 202602, 202604], size=num_transactions))
+weeks = pd.DataFrame({"week_id": [202601, 202602, 202603, 202604]})
+categories = pd.DataFrame({"category": ["Electronics", "Clothing", "Home"]})
+stats_weekly = SegTransactionStats(
+    data=weekly,
+    segment_col=["category", "week_id"],
+    expected_segments=categories.merge(weeks, how="cross"),
+    grouping_sets="cube",
+    rollup_value=["All", 0],
+    sort_by=True,
+)
+results_weekly = stats_weekly.df
+# every category, and the "All" weekly total, has a 202603 row with 0 spend/transactions and null ratios

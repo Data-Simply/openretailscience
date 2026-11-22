@@ -26,7 +26,13 @@ from openretailscience.segmentation.segstats import SegTransactionStats, cube, r
   segment column raises unless you pass a `rollup_value` of its type. `rollup_value` requires `grouping_sets`.
   With the `data.unknown_customer_value` option set (`references/configuration.md`), plain metrics cover identified
   customers only, and spend/transactions/units (+ their ratios and extra_aggs) gain `_unknown`/`_total` variants;
-  customers do not. Each extra_aggs result must then be numeric (`"max"` of a text column raises).
+  customers do not.
+  For a trend, pass `expected_segments`: a pandas DataFrame of the combinations that must appear, with exactly the
+  `segment_col` columns (e.g. `categories.merge(weeks, how="cross")`, weeks from a calendar, not the data).
+  Missing combinations get rows with 0 for counts/sums (incl. extra_aggs `sum`/`count`/`nunique`/`approx_nunique`)
+  and null for ratios and other aggregations; don't pad `.df` yourself. Subtotals get the listed values of their own
+  columns (a weekly total covers every listed week); list detail combinations only, never rollup labels. A
+  combination with a null isn't padded.
 - `cube(*columns)` → all 2ⁿ grouping-set tuples; `rollup(*columns)` → n+1
   hierarchical tuples.
 
