@@ -40,6 +40,7 @@
   var DROP_GAP_MIN_S = 0.9;
   var DROP_GAP_RANGE_S = 1.4;
   var INTRO_S = 1.6;
+  var SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|basic render|software/i;
 
   var VERT = "attribute vec2 aPos;varying vec2 vUv;void main(){vUv=aPos*.5+.5;gl_Position=vec4(aPos,0.,1.);}";
 
@@ -133,6 +134,10 @@
     premultipliedAlpha: true, alpha: true, antialias: false, depth: false, failIfMajorPerformanceCaveat: true,
   });
   if (!gl) return;
+  // Chrome hands out SwiftShader (also what headless Chrome, Lighthouse and PageSpeed run on) despite the caveat flag.
+  var dbg = gl.getExtension("WEBGL_debug_renderer_info");
+  var renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  if (SOFTWARE_RENDERER.test(renderer)) return;
 
   function compile(type, src) {
     var sh = gl.createShader(type);

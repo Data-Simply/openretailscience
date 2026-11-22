@@ -31,10 +31,10 @@ VENN_PALETTE = ["#22c55e", COLORS["neutral"][400], "#bbf7d0"]
 
 def _save(fig: plt.Figure, name: str) -> None:
     path = OUT_DIR / f"chart-{name}.svg"
-    # No bbox_inches="tight": it shifts the ORS title chrome. Dropping the date keeps reruns diff-free.
+    # No bbox_inches="tight": it shifts the ORS title chrome.
     fig.savefig(path, format="svg", metadata={"Date": None})
     plt.close(fig)
-    print(f"wrote {path.relative_to(Path.cwd())}")
+    print(f"wrote {path}")
 
 
 def regenerate_waterfall() -> None:
@@ -75,7 +75,7 @@ def regenerate_cohort() -> None:
         x_label="Months since first purchase",
         y_label="Acquisition cohort",
         eyebrow="Retention",
-        title="The December cohort holds on longest",
+        title="The December cohort retains best",
         subtitle="Share of each cohort still shopping, by month",
         figsize=FIGSIZE,
     )
