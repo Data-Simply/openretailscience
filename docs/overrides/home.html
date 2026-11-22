@@ -1,48 +1,67 @@
 {% extends "main.html" %}
+
+{% block extrahead %}
+{{ super() }}
+<link rel="preload" as="image" href="{{ 'assets/images/home/liquid-o.webp' | url }}" type="image/webp">
+{% endblock %}
 {% block tabs %}
 {{ super() }}
 
 <style>
-  .md-main__inner { margin: 0; }
-  .md-content { display: none; }
-  @media screen and (min-width: 60em) {
-    .md-sidebar--secondary { display: none; }
-  }
+  .md-main__inner.md-grid { max-width: none; margin: 0; }
   @media screen and (min-width: 76.25em) {
     .md-sidebar--primary { display: none; }
   }
+  /* Homepage only: the header joins the dark hero. */
+  .md-header, .md-tabs { background: var(--ds-dark); border-bottom-color: rgba(255, 255, 255, 0.06); }
+  .md-header__title, .md-header__topic, .md-header__button, .md-search__icon,
+  .md-tabs__link { color: rgba(255, 255, 255, 0.72); }
+  .md-tabs__link:hover, .md-tabs__link--active, .md-tabs__item--active .md-tabs__link { color: #fff; }
+  .md-header__source { color: rgba(255, 255, 255, 0.72); }
+  .md-header :focus-visible, .md-tabs :focus-visible { outline: 2px solid var(--ds-green-400); outline-offset: 2px; }
+  @media screen and (min-width: 60em) {
+    .md-search__input { background: rgba(255, 255, 255, 0.07); color: #fff; }
+    .md-search__input::placeholder { color: rgba(255, 255, 255, 0.5); }
+  }
 </style>
+{% endblock %}
 
+{% block container %}
 <div class="ds-page">
-<!-- Hero -->
-<section class="ds-hero">
-  <div class="ds-hero-burst"></div>
-  <div class="ds-hero-inner">
-    <div class="ds-hero-content">
-      <h1 class="ds-hero-headline">
-        <span class="ds-text-dark">Months to deploy.<br>Black box results.<br>Someone else's cloud.</span><br>
-        <span class="ds-text-primary">There's a better way.</span>
+<section class="lg-hero">
+  <div class="lg-hero-inner">
+    <div class="lg-hero-copy">
+      <h1 class="lg-hero-headline">
+        <span class="lg-hero-problems">Months to deploy.<br>Black box results.<br>Someone else's cloud.</span>
+        <span class="lg-hero-answer">There's a better way.</span>
       </h1>
-      <p class="ds-hero-body">
+      <p class="lg-hero-body">
         OpenRetailScience is open source retail analytics that runs in your
         database, handles billions of rows, and gives you back control of
         your KPIs.
       </p>
-      <div class="ds-hero-actions">
-        <a href="{{ 'getting_started/installation/' | url }}" class="ds-btn ds-btn-dark">
+      <div class="lg-hero-actions">
+        <a href="{{ 'getting_started/installation/' | url }}" class="ds-btn ds-btn-primary">
           Get Started
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
         </a>
-        <a href="{{ 'analysis_modules/' | url }}" class="ds-btn ds-btn-text">
+        <a href="{{ 'analysis_modules/' | url }}" class="ds-btn ds-btn-ghost">
           Explore Modules
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
         </a>
       </div>
+    </div>
+    <div class="lg-hero-art">
+      <div class="lg-hero-stage" data-liquid-stage>
+        <span class="lg-hero-glow" aria-hidden="true"></span>
+        <img src="{{ 'assets/images/home/liquid-o.webp' | url }}" alt="The OpenRetailScience O logo rendered as a splash of green liquid glass" width="900" height="947" fetchpriority="high" decoding="async">
+        <canvas aria-hidden="true"></canvas>
+      </div>
+      <div class="lg-hero-pool" aria-hidden="true"></div>
     </div>
   </div>
 </section>
 
-<!-- Logo Bar -->
 <section class="ds-logo-bar">
   <div class="ds-logo-bar-header">
     <p class="ds-logo-bar-label">Built with expertise doing analytics for scale-ups to multinationals</p>
@@ -56,57 +75,66 @@
   </div>
 </section>
 
-<!-- What's Included -->
-<section class="ds-section ds-bg-surface">
-  <div class="ds-container">
-    <div class="ds-grid-5">
-      <div>
-        <div class="ds-sticky">
-          <h2 class="ds-section-heading">What's included</h2>
-          <p class="ds-section-body">
-            A complete toolkit for retail analytics &mdash; from customer segmentation to revenue trees. Every module is tested, documented, and ready to use.
-          </p>
-        </div>
+<section class="ds-section ds-features">
+  <div class="ds-container ds-features-layout">
+    <div>
+      <div class="ds-features-header" data-reveal>
+        <p class="ds-eyebrow">What's included</p>
+        <h2 class="ds-section-heading">A complete toolkit for retail analytics</h2>
+        <p class="ds-section-body">
+          From customer segmentation to revenue trees. Every module is tested, documented, and ready to use.
+        </p>
       </div>
-      <div>
-        <div class="ds-card-bordered">
+    </div>
+    <div>
+      <article class="ds-feature-row" data-reveal>
+        <img class="ds-feature-art" src="{{ 'assets/images/home/glass-cloud.webp' | url }}" width="296" height="260" alt="" loading="lazy" />
+        <div>
           <h3 class="ds-card-heading">Your cloud, your data</h3>
           <p class="ds-card-body">
-            Runs in your database. No data leaves your environment. Works with ~20 backends from Snowflake to SQL Server, Databricks to BigQuery.
+            Runs in your database. Your data stays safe and secure in your environment.
           </p>
         </div>
-        <div class="ds-card-bordered">
+      </article>
+      <article class="ds-feature-row" data-reveal>
+        <img class="ds-feature-art" src="{{ 'assets/images/home/glass-tag.webp' | url }}" width="296" height="296" alt="" loading="lazy" />
+        <div>
           <h3 class="ds-card-heading">Value in days, not years</h3>
           <p class="ds-card-body">
-            Pre-built modules for the analyses retailers rebuild over and over: churn, gain-loss, cross-shop, segmentation, revenue trees, and more.
+            Modules for churn, gain-loss, cross-shop, segmentation, revenue trees, and more.
           </p>
         </div>
-        <div class="ds-card-bordered">
+      </article>
+      <article class="ds-feature-row" data-reveal>
+        <img class="ds-feature-art" src="{{ 'assets/images/home/glass-bars.webp' | url }}" width="296" height="296" alt="" loading="lazy" />
+        <div>
           <h3 class="ds-card-heading">Own your KPIs</h3>
           <p class="ds-card-body">
-            No black boxes. Every calculation is open source, auditable, and yours to extend. No vendor lock-in, no dependency on a third party's roadmap.
+            Every calculation is auditable and yours to extend, with no dependency on a third party's roadmap.
           </p>
         </div>
-        <div class="ds-card-bordered">
+      </article>
+      <article class="ds-feature-row" data-reveal>
+        <img class="ds-feature-art" src="{{ 'assets/images/home/glass-scale.webp' | url }}" width="296" height="296" alt="" loading="lazy" />
+        <div>
           <h3 class="ds-card-heading">Built for scale</h3>
           <p class="ds-card-body">
-            The heavy lifting happens in your database. Python handles orchestration. Tested with retailers running billions of rows of transaction data.
+            Python only orchestrates. Tested with retailers on their own transaction data.
           </p>
         </div>
-      </div>
+      </article>
     </div>
   </div>
 </section>
 
-<!-- Impact Stats -->
-<section class="ds-stats">
-  <div class="ds-stats-burst"></div>
-  <div class="ds-stats-inner">
-    <h2 class="ds-stats-label">Built for production</h2>
+<section class="ds-band">
+  <img class="ds-band-o" src="{{ 'assets/images/home/liquid-o.webp' | url }}" width="900" height="947" alt="" loading="lazy" />
+  <div class="ds-band-inner" data-reveal>
+    <h2 class="ds-band-heading">Raw data in.<br><span>Decisions out.</span></h2>
     <div class="ds-stats-grid">
       <div class="ds-stat">
-        <p class="ds-stat-value">~20</p>
-        <p class="ds-stat-desc">Database backends supported &mdash; Snowflake, Databricks, BigQuery, SQL Server, and more</p>
+        <p class="ds-stat-value">Databricks, Snowflake, BigQuery</p>
+        <p class="ds-stat-desc">Among ~20 supported database backends</p>
       </div>
       <div class="ds-stat">
         <p class="ds-stat-value">Billions</p>
@@ -118,115 +146,102 @@
       </div>
       <div class="ds-stat">
         <p class="ds-stat-value">Open Source</p>
-        <p class="ds-stat-desc">Fully open source &mdash; no vendor lock-in, no black boxes, no data leakage</p>
+        <p class="ds-stat-desc">No vendor lock-in, no black boxes, no data leakage</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- Showcase -->
-<section class="ds-section">
+<section class="ds-section ds-showcase">
   <div class="ds-container">
-    <div class="ds-showcase-header">
+    <div class="ds-showcase-header" data-reveal>
       <h2 class="ds-section-heading">See it in action</h2>
       <p class="ds-section-body">
-        From quick analyses to end-to-end workflows, see what you can build.
+        From quick analyses to end-to-end workflows, see what you can build. Every chart here was drawn by
+        OpenRetailScience with its default styling.
       </p>
     </div>
-    <div class="ds-showcase-grid">
-      <div class="ds-showcase-card">
-        <span class="ds-badge">Analysis</span>
-        <img src="{{ 'assets/images/features/cross_shop.png' | url }}" alt="Cross-shop Venn diagram" class="ds-showcase-img" loading="lazy" />
-        <h3 class="ds-showcase-heading">Cross-shop analysis</h3>
-        <p class="ds-showcase-body">
-          Understand how customers shop across categories, brands, or stores with automated Venn diagrams and overlap metrics.
-        </p>
-        <p class="ds-showcase-tags">Venn Diagram &middot; Customer Overlap</p>
-      </div>
-
-      <div class="ds-showcase-card">
-        <span class="ds-badge">Visualization</span>
-        <img src="{{ 'assets/images/features/charts.png' | url }}" alt="Waterfall chart" class="ds-showcase-img" loading="lazy" />
-        <h3 class="ds-showcase-heading">Professional charts</h3>
-        <p class="ds-showcase-body">
-          Waterfall, cohort, heatmap, time series, and more &mdash; all styled consistently and ready for stakeholder presentations.
-        </p>
-        <p class="ds-showcase-tags">Waterfall &middot; Cohort &middot; Heatmap</p>
-      </div>
-
-      <div class="ds-showcase-card ds-showcase-card--wide">
+    <div class="ds-bento">
+      <figure class="ds-bento-card ds-bento-card--7" data-reveal>
+        <a class="ds-bento-zoom" href="{{ 'assets/images/home/chart-waterfall.svg' | url }}" target="_blank" rel="noopener"><img src="{{ 'assets/images/home/chart-waterfall.svg' | url }}" width="576" height="389" alt="Waterfall chart: new customers add $610K, basket growth $380K, lapsed customers cost $290K, price adds $170K and returns cost $110K, for a net $760K lift" class="ds-bento-img" loading="lazy" /></a>
+        <figcaption>
+          <span class="ds-badge">Visualization</span>
+          <h3 class="ds-showcase-heading">Revenue bridges in one call</h3>
+          <p class="ds-showcase-body"><code>waterfall.plot()</code> turns a list of drivers into a board-ready revenue bridge.</p>
+        </figcaption>
+      </figure>
+      <figure class="ds-bento-card ds-bento-card--5" data-reveal>
+        <a class="ds-bento-zoom" href="{{ 'assets/images/home/chart-venn.svg' | url }}" target="_blank" rel="noopener"><img src="{{ 'assets/images/home/chart-venn.svg' | url }}" width="461" height="432" alt="Three-way Venn diagram of Fresh, Bakery and Health and Beauty shoppers" class="ds-bento-img" loading="lazy" /></a>
+        <figcaption>
+          <span class="ds-badge">Analysis</span>
+          <h3 class="ds-showcase-heading">Cross-shop analysis</h3>
+          <p class="ds-showcase-body">See how customers shop across categories, brands, or stores with automated Venn diagrams and overlap metrics.</p>
+        </figcaption>
+      </figure>
+      <figure class="ds-bento-card ds-bento-card--5" data-reveal>
+        <a class="ds-bento-zoom" href="{{ 'assets/images/home/chart-cohort.svg' | url }}" target="_blank" rel="noopener"><img src="{{ 'assets/images/home/chart-cohort.svg' | url }}" width="576" height="389" alt="Cohort retention heatmap: the December cohort has the highest retention in each of its first four months" class="ds-bento-img" loading="lazy" /></a>
+        <figcaption>
+          <span class="ds-badge">Customer</span>
+          <h3 class="ds-showcase-heading">Cohorts and retention</h3>
+          <p class="ds-showcase-body">Retention, spend and churn by acquisition cohort, stepped into readable bands.</p>
+        </figcaption>
+      </figure>
+      <div class="ds-bento-card ds-bento-card--7 ds-bento-card--code" data-reveal>
         <div class="ds-code-window">
           <div class="ds-code-titlebar">
-            <span class="ds-code-dot ds-code-dot--red"></span>
-            <span class="ds-code-dot ds-code-dot--yellow"></span>
-            <span class="ds-code-dot ds-code-dot--green"></span>
             <span class="ds-code-filename">workflow.py</span>
           </div>
-          <pre class="ds-code-body"><code><span class="kw">from</span> <span class="mod">openretailscience.analysis</span> <span class="kw">import</span> <span class="cls">customer</span>
-<span class="kw">from</span> <span class="mod">openretailscience.plots</span> <span class="kw">import</span> <span class="cls">histogram</span>
+          <pre class="ds-code-body"><code><span class="kw">from</span> openretailscience.segmentation.hml <span class="kw">import</span> <span class="cls">HMLSegmentation</span>
+<span class="kw">from</span> openretailscience.segmentation.segstats <span class="kw">import</span> <span class="cls">SegTransactionStats</span>
 
-dbp = customer.<span class="cls">DaysBetweenPurchases</span>(df)
-churn = dbp.purchases_percentile(<span class="num">0.8</span>)
-histogram.plot(df=dbp.df[<span class="str">"avg_days_between_purchases"</span>], title=<span class="str">f"Churn: {round(churn)}d"</span>)</code></pre>
+segments = <span class="cls">HMLSegmentation</span>(transactions)
+joined = transactions.left_join(segments.table, <span class="str">"customer_id"</span>)
+stats = <span class="cls">SegTransactionStats</span>(joined, grouping_sets=[(<span class="str">"segment_name"</span>,)])
+df = stats.df.set_index(<span class="str">"segment_name"</span>)
+share = df.spend / df.spend.sum()
+print(<span class="str">f"Your top 20% of customers drive {share['Heavy']:.0%} of spend"</span>)</code></pre>
         </div>
-        <div class="ds-showcase-card__text">
+        <div>
           <span class="ds-badge">Workflow</span>
           <h3 class="ds-showcase-heading">Composable workflows</h3>
-          <p class="ds-showcase-body">
-            Chain modules together. Use the output of one analysis as input for another to build complete analytical pipelines.
-          </p>
-          <p class="ds-showcase-tags">Automation &middot; Chaining</p>
+          <p class="ds-showcase-body">Chain modules together. Use the output of one analysis as input for another to build complete analytical pipelines.</p>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- Final CTA -->
 <section class="ds-cta">
-  <div class="ds-cta-burst"></div>
-  <div class="ds-cta-inner">
+  <img class="ds-cta-o" src="{{ 'assets/images/home/liquid-o.webp' | url }}" width="900" height="947" alt="" loading="lazy" />
+  <div class="ds-cta-inner" data-reveal>
     <h2 class="ds-cta-heading">Your database. Your analytics. Get started.</h2>
     <p class="ds-cta-body">
       Install OpenRetailScience and run your first analysis in minutes.
       Open source, well-tested, and ready for production.
     </p>
     <div class="ds-install-command">
-      <span class="ds-install-prompt">$</span> pip install openretailscience
-      <button type="button" class="ds-install-copy" aria-label="Copy to clipboard" onclick="copyInstall(this.closest('.ds-install-command'))">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span class="ds-install-prompt" aria-hidden="true">$</span>
+      <code class="ds-install-text">pip install openretailscience</code>
+      <button type="button" class="ds-install-copy" aria-label="Copy install command" hidden>
+        <svg class="ds-icon-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="ds-icon-done" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
       </button>
+      <span class="ds-install-status" role="status"></span>
     </div>
-    <script>
-    function copyInstall(el) {
-      navigator.clipboard.writeText('pip install openretailscience');
-      var btn = el.querySelector('.ds-install-copy');
-      btn.classList.add('copied');
-      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-      setTimeout(function() {
-        btn.classList.remove('copied');
-        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-      }, 2000);
-    }
-    </script>
     <div class="ds-cta-actions">
       <a href="{{ 'getting_started/installation/' | url }}" class="ds-btn ds-btn-dark">
-        Read the Docs
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+        Read the install guide
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
       </a>
-      <a href="https://github.com/Data-Simply/openretailscience" target="_blank" rel="noopener noreferrer" class="ds-btn ds-btn-text ds-btn-text--on-dark">
+      <a href="https://github.com/Data-Simply/openretailscience" target="_blank" rel="noopener noreferrer" class="ds-btn ds-btn-text">
         View on GitHub
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
       </a>
     </div>
   </div>
 </section>
 
 </div>
-{% endblock %}
-
-{% block content %}{% endblock %}
-
-{% block footer %}
-{{ super() }}
+<script src="{{ 'javascripts/home.js' | url }}" defer></script>
+<script src="{{ 'javascripts/home-liquid.js' | url }}" defer></script>
 {% endblock %}

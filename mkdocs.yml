@@ -122,8 +122,9 @@ theme:
   language: en
   palette:
     primary: custom
+    accent: custom
   logo: assets/images/logo.svg
-  favicon: assets/images/logo.svg
+  favicon: assets/images/favicon.svg
 extra_css:
   - stylesheets/extra.css
 extra_javascript:
