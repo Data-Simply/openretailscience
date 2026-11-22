@@ -1,5 +1,7 @@
 """Tests for the SegTransactionStats class."""
 
+from datetime import date
+
 import ibis
 import numpy as np
 import pandas as pd
@@ -274,34 +276,74 @@ class TestInputValidation:
         )
 
     @pytest.mark.parametrize(
-        ("kwargs", "options", "match"),
+        ("kwargs", "options", "exc", "match"),
         [
             pytest.param(
                 {"segment_col": "segment_name"},
                 {},
+                ValueError,
                 r"segment_col references columns not present in the data: \['segment_name'\]",
                 id="missing_segment_col",
             ),
-            pytest.param({"segment_col": []}, {}, "segment_col must not be an empty list", id="empty_segment_col"),
+            pytest.param(
+                {"segment_col": []},
+                {},
+                ValueError,
+                "segment_col must not be an empty list",
+                id="empty_segment_col",
+            ),
             # Exhaustive extra_aggs cases live in tests/core/test_validation.py; this pins the constructor wiring.
             pytest.param(
                 {"segment_col": cols.store_id, "extra_aggs": {"stores": ("nonexistent_column", "nunique")}},
                 {},
+                ValueError,
                 r"Column 'nonexistent_column' specified in extra_aggs does not exist in the data",
                 id="extra_agg_column_missing",
             ),
-            # The unknown/total split coalesces each extra_aggs result to 0, so a text result is rejected up front.
             pytest.param(
-                {"segment_col": cols.store_id, "grouping_sets": "total", "extra_aggs": {"top_brand": ("brand", "max")}},
-                {"data.unknown_customer_value": -1},
-                r"extra_aggs\['top_brand'\] 'max' is not an aggregation .* with a numeric result",
-                id="text_extra_agg_with_unknown_customers",
+                {"segment_col": cols.store_id, "expected_segments": pd.DataFrame({"brand": ["Coke", "Fanta"]})},
+                {},
+                ValueError,
+                r"expected_segments must have exactly the segment_col columns \['store_id'\]\. Got \['brand'\]\.",
+                id="expected_segments_other_column",
+            ),
+            pytest.param(
+                {"segment_col": cols.store_id, "expected_segments": pd.DataFrame(index=[0, 1])},
+                {},
+                ValueError,
+                r"expected_segments must have exactly the segment_col columns \['store_id'\]\. Got \[\]\.",
+                id="expected_segments_without_columns",
+            ),
+            pytest.param(
+                {
+                    "segment_col": [cols.store_id, "brand"],
+                    "expected_segments": pd.DataFrame({cols.store_id: ["Camden", "York"]}),
+                },
+                {},
+                ValueError,
+                r"expected_segments must have exactly the segment_col columns \['store_id', 'brand'\]\. Got "
+                r"\['store_id'\]\.",
+                id="expected_segments_missing_a_segment_col",
+            ),
+            pytest.param(
+                {"segment_col": cols.store_id, "expected_segments": ibis.memtable({cols.store_id: ["Camden", "York"]})},
+                {},
+                TypeError,
+                r"expected_segments must be a pandas DataFrame\. Got Table\.",
+                id="expected_segments_not_a_dataframe",
+            ),
+            pytest.param(
+                {"segment_col": cols.store_id, "expected_segments": pd.DataFrame({cols.store_id: [1, 2]})},
+                {},
+                TypeError,
+                rf"expected_segments column '{cols.store_id}' \(int64\) can't be compared with the data's \(string\)",
+                id="expected_segments_type_mismatch",
             ),
         ],
     )
-    def test_rejects_invalid_input(self, transactions, kwargs, options, match):
-        """A bad segment_col or extra_aggs raises a ValueError that names the problem."""
-        with option_context(options), pytest.raises(ValueError, match=match):
+    def test_rejects_invalid_input(self, transactions, kwargs, options, exc, match):
+        """A bad segment_col, extra_aggs or expected_segments raises an error that names the problem."""
+        with option_context(options), pytest.raises(exc, match=match):
             SegTransactionStats(transactions, **kwargs)
 
     @pytest.mark.parametrize("measure_col", [cols.unit_spend, cols.unit_qty])
@@ -410,6 +452,12 @@ class TestGroupingSets:
                 [("region", "product"), ("product",), ("region", "product"), (), ()],
                 [("region", "product"), ("product",), ()],
                 id="custom_deduplicates",
+            ),
+            pytest.param(
+                ["region", "product"],
+                [("region", "product"), ("product", "region"), ("product",)],
+                [("region", "product"), ("product",)],
+                id="reordered_set_deduplicates",
             ),
             pytest.param(
                 ["region", "store", "date"],
@@ -1214,6 +1262,244 @@ class TestDivisionByZeroHandling:
         assert walkin_segment[cols.calc.spend_per_trans_unknown].iloc[0] == pytest.approx(
             expected_walkin_spend_per_trans_unknown,
         )
+
+
+_WEEKS = [202601, 202602, 202603, 202604]
+
+
+class TestExpectedSegments:
+    """expected_segments adds a row for each listed segment value that has no transactions."""
+
+    @pytest.fixture
+    def transactions(self) -> pd.DataFrame:
+        """Return five transactions over weeks 202601, 202602 and 202604; nothing sold in 202603."""
+        return pd.DataFrame(
+            {
+                "week_id": [202601, 202601, 202602, 202604, 202604],
+                "category": ["Dairy", "Bakery", "Dairy", "Dairy", "Bakery"],
+                cols.transaction_id: [9001, 9002, 9003, 9004, 9005],
+                cols.customer_id: [101, 102, 101, 103, 102],
+                cols.unit_spend: [4.50, 3.00, 5.25, 6.00, 2.50],
+            },
+        )
+
+    @staticmethod
+    def _stats(keys: dict[str, list], spend: list[float], trans: list[int]) -> pd.DataFrame:
+        """Build the expected frame for rows where each customer made one transaction."""
+        per_customer = [s / t if t > 0 else np.nan for s, t in zip(spend, trans, strict=True)]
+        return pd.DataFrame(
+            {
+                **keys,
+                cols.agg.unit_spend: spend,
+                cols.agg.transaction_id: trans,
+                cols.agg.customer_id: trans,
+                cols.calc.spend_per_cust: per_customer,
+                cols.calc.spend_per_trans: per_customer,
+                cols.calc.trans_per_cust: [1.0 if t > 0 else np.nan for t in trans],
+            },
+        )
+
+    @pytest.mark.parametrize(
+        ("segment_col", "expected_segments", "expected"),
+        [
+            pytest.param(
+                "week_id",
+                pd.DataFrame({"week_id": _WEEKS}),
+                {"week_id": _WEEKS, "spend": [7.5, 5.25, 0.0, 8.5], "trans": [2, 1, 0, 2]},
+                id="full_key",
+            ),
+            pytest.param(
+                "week_id",
+                pd.DataFrame({"week_id": [202603, *_WEEKS, 202603]}),
+                {"week_id": _WEEKS, "spend": [7.5, 5.25, 0.0, 8.5], "trans": [2, 1, 0, 2]},
+                id="duplicate_rows_count_once",
+            ),
+            pytest.param(
+                ["category", "week_id"],
+                pd.DataFrame({"category": ["Bakery", "Dairy"]}).merge(pd.DataFrame({"week_id": _WEEKS}), how="cross"),
+                {
+                    "category": ["Bakery"] * 4 + ["Dairy"] * 4,
+                    "week_id": _WEEKS * 2,
+                    "spend": [3.0, 0.0, 0.0, 2.5, 4.5, 5.25, 0.0, 6.0],
+                    "trans": [1, 0, 0, 1, 1, 1, 0, 1],
+                },
+                id="every_category_and_week",
+            ),
+            pytest.param(
+                ["category", "week_id"],
+                pd.DataFrame({"category": ["Bakery", "Dairy"], "week_id": [202602, 202603]}),
+                {
+                    "category": ["Bakery", "Bakery", "Bakery", "Dairy", "Dairy", "Dairy", "Dairy"],
+                    "week_id": [202601, 202602, 202604, 202601, 202602, 202603, 202604],
+                    "spend": [3.0, 0.0, 2.5, 4.5, 5.25, 0.0, 6.0],
+                    "trans": [1, 0, 1, 1, 1, 0, 1],
+                },
+                id="unlisted_observed_rows_are_kept",
+            ),
+        ],
+    )
+    def test_adds_listed_segments_without_sales(self, transactions, segment_col, expected_segments, expected):
+        """Added rows have 0 spend, transactions and customers and null ratios; observed rows are unchanged."""
+        result = SegTransactionStats(
+            transactions,
+            segment_col=segment_col,
+            expected_segments=expected_segments,
+            sort_by=True,
+        ).df
+        keys = {col: expected[col] for col in ([segment_col] if isinstance(segment_col, str) else segment_col)}
+        pd.testing.assert_frame_equal(result, self._stats(keys, expected["spend"], expected["trans"]))
+
+    def test_null_segment_value_is_kept_once_and_not_padded(self, transactions):
+        """A product with no category keeps its one observed row instead of gaining a padded copy."""
+        transactions["category"] = ["Dairy", None, "Dairy", "Dairy", "Bakery"]
+        calendar = pd.DataFrame({"category": ["Bakery", "Dairy", None]}).merge(
+            pd.DataFrame({"week_id": _WEEKS}),
+            how="cross",
+        )
+        result = SegTransactionStats(
+            transactions,
+            segment_col=["category", "week_id"],
+            expected_segments=calendar,
+            sort_by=True,
+        ).df
+        keys = {"category": ["Bakery"] * 4 + ["Dairy"] * 4 + [None], "week_id": [*_WEEKS, *_WEEKS, 202601]}
+        expected = self._stats(keys, [0.0, 0.0, 0.0, 2.5, 4.5, 5.25, 0.0, 6.0, 3.0], [0, 0, 0, 1, 1, 1, 0, 1, 1])
+        pd.testing.assert_frame_equal(result, expected)
+
+    @pytest.mark.parametrize("category_label", ["All", None], ids=["labelled", "null_label"])
+    @pytest.mark.parametrize("use_native_sql", [True, False], ids=["native_grouping_sets", "union"])
+    def test_subtotals_get_the_listed_values_of_their_columns(self, transactions, use_native_sql, category_label):
+        """The weekly totals get the empty week and an unsold category gets a 0 subtotal; the grand total is as is."""
+        table = ibis.duckdb.connect().create_table("transactions", transactions)
+        calendar = pd.DataFrame({"category": ["Bakery", "Dairy", "Meat"]}).merge(
+            pd.DataFrame({"week_id": _WEEKS}),
+            how="cross",
+        )
+        with option_context("optimization.use_native_sql", use_native_sql):
+            stats = SegTransactionStats(
+                table,
+                segment_col=["category", "week_id"],
+                expected_segments=calendar,
+                grouping_sets="cube",
+                rollup_value=[category_label, 0],
+                sort_by=True,
+            )
+            result = stats.df
+        assert ("GROUPING SETS" in ibis.to_sql(stats.table).upper()) == use_native_sql
+
+        nan = np.nan
+        expected = pd.DataFrame(
+            {
+                "category": [category_label] * 5 + ["Bakery"] * 5 + ["Dairy"] * 5 + ["Meat"] * 5,
+                "week_id": [0, *_WEEKS] * 4,
+                cols.agg.unit_spend: [21.25, 7.5, 5.25, 0.0, 8.5, 5.5, 3.0, 0.0, 0.0, 2.5]
+                + [15.75, 4.5, 5.25, 0.0, 6.0]
+                + [0.0] * 5,
+                cols.agg.transaction_id: [5, 2, 1, 0, 2, 2, 1, 0, 0, 1, 3, 1, 1, 0, 1, 0, 0, 0, 0, 0],
+                cols.agg.customer_id: [3, 2, 1, 0, 2, 1, 1, 0, 0, 1, 2, 1, 1, 0, 1, 0, 0, 0, 0, 0],
+                cols.calc.spend_per_cust: [21.25 / 3, 3.75, 5.25, nan, 4.25, 5.5, 3.0, nan, nan, 2.5]
+                + [7.875, 4.5, 5.25, nan, 6.0]
+                + [nan] * 5,
+                cols.calc.spend_per_trans: [4.25, 3.75, 5.25, nan, 4.25, 2.75, 3.0, nan, nan, 2.5]
+                + [5.25, 4.5, 5.25, nan, 6.0]
+                + [nan] * 5,
+                cols.calc.trans_per_cust: [5 / 3, 1.0, 1.0, nan, 1.0, 2.0, 1.0, nan, nan, 1.0]
+                + [1.5, 1.0, 1.0, nan, 1.0]
+                + [nan] * 5,
+            },
+        ).sort_values(["category", "week_id"], na_position="last", ignore_index=True)
+        pd.testing.assert_frame_equal(result, expected)
+
+    def test_extra_aggs_fill_follows_the_aggregation(self, transactions):
+        """Counts and sums are 0 on an added row and other aggregations null, as they are for an empty guest split."""
+        transactions[cols.customer_id] = [101, -1, 101, 103, -1]
+        extra_aggs = {
+            "avg_line_spend": (cols.unit_spend, "mean"),
+            "categories": ("category", "nunique"),
+            "top_category": ("category", "max"),
+        }
+        with option_context("data.unknown_customer_value", -1):
+            result = SegTransactionStats(
+                transactions,
+                segment_col="week_id",
+                extra_aggs=extra_aggs,
+                expected_segments=pd.DataFrame({"week_id": _WEEKS}),
+                sort_by=True,
+            ).df
+
+        unknown = get_option("column.suffix.unknown_customer")
+        total = get_option("column.suffix.total")
+        expected = pd.DataFrame(
+            {
+                "week_id": _WEEKS,
+                cols.agg.unit_spend: [4.5, 5.25, 0.0, 6.0],
+                cols.agg.transaction_id: [1, 1, 0, 1],
+                cols.agg.customer_id: [1, 1, 0, 1],
+                cols.calc.spend_per_cust: [4.5, 5.25, np.nan, 6.0],
+                cols.calc.spend_per_trans: [4.5, 5.25, np.nan, 6.0],
+                cols.calc.trans_per_cust: [1.0, 1.0, np.nan, 1.0],
+                cols.agg.unit_spend_unknown: [3.0, 0.0, 0.0, 2.5],
+                cols.agg.transaction_id_unknown: [1, 0, 0, 1],
+                cols.calc.spend_per_trans_unknown: [3.0, np.nan, np.nan, 2.5],
+                cols.agg.unit_spend_total: [7.5, 5.25, 0.0, 8.5],
+                cols.agg.transaction_id_total: [2, 1, 0, 2],
+                cols.calc.spend_per_trans_total: [3.75, 5.25, np.nan, 4.25],
+                "avg_line_spend": [4.5, 5.25, np.nan, 6.0],
+                f"avg_line_spend_{unknown}": [3.0, np.nan, np.nan, 2.5],
+                f"avg_line_spend_{total}": [3.75, 5.25, np.nan, 4.25],
+                "categories": [1, 1, 0, 1],
+                f"categories_{unknown}": [1, 0, 0, 1],
+                f"categories_{total}": [2, 1, 0, 2],
+                "top_category": ["Dairy", "Dairy", None, "Dairy"],
+                f"top_category_{unknown}": ["Bakery", None, None, "Bakery"],
+                f"top_category_{total}": ["Dairy", "Dairy", None, "Dairy"],
+            },
+        )
+        pd.testing.assert_frame_equal(result, expected)
+
+    @pytest.mark.parametrize(
+        ("extra_aggs", "extra_expected"),
+        [
+            pytest.param(
+                {"week_id_right": (cols.unit_spend, "sum")},
+                {"week_id_right": [7.5, 5.25, 0.0, 8.5]},
+                id="named_like_a_join_suffix",
+            ),
+            pytest.param(
+                {"discount": ("discount", "sum")},
+                {"discount": [np.nan, 0.5, 0.0, 1.0]},
+                id="observed_null_sum_stays_null",
+            ),
+        ],
+    )
+    def test_extra_aggs_keep_observed_values(self, transactions, extra_aggs, extra_expected):
+        """An observed row keeps its extra_aggs value, null included; only an added row gets 0."""
+        transactions["discount"] = [None, None, 0.50, 1.00, None]
+        result = SegTransactionStats(
+            transactions,
+            segment_col="week_id",
+            extra_aggs=extra_aggs,
+            expected_segments=pd.DataFrame({"week_id": _WEEKS}),
+            sort_by=True,
+        ).df
+        expected = self._stats({"week_id": _WEEKS}, [7.5, 5.25, 0.0, 8.5], [2, 1, 0, 2]).assign(**extra_expected)
+        pd.testing.assert_frame_equal(result, expected)
+
+    def test_listed_values_take_the_data_type_before_matching(self, transactions):
+        """A calendar timestamp matches the date it falls on rather than adding a second row for that date."""
+        week_starts = [date(2026, 1, 5), date(2026, 1, 12), date(2026, 1, 19), date(2026, 1, 26)]
+        transactions["week_start"] = [week_starts[0], week_starts[0], week_starts[1], week_starts[3], week_starts[3]]
+        calendar = pd.DataFrame({"week_start": [pd.Timestamp(day) + pd.Timedelta(hours=9) for day in week_starts]})
+        result = SegTransactionStats(
+            transactions,
+            segment_col="week_start",
+            expected_segments=calendar,
+            sort_by=True,
+        ).df
+        expected = self._stats({"week_start": week_starts}, [7.5, 5.25, 0.0, 8.5], [2, 1, 0, 2]).astype(
+            {"week_start": "datetime64[s]"},
+        )
+        pd.testing.assert_frame_equal(result, expected)
 
 
 _NATIVE_SEGMENTS = ["region", "category"]

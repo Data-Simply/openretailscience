@@ -14,11 +14,13 @@ import ibis
 import ibis.expr.operations as ops
 import pandas as pd
 from ibis.backends.sql import compilers as sql_compilers
+from ibis.common.exceptions import IbisTypeError
 from sqlglot import exp
 
 from openretailscience.core.validation import (
     ensure_columns,
     ensure_data_has_columns,
+    ensure_dataframe,
     ensure_ibis_table,
     ensure_valid_extra_aggs,
     unknown_customer_flag,
@@ -31,6 +33,9 @@ __all__ = ["SegTransactionStats", "cube", "rollup"]
 # CUBE generates 2^n grouping sets, so 6 dimensions = 64 sets (reasonable), but 7+ dimensions
 # = 128+ sets (potentially expensive). This threshold balances flexibility with performance awareness.
 MAX_CUBE_DIMENSIONS_WITHOUT_WARNING = 6
+
+# Aggregations that are 0 over no rows; any other aggregation is null there.
+_ADDITIVE_AGG_FUNCS = frozenset({"sum", "count", "nunique", "approx_nunique"})
 
 # Backends whose dialect supports GROUP BY GROUPING SETS + GROUPING(); these use the single-scan native path.
 _NATIVE_GROUPING_SETS_BACKENDS = frozenset(
@@ -85,6 +90,50 @@ def _rewrite_to_grouping_sets(
 
     tuples = [exp.Tuple(expressions=[key_by_name[col].copy() for col in gs]) for gs in grouping_sets]
     tree.set("group", exp.Group(expressions=[exp.GroupingSets(expressions=tuples)]))
+
+
+def _pad_segments(
+    table: ibis.Table,
+    expected_segments: ibis.Table,
+    key_cols: list[str],
+    fill_cols: list[str],
+    null_safe_cols: frozenset[str] = frozenset(),
+) -> ibis.Table:
+    """Add a row for each expected key the aggregated table lacks.
+
+    Args:
+        table (ibis.Table): The aggregated rows, one per key.
+        expected_segments (ibis.Table): Distinct expected values of every key column; key_cols[0] is never null.
+        key_cols (list[str]): The columns to match on.
+        fill_cols (list[str]): The aggregates that are 0 on an added row; the others are null.
+        null_safe_cols (frozenset[str]): Key columns where null matches null (a null rollup label). Others keep a
+            plain equality, which every backend can hash-join.
+
+    Returns:
+        ibis.Table: The table's rows plus the added ones, with the table's columns and types.
+    """
+    # Spelled out rather than identical_to, which compiles to IS NOT DISTINCT FROM: SQL Server only has it from 2022.
+    predicates = [
+        (table[col] == expected_segments[col]) | (table[col].isnull() & expected_segments[col].isnull())  # noqa: PD003
+        if col in null_safe_cols
+        else table[col] == expected_segments[col]
+        for col in key_cols
+    ]
+    joined = table.outer_join(expected_segments, predicates)
+    # Only an added row has key_cols[0] null on the table's side but not the other; filling just those keeps an
+    # observed null aggregate (e.g. a sum of all-null values) null.
+    added = table[key_cols[0]].isnull() & expected_segments[key_cols[0]].notnull()  # noqa: PD003, PD004 (ibis API)
+    # Selecting through the input tables, not "<col>_right" names, can't collide with an output column.
+    return joined.select(
+        **{
+            col: ibis.coalesce(table[col], expected_segments[col])
+            if col in key_cols
+            else ibis.ifelse(added, 0, table[col])
+            if col in fill_cols
+            else table[col]
+            for col in table.columns
+        },
+    )
 
 
 def cube(*columns: str) -> list[tuple[str, ...]]:
@@ -191,9 +240,13 @@ class SegTransactionStats:
     ibis Table (`.table`), materialized via `.df`.
 
     `.df` has a RangeIndex, with the segment columns as ordinary columns. Each grouping set
-    contributes one row per segment combination present in the data; a segment column the
+    contributes one row per segment combination present in the data or expected_segments; a segment column the
     set leaves out holds that column's `rollup_value`. Row order is unspecified unless
     `sort_by=True`. A ratio whose denominator is 0 is null.
+
+    A trend grouped by a time bucket has no row for a bucket with no sales. Pass
+    `expected_segments` (e.g. every category crossed with every week of a calendar) to add those
+    rows rather than padding the result yourself.
 
     With the ``data.unknown_customer_value`` option set, the plain metrics cover identified
     customers only (null IDs count as unknown), and spend, transactions, units, their per-transaction
@@ -212,6 +265,7 @@ class SegTransactionStats:
         extra_aggs: dict[str, tuple[str, str]] | None = None,
         rollup_value: Any | list[Any] | None = None,  # noqa: ANN401 - Any is required for ibis.literal typing
         grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None = None,
+        expected_segments: pd.DataFrame | None = None,
         sort_by: bool = False,
     ) -> None:
         """Calculates transaction statistics by segment.
@@ -240,6 +294,13 @@ class SegTransactionStats:
                   dropped; every segment_col column must appear in at least one set and every set
                   column must be in segment_col.
                 - None (default): one row per segment_col combination, with no subtotals or total.
+            expected_segments (pd.DataFrame | None, optional): Segment combinations that must appear even
+                without transactions, as a DataFrame with exactly the segment_col columns (e.g. every
+                category crossed with every week). A missing combination gets 0 for counts and sums
+                (including extra_aggs "sum", "count", "nunique" and "approx_nunique") and null otherwise.
+                Each subtotal gets the listed values of its own columns, so a weekly total covers every
+                listed week; the grand total is never padded. Unlisted rows are kept, and a combination
+                with a null isn't padded. Defaults to None.
             sort_by (bool, optional): When True, sort the output rows ascending by segment_col.
                 Defaults to False.
 
@@ -248,12 +309,13 @@ class SegTransactionStats:
                 more than one or an empty cube()/rollup() result; if the grouping sets and
                 segment_col do not cover each other; if rollup_value is set without grouping_sets, or
                 is a list whose length does not match segment_col; if rollup_value can't be cast to its
-                segment_col column's type; or if the data.unknown_customer_value option is set and the data has
-                no customer_id column, or an extra_aggs aggregation's result isn't numeric.
+                segment_col column's type; if the data.unknown_customer_value option is set and the data has
+                no customer_id column; or if expected_segments' columns aren't exactly segment_col.
             TypeError: If grouping_sets is not a str, list or None; if a grouping_sets list element is not a
                 tuple, or holds a column that isn't a str, or a spec tuple holds a list that isn't a list of tuples;
-                if unit_spend or unit_quantity is not numeric; or if the data.unknown_customer_value option
-                can't be compared with customer_id.
+                if unit_spend or unit_quantity is not numeric; if the data.unknown_customer_value option
+                can't be compared with customer_id; or if expected_segments is not a DataFrame, or a column of it
+                can't be compared with the data's.
         """
         data = ensure_ibis_table(data, "data")
 
@@ -276,8 +338,9 @@ class SegTransactionStats:
             if measure_col in data.columns and not data[measure_col].type().is_numeric():
                 msg = f"Column '{measure_col}' must be numeric. Got {data[measure_col].type()}."
                 raise TypeError(msg)
-        # The unknown/total split coalesces each extra_aggs result to 0, which a text or date result can't take.
-        ensure_valid_extra_aggs(data, extra_aggs, numeric=unknown_customer_value is not None)
+        ensure_valid_extra_aggs(data, extra_aggs)
+        if expected_segments is not None:
+            expected_segments = self._validate_expected_segments(data, expected_segments, segment_col)
 
         if rollup_value is not None and grouping_sets is None:
             msg = (
@@ -301,6 +364,7 @@ class SegTransactionStats:
             rollup_value,
             unknown_customer_value,
             grouping_sets,
+            expected_segments,
         )
 
         if sort_by:
@@ -391,6 +455,48 @@ class SegTransactionStats:
             except (TypeError, ValueError) as err:
                 raise ValueError(msg) from err
         return mutations
+
+    @staticmethod
+    def _validate_expected_segments(
+        data: ibis.Table,
+        expected_segments: pd.DataFrame,
+        segment_col: list[str],
+    ) -> ibis.Table:
+        """Validate expected_segments against the data.
+
+        Args:
+            data (ibis.Table): The transaction data.
+            expected_segments (pd.DataFrame): The caller's expected segment values.
+            segment_col (list[str]): The validated segment columns.
+
+        Returns:
+            ibis.Table: The expected segment combinations without nulls, cast to the data's types.
+
+        Raises:
+            ValueError: If expected_segments' columns aren't exactly segment_col.
+            TypeError: If expected_segments is not a pandas DataFrame, or a column of it can't be compared with the
+                data's.
+        """
+        ensure_dataframe(expected_segments, "expected_segments")
+        expected = ensure_ibis_table(expected_segments, "expected_segments")
+        if set(expected.columns) != set(segment_col):
+            msg = (
+                f"expected_segments must have exactly the segment_col columns {segment_col}. "
+                f"Got {list(expected.columns)}."
+            )
+            raise ValueError(msg)
+        for col in expected.columns:
+            try:
+                data[col] == expected[col]  # noqa: B015 - only checks the types compare
+            except IbisTypeError as err:
+                msg = (
+                    f"expected_segments column '{col}' ({expected[col].type()}) can't be compared with the data's "
+                    f"({data[col].type()}). Give it the data's type."
+                )
+                raise TypeError(msg) from err
+        # Cast before matching: a value cast only after the join would miss its row and then duplicate it. A null
+        # never matches in the join either, so it would add a padded copy beside the observed row.
+        return expected.cast({col: data[col].type() for col in expected.columns}).drop_null()
 
     @staticmethod
     def _validate_grouping_sets_params(
@@ -552,9 +658,12 @@ class SegTransactionStats:
             for item in grouping_sets:
                 expanded.extend(SegTransactionStats._flatten_item(item))
 
-            # dict.fromkeys, not set(): str hashing is randomized per process, so set order would make the SQL
-            # text (and so warehouse result caching) and the union row order differ between runs.
-            expanded = list(dict.fromkeys(expanded))
+            # A dict, not set(): str hashing is randomized per process, so set order would make the SQL text (and so
+            # warehouse result caching) differ between runs. Keyed on the column set: ("a", "b") is ("b", "a").
+            first_by_cols = {}
+            for gs in expanded:
+                first_by_cols.setdefault(frozenset(gs), gs)
+            expanded = list(first_by_cols.values())
 
             # Validate columns (applies to list modes)
             all_mentioned_cols = {col for gs in expanded for col in gs}
@@ -590,6 +699,8 @@ class SegTransactionStats:
         segment_col: list[str],
         rollup_value: list[Any],
         aggs: dict[str, Any],
+        expected_segments: ibis.Table | None,
+        fill_cols: list[str],
     ) -> ibis.Table:
         """Execute all grouping sets and union the results.
 
@@ -605,6 +716,9 @@ class SegTransactionStats:
             segment_col (list[str]): All segment columns (used for mutation).
             rollup_value (list[Any]): Rollup values for each segment column.
             aggs (dict[str, Any]): Aggregation specifications.
+            expected_segments (ibis.Table | None): Every segment_col combination the rows must cover; each grouping
+                set gets the combinations of its own columns.
+            fill_cols (list[str]): The aggregates that are 0 on a padded row.
 
         Returns:
             ibis.Table: Union of all grouping set results.
@@ -622,6 +736,10 @@ class SegTransactionStats:
                 # Regular grouping: group by specified columns
                 group_cols = list(gs)
                 result = data.group_by(group_cols).aggregate(**aggs)
+                if expected_segments is not None:
+                    result = _pad_segments(
+                        result, expected_segments.select(group_cols).distinct(), group_cols, fill_cols
+                    )
 
                 # Mutate columns NOT in this grouping set to rollup_value
                 mutation_cols = [col for col in segment_col if col not in gs]
@@ -642,6 +760,8 @@ class SegTransactionStats:
         segment_col: list[str],
         rollup_value: list[Any],
         aggs: dict[str, Any],
+        expected_segments: ibis.Table | None,
+        fill_cols: list[str],
     ) -> ibis.Table:
         """Execute all grouping sets in a single backend-native ``GROUP BY GROUPING SETS`` pass.
 
@@ -655,6 +775,9 @@ class SegTransactionStats:
             segment_col (list[str]): All segment columns.
             rollup_value (list[Any]): Rollup label per segment column.
             aggs (dict[str, Any]): Aggregation specifications.
+            expected_segments (ibis.Table | None): Every segment_col combination the rows must cover; each grouping
+                set gets the combinations of its own columns.
+            fill_cols (list[str]): The aggregates that are 0 on a padded row.
 
         Returns:
             ibis.Table: Aggregated table with rollup labels applied. Same rows and columns as the
@@ -697,6 +820,32 @@ class SegTransactionStats:
                 if col in typed_values
             },
         )
+        if expected_segments is not None:
+            # One padding row per listed combination of each set's columns, labelled and flagged like that set's rows.
+            # The flags keep each set's padding to its own rows and give the ON clause equalities to hash-join on.
+            grids = [
+                expected_segments.select(*gs)
+                .distinct()
+                .mutate(
+                    **{col: typed_values[col] for col in segment_col if col not in gs},
+                    **{
+                        flag: ibis.literal(int(col not in gs), type="int32")
+                        for col, flag in zip(segment_col, flag_names, strict=True)
+                    },
+                )
+                .select(*segment_col, *flag_names)
+                for gs in grouping_sets
+                if len(gs) > 0
+            ]
+            grid = grids[0].union(*grids[1:], distinct=False) if len(grids) > 1 else grids[0]
+            # Flags lead the keys: unlike a rollup label, a flag is never null.
+            labelled = _pad_segments(
+                labelled,
+                grid,
+                [*flag_names, *segment_col],
+                fill_cols,
+                null_safe_cols=frozenset(col for col, value in rolled.items() if value is None),
+            )
         return labelled.drop(*flag_names)
 
     @staticmethod
@@ -780,12 +929,12 @@ class SegTransactionStats:
             suffix_unknown = get_option("column.suffix.unknown_customer")
             suffix_total = get_option("column.suffix.total")
             for agg_name, (col, func) in extra_aggs.items():
-                # Use coalesce with 0 for count functions, 0.0 for others
-                coalesce_value = 0 if func in ("nunique", "count") else 0.0
-                aggs[agg_name] = getattr(data[col], func)(where=~unknown_flag).coalesce(coalesce_value)
-                aggs[f"{agg_name}_{suffix_unknown}"] = getattr(data[col], func)(where=unknown_flag).coalesce(
-                    coalesce_value,
-                )
+                identified = getattr(data[col], func)(where=~unknown_flag)
+                unknown = getattr(data[col], func)(where=unknown_flag)
+                if func in _ADDITIVE_AGG_FUNCS:
+                    identified, unknown = identified.coalesce(0), unknown.coalesce(0)
+                aggs[agg_name] = identified
+                aggs[f"{agg_name}_{suffix_unknown}"] = unknown
                 aggs[f"{agg_name}_{suffix_total}"] = getattr(data[col], func)()
 
         return aggs
@@ -798,6 +947,7 @@ class SegTransactionStats:
         rollup_value: Any | list[Any],  # noqa: ANN401 - Any is required for ibis.literal typing
         unknown_customer_value: int | str | ibis.expr.types.NullScalar | None,
         grouping_sets: Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None,
+        expected_segments: ibis.Table | None,
     ) -> ibis.Table:
         """Calculate the transaction statistics by segment as a lazy ibis expression.
 
@@ -815,6 +965,7 @@ class SegTransactionStats:
             unknown_customer_value (int | str | ibis.expr.types.NullScalar | None): The
                 data.unknown_customer_value option's value; None splits out no unknown customers.
             grouping_sets (Literal["rollup", "cube", "total"] | list[tuple[str, ...]] | None): Grouping sets mode.
+            expected_segments (ibis.Table | None): Validated segment combinations to pad with.
 
         Returns:
             ibis.Table: The transaction statistics by segment.
@@ -848,6 +999,11 @@ class SegTransactionStats:
         )
 
         grouping_sets_list = SegTransactionStats._generate_grouping_sets(segment_col, grouping_sets)
+        null_aggs = {name for name, (_, func) in extra_aggs.items() if func not in _ADDITIVE_AGG_FUNCS}
+        if unknown_flag is not None:
+            suffixes = [get_option("column.suffix.unknown_customer"), get_option("column.suffix.total")]
+            null_aggs |= {f"{name}_{suffix}" for name in null_aggs for suffix in suffixes}
+        fill_cols = [name for name in aggs if name not in null_aggs]
 
         # Native GROUPING SETS only pays off by fusing 2+ sets into one scan; a single set has no benefit.
         use_native = (
@@ -867,6 +1023,8 @@ class SegTransactionStats:
             segment_col,
             rollup_value,
             aggs,
+            expected_segments,
+            fill_cols,
         )
 
         # Calculate derived metrics
