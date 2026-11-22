@@ -804,6 +804,7 @@ class SegTransactionStats:
         # Pass the known schema so con.sql skips inference (it mis-types float aggregates on e.g. Oracle).
         out_schema = ibis.schema({**base.schema(), **dict.fromkeys(flag_names, "int32")})
         gs_table = backend.sql(native_sql, schema=out_schema)
+
         # Rolled-up columns come back NULL; GROUPING(col) == 1 marks them, so replace with rollup_value. A column
         # every set keeps is never rolled up, so its rollup_value needn't fit its type (as on the union path).
         rolled = {
