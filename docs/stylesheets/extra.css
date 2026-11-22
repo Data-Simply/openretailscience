@@ -5,47 +5,52 @@
    ========================================= */
 
 :root {
-  /* Colors */
-  --ds-primary: #22c55e;
-  --ds-bg: #ffffff;
-  --ds-surface: #fafafa;
+  /* Colors: brand greens and ink from the logo kit */
+  --ds-green-50: #f0fdf4;
+  --ds-green-200: #bbf7d0;
+  --ds-green-400: #4ade80;
+  --ds-primary: #22c55e; /* green 500 */
+  --ds-green-700: #15803d;
+  --ds-green-900: #14532d;
+  --ds-green-950: #052e12;
   --ds-dark: #0a0a0a;
-  --ds-heading: #000000;
+  --ds-dark-green: #05110a;
+  --ds-surface: #fafafa;
+  --ds-mint: #f3fbf6;
+  --ds-mint-line: #dcefe3;
+  --ds-heading: var(--ds-dark);
   --ds-body: #404040;
   --ds-subtle: #555555;
   --ds-muted: #737373;
+  --ds-sage: #5f7568; /* green-tinted grey, 4.96:1 on white */
   --ds-border: #e5e5e5;
-  --ds-border-hover: #d1d5db;
 
   /* Type scale — px values to avoid Material's 20px root inflation */
-  --ds-text-hero: 72px;     /* 4.5rem × 16 */
-  --ds-text-display: 48px;  /* 3rem × 16 */
-  --ds-text-section: 42px;  /* 2.625rem × 16 */
-  --ds-text-subheading: 20px; /* 1.25rem × 16 */
-  --ds-text-body-lg: 17px;  /* 1.0625rem × 16 */
-  --ds-text-body-sm: 15px;  /* 0.9375rem × 16 */
-  --ds-text-xs: 12px;       /* 0.75rem × 16 */
-  --ds-text-sm: 14px;       /* 0.875rem × 16 */
-  --ds-text-base: 16px;     /* 1rem × 16 */
-  --ds-text-code: 11px;     /* 0.6875rem × 16 */
+  --ds-text-display: 48px;
+  --ds-text-subheading: 20px;
+  --ds-text-body-lg: 17px;
+  --ds-text-body-sm: 15px;
+  --ds-text-xs: 12px;
+  --ds-text-sm: 14px;
+  --ds-text-base: 16px;
 
-  /* Letter spacing */
-  --ds-tracking-hero: -3.5px;
-  --ds-tracking-display: -2px;
-  --ds-tracking-section: -1.8px;
-  --ds-tracking-stat: -1px;
   --ds-tracking-subheading: -0.3px;
 
-  /* Line heights */
   --ds-leading-tight: 1.1;
   --ds-leading-heading: 1.15;
   --ds-leading-body: 1.6;
-  --ds-leading-body-loose: 1.7;
 
-  /* MkDocs Material overrides */
-  --md-primary-fg-color: #22c55e;
-  --md-primary-fg-color--light: #4ade80;
-  --md-primary-fg-color--dark: #15803d;
+  --ds-ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  --md-text-font: "Poppins";
+  --md-code-font: "Roboto Mono";
+  --md-primary-fg-color: var(--ds-primary);
+  --md-primary-fg-color--light: var(--ds-green-400);
+  --md-primary-fg-color--dark: var(--ds-green-700);
+  --md-accent-fg-color: var(--ds-green-700);
+  --md-accent-fg-color--transparent: rgba(21, 128, 61, 0.1);
+  --md-accent-bg-color: #fff;
+  --md-accent-bg-color--light: rgba(255, 255, 255, 0.7);
 }
 
 /* Material defines these per color scheme on <body>, so :root can't override them. */
@@ -69,187 +74,324 @@ body {
 
 
 /* ========================================= */
-/* Utility classes                           */
+/* Homepage: green liquid glass, light       */
 /* ========================================= */
-.ds-text-dark    { color: var(--ds-dark); }
-/* One step darker than --ds-primary, whose 2.3:1 on white is below the 3:1 large text needs. Only the hero uses it. */
-.ds-text-primary { color: #16a34a; }
-.ds-bg-surface   { background: var(--ds-surface); }
-
 .ds-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0;
 }
 
 .ds-section {
-  padding: 64px 24px;
+  padding: 72px 20px;
 }
 
 @media (min-width: 48em) {
   .ds-section {
-    padding: 80px 40px;
+    padding: 104px 40px;
   }
 }
 
-/* Tighter rhythm for features (grouped with hero) */
-.ds-section.ds-bg-surface {
-  padding-top: 56px;
-  padding-bottom: 64px;
-}
-
-@media (min-width: 48em) {
-  .ds-section.ds-bg-surface {
-    padding-top: 72px;
-    padding-bottom: 80px;
-  }
+.ds-eyebrow {
+  margin: 0 0 18px;
+  font-family: "Inter", sans-serif;
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ds-green-700);
 }
 
 
-/* ========================================= */
-/* Buttons — datasimply.co style             */
-/* ========================================= */
+/* ---------- Focus ---------- */
+/* Browser default rings are dark and vanish on the hero and stats band. */
+.ds-page :focus-visible {
+  outline: 2px solid var(--ds-green-700);
+  outline-offset: 3px;
+}
+
+.lg-hero :focus-visible,
+.ds-band :focus-visible {
+  outline-color: var(--ds-green-400);
+}
+
+
+/* ---------- Buttons ---------- */
 .ds-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: 999px;
   font-weight: 600;
   font-size: var(--ds-text-sm);
-  transition: opacity 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
 
 .ds-btn-dark {
   background: var(--ds-dark);
   color: #fff;
-  padding: 12px 24px;
+  padding: 13px 24px;
 }
 
 @media (min-width: 48em) {
   .ds-btn-dark {
-    padding: 16px 32px;
+    padding: 16px 30px;
   }
 }
 
 .ds-btn-dark:hover {
-  opacity: 0.9;
+  color: #fff;
+  background: var(--ds-green-900);
 }
 
 .ds-btn-text {
   color: var(--ds-heading);
   padding: 12px 4px;
-  font-weight: 600;
 }
 
 .ds-btn-text:hover {
-  opacity: 0.5;
-}
-
-.ds-btn-text--on-dark {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.ds-btn-text--on-dark:hover {
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 
-/* ========================================= */
-/* Hero — typography-led, two-tone headline  */
-/* ========================================= */
-.ds-hero {
-  position: relative;
-  overflow: hidden;
-  padding: 40px 24px 40px;
+/* ---------- Hero: dark stage for the liquid O ---------- */
+.ds-btn-primary {
+  background: var(--ds-primary);
+  color: var(--ds-green-950);
+  padding: 13px 24px;
+}
+
+.ds-btn-ghost {
+  color: #fff;
+  padding: 13px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
 }
 
 @media (min-width: 48em) {
-  .ds-hero {
-    padding: 48px 40px 56px;
+  .ds-btn-primary,
+  .ds-btn-ghost {
+    padding: 16px 30px;
   }
 }
 
-.ds-hero-burst {
-  position: absolute;
-  pointer-events: none;
-  width: 500px;
-  height: 500px;
-  top: -150px;
-  right: -100px;
-  background: radial-gradient(circle, rgba(34, 197, 94, 0.10) 0%, transparent 60%);
+.ds-btn-primary:hover {
+  background: var(--ds-green-400);
 }
 
-.ds-hero-inner {
+.ds-btn-ghost:hover {
+  border-color: rgba(187, 247, 208, 0.6);
+}
+
+/* Material recolours links on hover; keep button text fixed. */
+.ds-btn-primary:hover, .ds-btn-primary:focus { color: var(--ds-green-950); }
+.ds-btn-ghost:hover, .ds-btn-ghost:focus { color: #fff; }
+
+
+.lg-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(60% 55% at 72% 38%, rgba(22, 163, 74, 0.20) 0%, transparent 70%),
+    radial-gradient(40% 40% at 12% 90%, rgba(34, 197, 94, 0.08) 0%, transparent 70%),
+    linear-gradient(180deg, var(--ds-dark) 0%, var(--ds-dark-green) 100%);
+  color: #fff;
+  padding: 40px 24px 56px;
+}
+
+@media (min-width: 48em) {
+  .lg-hero {
+    padding: 56px 40px 72px;
+  }
+}
+
+/* Fine grain keeps the large gradients from banding. */
+.lg-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+
+.lg-hero-inner {
   position: relative;
   z-index: 1;
   max-width: 1200px;
   margin: 0 auto;
+  display: grid;
+  align-items: center;
+  gap: 8px;
 }
 
-.ds-hero-content {
-  max-width: 780px;
-}
-
-@media (min-width: 64em) {
-  .ds-hero-content {
-    margin-left: 8%;
+@media (min-width: 60em) {
+  .lg-hero-inner {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    gap: 32px;
+    min-height: min(620px, calc(100vh - 200px));
   }
 }
 
-.ds-hero-headline {
+.lg-hero-copy > * {
+  animation: lg-rise 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.lg-hero-copy > :nth-child(2) { animation-delay: 0.12s; }
+.lg-hero-copy > :nth-child(3) { animation-delay: 0.22s; }
+
+@keyframes lg-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg-hero-copy > * { animation: none; }
+}
+
+.lg-hero-headline {
   font-family: "Poppins", sans-serif;
-  font-size: clamp(32px, 5vw + 8px, 72px);
+  font-size: clamp(34px, 3.2vw + 10px, 56px);
   font-weight: 800;
-  line-height: 1;
-  letter-spacing: var(--ds-tracking-display);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
   margin: 0;
 }
 
-@media (min-width: 64em) {
-  .ds-hero-headline {
-    letter-spacing: var(--ds-tracking-hero);
-  }
+.lg-hero-problems {
+  display: block;
+  color: #fff;
 }
 
-.ds-hero-body {
-  margin-top: 24px;
+.lg-hero-answer {
+  display: block;
+  margin-top: 6px;
+  color: var(--ds-green-400);
+}
+
+.lg-hero-body {
+  margin: 26px 0 0;
+  max-width: 470px;
   font-family: "Inter", sans-serif;
-  font-weight: 400;
-  color: var(--ds-subtle);
-  max-width: 480px;
-  font-size: var(--ds-text-body-sm);
+  font-size: var(--ds-text-body-lg);
   line-height: var(--ds-leading-body);
+  color: #fff;
 }
 
-.ds-hero-actions {
+.lg-hero-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
-  margin-top: 32px;
+  gap: 14px;
+  margin-top: 34px;
 }
 
 @media (max-width: 25em) {
-  .ds-hero-actions {
+  .lg-hero-actions {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .ds-hero-actions .ds-btn {
+  .lg-hero-actions .ds-btn {
     justify-content: center;
   }
 }
 
+.lg-hero-art {
+  position: relative;
+  width: min(54vw, 230px);
+  margin: 0 auto 16px;
+}
 
-/* ========================================= */
-/* Logo Bar — scrolling marquee              */
-/* ========================================= */
+@media (min-width: 60em) {
+  .lg-hero-art {
+    width: min(85%, 425px);
+    margin: 0 auto;
+  }
+}
+
+/* The shader draws the O at 80% of a square canvas (top at 15%, 5% below). Size the canvas so the O
+   itself fills .lg-hero-art: 1.3153 = (947 / 900) / 0.8; the margins trim the headroom back to the O's box. */
+.lg-hero-stage {
+  position: relative;
+  width: 131.53%;
+  margin: -19.73% 0 -6.58% -15.76%;
+  aspect-ratio: 1;
+}
+
+.lg-hero-stage.is-live { will-change: transform; }
+
+.lg-hero-glow,
+.lg-hero-stage img,
+.lg-hero-stage canvas {
+  position: absolute;
+  display: block;
+}
+
+/* Matches the shader's layout (O is 80% of the canvas height, centre 5% below middle). */
+.lg-hero-glow,
+.lg-hero-stage img {
+  height: 80%;
+  left: 50%;
+  top: 15%;
+}
+
+/* The O's drop shadow, drawn once: a drop-shadow filter on the canvas would re-blur it every frame. The blur
+   sits on the parent because filter applies before mask on the same element. */
+.lg-hero-glow {
+  aspect-ratio: 900 / 947;
+  transform: translate(-50%, 30px);
+  filter: blur(30px);
+}
+
+.lg-hero-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(22, 163, 74, 0.28);
+  /* Chrome before 120 only knows the prefixed form, and unmasked the glow is a blurred green box. */
+  -webkit-mask: url("../assets/images/home/liquid-o.webp") center / contain no-repeat;
+  mask: url("../assets/images/home/liquid-o.webp") center / contain no-repeat;
+}
+
+.lg-hero-stage img {
+  width: auto;
+  transform: translateX(-50%);
+  transition: opacity 0.8s ease;
+}
+
+.lg-hero-stage canvas {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity 0.8s ease;
+}
+
+.lg-hero-stage.is-live canvas { opacity: 1; pointer-events: auto; }
+.lg-hero-stage.is-live img { opacity: 0; }
+
+.lg-hero-pool {
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: -2%;
+  height: 12%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(74, 222, 128, 0.22), transparent);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+
+/* ---------- Logo bar ---------- */
 .ds-logo-bar {
-  border-top: 1px solid var(--ds-border);
-  border-bottom: 1px solid var(--ds-border);
-  padding: 48px 0;
+  border-top: 1px solid var(--ds-mint-line);
+  border-bottom: 1px solid var(--ds-mint-line);
+  padding: 40px 0;
   overflow: hidden;
+  background: #fff;
 }
 
 .ds-logo-bar-header {
@@ -263,10 +405,10 @@ body {
   font-family: "Inter", sans-serif;
   font-size: var(--ds-text-xs);
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ds-muted);
-  margin-bottom: 40px;
+  margin: 0 0 28px;
 }
 
 .ds-logo-bar-mask {
@@ -276,7 +418,7 @@ body {
 
 .ds-logo-scroll {
   display: flex;
-  gap: 48px;
+  gap: 56px;
   animation: ds-scroll-logos 45s linear infinite;
   width: max-content;
 }
@@ -286,7 +428,7 @@ body {
   font-family: "Poppins", sans-serif;
   font-size: var(--ds-text-subheading);
   font-weight: 600;
-  color: var(--ds-muted);
+  color: var(--ds-sage);
   white-space: nowrap;
 }
 
@@ -309,37 +451,19 @@ body {
 }
 
 
-/* ========================================= */
-/* Grid layout — sticky heading + cards      */
-/* ========================================= */
-.ds-grid-5 {
-  display: grid;
-  gap: 48px;
-}
-
-@media (min-width: 64em) {
-  .ds-grid-5 {
-    grid-template-columns: 2fr 3fr;
-  }
-}
-
-.ds-sticky {
-  position: sticky;
-  top: 112px;
-}
-
+/* ---------- Section headings ---------- */
 .ds-section-heading {
   font-family: "Poppins", sans-serif;
   font-weight: 700;
   color: var(--ds-heading);
-  font-size: clamp(28px, 3vw + 8px, 42px);
+  font-size: clamp(30px, 2.6vw + 14px, 46px);
   line-height: var(--ds-leading-heading);
-  letter-spacing: var(--ds-tracking-section);
+  letter-spacing: -0.03em;
   margin: 0;
 }
 
 .ds-section-body {
-  margin-top: 16px;
+  margin: 16px 0 0;
   font-family: "Inter", sans-serif;
   color: var(--ds-subtle);
   font-size: var(--ds-text-body-lg);
@@ -347,12 +471,74 @@ body {
 }
 
 
-/* ========================================= */
-/* Bordered cards — "What we do" style       */
-/* ========================================= */
-.ds-card-bordered {
-  border-top: 1px solid var(--ds-border);
-  padding: 24px 0 32px;
+/* ---------- What's included ---------- */
+.ds-features {
+  background: var(--ds-surface);
+}
+
+.ds-features-layout {
+  display: grid;
+  gap: 40px;
+}
+
+@media (min-width: 64em) {
+  .ds-features-layout {
+    grid-template-columns: 2fr 3fr;
+    gap: 72px;
+  }
+
+  /* top clears Material's sticky header and tabs */
+  .ds-features-header {
+    position: sticky;
+    top: 112px;
+  }
+}
+
+.ds-showcase-header {
+  max-width: 640px;
+  margin-bottom: 48px;
+}
+
+@media (min-width: 64em) {
+  .ds-showcase-header {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    column-gap: 72px;
+    align-items: end;
+    max-width: none;
+    margin-bottom: 56px;
+  }
+}
+
+.ds-feature-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  padding: 28px 0 32px;
+  border-top: 1px solid var(--ds-mint-line);
+}
+
+@media (min-width: 48em) {
+  .ds-feature-row {
+    grid-template-columns: 148px minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+
+.ds-feature-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 132px;
+  object-fit: contain;
+  transition: transform 0.7s var(--ds-ease-out);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ds-feature-row:hover .ds-feature-art {
+    transform: translateY(-4px) rotate(-3deg) scale(1.04);
+  }
 }
 
 .ds-card-heading {
@@ -361,198 +547,223 @@ body {
   color: var(--ds-heading);
   font-size: var(--ds-text-subheading);
   letter-spacing: var(--ds-tracking-subheading);
-  margin: 0;
+  margin: 4px 0 0;
 }
 
 .ds-card-body {
-  margin-top: 12px;
+  margin: 10px 0 0;
   font-family: "Inter", sans-serif;
   color: var(--ds-body);
-  font-size: var(--ds-text-base);
-  line-height: var(--ds-leading-body-loose);
-}
-
-
-/* ========================================= */
-/* Impact stats — dark section               */
-/* ========================================= */
-.ds-stats {
-  position: relative;
-  overflow: hidden;
-  background: var(--ds-dark);
-  padding: 56px 32px;
-}
-
-@media (min-width: 64em) {
-  .ds-stats {
-    padding: 64px 64px;
-  }
-}
-
-.ds-stats-burst {
-  position: absolute;
-  pointer-events: none;
-  width: 500px;
-  height: 500px;
-  top: -200px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: radial-gradient(circle, rgba(34, 197, 94, 0.08) 0%, transparent 60%);
-}
-
-.ds-stats-inner {
-  position: relative;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.ds-stats-label {
-  text-align: center;
-  margin-bottom: 32px;
-  font-family: "Poppins", sans-serif;
-  font-weight: 600;
-  color: var(--ds-primary);
-  font-size: var(--ds-text-subheading);
-  letter-spacing: var(--ds-tracking-subheading);
-}
-
-.ds-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 32px;
-}
-
-@media (min-width: 64em) {
-  .ds-stats-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 48px;
-  }
-}
-
-.ds-stat {
-  text-align: center;
-}
-
-.ds-stat-value {
-  font-family: "Poppins", sans-serif;
-  font-size: 20px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: var(--ds-tracking-stat);
-  margin: 0;
-  white-space: nowrap;
-}
-
-@media (min-width: 25em) {
-  .ds-stat-value {
-    font-size: 24px;
-  }
-}
-
-@media (min-width: 48em) {
-  .ds-stat-value {
-    font-size: 36px;
-  }
-}
-
-.ds-stat-desc {
-  margin-top: 8px;
-  font-family: "Inter", sans-serif;
-  color: var(--ds-border-hover);
   font-size: var(--ds-text-body-sm);
   line-height: var(--ds-leading-body);
 }
 
 
-/* ========================================= */
-/* Showcase — case-study style cards         */
-/* ========================================= */
-.ds-showcase-header {
-  max-width: 640px;
-  margin-bottom: 48px;
-}
-
-.ds-showcase-grid {
-  display: grid;
-  gap: 24px;
-  min-width: 0;
+/* ---------- Stats band ---------- */
+.ds-band {
+  position: relative;
+  overflow: hidden;
+  padding: 72px 20px;
+  background:
+    radial-gradient(30% 60% at 14% 50%, rgba(34, 197, 94, 0.16), transparent 70%),
+    radial-gradient(30% 50% at 92% 20%, rgba(34, 197, 94, 0.08), transparent 70%),
+    var(--ds-dark-green);
 }
 
 @media (min-width: 48em) {
-  .ds-showcase-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .ds-showcase-card--wide {
-    grid-column: 1 / -1;
+  .ds-band {
+    padding: 104px 40px;
   }
 }
 
-.ds-showcase-card {
-  border: 1px solid var(--ds-border);
-  border-radius: 16px;
-  padding: 20px;
+.ds-band-o {
+  position: absolute;
+  left: -90px;
+  top: 50%;
+  height: 120%;
+  width: auto;
+  transform: translateY(-50%) rotate(-10deg);
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+@media (min-width: 64em) {
+  .ds-band-o {
+    left: max(-30px, calc(50% - 760px));
+    height: 500px;
+    opacity: 0.95;
+  }
+}
+
+.ds-band-inner {
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  gap: 40px;
+}
+
+@media (min-width: 64em) {
+  .ds-band-inner {
+    padding-left: 440px;
+    gap: 48px;
+  }
+}
+
+.ds-band-heading {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: clamp(34px, 3vw + 12px, 54px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: #fff;
+}
+
+.ds-band-heading span {
+  color: var(--ds-green-400);
+}
+
+.ds-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px 28px;
+}
+
+/* Subgrid rows keep each pair's values bottom-aligned and descriptions level when one value wraps. */
+.ds-stat {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  row-gap: 8px;
+  align-content: start;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.ds-stat-value {
+  align-self: end;
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  font-size: clamp(18px, 1vw + 12px, 26px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  color: #fff;
+}
+
+.ds-stat-desc {
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-body);
+}
+
+
+/* ---------- Showcase (bento) ---------- */
+.ds-bento {
+  display: grid;
+  gap: 20px;
+}
+
+@media (min-width: 56em) {
+  .ds-bento {
+    grid-template-columns: repeat(12, 1fr);
+  }
+
+  .ds-bento-card--7 { grid-column: span 7; }
+  .ds-bento-card--5 { grid-column: span 5; }
+}
+
+.ds-bento-card {
   display: flex;
   flex-direction: column;
-  background: var(--ds-bg);
-  transition: all 0.2s ease;
   min-width: 0;
-  max-width: 100%;
+  margin: 0;
+  padding: 14px 14px 26px;
+  border-radius: 22px;
+  border: 1px solid var(--ds-border);
+  background: #fff;
+  transition: transform 0.4s var(--ds-ease-out), box-shadow 0.4s ease, border-color 0.4s ease;
 }
 
-@media (min-width: 48em) {
-  .ds-showcase-card {
-    padding: 32px;
+.ds-bento-card:hover {
+  border-color: var(--ds-green-200);
+  box-shadow: 0 30px 60px -30px rgba(21, 128, 61, 0.4);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ds-bento-card:hover {
+    transform: translateY(-6px);
   }
 }
 
-.ds-showcase-card:hover {
-  border-color: var(--ds-border-hover);
-  transform: translateY(-4px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+.ds-bento-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
 }
 
-@media (min-width: 48em) {
-  .ds-showcase-card--wide {
-    flex-direction: row;
-    align-items: center;
-    gap: 32px;
+.ds-bento-card figcaption {
+  padding: 18px 10px 0;
+}
+
+.ds-bento-zoom {
+  display: block;
+  cursor: zoom-in;
+}
+
+/* Phones: let the charts use nearly the full width so their labels stay readable. */
+@media (max-width: 47.99em) {
+  .ds-showcase {
+    padding-left: 10px;
+    padding-right: 10px;
   }
 
-  .ds-showcase-card--wide .ds-code-window {
-    flex: 0 0 45%;
-    margin-bottom: 0;
+  .ds-showcase-header {
+    padding: 0 10px;
   }
 
-  .ds-showcase-card--wide .ds-showcase-card__text {
-    flex: 1;
+  .ds-bento-card {
+    padding: 4px 4px 22px;
+    border-radius: 16px;
   }
 
-  .ds-showcase-card--wide .ds-showcase-body {
-    flex: initial;
+  .ds-bento-card figcaption {
+    padding: 16px 14px 0;
   }
+
+  .ds-bento-card--code {
+    padding: 14px 12px 22px;
+  }
+}
+
+.ds-bento-card--code {
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 22px 26px;
+  background: linear-gradient(180deg, var(--ds-mint) 0%, #fff 80%);
+  border-color: var(--ds-mint-line);
+}
+
+.ds-bento-card--code > div:last-child {
+  padding: 0 2px;
+}
+
+.ds-bento-card--code .ds-code-window {
+  flex: 1;
 }
 
 .ds-badge {
-  display: inline-block;
-  align-self: flex-start;
+  display: block;
   font-family: "Inter", sans-serif;
-  font-size: var(--ds-text-xs);
+  font-size: var(--ds-text-sm);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 4px 12px;
-  border-radius: 9999px;
-  background: #f0fdf4;
-  color: #15803d;
-  margin-bottom: 24px;
-}
-
-.ds-showcase-img {
-  width: 100%;
-  height: auto;
-  border-radius: 8px;
-  margin-bottom: 24px;
+  color: var(--ds-green-700);
+  margin-bottom: 6px;
 }
 
 .ds-showcase-heading {
@@ -565,109 +776,96 @@ body {
 }
 
 .ds-showcase-body {
-  margin-top: 12px;
-  flex: 1;
+  margin: 8px 0 0;
   font-family: "Inter", sans-serif;
   color: var(--ds-subtle);
   font-size: var(--ds-text-body-sm);
   line-height: var(--ds-leading-body);
 }
 
-.ds-showcase-tags {
-  margin-top: 16px;
-  font-family: "Inter", sans-serif;
-  font-size: var(--ds-text-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ds-muted);
+.ds-showcase-body code {
+  font-family: "Roboto Mono", monospace;
+  font-size: 0.9em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--ds-mint);
+  color: var(--ds-green-900);
 }
 
 
-/* ========================================= */
-/* Code window — compact, for showcase card  */
-/* ========================================= */
+/* ---------- Code window ---------- */
 .ds-code-window {
-  background: #1e1e2e;
-  border-radius: 12px;
+  background: #0f1d15;
+  border-radius: 14px;
   overflow: hidden;
-  margin-bottom: 24px;
+  box-shadow: 0 24px 40px -24px rgba(5, 46, 22, 0.6);
 }
 
 .ds-code-titlebar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   padding: 10px 14px;
-  background: #181825;
+  background: var(--ds-dark-green);
 }
-
-.ds-code-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.ds-code-dot--red    { background: #f38ba8; }
-.ds-code-dot--yellow { background: #f9e2af; }
-.ds-code-dot--green  { background: #a6e3a1; }
 
 .ds-code-filename {
-  margin-left: 8px;
   font-size: var(--ds-text-xs);
-  color: #9399b2;
+  color: rgba(255, 255, 255, 0.55);
   font-family: "Roboto Mono", monospace;
 }
 
 .ds-code-body {
-  padding: 16px;
+  padding: 16px 18px;
   margin: 0;
   overflow-x: auto;
   font-family: "Roboto Mono", monospace;
-  font-size: var(--ds-text-code);
-  line-height: 1.7;
-  color: #cdd6f4;
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: #d8e7dd;
 }
 
 .ds-code-body code {
   font-family: inherit;
 }
 
-/* Syntax highlighting — scoped to code windows */
-.ds-code-body .kw  { color: #cba6f7; }
-.ds-code-body .mod { color: #89b4fa; }
-.ds-code-body .cls { color: #a6e3a1; }
-.ds-code-body .fn  { color: #89dceb; }
-.ds-code-body .cmt { color: #9399b2; }
-.ds-code-body .num { color: #fab387; }
-.ds-code-body .str { color: #f9e2af; }
+/* Brand greens only: keywords stand out, names read brightest, strings sit in between. */
+.ds-code-body .kw  { color: var(--ds-green-400); }
+.ds-code-body .cls { color: var(--ds-green-50); }
+.ds-code-body .str { color: var(--ds-green-200); }
 
 
-/* ========================================= */
-/* Final CTA — centered, with gradient burst */
-/* ========================================= */
+/* ---------- Final CTA ---------- */
 .ds-cta {
   position: relative;
   overflow: hidden;
-  background: var(--ds-dark);
-  padding: 100px 24px;
+  padding: 88px 20px 96px;
+  border-top: 1px solid var(--ds-mint-line);
+  background: linear-gradient(180deg, var(--ds-surface) 0%, var(--ds-green-50) 100%);
 }
 
 @media (min-width: 48em) {
   .ds-cta {
-    padding: 100px 40px;
+    padding: 120px 40px 128px;
   }
 }
 
-.ds-cta-burst {
+.ds-cta-o {
   position: absolute;
   pointer-events: none;
-  width: 600px;
-  height: 600px;
-  top: -150px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: radial-gradient(circle, rgba(34, 197, 94, 0.06) 0%, transparent 60%);
+  right: -110px;
+  bottom: -150px;
+  height: 460px;
+  width: auto;
+  rotate: 14deg;
+  opacity: 0.2;
+}
+
+@media (min-width: 64em) {
+  .ds-cta-o {
+    right: 4%;
+    bottom: -90px;
+    height: 400px;
+    opacity: 0.95;
+    filter: drop-shadow(0 30px 40px rgba(21, 128, 61, 0.18));
+  }
 }
 
 .ds-cta-inner {
@@ -680,10 +878,10 @@ body {
 .ds-cta-heading {
   font-family: "Poppins", sans-serif;
   font-weight: 700;
-  color: #fff;
-  font-size: 24px;
+  color: var(--ds-dark);
+  font-size: 30px;
   line-height: var(--ds-leading-tight);
-  letter-spacing: var(--ds-tracking-display);
+  letter-spacing: -0.03em;
   margin: 0;
 }
 
@@ -694,9 +892,9 @@ body {
 }
 
 .ds-cta-body {
-  margin-top: 20px;
+  margin: 20px 0 0;
   font-family: "Inter", sans-serif;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--ds-subtle);
   font-size: var(--ds-text-body-lg);
   line-height: var(--ds-leading-body);
 }
@@ -706,17 +904,22 @@ body {
   align-items: center;
   gap: 16px;
   margin-top: 32px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  padding: 12px 24px;
+  background: #fff;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  padding: 12px 20px;
   font-family: "Roboto Mono", monospace;
   font-size: var(--ds-text-sm);
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--ds-dark);
+  box-shadow: 0 8px 24px rgba(10, 10, 10, 0.06);
+}
+
+.ds-install-text {
+  font: inherit;
 }
 
 .ds-install-prompt {
-  color: var(--ds-primary);
+  color: var(--ds-green-700);
   margin-right: 8px;
 }
 
@@ -726,7 +929,7 @@ body {
   justify-content: center;
   align-items: center;
   gap: 16px;
-  margin-top: 32px;
+  margin-top: 28px;
 }
 
 @media (max-width: 25em) {
@@ -741,11 +944,27 @@ body {
 }
 
 
+/* ---------- Reveal on scroll (class added by home.js) ---------- */
+/* `translate` rather than `transform`, so card hover transforms still apply after reveal. */
+.ds-js-reveal [data-reveal] {
+  opacity: 0;
+  translate: 0 28px;
+  transition: opacity 0.8s var(--ds-ease-out), translate 0.8s var(--ds-ease-out),
+    transform 0.4s var(--ds-ease-out), box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+.ds-js-reveal [data-reveal].is-visible {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.ds-js-reveal .ds-bento > :nth-child(2) { transition-delay: 0.08s, 0.08s, 0s, 0s, 0s; }
+
+
 /* ========================================= */
 /* MkDocs Material overrides                 */
 /* ========================================= */
 
-/* Header — clean white style */
 .md-header {
   background: #fff;
   box-shadow: none;
@@ -770,7 +989,6 @@ body {
   font-weight: 600;
 }
 
-/* Nav tabs — clean text links */
 .md-tabs {
   background: #fff;
   border: none;
@@ -802,7 +1020,6 @@ body {
   width: auto;
 }
 
-/* Search icon */
 .md-search__icon,
 .md-header__button {
   color: var(--ds-body);
@@ -861,28 +1078,30 @@ body {
 
 .md-consent__form {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 12px 16px;
   padding: 12px 24px;
   max-width: 1200px;
   margin: 0 auto;
   font-size: var(--ds-text-sm);
 }
 
-.md-consent__form > :first-child {
-  flex: 1;
-  margin: 0;
-}
-
 .md-consent__form h4 {
   display: none;
 }
 
-.md-consent__form > :first-child p {
+/* The flex-basis makes the controls wrap below the text once the row gets too narrow for both. */
+.md-consent__form > p {
+  flex: 1 1 320px;
   margin: 0;
   font-size: var(--ds-text-xs);
   color: var(--ds-muted);
-  line-height: 1.4;
+  line-height: 1.5;
+}
+
+.md-consent__settings {
+  flex-basis: 100%;
 }
 
 .md-consent__controls {
@@ -892,44 +1111,90 @@ body {
   flex-shrink: 0;
 }
 
+/* Green 700, not Material's primary green: that is too light behind (or as) 12px text. */
 .md-consent__controls .md-button {
   font-size: var(--ds-text-xs);
   padding: 6px 16px;
   min-width: auto;
+  border-color: var(--ds-green-700);
+  color: var(--ds-green-700);
+}
+
+.md-consent__controls .md-button--primary {
+  background: var(--ds-green-700);
+  color: #fff;
+}
+
+@media (max-width: 30em) {
+  .md-consent__form {
+    padding: 14px 16px;
+  }
+
+  .md-consent__controls {
+    flex-basis: 100%;
+  }
+
+  .md-consent__controls .md-button {
+    flex: 1;
+    min-height: 44px;
+  }
 }
 
 /* ========================================= */
 /* Install command — copy button             */
 /* ========================================= */
+/* 40px hit area; the negative margin keeps the pill's height. */
 .ds-install-copy {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.4);
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.2s;
-  display: flex;
-  align-items: center;
+  display: grid;
+  place-items: center;
   flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  margin: -10px -14px -10px -8px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ds-muted);
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.ds-install-copy[hidden] {
+  display: none;
 }
 
 .ds-install-copy:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--ds-dark);
+  background: var(--ds-mint);
+}
+
+.ds-install-copy .ds-icon-done,
+.ds-install-copy.copied .ds-icon-copy {
+  display: none;
+}
+
+.ds-install-copy.copied .ds-icon-done {
+  display: block;
 }
 
 .ds-install-copy.copied {
-  color: var(--ds-primary);
+  color: var(--ds-green-700);
+}
+
+.ds-install-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* ========================================= */
-/* === Plot gallery cards ===                */
+/* Plot gallery cards                        */
 /* ========================================= */
-/* Airy, large, no separators: no card boxes, borders, tiles or
-   background panels. Plots are large, sit directly on the white page,
-   separated purely by generous whitespace.
-   Selectors are scoped under .md-typeset so the brand styles win over
-   Material's own h2/h3/p/img/a content rules (which have higher
-   specificity than a bare single-class selector). */
+/* Scoped under .md-typeset to out-specify Material's h2/h3/p/img/a content rules. */
 .md-typeset .orsg-cat { margin-top: 4rem; }
 .md-typeset .orsg-cat:first-of-type { margin-top: 0.75rem; }
 .md-typeset .orsg-cat__head {
@@ -975,18 +1240,12 @@ body {
 .md-typeset .orsg-card:hover .orsg-card__thumb img { opacity: .82; }
 
 .md-typeset .orsg-card__thumb {
-  /* Push the thumbnail to the bottom of the (equal-height) card so chart
-     tops align across a row even when titles/descriptions wrap to
-     different line counts. All thumbnails share the same width and
-     aspect-ratio, so equal height + bottom alignment == aligned tops. */
+  /* Cards are equal height and thumbnails identical, so bottom-aligning them aligns chart tops across a row. */
   margin-top: auto;
 }
 .md-typeset .orsg-card__thumb img {
   display: block;
-  /* aspect-ratio on the image (with a definite width) reliably gives every
-     thumbnail an identical 16:10 box; object-fit letterboxes mixed-ratio
-     plots (e.g. the tall revenue tree) inside it. Putting aspect-ratio on
-     the container instead lets a tall image expand it, breaking alignment. */
+  /* On the img, not the container: a tall plot would stretch the container and break row alignment. */
   width: 100%;
   aspect-ratio: 16 / 10;
   object-fit: contain;
