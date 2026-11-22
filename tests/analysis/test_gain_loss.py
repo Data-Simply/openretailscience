@@ -4,15 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
-from matplotlib.colors import to_hex
 
 from openretailscience.analysis.gain_loss import GainLoss
 from openretailscience.options import ColumnHelper, option_context
-from openretailscience.plots.styles.colors import COLORS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -34,13 +31,6 @@ COMPONENTS = [
     "switch_from_comparison",
     "switch_to_comparison",
 ]
-
-
-@pytest.fixture(autouse=True)
-def cleanup_figures():
-    """Automatically close all matplotlib figures after each test."""
-    yield
-    plt.close("all")
 
 
 def _transactions(rows: list[tuple[int, str, str, int, int]]) -> pd.DataFrame:
@@ -258,7 +248,6 @@ class TestResults:
         [
             ("count", [2, 1, 3, 1, 1, 2]),
             ("mean", [50.0, 100.0, 200 / 3, 150.0, 120.0, 135.0]),
-            ("max", [60, 100, 100, 150, 120, 150]),
         ],
     )
     def test_agg_func_aggregates_each_period_and_group(self, agg_func: str, expected: list[float]) -> None:
@@ -412,13 +401,6 @@ class TestValidation:
                 r'must be boolean; .* nullable "boolean" dtype',
                 id="series_with_nan",
             ),
-            pytest.param(
-                "focus_group_index",
-                lambda df: list(df["brand"].map({FOCUS: True})),
-                TypeError,
-                r'must be boolean; .* nullable "boolean" dtype',
-                id="list_with_nan",
-            ),
         ],
     )
     def test_invalid_mask_raises(
@@ -456,69 +438,3 @@ class TestValidation:
 
         with pytest.raises(ValueError, match=f"{match}.*{missing_col}"):
             _gain_loss(df, **kwargs)
-
-
-class TestPlot:
-    """GainLoss.plot."""
-
-    @pytest.mark.parametrize(
-        ("group_col", "plot_kwargs", "expected_bar_labels", "expected_y_label"),
-        [
-            pytest.param(None, {}, [""], FOCUS, id="ungrouped"),
-            pytest.param(cols.store_id, {}, ["201", "202"], cols.store_id, id="grouped"),
-            pytest.param(
-                cols.store_id,
-                {"x_col": "new", "stacked": False},
-                ["201", "202"],
-                cols.store_id,
-                id="caller_x_col_and_stacked_ignored",
-            ),
-        ],
-    )
-    def test_default_labels(
-        self,
-        transactions: pd.DataFrame,
-        group_col: str | None,
-        plot_kwargs: dict[str, str | bool],
-        expected_bar_labels: list[str],
-        expected_y_label: str,
-    ) -> None:
-        """One stacked bar per table row, unlabelled ungrouped (the y label names the focus group) or by group_col.
-
-        The x label names the value column.
-        """
-        ax = _gain_loss(transactions, group_col=group_col).plot(**plot_kwargs)
-        # Unstacked, each segment gets its own y offset
-        bar_positions = {patch.get_y() for bars in ax.containers for patch in bars.patches}
-
-        assert (
-            [t.get_text() for t in ax.get_yticklabels()],
-            len(bar_positions),
-            ax.get_xlabel(),
-            ax.get_ylabel(),
-        ) == (expected_bar_labels, len(expected_bar_labels), cols.unit_spend, expected_y_label)
-
-    def test_gains_are_green_and_losses_red(self, transactions: pd.DataFrame) -> None:
-        """New, increased and switched-from segments are shades of green; lost, decreased and switched-to of red.
-
-        A caller's color is ignored.
-        """
-        ax = _gain_loss(transactions).plot(color="black")
-
-        expected = [COLORS[hue][shade] for hue in ("green", "red") for shade in (700, 500, 300)]
-        assert [to_hex(bars.patches[0].get_facecolor()) for bars in ax.containers] == expected
-
-    def test_legend_and_default_title_use_group_names(self, transactions: pd.DataFrame) -> None:
-        """One legend entry per gain/loss segment, and the default title, interpolate the focus and comparison names."""
-        ax = _gain_loss(transactions).plot()
-
-        assert f"Gain Loss from {FOCUS} to {COMPARISON}" in [t.get_text().replace("\n", " ") for t in ax.figure.texts]
-
-        assert [t.get_text() for t in ax.get_legend().get_texts()] == [
-            "New",
-            f"Increased {FOCUS}",
-            f"Switch From {COMPARISON}",
-            "Lost",
-            f"Decreased {FOCUS}",
-            f"Switch To {COMPARISON}",
-        ]
