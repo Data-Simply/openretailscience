@@ -48,7 +48,7 @@ methods, the last write wins.
 - `data.unknown_customer_value` — the customer ID that marks rows with no identified customer (e.g. `-1`), or
   `ibis.null()`/`pd.NA` when null IDs mark them (`"<NULL>"` in TOML). Default `None` (off). When set,
   analyses that support it count customers from identified rows only and report unknown-customer sales in
-  `_unknown`/`_total` columns.
+  `_unknown`/`_total` columns. `GainLoss` leaves unknown-customer rows out, since it decomposes spend per customer.
 
 Other columns (a brand, a region) have no option; pass them to analyses as arguments (`group_col=`, `segment_col=`).
 

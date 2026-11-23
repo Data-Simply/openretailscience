@@ -1,72 +1,83 @@
-"""Gain loss (switching) analysis of customer movement between a focus and a comparison group across two periods.
+"""Gain loss (switching) analysis of customer movement between a focus and a comparison group across two periods."""
 
-Pandas-only; period and group selectors are positional boolean masks.
-"""
+from __future__ import annotations
 
-from typing import Any
+import functools
+from typing import TYPE_CHECKING, Any
 
-import numpy as np
-import pandas as pd
-from matplotlib.axes import Axes, SubplotBase
+import ibis
 
 from openretailscience.core.validation import (
+    ensure_agg_func,
     ensure_columns,
     ensure_data_has_columns,
-    ensure_dataframe,
     ensure_excludes_customer_col,
+    ensure_ibis_table,
+    ensure_value_choice,
+    unknown_customer_flag,
 )
 from openretailscience.options import ColumnHelper, get_option
 from openretailscience.plots import bar
 from openretailscience.plots.styles.colors import COLORS
 
-Mask = list[bool] | np.ndarray | pd.Series
+if TYPE_CHECKING:
+    import datetime as dt
 
-# Reductions only: a groupby method such as "cumsum" or "head" returns rows per transaction, not per customer.
-# No "prod": the categorical customer_id grouping gives absent customers prod's empty value 1, not 0.
-_GROUPBY_AGGREGATIONS = (
-    "sum",
-    "mean",
-    "median",
-    "min",
-    "max",
-    "count",
-    "nunique",
-    "size",
-    "std",
-    "var",
-    "sem",
-    "skew",
-    "quantile",
-    "first",
-    "last",
-)
+    import pandas as pd
+    from matplotlib.axes import Axes, SubplotBase
+
+# Additive per customer only: the summary sums customer values, and switching assumes value moves between groups
+VALID_AGG_FUNCS = ("sum", "count", "nunique")
+
+VALUE_COLS = [
+    "focus_p1",
+    "comparison_p1",
+    "total_p1",
+    "focus_p2",
+    "comparison_p2",
+    "total_p2",
+    "focus_diff",
+    "comparison_diff",
+    "total_diff",
+]
+COMPONENTS = [
+    "new",
+    "lost",
+    "increased_focus",
+    "decreased_focus",
+    "switch_from_comparison",
+    "switch_to_comparison",
+]
+# Rows matching each selected value, carried into the summary so df can tell a misspelt value from a zero total
+_ROW_COUNTS = {
+    "p1_value": "_p1_rows",
+    "p2_value": "_p2_rows",
+    "focus_value": "_focus_rows",
+    "comparison_value": "_comparison_rows",
+}
 
 
 class GainLoss:
     """Gain loss (switching) analysis between a focus group and a comparison group.
 
-    Results are computed at initialization; there are no ``df``/``table`` attributes.
-
-    ``gain_loss_df`` has one row per customer, or per ``group_col`` value and customer when grouped:
+    ``customer_table`` has one row per customer, or per ``group_col`` value and customer when grouped:
     ``customer_id`` (after ``group_col``), then ``focus``/``comparison``/``total`` for ``_p1``,
     ``_p2`` and ``_diff``, then the six components ``new``, ``lost``, ``increased_focus``,
     ``decreased_focus``, ``switch_from_comparison`` and ``switch_to_comparison``, which sum to
-    ``focus_diff``.
-    Customers whose values are all 0 are dropped.
+    ``focus_diff``. It is lazy and unordered; filter it before executing on large data.
 
-    ``gain_loss_table_df`` has the same value columns summed over customers: one row when
-    ungrouped, one row per ``group_col`` value (with ``group_col`` first) otherwise.
+    ``table`` and ``df`` hold the same value columns summed over customers: one row when
+    ungrouped, one row per ``group_col`` value (with ``group_col`` first, null as its own group) otherwise.
+
+    Rows with a null customer ID, or the ``data.unknown_customer_value`` ID when that option is set, are left out.
+    Values are netted per customer and period, so a return of an item bought outside both periods shows as
+    negative ``new`` or positive ``lost``. Drop those returns, or move them to the sale's period, first.
 
     Examples:
         >>> from openretailscience.analysis import GainLoss
         >>> gl = GainLoss(
-        ...     df=transactions,
-        ...     p1_index=transactions["period"] == "2025Q1",
-        ...     p2_index=transactions["period"] == "2025Q2",
-        ...     focus_group_index=transactions["brand"] == "Meadow Farm",
-        ...     focus_group_name="Meadow Farm",
-        ...     comparison_group_index=transactions["brand"] == "Greenvale",
-        ...     comparison_group_name="Greenvale",
+        ...     df=transactions, period_col="period", p1_value="2025Q1", p2_value="2025Q2",
+        ...     compare_col="brand", focus_value="Meadow Farm", comparison_value="Greenvale",
         ... )
         >>> ax = gl.plot(
         ...     eyebrow="Brand switching", title="Where Meadow Farm spend came from and went", subtitle="Q2 vs Q1 2025"
@@ -75,275 +86,162 @@ class GainLoss:
 
     def __init__(
         self,
-        df: pd.DataFrame,
-        p1_index: Mask,
-        p2_index: Mask,
-        focus_group_index: Mask,
-        focus_group_name: str,
-        comparison_group_index: Mask,
-        comparison_group_name: str,
+        df: pd.DataFrame | ibis.Table,
+        period_col: str,
+        p1_value: str | int | dt.date,
+        p2_value: str | int | dt.date,
+        compare_col: str,
+        focus_value: str | int,
+        comparison_value: str | int,
         group_col: str | None = None,
         value_col: str | None = None,
         agg_func: str = "sum",
     ) -> None:
-        """Calculate the gain loss decomposition at the customer level.
+        """Build the gain loss queries; they run when ``df`` is read or a table is executed.
 
-        The four masks have one entry per row of ``df`` and are matched by position, so ``df``
-        may repeat index labels.
+        To compare against more than one value (e.g. every other brand in the category), or to show
+        display names in place of codes, label a column first with
+        ``openretailscience.utils.filter_and_label_by_condition`` and select on that column. Label date
+        ranges for ``period_col`` with ``openretailscience.utils.filter_and_label_by_periods``.
 
         Args:
-            df (pd.DataFrame): Transactions with the option-derived customer_id column and ``value_col``.
-            p1_index (list[bool] | np.ndarray | pd.Series): Rows in the first period.
-            p2_index (list[bool] | np.ndarray | pd.Series): Rows in the second period.
-            focus_group_index (list[bool] | np.ndarray | pd.Series): Rows in the focus group.
-            focus_group_name (str): Display name of the focus group.
-            comparison_group_index (list[bool] | np.ndarray | pd.Series): Rows in the comparison group.
-            comparison_group_name (str): Display name of the comparison group.
+            df (pd.DataFrame | ibis.Table): Transactions with the option-derived customer_id column,
+                ``value_col``, ``period_col`` and ``compare_col``.
+            period_col (str): Column holding a period label per row (e.g. "2025Q1").
+            p1_value (str | int | dt.date): Label of the first (base) period.
+            p2_value (str | int | dt.date): Label of the second period.
+            compare_col (str): Column holding the focus and comparison groups (e.g. "brand").
+            focus_value (str | int): Value of ``compare_col`` for the focus group; also its plot label.
+            comparison_value (str | int): Value of ``compare_col`` for the comparison group; also its plot label.
             group_col (str | None): Optional column to break the analysis down by.
             value_col (str | None): Value column to aggregate; defaults to option ``column.unit_spend``.
-            agg_func (str): A pandas groupby reduction from a fixed list ("sum", "mean", "median", "min", "max",
-                "count", "nunique", "size", "std", "var", "sem", "skew", "quantile", "first", "last"; case-sensitive).
-                Defaults to "sum".
+            agg_func (str): "sum", "count" or "nunique". Defaults to "sum".
 
         Raises:
-            TypeError: If ``df`` is not a pandas DataFrame, or a mask is not boolean.
-            ValueError: If ``p1_index`` and ``p2_index`` overlap.
-            ValueError: If ``focus_group_index`` and ``comparison_group_index`` overlap.
-            ValueError: If a mask does not have one entry per row of ``df``, or is a Series whose
-                index differs from ``df.index``.
-            ValueError: If the option-derived customer_id or ``value_col`` columns are missing,
-                or if a given ``group_col`` is not in ``df`` or is the customer column.
-            ValueError: If ``agg_func`` is not a pandas groupby aggregation.
-        """
-        ensure_dataframe(df, "df")
-        value_col = get_option("column.unit_spend") if value_col is None else value_col
-        if not len(df) == len(p1_index) == len(p2_index) == len(focus_group_index) == len(comparison_group_index):
-            raise ValueError(
-                "p1_index, p2_index, focus_group_index, and comparison_group_index must each have one entry per row "
-                "of df",
-            )
-        raw_masks = (p1_index, p2_index, focus_group_index, comparison_group_index)
-        if any(isinstance(mask, pd.Series) and not mask.index.equals(df.index) for mask in raw_masks):
-            raise ValueError("A Series mask's index must match df.index; build the masks from df itself")
-        # Positional masks, so a df index with repeated labels (e.g. customer_id) can't misalign them.
-        # infer_objects accepts an object Series of plain bools but, unlike pd.array, keeps a None/NaN hole non-boolean
-        masks = tuple(pd.Series(mask).infer_objects().array for mask in raw_masks)
-        if not all(pd.api.types.is_bool_dtype(mask.dtype) for mask in masks):
-            raise TypeError(
-                "p1_index, p2_index, focus_group_index, and comparison_group_index must be boolean; a mask with "
-                'missing values needs the nullable "boolean" dtype, where <NA> selects nothing'
-            )
-        # A nullable mask's <NA> (e.g. a comparison against a missing brand) selects nothing, as in pandas indexing
-        p1_index, p2_index, focus_group_index, comparison_group_index = (
-            mask.to_numpy(dtype=bool, na_value=False) for mask in masks
-        )
-
-        if (p1_index & p2_index).any():
-            raise ValueError("p1_index and p2_index should not overlap")
-
-        if (focus_group_index & comparison_group_index).any():
-            raise ValueError("focus_group_index and comparison_group_index should not overlap")
-
-        if group_col is not None:
-            # group_col is typed str | None here, so unpack the single-element list back to a string.
-            group_col = ensure_columns(df, group_col, "group_col")[0]
-            ensure_excludes_customer_col([group_col], "group_col")
-        ensure_data_has_columns(df, [get_option("column.customer_id"), value_col])
-        if agg_func not in _GROUPBY_AGGREGATIONS:
-            msg = (
-                f"agg_func {agg_func!r} is not a pandas groupby aggregation. Use one of {list(_GROUPBY_AGGREGATIONS)}."
-            )
-            raise ValueError(msg)
-
-        self.focus_group_name = focus_group_name
-        self.comparison_group_name = comparison_group_name
-        self.group_col = group_col
-        self.value_col = value_col
-
-        self.gain_loss_df = self._calc_gain_loss(
-            df=df,
-            p1_index=p1_index,
-            p2_index=p2_index,
-            focus_group_index=focus_group_index,
-            comparison_group_index=comparison_group_index,
-            group_col=group_col,
-            value_col=value_col,
-            agg_func=agg_func,
-        )
-        self.gain_loss_table_df = self._calc_gains_loss_table(
-            gain_loss_df=self.gain_loss_df,
-            group_col=group_col,
-        )
-
-    @staticmethod
-    def process_customer_group(
-        focus_p1: float,
-        comparison_p1: float,
-        focus_p2: float,
-        comparison_p2: float,
-        focus_diff: float,
-        comparison_diff: float,
-    ) -> tuple[float, float, float, float, float, float]:
-        """Decompose a group's focus-period change into the six gain loss components.
-
-        Returns ``(new, lost, increased_focus, decreased_focus, switch_from_comparison,
-        switch_to_comparison)`` in that order. ``new``, ``increased_focus``, and
-        ``switch_from_comparison`` are >= 0; ``lost``, ``decreased_focus``, and
-        ``switch_to_comparison`` are <= 0. When both groups are zero in p1 the entire
-        focus p2 value counts as ``new``; when both are zero in p2 the entire focus
-        p1 value counts as ``lost``.
-
-        Args:
-            focus_p1 (float): Focus group value in period 1.
-            comparison_p1 (float): Comparison group value in period 1.
-            focus_p2 (float): Focus group value in period 2.
-            comparison_p2 (float): Comparison group value in period 2.
-            focus_diff (float): Focus group change, p2 - p1.
-            comparison_diff (float): Comparison group change, p2 - p1.
-
-        Returns:
-            tuple[float, float, float, float, float, float]: The six components, in the unpack order above.
-        """
-        if focus_p1 == 0 and comparison_p1 == 0:
-            return focus_p2, 0, 0, 0, 0, 0
-        if focus_p2 == 0 and comparison_p2 == 0:
-            return 0, -1 * focus_p1, 0, 0, 0, 0
-
-        if focus_diff > 0:
-            focus_inc_dec = focus_diff if comparison_diff > 0 else max(0, comparison_diff + focus_diff)
-        elif comparison_diff < 0:
-            focus_inc_dec = focus_diff
-        else:
-            focus_inc_dec = min(0, comparison_diff + focus_diff)
-
-        increased_focus = max(0, focus_inc_dec)
-        decreased_focus = min(0, focus_inc_dec)
-
-        transfer = focus_diff - focus_inc_dec
-        switch_from_comparison = max(0, transfer)
-        switch_to_comparison = min(0, transfer)
-
-        return 0, 0, increased_focus, decreased_focus, switch_from_comparison, switch_to_comparison
-
-    @staticmethod
-    def _calc_gain_loss(
-        df: pd.DataFrame,
-        p1_index: np.ndarray,
-        p2_index: np.ndarray,
-        focus_group_index: np.ndarray,
-        comparison_group_index: np.ndarray,
-        group_col: str | None,
-        value_col: str,
-        agg_func: str,
-    ) -> pd.DataFrame:
-        """Build ``gain_loss_df`` (described on the class) from positional boolean masks.
-
-        Args:
-            df (pd.DataFrame): The transactions.
-            p1_index (np.ndarray): Rows in the first period.
-            p2_index (np.ndarray): Rows in the second period.
-            focus_group_index (np.ndarray): Rows in the focus group.
-            comparison_group_index (np.ndarray): Rows in the comparison group.
-            group_col (str | None): Column to break the analysis down by, if any.
-            value_col (str): Value column to aggregate.
-            agg_func (str): pandas groupby aggregation name.
-
-        Returns:
-            pd.DataFrame: The ``gain_loss_df``.
+            TypeError: If ``df`` is not a pandas DataFrame or an Ibis Table, if ``agg_func`` is not a string, or
+                if the ``data.unknown_customer_value`` option can't be compared with customer_id.
+            ValueError: If ``p1_value`` equals ``p2_value``, ``focus_value`` equals ``comparison_value``, or
+                ``period_col`` equals ``compare_col``.
+            ValueError: If the option-derived customer_id, ``value_col``, ``period_col`` or ``compare_col``
+                columns are missing, or if a given ``group_col`` is not a single column of ``df``, or is the
+                customer column, ``period_col`` or ``compare_col``.
+            ValueError: If ``agg_func`` is not one of the valid options or has no numeric result for ``value_col``.
+            ibis.common.exceptions.IbisTypeError: If a period value can't be compared with ``period_col``, or a
+                group value with ``compare_col`` (e.g. a str label on an int column).
         """
         cols = ColumnHelper()
-        in_periods = p1_index | p2_index
-        df = df[in_periods].copy()
-        p1_index, p2_index, focus_group_index, comparison_group_index = (
-            mask[in_periods] for mask in (p1_index, p2_index, focus_group_index, comparison_group_index)
+        value_col = cols.unit_spend if value_col is None else value_col
+        table = ensure_ibis_table(df)
+
+        if p1_value == p2_value:
+            msg = f"p1_value and p2_value must be different, got {p1_value!r} for both."
+            raise ValueError(msg)
+        if focus_value == comparison_value:
+            msg = f"focus_value and comparison_value must be different, got {focus_value!r} for both."
+            raise ValueError(msg)
+        if period_col == compare_col:
+            msg = f"period_col and compare_col must be different, got {period_col!r} for both."
+            raise ValueError(msg)
+        if group_col is not None:
+            group_cols = ensure_columns(table, group_col, "group_col")
+            if len(group_cols) > 1:
+                msg = f"group_col must be a single column, got {group_cols}."
+                raise ValueError(msg)
+            group_col = group_cols[0]
+            ensure_excludes_customer_col(group_cols, "group_col")
+            if group_col in (period_col, compare_col):
+                msg = f"group_col must differ from period_col and compare_col, got {group_col!r}."
+                raise ValueError(msg)
+        ensure_data_has_columns(table, [cols.customer_id, value_col, period_col, compare_col])
+        agg_func = ensure_value_choice(agg_func, VALID_AGG_FUNCS, "agg_func")
+        ensure_agg_func(table, value_col, agg_func, numeric=True)
+
+        self.focus_value = focus_value
+        self.comparison_value = comparison_value
+        self.group_col = group_col
+        self.value_col = value_col
+        self._selection = {
+            "p1_value": (p1_value, period_col),
+            "p2_value": (p2_value, period_col),
+            "focus_value": (focus_value, compare_col),
+            "comparison_value": (comparison_value, compare_col),
+        }
+
+        unknown_customer_value = get_option("data.unknown_customer_value")
+        identified = (
+            table[cols.customer_id].notnull()  # noqa: PD004 (ibis API)
+            if unknown_customer_value is None
+            else ~unknown_customer_flag(table, unknown_customer_value)
         )
-        customer_id_dtype = df[cols.customer_id].dtype
-        df[cols.customer_id] = df[cols.customer_id].astype("category")
-
-        grp_cols = [cols.customer_id] if group_col is None else [group_col, cols.customer_id]
-
-        p1_df = pd.concat(
-            [
-                df[focus_group_index & p1_index].groupby(grp_cols, observed=False)[value_col].agg(agg_func),
-                df[comparison_group_index & p1_index].groupby(grp_cols, observed=False)[value_col].agg(agg_func),
-                df[(focus_group_index | comparison_group_index) & p1_index]
-                .groupby(grp_cols, observed=False)[value_col]
-                .agg(agg_func),
-            ],
-            axis=1,
+        # ==, not isin: isin leaves a value it can't compare (an int on a text column) to fail in the backend
+        rows = table.filter(
+            (table[period_col] == p1_value) | (table[period_col] == p2_value),
+            (table[compare_col] == focus_value) | (table[compare_col] == comparison_value),
+            identified,
         )
-        p1_df.columns = ["focus", "comparison", "total"]
-
-        p2_df = pd.concat(
-            [
-                df[focus_group_index & p2_index].groupby(grp_cols, observed=False)[value_col].agg(agg_func),
-                df[comparison_group_index & p2_index].groupby(grp_cols, observed=False)[value_col].agg(agg_func),
-                df[(focus_group_index | comparison_group_index) & p2_index]
-                .groupby(grp_cols, observed=False)[value_col]
-                .agg(agg_func),
-            ],
-            axis=1,
+        # Complements, not equality tests: values that select the same rows (e.g. "2025-01-01" and that date) leave
+        # p2 or comparison with no rows, so df raises instead of counting the rows in both
+        in_p1 = rows[period_col] == p1_value
+        in_p2 = ~in_p1
+        is_focus = rows[compare_col] == focus_value
+        is_comparison = ~is_focus
+        aggregate = getattr(rows[value_col], agg_func)
+        keys = [cols.customer_id] if group_col is None else [group_col, cols.customer_id]
+        customers = rows.group_by(keys).aggregate(
+            focus_p1=aggregate(where=in_p1 & is_focus).fill_null(0),
+            comparison_p1=aggregate(where=in_p1 & is_comparison).fill_null(0),
+            total_p1=aggregate(where=in_p1).fill_null(0),
+            focus_p2=aggregate(where=in_p2 & is_focus).fill_null(0),
+            comparison_p2=aggregate(where=in_p2 & is_comparison).fill_null(0),
+            total_p2=aggregate(where=in_p2).fill_null(0),
+            **{
+                _ROW_COUNTS["p1_value"]: rows.count(where=in_p1),
+                _ROW_COUNTS["p2_value"]: rows.count(where=in_p2),
+                _ROW_COUNTS["focus_value"]: rows.count(where=is_focus),
+                _ROW_COUNTS["comparison_value"]: rows.count(where=is_comparison),
+            },
         )
-        p2_df.columns = ["focus", "comparison", "total"]
+        customers = _decompose(customers)
+        self.customer_table: ibis.Table = customers.select(*keys, *VALUE_COLS, *COMPONENTS)
 
-        gl_df = p1_df.merge(p2_df, on=grp_cols, how="outer", suffixes=("_p1", "_p2")).fillna(0)
-
-        # Remove rows that are all 0 due to grouping by customer_id as a categorical with observed=False
-        gl_df = gl_df[~(gl_df == 0).all(axis=1)]
-
-        gl_df["focus_diff"] = gl_df["focus_p2"] - gl_df["focus_p1"]
-        gl_df["comparison_diff"] = gl_df["comparison_p2"] - gl_df["comparison_p1"]
-        gl_df["total_diff"] = gl_df["total_p2"] - gl_df["total_p1"]
-
-        if len(gl_df) == 0:
-            # The zip below has no rows to unpack
-            gl_df = gl_df.assign(
-                new=0, lost=0, increased_focus=0, decreased_focus=0, switch_from_comparison=0, switch_to_comparison=0
-            )
-        else:
-            (
-                gl_df["new"],
-                gl_df["lost"],
-                gl_df["increased_focus"],
-                gl_df["decreased_focus"],
-                gl_df["switch_from_comparison"],
-                gl_df["switch_to_comparison"],
-            ) = zip(
-                *gl_df.apply(
-                    lambda x: GainLoss.process_customer_group(
-                        focus_p1=x["focus_p1"],
-                        comparison_p1=x["comparison_p1"],
-                        focus_p2=x["focus_p2"],
-                        comparison_p2=x["comparison_p2"],
-                        focus_diff=x["focus_diff"],
-                        comparison_diff=x["comparison_diff"],
-                    ),
-                    axis=1,
-                ),
-                strict=False,
-            )
-
-        return gl_df.reset_index().astype({cols.customer_id: customer_id_dtype})
-
-    @staticmethod
-    def _calc_gains_loss_table(
-        gain_loss_df: pd.DataFrame,
-        group_col: str | None = None,
-    ) -> pd.DataFrame:
-        """Aggregate the per-customer gain loss table to total gains and losses.
-
-        Args:
-            gain_loss_df (pd.DataFrame): The per-customer gain loss table.
-            group_col (str | None): Grouping column, if any.
-
-        Returns:
-            pd.DataFrame: A single-row frame when ``group_col`` is None, otherwise one row per group.
-        """
-        values = gain_loss_df.drop(columns=ColumnHelper().customer_id)
+        # max, not sum, for the row counts: df only tests them for zero, and SQL Server sums them as INT, which
+        # overflows past 2^31 rows
+        sums = {col: customers[col].sum() for col in [*VALUE_COLS, *COMPONENTS]} | {
+            col: customers[col].max() for col in _ROW_COUNTS.values()
+        }
         if group_col is None:
-            return values.sum().to_frame().T
+            self._summary = customers.aggregate(**sums)
+        else:
+            self._summary = customers.group_by(group_col).aggregate(**sums)
+        self.table: ibis.Table = self._summary.drop(*_ROW_COUNTS.values())
 
-        return values.groupby(group_col, as_index=False, observed=True).sum()
+    @functools.cached_property
+    def df(self) -> pd.DataFrame:
+        """The summary as a pandas DataFrame, ordered by ``group_col`` when grouped.
+
+        Raises:
+            ValueError: If ``p1_value``, ``p2_value``, ``focus_value`` or ``comparison_value`` matches no row
+                within the other selection (e.g. a focus value with no rows in either period).
+        """
+        # Sorted here, not in table: SQL Server rejects ORDER BY in the derived table that selecting from table makes
+        summary = (self._summary if self.group_col is None else self._summary.order_by(self.group_col)).execute()
+        unmatched = [
+            f"{param} {value!r} matches no rows of '{col}'"
+            for param, (value, col) in self._selection.items()
+            if summary[_ROW_COUNTS[param]].sum() == 0
+        ]
+        if len(unmatched) > 0:
+            detail = f"{'; '.join(unmatched)} among the selected periods and groups"
+            if len(unmatched) == len(self._selection):
+                # Every count is 0 when either pair matches nothing, so the counts can't tell which pair is wrong
+                (p1, period_col), (p2, _), (focus, compare_col), (comparison, _) = self._selection.values()
+                detail = f"No rows have '{period_col}' {p1!r} or {p2!r} and '{compare_col}' {focus!r} or {comparison!r}"
+            msg = (
+                f"{detail} with a customer ID. Pass values that exist in the data, matching their type, case and "
+                "spacing exactly."
+            )
+            raise ValueError(msg)
+        return summary.drop(columns=list(_ROW_COUNTS.values()))
 
     def plot(
         self,
@@ -357,11 +255,11 @@ class GainLoss:
         move_legend_outside: bool = False,
         **kwargs: Any,  # noqa: ANN401
     ) -> SubplotBase:
-        """Plot the gain loss table as a stacked horizontal bar of the six decomposition columns.
+        """Plot the summary as a stacked horizontal bar of the six decomposition columns.
 
         Green segments are ``new`` / ``increased_focus`` / ``switch_from_comparison``; red
         segments are ``lost`` / ``decreased_focus`` / ``switch_to_comparison``. Legend labels
-        use the focus and comparison group names. ``stacked``, ``color`` and ``x_col`` kwargs
+        use the focus and comparison values. ``stacked``, ``color`` and ``x_col`` kwargs
         are silently ignored.
 
         Args:
@@ -369,7 +267,7 @@ class GainLoss:
             eyebrow (str | None): Small uppercase label rendered above the title.
             subtitle (str | None): Supporting copy rendered below the title.
             x_label (str | None): X-axis label; defaults to the value column name.
-            y_label (str | None): Y-axis label; defaults to the focus group name, or ``group_col`` when grouped.
+            y_label (str | None): Y-axis label; defaults to the focus value, or ``group_col`` when grouped.
             ax (Axes | None): Axes to plot on.
             source_text (str | None): Source annotation.
             move_legend_outside (bool): Whether to move the legend outside the plot.
@@ -377,6 +275,9 @@ class GainLoss:
 
         Returns:
             SubplotBase: The plot axes.
+
+        Raises:
+            ValueError: If a selected value matches no rows, as for ``df``.
         """
         increase_cols = ["new", "increased_focus", "switch_from_comparison"]
         decrease_cols = ["lost", "decreased_focus", "switch_to_comparison"]
@@ -391,15 +292,15 @@ class GainLoss:
         ]
         legend_labels = [
             "New",
-            f"Increased {self.focus_group_name}",
-            f"Switch From {self.comparison_group_name}",
+            f"Increased {self.focus_value}",
+            f"Switch From {self.comparison_value}",
             "Lost",
-            f"Decreased {self.focus_group_name}",
-            f"Switch To {self.comparison_group_name}",
+            f"Decreased {self.focus_value}",
+            f"Switch To {self.comparison_value}",
         ]
 
-        default_y_label = self.focus_group_name if self.group_col is None else self.group_col
-        plot_data = self.gain_loss_table_df
+        default_y_label = str(self.focus_value) if self.group_col is None else self.group_col
+        plot_data = self.df
         if self.group_col is None:
             # Blank the single bar's tick label, which would otherwise be the row number; the y label names it
             plot_data = plot_data.set_axis([""])
@@ -408,9 +309,7 @@ class GainLoss:
         kwargs.pop("color", None)
         kwargs.pop("x_col", None)
 
-        resolved_title = (
-            title if title is not None else f"Gain Loss from {self.focus_group_name} to {self.comparison_group_name}"
-        )
+        resolved_title = title if title is not None else f"Gain Loss from {self.focus_value} to {self.comparison_value}"
 
         ax = bar.plot(
             df=plot_data,
@@ -434,3 +333,46 @@ class GainLoss:
         ax.axvline(0, color="black", linewidth=0.5)
 
         return ax
+
+
+def _decompose(customers: ibis.Table) -> ibis.Table:
+    """Add the diffs and the six components to a table of per-customer period values.
+
+    When both groups are zero in p1, all of focus p2 is ``new``; when both are zero in p2, all of
+    focus p1 is ``lost``. Otherwise the focus change is split into a part matched by an opposite
+    comparison change (switching) and the rest (increased or decreased focus).
+
+    Args:
+        customers (ibis.Table): One row per customer with ``focus``, ``comparison`` and ``total`` for
+            ``_p1`` and ``_p2``.
+
+    Returns:
+        ibis.Table: ``customers`` with the ``_diff`` columns and the six components added.
+    """
+    # Staged mutates: in one, the SQL would repeat the focus change CASE in all four components
+    customers = customers.mutate(
+        focus_diff=customers.focus_p2 - customers.focus_p1,
+        comparison_diff=customers.comparison_p2 - customers.comparison_p1,
+        total_diff=customers.total_p2 - customers.total_p1,
+    )
+    focus_diff, comparison_diff = customers.focus_diff, customers.comparison_diff
+    is_new = (customers.focus_p1 == 0) & (customers.comparison_p1 == 0)
+    is_lost = ~is_new & (customers.focus_p2 == 0) & (customers.comparison_p2 == 0)
+    customers = customers.mutate(
+        new=is_new.ifelse(customers.focus_p2, 0),
+        lost=is_lost.ifelse(-customers.focus_p1, 0),
+        _focus_change=ibis.cases(
+            (is_new | is_lost, 0),
+            ((focus_diff > 0) & (comparison_diff > 0), focus_diff),
+            (focus_diff > 0, ibis.greatest(0, comparison_diff + focus_diff)),
+            (comparison_diff < 0, focus_diff),
+            else_=ibis.least(0, comparison_diff + focus_diff),
+        ),
+    )
+    switched = customers.focus_diff - customers.new - customers.lost - customers._focus_change
+    return customers.mutate(
+        increased_focus=ibis.greatest(0, customers._focus_change),
+        decreased_focus=ibis.least(0, customers._focus_change),
+        switch_from_comparison=ibis.greatest(0, switched),
+        switch_to_comparison=ibis.least(0, switched),
+    )

@@ -62,21 +62,17 @@ from openretailscience.analysis.gain_loss import GainLoss
 
 gl = GainLoss(
     df,
-    # Flag the rows of period 1
-    p1_index=time_period_1,
-    # Flag the rows of period 2
-    p2_index=time_period_2,
-    # Flag which rows are part of the focus group.
-    # Namely, which rows are Calvin Klein sales
-    focus_group_index=df["brand_name"] == "Calvin Klein",
-    focus_group_name="Calvin Klein",
-    # Flag which rows are part of the comparison group.
-    # Namely, which rows are Diesel sales
-    comparison_group_index=df["brand_name"] == "Diesel",
-    comparison_group_name="Diesel",
-    # Finally we specifiy that we want to calculate
+    # Compare the pre-period with the promotion period
+    period_col="period",
+    p1_value="H1 2023",
+    p2_value="H2 2023",
+    # Calvin Klein is the focus brand and Diesel the comparison brand
+    compare_col="brand_name",
+    focus_value="Calvin Klein",
+    comparison_value="Diesel",
+    # Finally we specify that we want to calculate
     # the gain/loss in total revenue
-    value_col="total_price",
+    value_col="unit_spend",
 )
 # Ok now let's plot the result
 gl.plot(

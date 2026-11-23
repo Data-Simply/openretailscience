@@ -94,11 +94,16 @@ from openretailscience.analysis.haversine import haversine_distance
   summed `value_col`, spend by default; use `value_col="customer_id", agg_func="nunique"` for customer shares,
   which names the count column `customer_id_nunique` in both frames);
   `.plot(vary_size=False, ...)` → Venn.
-- `GainLoss(df, p1_index, p2_index, focus_group_index, focus_group_name, comparison_group_index, ...)` —
-  period/group index args are boolean lists, arrays or Series with one entry per row of `df` (matched by
-  position; a Series must have `df`'s index, so build it from `df`). `.gain_loss_df` has one row per
-  `customer_id` (per `group_col` and `customer_id` when grouped); its six components sum to `focus_diff`.
-  `.gain_loss_table_df` is one row ungrouped, else one per `group_col` value; `.plot(...)`.
+- `GainLoss(df, period_col, p1_value, p2_value, compare_col, focus_value, comparison_value, group_col=None,
+  value_col=None, agg_func="sum")` — `agg_func` is "sum", "count" or "nunique". To compare against several
+  values (e.g. every other brand in the category) or show display names, label a column first with
+  `filter_and_label_by_condition` and pass it as `compare_col`; label date ranges with
+  `filter_and_label_by_periods` for `period_col`. `.customer_table` (lazy, unordered) has one row
+  per `customer_id` (per `group_col` and `customer_id` when grouped); its six components sum to `focus_diff`.
+  `.df` / `.table` are one row ungrouped, else one per `group_col` value (null is its own group); `.df` raises
+  if a value matches no rows. Null customer IDs, and the `data.unknown_customer_value` ID when set, are left
+  out. Values are netted per customer and period: a return of an item bought outside both periods shows as
+  negative `new` or positive `lost`, so drop such returns or move them to the sale's period first. `.plot(...)`.
 - `IndexAnalysis(df, value_col, group_col, index_col, value_to_index, agg_func="sum", subgroup_col=None)` —
   how over- or under-represented each `group_col` value is among the rows where `index_col == value_to_index`,
   against all rows: `index = 100 * subset_share / baseline_share`. Use it instead of computing shares and

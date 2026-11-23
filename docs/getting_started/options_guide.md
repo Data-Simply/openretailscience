@@ -85,12 +85,12 @@ with option_context(
     # OpenRetailScience uses your column names within this block
     gl = GainLoss(
         df,
-        p1_index=period_1,
-        p2_index=period_2,
-        focus_group_index=brand_a,
-        focus_group_name="Brand A",
-        comparison_group_index=brand_b,
-        comparison_group_name="Brand B",
+        period_col="period",
+        p1_value="2024Q1",
+        p2_value="2024Q2",
+        compare_col="brand",
+        focus_value="Brand A",
+        comparison_value="Brand B",
         value_col="revenue"  # Uses your column name
     )
     gl.plot()
@@ -138,12 +138,12 @@ from openretailscience.analysis.gain_loss import GainLoss
 # Works directly with your column names
 gl = GainLoss(
     df,
-    p1_index=period_1,
-    p2_index=period_2,
-    focus_group_index=brand_a,
-    focus_group_name="Brand A",
-    comparison_group_index=brand_b,
-    comparison_group_name="Brand B",
+    period_col="period",
+    p1_value="2024Q1",
+    p2_value="2024Q2",
+    compare_col="brand",
+    focus_value="Brand A",
+    comparison_value="Brand B",
     value_col="revenue"  # Uses your column name
 )
 ```
@@ -262,7 +262,7 @@ Standard suffixes for period comparisons and calculations:
 - `data.unknown_customer_value` → `None` (off). The customer ID that marks rows with no identified customer, such as
   `-1`, or `ibis.null()` (or `pd.NA`) when null IDs mark them; write `"<NULL>"` in TOML. When set,
   analyses that support it count customers from identified rows only and report unknown-customer sales in `_unknown`
-  and `_total` columns.
+  and `_total` columns. `GainLoss` leaves unknown-customer rows out, since it decomposes spend per customer.
 
 ## Advanced Reference
 
