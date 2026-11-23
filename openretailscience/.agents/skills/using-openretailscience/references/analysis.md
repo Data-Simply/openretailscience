@@ -102,7 +102,8 @@ from openretailscience.analysis.haversine import haversine_distance
   per `customer_id` (per `group_col` and `customer_id` when grouped); its six components sum to `focus_diff`.
   `.df` / `.table` are one row ungrouped, else one per `group_col` value (null is its own group); `.df` raises
   if a value matches no rows. Null customer IDs, and the `data.unknown_customer_value` ID when set, are left
-  out. `.plot(...)`.
+  out. Values are netted per customer and period: a return of an item bought outside both periods shows as
+  negative `new` or positive `lost`, so drop such returns or move them to the sale's period first. `.plot(...)`.
 - `IndexAnalysis(df, value_col, group_col, index_col, value_to_index, agg_func="sum", subgroup_col=None)` —
   how over- or under-represented each `group_col` value is among the rows where `index_col == value_to_index`,
   against all rows: `index = 100 * subset_share / baseline_share`. Use it instead of computing shares and

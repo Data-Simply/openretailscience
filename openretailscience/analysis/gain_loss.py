@@ -70,6 +70,8 @@ class GainLoss:
     ungrouped, one row per ``group_col`` value (with ``group_col`` first, null as its own group) otherwise.
 
     Rows with a null customer ID, or the ``data.unknown_customer_value`` ID when that option is set, are left out.
+    Values are netted per customer and period, so a return of an item bought outside both periods shows as
+    negative ``new`` or positive ``lost``. Drop those returns, or move them to the sale's period, first.
 
     Examples:
         >>> from openretailscience.analysis import GainLoss
