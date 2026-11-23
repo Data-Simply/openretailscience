@@ -54,7 +54,8 @@ nav:
   - Examples:
       - Customer Retention: examples/retention.ipynb
       - Gain Loss Analysis: examples/gain_loss.ipynb
-      - Cross Shop Analysis: examples/cross_shop.ipynb
+      - Cross-Shopping Analysis: examples/cross_shop.md
+      - Cross-Brand Affinity Table: examples/brand_affinity.md
       - Segmentation: examples/segmentation.ipynb
       - Product Association: examples/product_association.ipynb
       - Revenue Tree: examples/revenue_tree.ipynb
@@ -138,6 +139,7 @@ plugins:
         - unpkg.com/mathjax@*
   - mkdocstrings
   - autorefs
+  - markdown-exec
   - mkdocs-jupyter:
       execute: false
       remove_tag_config:

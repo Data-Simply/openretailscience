@@ -91,31 +91,30 @@ plt.show()
 
 ### Cross Shop Analysis
 
-Here is an excerpt from the cross shop analysis example [notebook](https://openretailscience.datasimply.co/examples/cross_shop/)
+Here is an excerpt from the [cross-shopping analysis example](https://openretailscience.datasimply.co/examples/cross_shop/),
+which finds the coffee machine buyers who never buy pods from the retailer.
 
 ```python
-from openretailscience.analysis import cross_shop
+from openretailscience.analysis import CrossShop
 
-cs = cross_shop.CrossShop(
-    df,
+coffee = df[df["category_name"].isin(["Coffee Machines", "Coffee Pods"])]
+cs = CrossShop(
+    df=coffee,
     group_1_col="category_name",
-    group_1_val="Jeans",
-    group_2_col="category_name",
-    group_2_val="Shoes",
-    group_3_col="category_name",
-    group_3_val="Dresses",
-    labels=["Jeans", "Shoes", "Dresses"],
+    group_1_val="Coffee Machines",
+    group_2_val="Coffee Pods",
+    labels=["Coffee machines", "Coffee pods"],
 )
 cs.plot(
-    title="Jeans are a popular cross-shopping category with dresses",
-    source_text="Source: Transactions 2023-01-01 to 2023-12-31",
-    figsize=(6, 6),
+    eyebrow="Coffee customers, 2025",
+    title="Customers who buy both bring in 45% of machine and pod sales",
+    subtitle="Share of machine and pod sales in each combination",
+    subset_label_formatter=lambda x: f"{x:.0%}",
 )
 plt.show()
-# Let's see which customers were in which groups
-display(cs.cross_shop_df.head())
-# And the totals for all groups
-display(cs.cross_shop_table_df)
+# One row per customer, flagging which of the two categories they bought
+customers = cs.cross_shop_df.rename(columns={"group_1": "machines", "group_2": "pods"})
+offer_list = customers[(customers["machines"] == 1) & (customers["pods"] == 0)]
 ```
 
 ![Cross Shop Analysis Chart](https://raw.githubusercontent.com/Data-Simply/openretailscience/main/readme_assets/cross_shop_chart.png)

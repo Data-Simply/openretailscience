@@ -117,12 +117,18 @@ class TestNotebookAssets:
         assert bar_files == segmentation_files
         assert len(list(Path(site_config.site_dir, "assets/notebook").iterdir())) == len(bar_files)
 
-    def test_markdown_pages_are_left_alone(self, site_config):
-        """Only notebook pages are rewritten; a Markdown page's own style block stays inline."""
-        page = SimpleNamespace(file=SimpleNamespace(src_uri="getting_started/installation.md"), url="installation/")
-        html = _page_html(_notebook_img(_png(640, 480)))
+    def test_markdown_pages_keep_their_styles_but_link_their_plots(self, site_config, caplog):
+        """A Markdown page's plots (printed by markdown-exec) move to files; its own style block stays inline."""
+        page = SimpleNamespace(file=SimpleNamespace(src_uri="examples/cross_shop.md"), url="examples/cross_shop/")
+        data = base64.b64encode(_png(640, 480)).decode()
+        html = _page_html(f'<img alt="Venn diagram of machine and pod sales" src="data:image/png;base64,{data}">')
 
-        assert on_post_page(html, page, site_config) == html
+        output = on_post_page(html, page, site_config)
+
+        assert f'<style type="text/css">{NOTEBOOK_CSS}</style>' in output
+        assert "data:image/png" not in output
+        assert len(list(Path(site_config.site_dir, "assets/notebook").glob("*.png"))) == 1
+        assert caplog.records == []
 
     def test_warns_when_a_notebook_has_no_inline_css(self, site_config, caplog):
         """If mkdocs-jupyter stops emitting the expected style tag, the build says so instead of silently inlining."""
