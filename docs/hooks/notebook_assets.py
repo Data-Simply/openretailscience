@@ -1,4 +1,4 @@
-"""Move mkdocs-jupyter's inline CSS and base64 plots out of notebook pages into shared, content-hashed files.
+"""Move base64 plots, and mkdocs-jupyter's inline CSS, out of pages into shared, content-hashed files.
 
 Works on the rendered HTML, so re-executed notebooks need no extra step.
 """
@@ -34,7 +34,9 @@ log = logging.getLogger("mkdocs.hooks.notebook_assets")
 
 
 def on_post_page(output: str, page: Page, config: MkDocsConfig) -> str:
-    """Replace a notebook page's inline style blocks and PNG data URIs with links to content-hashed files.
+    """Replace PNG data URIs, and a notebook page's inline style blocks, with links to content-hashed files.
+
+    Markdown pages get their PNGs from markdown-exec code blocks that print plots as data URIs.
 
     Args:
         output (str): The rendered page HTML.
@@ -42,15 +44,15 @@ def on_post_page(output: str, page: Page, config: MkDocsConfig) -> str:
         config (MkDocsConfig): The MkDocs config.
 
     Returns:
-        str: The page HTML with notebook CSS and images linked rather than inlined.
+        str: The page HTML with images, and notebook CSS, linked rather than inlined.
     """
-    if not page.file.src_uri.endswith(".ipynb"):
-        return output
-    output, replaced = _JUPYTER_STYLE.subn(lambda match: _link_stylesheet(match.group(1), page, config), output)
-    if replaced == 0:
-        log.warning(
-            "%s has no inline mkdocs-jupyter CSS to extract; has the template's <style> tag changed?", page.file.src_uri
-        )
+    if page.file.src_uri.endswith(".ipynb"):
+        output, replaced = _JUPYTER_STYLE.subn(lambda match: _link_stylesheet(match.group(1), page, config), output)
+        if replaced == 0:
+            log.warning(
+                "%s has no inline mkdocs-jupyter CSS to extract; has the template's <style> tag changed?",
+                page.file.src_uri,
+            )
     # The first plot may be the largest contentful paint, which lazy loading would delay.
     image_index = itertools.count()
     return _PNG_IMAGE.sub(lambda match: _link_image(match, page, config, lazy=next(image_index) > 0), output)
