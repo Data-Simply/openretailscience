@@ -39,12 +39,12 @@ def transactions() -> pd.DataFrame:
 def _gain_loss(df: pd.DataFrame, **kwargs: str) -> GainLoss:
     return GainLoss(
         df=df,
-        p1_index=df["quarter"] == "2024Q1",
-        p2_index=df["quarter"] == "2024Q3",
-        focus_group_index=df["brand"] == "Coke",
-        focus_group_name="Coke",
-        comparison_group_index=df["brand"] == "Pepsi",
-        comparison_group_name="Pepsi",
+        period_col="quarter",
+        p1_value="2024Q1",
+        p2_value="2024Q3",
+        compare_col="brand",
+        focus_value="Coke",
+        comparison_value="Pepsi",
         **kwargs,
     )
 
@@ -125,19 +125,17 @@ class TestAggFunc:
                 ),
                 id="CrossShop",
             ),
-            pytest.param(lambda df, agg_func: _gain_loss(df, agg_func=agg_func), id="GainLoss"),
         ],
     )
-    # cumsum is a real method on both Ibis columns and pandas groupbys, but returns one row per transaction.
-    # prod reduces, but GainLoss's empty customer groups would get prod's empty value 1 rather than 0.
+    # cumsum is a real method on Ibis columns, but returns one row per transaction.
     # group_concat reduces, but to text that can't be summed, ranked or compared with 0.
     @pytest.mark.parametrize(
         "agg_func",
-        ["summ", "cumsum", "prod", "group_concat"],
-        ids=["typo", "running_total", "product_of_empty_group_is_one", "text_result"],
+        ["summ", "cumsum", "group_concat"],
+        ids=["typo", "running_total", "text_result"],
     )
     def test_rejects_non_aggregation_agg_func(self, transactions, construct, agg_func):
-        """A misspelt name, a non-reducing method, prod or a non-numeric result raises ValueError before any query."""
+        """A misspelt name, a non-reducing method or a non-numeric result raises ValueError before any query."""
         with pytest.raises(ValueError, match=f"agg_func '{agg_func}'"):
             construct(transactions, agg_func)
 
@@ -194,15 +192,7 @@ class TestNonDataFrameInput:
                 id="RevenueTree",
             ),
             pytest.param(
-                lambda data: GainLoss(
-                    data,
-                    p1_index=[True, False],
-                    p2_index=[False, True],
-                    focus_group_index=[True, False],
-                    focus_group_name="Coke",
-                    comparison_group_index=[False, True],
-                    comparison_group_name="Pepsi",
-                ),
+                _gain_loss,
                 id="GainLoss",
             ),
             pytest.param(

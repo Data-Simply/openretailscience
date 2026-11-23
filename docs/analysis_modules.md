@@ -227,12 +227,12 @@ df = pd.DataFrame({
 
 gain_loss = GainLoss(
     df=df,
-    p1_index=df["period"] == "p1",
-    p2_index=df["period"] == "p2",
-    focus_group_index=df["brand"] == "Brand A",
-    focus_group_name="Brand A",
-    comparison_group_index=df["brand"] == "Brand B",
-    comparison_group_name="Brand B",
+    period_col="period",
+    p1_value="p1",
+    p2_value="p2",
+    compare_col="brand",
+    focus_value="Brand A",
+    comparison_value="Brand B",
 )
 
 gain_loss.plot(

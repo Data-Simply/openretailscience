@@ -25,22 +25,17 @@ df = pd.concat(
     ignore_index=True,
 )
 
-p1_index = df["period"] == "P1"
-p2_index = df["period"] == "P2"
-brand_a_index = df["brand"] == "Brand A"
-brand_b_index = df["brand"] == "Brand B"
-
 gl = GainLoss(
     df=df,
-    p1_index=p1_index,
-    p2_index=p2_index,
-    focus_group_index=brand_a_index,
-    focus_group_name="Brand A",
-    comparison_group_index=brand_b_index,
-    comparison_group_name="Brand B",
+    period_col="period",
+    p1_value="P1",
+    p2_value="P2",
+    compare_col="brand",
+    focus_value="Brand A",
+    comparison_value="Brand B",
 )
-# gl.gain_loss_table_df columns: new, lost, increased_focus, decreased_focus,
-# switch_from_comparison, switch_to_comparison
+# gl.df columns: focus/comparison/total for _p1, _p2 and _diff, then new, lost, increased_focus,
+# decreased_focus, switch_from_comparison, switch_to_comparison
 
 # Example 2: Category Migration Analysis, Broken Down by Region
 regions = ["North", "South", "East", "West"]
@@ -69,35 +64,32 @@ cat_df = pd.concat(
 
 gl_regional = GainLoss(
     df=cat_df,
-    p1_index=cat_df["period"] == "P1",
-    p2_index=cat_df["period"] == "P2",
-    focus_group_index=cat_df["category"] == "Premium",
-    focus_group_name="Premium",
-    comparison_group_index=cat_df["category"] == "Standard",
-    comparison_group_name="Standard",
+    period_col="period",
+    p1_value="P1",
+    p2_value="P2",
+    compare_col="category",
+    focus_value="Premium",
+    comparison_value="Standard",
     group_col="region",
 )
 
-# Example 3: Customer Count Analysis
+# Example 3: Customer Count Analysis (each customer counts once per group and period)
 gl_count = GainLoss(
     df=df,
-    p1_index=p1_index,
-    p2_index=p2_index,
-    focus_group_index=brand_a_index,
-    focus_group_name="Brand A",
-    comparison_group_index=brand_b_index,
-    comparison_group_name="Brand B",
+    period_col="period",
+    p1_value="P1",
+    p2_value="P2",
+    compare_col="brand",
+    focus_value="Brand A",
+    comparison_value="Brand B",
     value_col="customer_id",
-    agg_func="count",
+    agg_func="nunique",
 )
 
-# Example 4: Customer-Level Details
-customer_details = gl.gain_loss_df
-
-new_customers = customer_details[customer_details["new"] > 0]
-lost_customers = customer_details[customer_details["lost"] < 0]
-switchers_to_a = customer_details[customer_details["switch_from_comparison"] > 0]
-switchers_to_b = customer_details[customer_details["switch_to_comparison"] < 0]
+# Example 4: Customer-Level Details. customer_table is lazy: filter before executing on large data
+customers = gl.customer_table
+new_customers = customers.filter(customers.new > 0).execute()
+switchers_to_a = customers.filter(customers.switch_from_comparison > 0).execute()
 
 # Example 5: Visualizing Results
 gl.plot(

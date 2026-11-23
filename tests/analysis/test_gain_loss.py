@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import datetime as dt
 
-import numpy as np
+import ibis
 import pandas as pd
 import pytest
+from ibis.common.exceptions import IbisTypeError
 
 from openretailscience.analysis.gain_loss import GainLoss
 from openretailscience.options import ColumnHelper, option_context
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 cols = ColumnHelper()
 
@@ -21,7 +19,14 @@ COMPARISON = "Greenvale"
 OTHER_BRAND = "Hillside"
 P1 = "2025Q1"
 P2 = "2025Q2"
-BRAND_NAMES = {"focus_group_name": FOCUS, "comparison_group_name": COMPARISON}
+SELECTION = {
+    "period_col": "period",
+    "p1_value": P1,
+    "p2_value": P2,
+    "compare_col": "brand",
+    "focus_value": FOCUS,
+    "comparison_value": COMPARISON,
+}
 
 COMPONENTS = [
     "new",
@@ -38,17 +43,15 @@ def _transactions(rows: list[tuple[int, str, str, int, int]]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=[cols.customer_id, "period", "brand", cols.store_id, cols.unit_spend])
 
 
-def _masks(df: pd.DataFrame) -> dict[str, pd.Series]:
-    return {
-        "p1_index": df["period"] == P1,
-        "p2_index": df["period"] == P2,
-        "focus_group_index": df["brand"] == FOCUS,
-        "comparison_group_index": df["brand"] == COMPARISON,
-    }
+def _gain_loss(df: pd.DataFrame | ibis.Table, **kwargs: str | None) -> GainLoss:
+    return GainLoss(df=df, **{**SELECTION, **kwargs})
 
 
-def _gain_loss(df: pd.DataFrame, **kwargs: str | None) -> GainLoss:
-    return GainLoss(df=df, **_masks(df), **BRAND_NAMES, **kwargs)
+def _customers(gl: GainLoss) -> pd.DataFrame:
+    """The per-customer frame, sorted: customer_table has no row order."""
+    customers = gl.customer_table.execute()
+    keys = [col for col in (cols.store_id, cols.customer_id) if col in customers.columns]
+    return customers.sort_values(keys).reset_index(drop=True)
 
 
 @pytest.fixture
@@ -132,13 +135,13 @@ class TestDecomposition:
         ]
         df = _transactions([(1001, period, brand, 201, spend) for period, brand, spend in spends if spend != 0])
 
-        result = _gain_loss(df).gain_loss_df[COMPONENTS]
+        result = _customers(_gain_loss(df))[COMPONENTS]
 
         pd.testing.assert_frame_equal(result, pd.DataFrame([expected], columns=COMPONENTS))
 
 
 class TestResults:
-    """The per-customer and summary frames."""
+    """The per-customer table and the summary."""
 
     def test_customer_frame_and_table(self, transactions: pd.DataFrame) -> None:
         """One row per customer with focus or comparison sales; other-period and other-brand sales are left out."""
@@ -164,8 +167,8 @@ class TestResults:
                 "switch_to_comparison": [0, 0, 0, 0, 0, -20, 0],
             },
         )
-        pd.testing.assert_frame_equal(gl.gain_loss_df, expected)
-        pd.testing.assert_frame_equal(gl.gain_loss_table_df, expected.drop(columns=cols.customer_id).sum().to_frame().T)
+        pd.testing.assert_frame_equal(_customers(gl), expected)
+        pd.testing.assert_frame_equal(gl.df, expected.drop(columns=cols.customer_id).sum().to_frame().T)
 
     def test_grouped_customer_frame_and_table(self, transactions: pd.DataFrame) -> None:
         """Grouped, each customer is decomposed per store: 1008's move is lost at store 201 and new at 202."""
@@ -192,14 +195,14 @@ class TestResults:
                 "switch_to_comparison": [0, 0, 0, 0, 0, 0, -20, 0],
             },
         )
-        pd.testing.assert_frame_equal(gl.gain_loss_df, expected)
+        pd.testing.assert_frame_equal(_customers(gl), expected)
         pd.testing.assert_frame_equal(
-            gl.gain_loss_table_df,
+            gl.df,
             expected.drop(columns=cols.customer_id).groupby(cols.store_id, as_index=False).sum(),
         )
 
-    def test_grouped_store_missing_from_a_period_or_brand_gets_zeros(self) -> None:
-        """Store 203 has only a Meadow Farm Q1 sale, so its Greenvale and Q2 values are 0, not NaN."""
+    def test_grouped_store_missing_from_a_period_or_brand_gets_integer_zeros(self) -> None:
+        """Store 203 has only a Meadow Farm Q1 sale, so its Greenvale and Q2 values are integer 0s, not NaN."""
         df = _transactions(
             [
                 (1003, P1, FOCUS, 201, 100),
@@ -210,24 +213,23 @@ class TestResults:
             ],
         )
 
-        result = _gain_loss(df, group_col=cols.store_id).gain_loss_table_df
+        result = _gain_loss(df, group_col=cols.store_id).df
 
-        # Pins today's data-dependent dtypes: NaN-filled columns are float, which makes non-zero components float too
         expected = pd.DataFrame(
             {
                 cols.store_id: [201, 203],
                 "focus_p1": [100, 90],
-                "comparison_p1": [100.0, 0.0],
+                "comparison_p1": [100, 0],
                 "total_p1": [200, 90],
-                "focus_p2": [150.0, 0.0],
-                "comparison_p2": [120.0, 0.0],
-                "total_p2": [270.0, 0.0],
-                "focus_diff": [50.0, -90.0],
-                "comparison_diff": [20.0, 0.0],
-                "total_diff": [70.0, -90.0],
+                "focus_p2": [150, 0],
+                "comparison_p2": [120, 0],
+                "total_p2": [270, 0],
+                "focus_diff": [50, -90],
+                "comparison_diff": [20, 0],
+                "total_diff": [70, -90],
                 "new": [0, 0],
-                "lost": [0.0, -90.0],
-                "increased_focus": [50.0, 0.0],
+                "lost": [0, -90],
+                "increased_focus": [50, 0],
                 "decreased_focus": [0, 0],
                 "switch_from_comparison": [0, 0],
                 "switch_to_comparison": [0, 0],
@@ -235,193 +237,189 @@ class TestResults:
         )
         pd.testing.assert_frame_equal(result, expected)
 
-    def test_grouped_table_omits_unused_group_categories(self, transactions: pd.DataFrame) -> None:
-        """A categorical group_col's unused category (a store with no sales) gets no table row."""
-        df = transactions.astype({cols.store_id: pd.CategoricalDtype([201, 202, 203])})
+    def test_null_group_is_its_own_group(self, transactions: pd.DataFrame) -> None:
+        """Sales with no store form their own row, sorted last, so no sales drop out of the grouped table."""
+        storeless_customer = 1001
+        no_store = transactions[cols.customer_id] == storeless_customer
+        df = transactions.assign(**{cols.store_id: transactions[cols.store_id].astype("Int64").mask(no_store)})
 
-        gl = _gain_loss(df, group_col=cols.store_id)
+        result = _gain_loss(df, group_col=cols.store_id).df
 
-        assert gl.gain_loss_table_df[cols.store_id].tolist() == [201, 202]
+        # The null makes store_id float on the way back from the backend
+        expected = pd.DataFrame(
+            {
+                cols.store_id: [201.0, 202.0, None],
+                "focus_p1": [350, 200, 0],
+                "comparison_p1": [200, 200, 0],
+                "total_p1": [550, 400, 0],
+                "focus_p2": [200, 290, 120],
+                "comparison_p2": [200, 230, 0],
+                "total_p2": [400, 520, 120],
+                "focus_diff": [-150, 90, 120],
+                "comparison_diff": [0, 30, 0],
+                "total_diff": [-150, 120, 120],
+                "new": [0, 60, 120],
+                "lost": [-150, 0, 0],
+                "increased_focus": [50, 30, 0],
+                "decreased_focus": [-50, 0, 0],
+                "switch_from_comparison": [0, 20, 0],
+                "switch_to_comparison": [0, -20, 0],
+            },
+        )
+        pd.testing.assert_frame_equal(result, expected)
+
+    @pytest.mark.parametrize(
+        ("guest_id", "unknown_customer_value"),
+        [pytest.param(pd.NA, None, id="null_id"), pytest.param(-1, -1, id="unknown_customer_value")],
+    )
+    def test_unidentified_customer_rows_are_left_out(
+        self, transactions: pd.DataFrame, guest_id: int | None, unknown_customer_value: int | None
+    ) -> None:
+        """Guest sales, under a null ID or the data.unknown_customer_value ID, can't be decomposed per customer."""
+        guests = _transactions([(0, P1, FOCUS, 201, 500), (0, P2, COMPARISON, 201, 700)])
+        df = pd.concat([transactions, guests], ignore_index=True)
+        df[cols.customer_id] = df[cols.customer_id].astype("Int64").mask(df[cols.customer_id] == 0, guest_id)
+
+        with option_context("data.unknown_customer_value", unknown_customer_value):
+            result = _gain_loss(df).df
+
+        pd.testing.assert_frame_equal(result, _gain_loss(transactions).df)
+
+    def test_grouped_table_has_no_nested_order_by(self, transactions: pd.DataFrame) -> None:
+        """SQL Server rejects ORDER BY in a derived table, so table is left unordered and df sorts instead."""
+        table = _gain_loss(transactions, group_col=cols.store_id).table
+
+        assert "ORDER BY" not in ibis.to_sql(table, dialect="mssql").upper()
 
     @pytest.mark.parametrize(
         ("agg_func", "expected"),
         [
             ("count", [2, 1, 3, 1, 1, 2]),
-            ("mean", [50.0, 100.0, 200 / 3, 150.0, 120.0, 135.0]),
+            ("nunique", [1, 1, 1, 1, 1, 2]),
         ],
     )
-    def test_agg_func_aggregates_each_period_and_group(self, agg_func: str, expected: list[float]) -> None:
+    def test_agg_func_aggregates_each_period_and_group(self, agg_func: str, expected: list[int]) -> None:
         """agg_func is applied to each period's focus, comparison and combined transactions."""
         df = _transactions(
             [
                 (1003, P1, FOCUS, 201, 60),
-                (1003, P1, FOCUS, 201, 40),
-                (1003, P1, COMPARISON, 201, 100),
+                (1003, P1, FOCUS, 201, 60),
+                (1003, P1, COMPARISON, 201, 60),
                 (1003, P2, FOCUS, 201, 150),
                 (1003, P2, COMPARISON, 201, 120),
             ],
         )
         period_cols = ["focus_p1", "comparison_p1", "total_p1", "focus_p2", "comparison_p2", "total_p2"]
 
-        result = _gain_loss(df, agg_func=agg_func).gain_loss_df[period_cols]
+        result = _customers(_gain_loss(df, agg_func=agg_func))[period_cols]
 
         pd.testing.assert_frame_equal(result, pd.DataFrame([expected], columns=period_cols))
 
     def test_value_col_replaces_spend(self, transactions: pd.DataFrame) -> None:
         """value_col decomposes the named column in place of unit_spend."""
         quantities = transactions[cols.unit_spend] // 10
-        expected = _gain_loss(transactions.assign(**{cols.unit_spend: quantities})).gain_loss_df
+        expected = _customers(_gain_loss(transactions.assign(**{cols.unit_spend: quantities})))
 
-        result = _gain_loss(transactions.assign(**{cols.unit_qty: quantities}), value_col=cols.unit_qty).gain_loss_df
+        result = _customers(
+            _gain_loss(transactions.assign(**{cols.unit_qty: quantities}), value_col=cols.unit_qty),
+        )
 
         pd.testing.assert_frame_equal(result, expected)
 
     def test_custom_column_names_from_options(self, transactions: pd.DataFrame) -> None:
         """The customer and spend columns come from the column options."""
         renames = {cols.customer_id: "loyalty_card_id", cols.unit_spend: "net_sales"}
-        expected = _gain_loss(transactions).gain_loss_df.rename(columns=renames)
+        expected = _customers(_gain_loss(transactions)).rename(columns=renames)
 
         with option_context("column.customer_id", "loyalty_card_id", "column.unit_spend", "net_sales"):
-            result = _gain_loss(transactions.rename(columns=renames)).gain_loss_df
+            result = _gain_loss(transactions.rename(columns=renames)).customer_table.execute()
 
-        pd.testing.assert_frame_equal(result, expected)
-
-    def test_groups_with_no_sales_give_an_all_zero_table(self, transactions: pd.DataFrame) -> None:
-        """Focus and comparison brands with no sales in either period (e.g. misspelt) give zeros, not a crash."""
-        masks = {
-            **_masks(transactions),
-            "focus_group_index": transactions["brand"] == "Meadow farm",
-            "comparison_group_index": transactions["brand"] == "Green vale",
-        }
-        gl = GainLoss(df=transactions, **masks, **BRAND_NAMES)
-
-        expected = _gain_loss(transactions).gain_loss_table_df * 0
-        pd.testing.assert_frame_equal(gl.gain_loss_table_df, expected)
-        assert len(gl.gain_loss_df) == 0
-
-
-class TestMasks:
-    """The four positional boolean masks."""
-
-    # astype(object) mimics a nullable flag column read from parquet: after dropna it is object dtype of plain bools
-    @pytest.mark.parametrize(
-        "to_mask", [list, np.asarray, lambda mask: mask.astype(object)], ids=["list", "ndarray", "object_series"]
-    )
-    def test_list_array_and_object_masks_match_boolean_series(
-        self, transactions: pd.DataFrame, to_mask: Callable[[pd.Series], list[bool] | np.ndarray | pd.Series]
-    ) -> None:
-        """Lists, numpy arrays and object-dtype Series of bools decompose the same as boolean Series."""
-        expected = _gain_loss(transactions).gain_loss_df
-
-        masks = {k: to_mask(v) for k, v in _masks(transactions).items()}
-        result = GainLoss(df=transactions, **masks, **BRAND_NAMES).gain_loss_df
-
-        pd.testing.assert_frame_equal(result, expected)
-
-    def test_non_unique_index_matches_default_index(self, transactions: pd.DataFrame) -> None:
-        """Masks select rows by position, so a df with repeated index labels (from pd.concat) decomposes the same."""
-        expected = _gain_loss(transactions).gain_loss_df
-        half = len(transactions) // 2
-        concatenated_df = pd.concat([transactions.iloc[:half], transactions.iloc[half:].reset_index(drop=True)])
-
-        result = _gain_loss(concatenated_df).gain_loss_df
-
-        pd.testing.assert_frame_equal(result, expected)
-
-    @pytest.mark.parametrize("brand_dtype", ["string", "string[pyarrow]"])
-    def test_nullable_boolean_masks_leave_missing_rows_out(self, transactions: pd.DataFrame, brand_dtype: str) -> None:
-        """Comparing a nullable brand column gives <NA> where the brand is missing; those rows join neither group."""
-        unbranded_customer = 1005
-        unbranded_q1 = (transactions[cols.customer_id] == unbranded_customer) & (transactions["period"] == P1)
-        brand = transactions["brand"].astype(brand_dtype).mask(unbranded_q1)
-        unbranded_df = transactions.assign(brand=brand)
-        masks = _masks(unbranded_df)
-        filled_masks = {k: v.fillna(False).astype(bool) for k, v in masks.items()}
-        expected = GainLoss(df=unbranded_df, **filled_masks, **BRAND_NAMES).gain_loss_df
-
-        result = GainLoss(df=unbranded_df, **masks, **BRAND_NAMES).gain_loss_df
-
-        pd.testing.assert_frame_equal(result, expected)
+        pd.testing.assert_frame_equal(result.sort_values("loyalty_card_id").reset_index(drop=True), expected)
 
 
 class TestValidation:
-    """Invalid input raises before any computation."""
+    """Invalid input raises with a message naming the problem."""
 
     @pytest.mark.parametrize(
-        ("mask_name", "make_mask", "error", "match"),
+        ("kwargs", "match"),
         [
+            pytest.param({"p2_value": P1}, "p1_value and p2_value must be different", id="same_period"),
             pytest.param(
-                "p2_index",
-                lambda df: df["period"].isin([P1, P2]),
-                ValueError,
-                "p1_index and p2_index should not overlap",
-                id="overlapping_periods",
+                {"comparison_value": FOCUS},
+                "focus_value and comparison_value must be different",
+                id="same_group",
             ),
+            pytest.param({"agg_func": "mean"}, "agg_func must be one of", id="non_additive_agg_func"),
             pytest.param(
-                "comparison_group_index",
-                lambda df: df["brand"] != OTHER_BRAND,
-                ValueError,
-                "focus_group_index and comparison_group_index should not overlap",
-                id="overlapping_groups",
+                {"group_col": [cols.store_id, "brand"]},
+                "group_col must be a single column",
+                id="several_group_cols",
             ),
-            # Same length, but positions would pick the wrong rows
+            pytest.param({"group_col": "brand"}, "group_col must differ from", id="group_col_is_compare_col"),
+            pytest.param({"group_col": "period"}, "group_col must differ from", id="group_col_is_period_col"),
             pytest.param(
-                "focus_group_index",
-                lambda df: df.sort_values(cols.unit_spend)["brand"] == FOCUS,
-                ValueError,
-                r"index must match df\.index",
-                id="series_from_reordered_frame",
+                {"compare_col": "period"},
+                "period_col and compare_col must be different",
+                id="compare_col_is_period_col",
             ),
+            pytest.param({"value_col": "brand"}, "agg_func 'sum' is not an aggregation available", id="sum_of_text"),
+        ],
+    )
+    def test_invalid_argument_raises(self, transactions: pd.DataFrame, kwargs: dict[str, str], match: str) -> None:
+        """Arguments that can't give a meaningful decomposition raise before any query runs."""
+        with pytest.raises(ValueError, match=match):
+            _gain_loss(transactions, **kwargs)
+
+    @pytest.mark.parametrize("param", ["p1_value", "p2_value", "focus_value", "comparison_value"])
+    def test_value_of_another_type_raises(self, transactions: pd.DataFrame, param: str) -> None:
+        """An int on a text column raises when the queries are built, not from the backend when df runs them."""
+        with pytest.raises(IbisTypeError, match="not comparable"):
+            _gain_loss(transactions, **{param: 2025})
+
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            pytest.param({"p1_value": "2025-Q1"}, "p1_value '2025-Q1' matches no rows", id="p1_value"),
+            pytest.param({"p2_value": "2025-Q2"}, "p2_value '2025-Q2' matches no rows", id="p2_value"),
+            pytest.param({"focus_value": "Meadow farm"}, "focus_value 'Meadow farm' matches no rows", id="focus"),
             pytest.param(
-                "focus_group_index",
-                lambda df: list(df["brand"] == FOCUS)[:-1],
-                ValueError,
-                "one entry per row of df",
-                id="list_one_short",
+                {"comparison_value": "Green vale"},
+                "comparison_value 'Green vale' matches no rows",
+                id="comparison",
             ),
+            # No row is left to count, so the brands, which do exist, aren't reported as matching nothing
             pytest.param(
-                "focus_group_index",
-                lambda df: df.iloc[1:]["brand"] == FOCUS,
-                ValueError,
-                "one entry per row of df",
-                id="series_from_filtered_frame",
-            ),
-            pytest.param(
-                "focus_group_index",
-                lambda df: df["brand"],
-                TypeError,
-                r'must be boolean; .* nullable "boolean" dtype',
-                id="brand_names",
-            ),
-            # NaN coerces to True, so coercing would put every other brand in the focus group
-            pytest.param(
-                "focus_group_index",
-                lambda df: df["brand"].map({FOCUS: True}),
-                TypeError,
-                r'must be boolean; .* nullable "boolean" dtype',
-                id="series_with_nan",
+                {"p1_value": "2025-Q1", "p2_value": "2025-Q2"},
+                "No rows have 'period' '2025-Q1' or '2025-Q2' and 'brand' 'Meadow Farm' or 'Greenvale'",
+                id="both_periods",
             ),
         ],
     )
-    def test_invalid_mask_raises(
-        self,
-        transactions: pd.DataFrame,
-        mask_name: str,
-        make_mask: Callable[[pd.DataFrame], pd.Series | list[bool | float]],
-        error: type[ValueError | TypeError],
-        match: str,
+    def test_value_matching_no_rows_raises(
+        self, transactions: pd.DataFrame, kwargs: dict[str, str], match: str
     ) -> None:
-        """Overlapping, misaligned or non-boolean masks raise rather than being misapplied or coerced to True/False."""
-        masks = {**_masks(transactions), mask_name: make_mask(transactions)}
+        """A misspelt period or brand raises instead of giving a plausible-looking decomposition."""
+        gl = _gain_loss(transactions, **kwargs)
 
-        with pytest.raises(error, match=match):
-            GainLoss(df=transactions, **masks, **BRAND_NAMES)
+        with pytest.raises(ValueError, match=match):
+            _ = gl.df
+
+    def test_same_period_as_text_and_date_raises(self, transactions: pd.DataFrame) -> None:
+        """A quarter passed once as text and once as a date selects the same rows, which aren't counted twice."""
+        quarter_starts = {P1: dt.date(2025, 1, 1), P2: dt.date(2025, 4, 1), "2024Q4": dt.date(2024, 10, 1)}
+        df = transactions.assign(period=transactions["period"].map(quarter_starts))
+        gl = _gain_loss(df, p1_value="2025-01-01", p2_value=dt.date(2025, 1, 1))
+
+        with pytest.raises(ValueError, match=r"p2_value datetime\.date\(2025, 1, 1\) matches no rows"):
+            _ = gl.df
 
     @pytest.mark.parametrize(
         ("missing_col", "kwargs", "match"),
         [
             pytest.param(cols.customer_id, {}, "Input data is missing required columns", id="customer_col"),
             pytest.param(cols.unit_spend, {}, "Input data is missing required columns", id="value_col"),
+            pytest.param("period", {}, "Input data is missing required columns", id="period_col"),
+            pytest.param("brand", {}, "Input data is missing required columns", id="compare_col"),
             pytest.param(
                 cols.store_id,
                 {"group_col": cols.store_id},
@@ -433,7 +431,7 @@ class TestValidation:
     def test_missing_column_raises(
         self, transactions: pd.DataFrame, missing_col: str, kwargs: dict[str, str], match: str
     ) -> None:
-        """A df without the customer, value or group column raises naming it, rather than failing inside the groupby."""
+        """A df without a required column raises naming it, rather than failing inside the query."""
         df = transactions.drop(columns=missing_col)
 
         with pytest.raises(ValueError, match=f"{match}.*{missing_col}"):

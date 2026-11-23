@@ -278,12 +278,12 @@ def regenerate_gain_loss() -> None:
 
     gain_loss = GainLoss(
         df=gl_df,
-        p1_index=gl_df["period"] == "p1",
-        p2_index=gl_df["period"] == "p2",
-        focus_group_index=gl_df["brand"] == "Brand A",
-        focus_group_name="Brand A",
-        comparison_group_index=gl_df["brand"] == "Brand B",
-        comparison_group_name="Brand B",
+        period_col="period",
+        p1_value="p1",
+        p2_value="p2",
+        compare_col="brand",
+        focus_value="Brand A",
+        comparison_value="Brand B",
     )
     fig, ax = plt.subplots(figsize=(7.2, 4.8))
     gain_loss.plot(
