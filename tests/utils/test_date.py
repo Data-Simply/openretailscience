@@ -12,7 +12,9 @@ import pytest
 from openretailscience.options import ColumnHelper, option_context
 from openretailscience.utils.date import (
     _MAX_BAD_EVENT_ROWS,
+    BEFORE_EVENT,
     filter_and_label_by_event_periods,
+    filter_and_label_by_event_to_date,
     filter_and_label_by_periods,
     find_overlapping_periods,
 )
@@ -816,3 +818,272 @@ class TestFilterAndLabelByEventPeriods:
             )
 
         assert str(raised.value).count("'rows': 2") == _MAX_BAD_EVENT_ROWS
+
+
+class TestFilterAndLabelByEventToDate:
+    """Each key's test period runs from its own event date to one end date; other windows are moved copies of it."""
+
+    @pytest.fixture
+    def transactions(self):
+        """Customer 1042 signs up on 20 Jan 2025, 3378 on 10 May 2025 and 5001 never; the data ends 30 Jun 2025."""
+        return pd.DataFrame(
+            {
+                cols.transaction_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+                cols.customer_id: [1042, 1042, 1042, 1042, 1042, 1042, 1042, 1042, 3378, 3378, 3378, 3378, 5001],
+                cols.transaction_date: pd.to_datetime(
+                    [
+                        "2024-08-10 20:00",  # the day before 1042's pre
+                        "2024-08-11 09:00",  # first day of 1042's pre: 162 days before sign-up
+                        "2025-01-19 22:30",  # last day of 1042's pre
+                        "2025-01-20 08:00",  # sign-up day, before the 15:30 sign-up: first day of post
+                        "2025-06-30 21:45",  # end_date, late in the day: last day of post
+                        "2025-07-01 10:00",  # after end_date
+                        "2024-01-22 12:00",  # first day of 1042's post_py1: sign-up day minus 52 weeks
+                        "2024-07-01 18:00",  # last day of 1042's post_py1: end_date minus 52 weeks
+                        "2025-03-18 11:00",  # the day before 3378's pre
+                        "2025-03-19 10:00",  # first day of 3378's pre: 52 days before sign-up
+                        "2025-05-10 09:30",  # 3378's sign-up day: first day of post
+                        "2024-07-02 09:00",  # the day after 3378's post_py1
+                        "2025-02-01 13:15",  # customer with no sign-up
+                    ],
+                ),
+                cols.unit_spend: [
+                    18.40,
+                    42.10,
+                    9.75,
+                    61.20,
+                    24.99,
+                    33.30,
+                    15.60,
+                    27.45,
+                    12.80,
+                    55.00,
+                    38.90,
+                    21.15,
+                    47.60,
+                ],
+            },
+        )
+
+    @pytest.fixture
+    def signups(self):
+        """Loyalty sign-ups; 1042's is timestamped mid-afternoon."""
+        return pd.DataFrame(
+            {
+                cols.customer_id: [1042, 3378],
+                "event_date": pd.to_datetime(["2025-01-20 15:30", "2025-05-10 00:00"]),
+            },
+        )
+
+    @pytest.mark.parametrize(
+        ("to_transactions", "to_events", "end_date"),
+        [
+            (lambda df: df, lambda df: df, "2025-06-30"),
+            (
+                lambda df: ibis.memtable(df).mutate(**{cols.transaction_date: ibis._[cols.transaction_date].date()}),
+                lambda df: ibis.memtable(df).mutate(event_date=ibis._.event_date.date()),
+                dt.date(2025, 6, 30),
+            ),
+        ],
+        ids=["pandas_timestamps", "ibis_dates"],
+    )
+    def test_labels_each_keys_test_period_and_its_moved_copies(
+        self,
+        transactions,
+        signups,
+        to_transactions,
+        to_events,
+        end_date,
+    ):
+        """Post runs from sign-up to end_date; pre is as long and ends the day before; post_py1 is 52 weeks earlier."""
+        result = filter_and_label_by_event_to_date(
+            to_transactions(transactions),
+            events=to_events(signups),
+            on=cols.customer_id,
+            end_date=end_date,
+            windows={"post": 0 * WEEK, "pre": BEFORE_EVENT, "post_py1": -52 * WEEK},
+        )
+
+        pd.testing.assert_frame_equal(
+            # Drop the inputs rather than select the label, so a duration column added by default fails the match.
+            result.drop(cols.customer_id, cols.transaction_date, cols.unit_spend)
+            .order_by(cols.transaction_id)
+            .to_pandas(),
+            pd.DataFrame(
+                {
+                    cols.transaction_id: [2, 3, 4, 5, 7, 8, 10, 11],
+                    "period_name": ["pre", "pre", "post", "post", "post_py1", "post_py1", "pre", "post"],
+                },
+            ),
+        )
+
+    @pytest.mark.parametrize(
+        ("kwargs", "duration_col"),
+        [({"include_duration": True}, "period_days"), ({"include_duration": True, "duration_col": "days"}, "days")],
+        ids=["default_name", "custom_name"],
+    )
+    def test_include_duration_adds_each_keys_period_length(self, transactions, signups, kwargs, duration_col):
+        """Every window of a key is as long as its test period, counting both ends: 162 days for 1042, 52 for 3378."""
+        result = filter_and_label_by_event_to_date(
+            transactions,
+            events=signups,
+            on=cols.customer_id,
+            end_date="2025-06-30",
+            windows={"post": 0 * WEEK, "pre": BEFORE_EVENT},
+            **kwargs,
+        )
+
+        pd.testing.assert_frame_equal(
+            result.select(cols.transaction_id, duration_col).order_by(cols.transaction_id).to_pandas(),
+            pd.DataFrame({cols.transaction_id: [2, 3, 4, 5, 10, 11], duration_col: [162, 162, 162, 162, 52, 52]}),
+        )
+
+    @pytest.mark.parametrize(
+        ("customer", "event_date", "windows", "expected"),
+        [
+            (3378, "2024-12-31", {"pre": BEFORE_EVENT, "post_py1": -52 * WEEK}, (12, "pre", 182)),
+            (1042, "2025-06-30", {"post": 0 * WEEK}, (5, "post", 1)),
+        ],
+        ids=["event_on_the_cutoff_day", "event_on_end_date"],
+    )
+    def test_events_on_the_date_limits_are_accepted(self, transactions, customer, event_date, windows, expected):
+        """The earliest event the windows allow gets the longest test period; an event on end_date gets one day."""
+        result = filter_and_label_by_event_to_date(
+            transactions,
+            events=pd.DataFrame({cols.customer_id: [customer], "event_date": pd.to_datetime([event_date])}),
+            on=cols.customer_id,
+            end_date="2025-06-30",
+            windows=windows,
+            include_duration=True,
+        )
+
+        transaction_id, period_name, period_days = expected
+        pd.testing.assert_frame_equal(
+            result.select(cols.transaction_id, "period_name", "period_days").to_pandas(),
+            pd.DataFrame(
+                {cols.transaction_id: [transaction_id], "period_name": [period_name], "period_days": [period_days]}
+            ),
+        )
+
+    @pytest.mark.parametrize(
+        ("kwargs", "error", "match"),
+        [
+            ({"windows": [("post", 0 * WEEK)]}, TypeError, r"^windows must be a mapping of labels to timedelta"),
+            ({"windows": {}}, ValueError, r"^windows must contain at least one window\.$"),
+            (
+                {"windows": {"post": 0 * WEEK, 1: -52 * WEEK}},
+                ValueError,
+                r"^windows labels must be all strings or all integers\.",
+            ),
+            (
+                {"windows": {"post": 0 * WEEK, "pre": "before"}},
+                TypeError,
+                r"^Window 'pre' must be a timedelta or BEFORE_EVENT\. Got 'before'\.$",
+            ),
+            (
+                {"windows": {"post": dt.timedelta(hours=-12)}},
+                ValueError,
+                r"^Window 'post' must move by whole days\. Got -1 day, 12:00:00\.$",
+            ),
+            (
+                {"windows": {"post": 0 * WEEK, "also_post": 0 * WEEK}},
+                ValueError,
+                r"^Windows 'post' and 'also_post' move by the same amount, so they always overlap\.$",
+            ),
+            (
+                {"windows": {"pre": BEFORE_EVENT, "also_pre": BEFORE_EVENT}},
+                ValueError,
+                r"^Windows 'pre' and 'also_pre' are both BEFORE_EVENT, so they always overlap\.$",
+            ),
+            (
+                {"windows": {"pre": BEFORE_EVENT, "lag": -DAY}},
+                ValueError,
+                r"^Windows 'pre' and 'lag' both hold the day before the event, so they always overlap\.$",
+            ),
+            (
+                {"end_date": "2025/06/30"},
+                ValueError,
+                r"^end_date must be an ISO 'YYYY-MM-DD' date string\. Got '2025/06/30'\.$",
+            ),
+            (
+                {"include_duration": True, "duration_col": cols.unit_spend},
+                ValueError,
+                rf"^duration_col '{cols.unit_spend}' is already a column in transactions\.",
+            ),
+            (
+                {"include_duration": True, "duration_col": "period_name"},
+                ValueError,
+                r"^duration_col and period_col are both 'period_name'\. Pass a different duration_col\.$",
+            ),
+            (
+                {"on": cols.store_id},
+                ValueError,
+                rf"^on references columns not present in the data: \['{cols.store_id}'\]",
+            ),
+            (
+                {
+                    "events": pd.DataFrame(
+                        {cols.customer_id: [1042, 3378], "event_date": pd.to_datetime(["2025-01-20", "2025-07-01"])},
+                    ),
+                },
+                ValueError,
+                (
+                    rf"event dates from 2024-12-31 to 2025-06-30.*Rows to fix \(at most \d+ shown\): "
+                    rf"{{'{cols.customer_id}': 3378, 'rows': 1, 'null_event_dates': 0, 'dates_outside': 1}}$"
+                ),
+            ),
+            (
+                {
+                    "windows": {"post": 0 * WEEK, "pre": BEFORE_EVENT},
+                    "events": pd.DataFrame(
+                        {cols.customer_id: [1042, 3378], "event_date": pd.to_datetime(["2025-01-20", "2025-07-01"])},
+                    ),
+                },
+                ValueError,
+                (
+                    rf"event dates on or before 2025-06-30\. Rows to fix \(at most \d+ shown\): "
+                    rf"{{'{cols.customer_id}': 3378, 'rows': 1, 'null_event_dates': 0, 'dates_outside': 1}}$"
+                ),
+            ),
+            (
+                {
+                    "events": pd.DataFrame(
+                        {cols.customer_id: [1042, 3378], "event_date": pd.to_datetime(["2024-12-30", "2025-05-10"])},
+                    ),
+                },
+                ValueError,
+                (
+                    rf"^events must have one row per {cols.customer_id}, with no null keys or event dates, and event "
+                    r"dates from 2024-12-31 to 2025-06-30\. An earlier event gives a test period over 182 days, "
+                    r"where windows 'pre' and 'post_py1' overlap\. Rows to fix"
+                ),
+            ),
+        ],
+        ids=[
+            "windows_not_a_mapping",
+            "no_windows",
+            "mixed_label_types",
+            "string_instead_of_constant",
+            "part_day_shift",
+            "same_shift_twice",
+            "before_event_twice",
+            "moved_back_one_day_with_before_event",
+            "malformed_end_date",
+            "duration_col_exists",
+            "duration_col_is_period_col",
+            "on_missing",
+            "event_after_end_date",
+            "event_after_end_date_without_window_limit",
+            "event_too_early_for_windows",
+        ],
+    )
+    def test_invalid_arguments_raise(self, transactions, signups, kwargs, error, match):
+        """Malformed windows, dates or columns, and events the windows can't fit, raise an error naming the problem."""
+        arguments = {
+            "events": signups,
+            "on": cols.customer_id,
+            "end_date": "2025-06-30",
+            "windows": {"post": 0 * WEEK, "pre": BEFORE_EVENT, "post_py1": -52 * WEEK},
+        } | kwargs
+        with pytest.raises(error, match=match):
+            filter_and_label_by_event_to_date(transactions, **arguments)
