@@ -5,13 +5,21 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 
 import ibis
+import numpy as np
 import pandas as pd
 import pytest
 
 from openretailscience.options import ColumnHelper, option_context
-from openretailscience.utils.date import filter_and_label_by_periods, find_overlapping_periods
+from openretailscience.utils.date import (
+    _MAX_BAD_EVENT_ROWS,
+    filter_and_label_by_event_periods,
+    filter_and_label_by_periods,
+    find_overlapping_periods,
+)
 
 cols = ColumnHelper()
+WEEK = dt.timedelta(weeks=1)
+DAY = dt.timedelta(days=1)
 
 
 class TestFilterAndLabelByPeriods:
@@ -37,60 +45,55 @@ class TestFilterAndLabelByPeriods:
         df = pd.DataFrame(data)
         return ibis.memtable(df)
 
-    def test_filter_and_label_by_periods_with_datetime_objects(self, sample_transactions_table):
-        """Test filtering and labeling periods using datetime objects."""
-        # Define expected transaction counts
-        q1_count = 2
-        q2_count = 2
-        total_count = q1_count + q2_count
-
-        period_ranges = {
-            "Q1": (
-                dt.datetime(2023, 1, 1, tzinfo=dt.UTC),
-                dt.datetime(2023, 3, 31, tzinfo=dt.UTC),
-            ),
-            "Q2": (
-                dt.datetime(2023, 4, 1, tzinfo=dt.UTC),
-                dt.datetime(2023, 6, 30, tzinfo=dt.UTC),
-            ),
-        }
-        result = filter_and_label_by_periods(sample_transactions_table, period_ranges)
-        result_df = result.execute()
-
-        # Verify the correct number of transactions
-        assert len(result_df) == total_count, f"Should return {total_count} transactions from Q1 and Q2"
-
-        # Verify the period labels are correct
-        q1_transactions = result_df[result_df["period_name"] == "Q1"]
-        q2_transactions = result_df[result_df["period_name"] == "Q2"]
-
-        assert len(q1_transactions) == q1_count, f"Should have {q1_count} transactions in Q1"
-        assert len(q2_transactions) == q2_count, f"Should have {q2_count} transactions in Q2"
-
-        # Verify the transaction IDs are correctly assigned to periods
-        assert sorted(q1_transactions["transaction_id"].tolist()) == [1, 2], "Q1 should have transaction IDs 1 and 2"
-        assert sorted(q2_transactions["transaction_id"].tolist()) == [3, 4], "Q2 should have transaction IDs 3 and 4"
-
     @pytest.mark.parametrize(
-        "to_input",
-        [lambda table: table, lambda table: table.to_pandas()],
-        ids=["ibis_table", "pandas_dataframe"],
+        ("to_input", "period_ranges", "expected_ids", "expected_periods"),
+        [
+            (
+                lambda table: table,
+                {
+                    "Q1": ("2023-01-01", "2023-03-31"),
+                    "Q2": ("2023-04-01", "2023-06-30"),
+                    "Q3": ("2023-07-01", "2023-09-30"),
+                },
+                [1, 2, 3, 4, 5, 6],
+                ["Q1", "Q1", "Q2", "Q2", "Q3", "Q3"],
+            ),
+            (
+                lambda table: table.to_pandas(),
+                {
+                    "Q1": ("2023-01-01", "2023-03-31"),
+                    "Q2": ("2023-04-01", "2023-06-30"),
+                    "Q3": ("2023-07-01", "2023-09-30"),
+                },
+                [1, 2, 3, 4, 5, 6],
+                ["Q1", "Q1", "Q2", "Q2", "Q3", "Q3"],
+            ),
+            (
+                lambda table: table,
+                {
+                    "Q1": (dt.datetime(2023, 1, 1, tzinfo=dt.UTC), dt.datetime(2023, 3, 31, tzinfo=dt.UTC)),
+                    "Q2": (dt.datetime(2023, 4, 1, tzinfo=dt.UTC), dt.datetime(2023, 6, 30, tzinfo=dt.UTC)),
+                },
+                [1, 2, 3, 4],
+                ["Q1", "Q1", "Q2", "Q2"],
+            ),
+        ],
+        ids=["ibis_string_dates", "pandas_string_dates", "datetime_bounds"],
     )
-    def test_filter_and_label_by_periods_with_string_dates(self, sample_transactions_table, to_input):
-        """String-date periods label each transaction, from an ibis table or a pandas DataFrame."""
-        period_ranges = {
-            "Q1": ("2023-01-01", "2023-03-31"),
-            "Q2": ("2023-04-01", "2023-06-30"),
-            "Q3": ("2023-07-01", "2023-09-30"),
-        }
-
-        result = filter_and_label_by_periods(to_input(sample_transactions_table), period_ranges)
+    def test_labels_each_transaction_with_its_period(
+        self,
+        sample_transactions_table,
+        to_input,
+        period_ranges,
+        expected_ids,
+        expected_periods,
+    ):
+        """Transactions inside a period get its name in period_col; the rest are dropped."""
+        result = filter_and_label_by_periods(to_input(sample_transactions_table), period_ranges, period_col="quarter")
 
         pd.testing.assert_frame_equal(
-            result.select(cols.transaction_id, "period_name").order_by(cols.transaction_id).to_pandas(),
-            pd.DataFrame(
-                {cols.transaction_id: [1, 2, 3, 4, 5, 6], "period_name": ["Q1", "Q1", "Q2", "Q2", "Q3", "Q3"]},
-            ),
+            result.select(cols.transaction_id, "quarter").order_by(cols.transaction_id).to_pandas(),
+            pd.DataFrame({cols.transaction_id: expected_ids, "quarter": expected_periods}),
         )
 
     @pytest.mark.parametrize(
@@ -169,18 +172,6 @@ class TestFilterAndLabelByPeriods:
         """Malformed periods or transactions raise a specific error naming what is wrong."""
         with pytest.raises(error, match=match):
             filter_and_label_by_periods(to_input(sample_transactions_table), period_ranges)
-
-    def test_filter_and_label_by_periods_no_matches(self, sample_transactions_table):
-        """Test behavior when no transactions match the given periods."""
-        period_ranges = {
-            "Future": ("2024-01-01", "2024-12-31"),
-        }
-
-        result = filter_and_label_by_periods(sample_transactions_table, period_ranges)
-        result_df = result.execute()
-
-        # Should return an empty dataframe since no transactions match the period
-        assert len(result_df) == 0, "Should return 0 transactions for future period"
 
     @pytest.mark.parametrize(
         ("period_ranges", "match"),
@@ -297,7 +288,8 @@ class TestFilterAndLabelByPeriods:
             pd.DataFrame({cols.transaction_id: [101, 102], cols.transaction_date: transaction_dates}),
         )
 
-        with pytest.raises(ValueError, match=r"Periods 'Q1' \(2023-01-01-2023-03-31\) and 'Q2' \(2023-03-31-.*overlap"):
+        match = r"Periods 'Q1' \[2023-01-01, 2023-03-31\] and 'Q2' \[2023-03-31, .*overlap"
+        with pytest.raises(ValueError, match=match):
             filter_and_label_by_periods(transactions, period_ranges)
 
     @pytest.mark.parametrize(
@@ -305,15 +297,18 @@ class TestFilterAndLabelByPeriods:
         [
             (
                 {"Q1": ("2023-01-01", "2023-06-30"), "Q2": ("2023-02-01", "2023-05-31")},
-                r"Periods 'Q1' \(2023-01-01-2023-06-30\) and 'Q2' \(2023-02-01-2023-05-31\) overlap",
+                r"Periods 'Q1' \[2023-01-01, 2023-06-30\] and 'Q2' \[2023-02-01, 2023-05-31\] overlap",
             ),
             (
                 {"Q1": ("2023-01-01", "2023-04-15"), "Q2": ("2023-04-01", "2023-06-30")},
-                r"Periods 'Q1' \(2023-01-01-2023-04-15\) and 'Q2' \(2023-04-01-2023-06-30\) overlap",
+                r"Periods 'Q1' \[2023-01-01, 2023-04-15\] and 'Q2' \[2023-04-01, 2023-06-30\] overlap",
             ),
             (
                 {"Q1": ("2023-01-01", "2023-03-31"), "Q2": ("2023-03-31", "2023-06-30")},
-                r"Periods 'Q1' \(2023-01-01-2023-03-31\) and 'Q2' \(2023-03-31-2023-06-30\) overlap",
+                (
+                    r"Periods 'Q1' \[2023-01-01, 2023-03-31\] and 'Q2' \[2023-03-31, 2023-06-30\] overlap\. "
+                    r"Both ends are included, so end 'Q1' before 'Q2' starts\.$"
+                ),
             ),
             (
                 {
@@ -321,17 +316,31 @@ class TestFilterAndLabelByPeriods:
                     "Q2": ("2023-03-01", "2023-06-30"),
                     "Q3": ("2023-05-01", "2023-08-31"),
                 },
-                r"Periods 'Q1' \(2023-01-01-2023-04-30\) and 'Q2' \(2023-03-01-2023-06-30\) overlap",
+                r"Periods 'Q1' \[2023-01-01, 2023-04-30\] and 'Q2' \[2023-03-01, 2023-06-30\] overlap",
             ),
             (
                 {
                     "Period_A": (dt.datetime(2023, 1, 1), dt.datetime(2023, 3, 31)),
                     "Period_B": (dt.datetime(2023, 3, 15), dt.datetime(2023, 6, 30)),
                 },
-                r"Periods 'Period_A' \(2023-01-01-2023-03-31\) and 'Period_B' \(2023-03-15-2023-06-30\) overlap",
+                r"Periods 'Period_A' \[2023-01-01, 2023-03-31\] and 'Period_B' \[2023-03-15, 2023-06-30\] overlap",
+            ),
+            (
+                {
+                    "Period_A": (dt.datetime(2023, 1, 1), dt.datetime(2023, 3, 31)),
+                    "Period_B": (dt.datetime(2023, 3, 31), dt.datetime(2023, 6, 30)),
+                },
+                r"overlap\. Both ends are included, so end 'Period_A' before 'Period_B' starts\.$",
             ),
         ],
-        ids=["complete_overlap", "partial_overlap", "touching_boundaries", "multiple_overlaps", "datetime_objects"],
+        ids=[
+            "complete_overlap",
+            "partial_overlap",
+            "touching_boundaries",
+            "multiple_overlaps",
+            "datetime_objects",
+            "datetimes_sharing_an_instant",
+        ],
     )
     def test_overlapping_periods_raises(self, sample_transactions_table, period_ranges, match):
         """Test that overlapping periods raise ValueError."""
@@ -339,45 +348,17 @@ class TestFilterAndLabelByPeriods:
             filter_and_label_by_periods(sample_transactions_table, period_ranges)
 
     def test_with_custom_column_names(self, sample_transactions_table):
-        """Test filter_and_label_by_periods with custom column names."""
+        """The date column comes from the column.transaction_date option."""
         custom_table = sample_transactions_table.mutate(my_date_col=sample_transactions_table.transaction_date).drop(
             "transaction_date",
         )
-        period_ranges = {"Test_Period": ("2023-01-01", "2023-12-31")}
-
         with option_context("column.transaction_date", "my_date_col"):
-            result = filter_and_label_by_periods(custom_table, period_ranges)
-            result_df = result.execute()
+            result = filter_and_label_by_periods(custom_table, {"H1": ("2023-01-01", "2023-06-30")})
 
-            assert isinstance(result_df, pd.DataFrame)
-            assert "my_date_col" in result_df.columns
-
-    def test_custom_period_column_name(self, sample_transactions_table):
-        """Test filter_and_label_by_periods with a custom period column name."""
-        # Define expected transaction counts
-        q1_count = 2
-        q2_count = 2
-
-        period_ranges = {
-            "Q1": ("2023-01-01", "2023-03-31"),
-            "Q2": ("2023-04-01", "2023-06-30"),
-        }
-
-        # Test with custom column name
-        result = filter_and_label_by_periods(sample_transactions_table, period_ranges, period_col="quarter")
-        result_df = result.execute()
-
-        # Verify the custom column exists
-        assert "quarter" in result_df.columns, "Custom period column 'quarter' should exist"
-        assert "period_name" not in result_df.columns, "Default 'period_name' column should not exist"
-
-        # Verify the values are correct
-        assert len(result_df) == q1_count + q2_count, f"Should return {q1_count + q2_count} transactions from Q1 and Q2"
-        q1_transactions = result_df[result_df["quarter"] == "Q1"]
-        q2_transactions = result_df[result_df["quarter"] == "Q2"]
-
-        assert len(q1_transactions) == q1_count, f"Should have {q1_count} transactions in Q1"
-        assert len(q2_transactions) == q2_count, f"Should have {q2_count} transactions in Q2"
+        pd.testing.assert_frame_equal(
+            result.select(cols.transaction_id, "period_name").order_by(cols.transaction_id).to_pandas(),
+            pd.DataFrame({cols.transaction_id: [1, 2, 3, 4], "period_name": ["H1", "H1", "H1", "H1"]}),
+        )
 
 
 class TestFindOverlappingPeriods:
@@ -528,3 +509,310 @@ class TestFindOverlappingPeriods:
         """Test that non-str/non-datetime inputs raise TypeError with a clear message."""
         with pytest.raises(TypeError, match="Expected str or datetime"):
             find_overlapping_periods(start_date, end_date)
+
+
+class TestFilterAndLabelByEventPeriods:
+    """Windows are placed around each key's own event date."""
+
+    @pytest.fixture
+    def transactions(self):
+        """Store 101 opens a competitor on 10 Mar 2025, store 102 on 2 Jun 2025, store 205 never."""
+        return pd.DataFrame(
+            {
+                cols.transaction_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                cols.store_id: [101, 101, 101, 101, 101, 101, 102, 102, 102, 205],
+                cols.transaction_date: pd.to_datetime(
+                    [
+                        "2025-02-23 18:00",  # 15 days before 101's event: before every window
+                        "2025-02-24 08:15",  # first day of pre
+                        "2025-03-09 23:40",  # last day of pre
+                        "2025-03-10 09:00",  # event day, before the 15:30 opening: first day of post
+                        "2025-03-23 21:30",  # last day of post, late in the day
+                        "2025-03-24 07:45",  # one day after post
+                        "2025-03-10 12:00",  # 101's event day, but 12 weeks before 102's
+                        "2025-06-01 17:20",  # last day of 102's pre
+                        "2024-06-03 10:05",  # first day of 102's post_py1
+                        "2025-03-10 11:00",  # store with no event
+                    ],
+                ),
+                cols.unit_spend: [12.40, 33.10, 8.75, 54.20, 19.99, 27.30, 41.00, 15.60, 22.45, 64.80],
+            },
+        )
+
+    @pytest.fixture
+    def events(self):
+        """Competitor openings for two of the three stores; 101's is timestamped mid-afternoon."""
+        return pd.DataFrame(
+            {cols.store_id: [101, 102], "event_date": pd.to_datetime(["2025-03-10 15:30", "2025-06-02 00:00"])},
+        )
+
+    @pytest.mark.parametrize(
+        ("to_transactions", "to_events"),
+        [
+            (lambda df: df, lambda df: df),
+            (
+                lambda df: ibis.memtable(df).mutate(**{cols.transaction_date: ibis._[cols.transaction_date].date()}),
+                lambda df: ibis.memtable(df).mutate(event_date=ibis._.event_date.date()),
+            ),
+            (
+                lambda df: ibis.memtable(df).mutate(**{cols.transaction_date: ibis._[cols.transaction_date].date()}),
+                lambda df: df,
+            ),
+            (lambda df: df, lambda df: ibis.memtable(df).mutate(event_date=ibis._.event_date.date())),
+            (lambda df: df.assign(__window_0_start=pd.Timestamp("2000-01-01")), lambda df: df),
+        ],
+        ids=[
+            "pandas_timestamps",
+            "ibis_dates",
+            "dates_with_timestamp_events",
+            "timestamps_with_date_events",
+            "column_named_like_a_window_bound",
+        ],
+    )
+    def test_labels_rows_by_their_own_keys_event(self, transactions, events, to_transactions, to_events):
+        """Each row gets the window around its store's event; both ends of a window are whole days included."""
+        result = filter_and_label_by_event_periods(
+            to_transactions(transactions),
+            events=to_events(events),
+            on=cols.store_id,
+            windows={
+                "pre": (-2 * WEEK, -DAY),
+                "post": (0 * WEEK, 2 * WEEK - DAY),
+                "post_py1": (-52 * WEEK, -50 * WEEK - DAY),
+            },
+            period_col="window",
+        )
+
+        pd.testing.assert_frame_equal(
+            result.select(cols.transaction_id, cols.store_id, "window").order_by(cols.transaction_id).to_pandas(),
+            pd.DataFrame(
+                {
+                    cols.transaction_id: [2, 3, 4, 5, 8, 9],
+                    cols.store_id: [101, 101, 101, 101, 102, 102],
+                    "window": ["pre", "pre", "post", "post", "pre", "post_py1"],
+                },
+            ),
+        )
+
+    @pytest.mark.parametrize("weeks", [range(-2, 2), np.arange(-2, 2)], ids=["range", "numpy_arange"])
+    def test_integer_labels_give_an_integer_column(self, transactions, events, weeks):
+        """Integer window keys come back as an int64 label, ready to sort and plot as week numbers."""
+        result = filter_and_label_by_event_periods(
+            transactions,
+            events=events,
+            on=cols.store_id,
+            windows={n: (n * WEEK, (n + 1) * WEEK - DAY) for n in weeks},
+        )
+
+        pd.testing.assert_frame_equal(
+            result.select(cols.transaction_id, "period_name").order_by(cols.transaction_id).to_pandas(),
+            pd.DataFrame({cols.transaction_id: [2, 3, 4, 5, 8], "period_name": [-2, -1, 0, 1, -1]}),
+        )
+
+    def test_reads_the_configured_transaction_date_column(self, transactions, events):
+        """The transaction date column comes from the column.transaction_date option."""
+        renamed = transactions.rename(columns={cols.transaction_date: "sold_at"})
+        with option_context("column.transaction_date", "sold_at"):
+            result = filter_and_label_by_event_periods(
+                renamed, events=events, on=cols.store_id, windows={"pre": (-2 * WEEK, -DAY)}
+            )
+
+        pd.testing.assert_frame_equal(
+            result.select(cols.transaction_id, "period_name").order_by(cols.transaction_id).to_pandas(),
+            pd.DataFrame({cols.transaction_id: [2, 3, 8], "period_name": ["pre", "pre", "pre"]}),
+        )
+
+    def test_composite_key_drops_rows_without_an_event(self):
+        """With a store and brand key, other brands in the same store and guest rows with a null key are dropped."""
+        transactions = pd.DataFrame(
+            {
+                cols.transaction_id: [1, 2, 3, 4],
+                cols.store_id: [101, 101, 102, None],
+                "brand_id": [7, 9, 7, 7],
+                cols.transaction_date: pd.to_datetime(["2025-04-01", "2025-04-01", "2025-04-01", "2025-04-01"]),
+            },
+        )
+        rangings = pd.DataFrame(
+            {
+                cols.store_id: [101, 102],
+                "brand_id": [7, 7],
+                "event_date": pd.to_datetime(["2025-03-10", "2025-06-02"]),
+            },
+        )
+
+        result = filter_and_label_by_event_periods(
+            transactions,
+            events=rangings,
+            on=[cols.store_id, "brand_id"],
+            windows={"pre": (-12 * WEEK, -DAY), "post": (0 * WEEK, 12 * WEEK - DAY)},
+        )
+
+        pd.testing.assert_frame_equal(
+            result.select(cols.transaction_id, "period_name").order_by(cols.transaction_id).to_pandas(),
+            pd.DataFrame({cols.transaction_id: [1, 3], "period_name": ["post", "pre"]}),
+        )
+
+    @pytest.mark.parametrize(
+        ("kwargs", "error", "match"),
+        [
+            ({"windows": [("pre", (-WEEK, -DAY))]}, TypeError, r"^windows must be a mapping of labels"),
+            ({"windows": {}}, ValueError, r"^windows must contain at least one window\.$"),
+            (
+                {"windows": {"pre": (-WEEK, -DAY), 0: (0 * WEEK, WEEK)}},
+                ValueError,
+                r"^windows labels must be all strings or all integers\.",
+            ),
+            (
+                {"windows": {"pre": (-7, -1)}},
+                TypeError,
+                r"^Window 'pre' must be a \(start, end\) tuple of timedeltas\.",
+            ),
+            (
+                {"windows": {"pre": (-WEEK,)}},
+                TypeError,
+                r"^Window 'pre' must be a \(start, end\) tuple of timedeltas\.",
+            ),
+            (
+                {"windows": {"pre": (-DAY, -WEEK)}},
+                ValueError,
+                r"^Window 'pre' starts after it ends: start -1d must be <= end -7d\.$",
+            ),
+            (
+                {"windows": {"pre": (-WEEK, -dt.timedelta(hours=12))}},
+                ValueError,
+                r"^Window 'pre' offsets must be whole days\.",
+            ),
+            (
+                {"windows": {"pre": (-52 * WEEK, -DAY), "post_py1": (-50 * WEEK, -38 * WEEK - DAY)}},
+                ValueError,
+                r"^Windows 'pre' \[-364d, -1d\] and 'post_py1' \[-350d, -267d\] overlap\.$",
+            ),
+            (
+                {"windows": {"pre": (-WEEK, 0 * WEEK), "post": (0 * WEEK, WEEK - DAY)}},
+                ValueError,
+                (
+                    r"^Windows 'pre' \[-7d, 0d\] and 'post' \[0d, 6d\] overlap\. Both ends are included, so end "
+                    r"'pre' before 'post' starts\.$"
+                ),
+            ),
+            (
+                {"windows": {"opening_day": (0 * DAY, 0 * DAY), "post": (0 * DAY, WEEK - DAY)}},
+                ValueError,
+                r"^Windows 'opening_day' \[0d, 0d\] and 'post' \[0d, 6d\] overlap\.$",
+            ),
+            ({"on": []}, ValueError, r"^on must not be an empty list\.$"),
+            ({"on": None}, TypeError, r"^on must be a string or list of strings\. Got NoneType\.$"),
+            (
+                {"on": cols.customer_id},
+                ValueError,
+                rf"^on references columns not present in the data: \['{cols.customer_id}'\]\.$",
+            ),
+            (
+                {"on": cols.transaction_id},
+                ValueError,
+                rf"^on \(in events\) references columns not present in the data: \['{cols.transaction_id}'\]\.$",
+            ),
+            (
+                {"event_date_col": "opened_on"},
+                ValueError,
+                r"^event_date_col references columns not present in the data: \['opened_on'\]\.$",
+            ),
+            (
+                {"period_col": cols.unit_spend},
+                ValueError,
+                rf"^period_col '{cols.unit_spend}' is already a column in transactions\.",
+            ),
+            (
+                {
+                    "events": pd.DataFrame(
+                        {
+                            cols.store_id: [101, 101, 102],
+                            "event_date": pd.to_datetime(["2025-03-10", "2025-09-01", "2025-06-02"]),
+                        }
+                    ),
+                },
+                ValueError,
+                (
+                    rf"^events must have one row per {cols.store_id}, with no null keys or event dates\. "
+                    rf"Rows to fix \(at most \d+ shown\): {{'{cols.store_id}': 101, 'rows': 2, 'null_event_dates': 0}}$"
+                ),
+            ),
+            (
+                {
+                    "events": pd.DataFrame(
+                        {cols.store_id: [101, 102], "event_date": pd.to_datetime(["2025-03-10", None])}
+                    )
+                },
+                ValueError,
+                rf"Rows to fix \(at most \d+ shown\): {{'{cols.store_id}': 102, 'rows': 1, 'null_event_dates': 1}}$",
+            ),
+            (
+                {
+                    "events": pd.DataFrame(
+                        {cols.store_id: [101, None], "event_date": pd.to_datetime(["2025-03-10", "2025-06-02"])}
+                    ),
+                },
+                ValueError,
+                rf"Rows to fix \(at most \d+ shown\): {{'{cols.store_id}': .*, 'rows': 1, 'null_event_dates': 0}}$",
+            ),
+            (
+                {"events": pd.DataFrame({cols.store_id: [101, 102], "event_date": ["2025-03-10", "2025-06-02"]})},
+                TypeError,
+                r"^Column 'event_date' must be a date or datetime type\. Got string\.",
+            ),
+            (
+                {
+                    "events": pd.DataFrame(
+                        {
+                            cols.store_id: [101, 102],
+                            "event_date": pd.to_datetime(["2025-03-10", "2025-06-02"]).tz_localize("Europe/London"),
+                        }
+                    ),
+                },
+                ValueError,
+                r"^Column 'event_date' is timezone-aware \(Europe/London\)\.",
+            ),
+        ],
+        ids=[
+            "windows_not_a_mapping",
+            "no_windows",
+            "mixed_label_types",
+            "integer_offsets",
+            "one_offset",
+            "start_after_end",
+            "part_day_offset",
+            "overlap",
+            "shared_boundary_day",
+            "shared_start_day",
+            "empty_on",
+            "on_not_a_column_name",
+            "on_missing",
+            "on_missing_from_events",
+            "event_date_col_missing",
+            "period_col_exists",
+            "two_events_for_a_store",
+            "null_event_date",
+            "null_key",
+            "string_event_dates",
+            "timezone_aware_event_dates",
+        ],
+    )
+    def test_invalid_arguments_raise(self, transactions, events, kwargs, error, match):
+        """Malformed windows, keys, column names or events raise an error that says what is wrong.
+
+        Duplicate keys, null keys and null event dates list the rows to fix.
+        """
+        arguments = {"events": events, "on": cols.store_id, "windows": {"pre": (-WEEK, -DAY)}} | kwargs
+        with pytest.raises(error, match=match):
+            filter_and_label_by_event_periods(transactions, **arguments)
+
+    def test_lists_at_most_a_few_rows_to_fix(self, transactions):
+        """With many duplicated stores, the error lists only the first few rather than every bad key."""
+        stores = list(range(101, 102 + _MAX_BAD_EVENT_ROWS))
+        events = pd.DataFrame({cols.store_id: stores * 2, "event_date": pd.Timestamp("2025-03-10")})
+        with pytest.raises(ValueError, match="Rows to fix") as raised:
+            filter_and_label_by_event_periods(
+                transactions, events=events, on=cols.store_id, windows={"pre": (-WEEK, -DAY)}
+            )
+
+        assert str(raised.value).count("'rows': 2") == _MAX_BAD_EVENT_ROWS

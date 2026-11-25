@@ -1,5 +1,7 @@
 """Bad input is rejected at each public constructor, with an error naming the parameter at fault."""
 
+from datetime import timedelta
+
 import pandas as pd
 import pytest
 
@@ -16,9 +18,11 @@ from openretailscience.segmentation.hml import HMLSegmentation
 from openretailscience.segmentation.nlr import NLRSegmentation
 from openretailscience.segmentation.rfm import RFMSegmentation
 from openretailscience.segmentation.threshold import ThresholdSegmentation
-from openretailscience.utils.date import filter_and_label_by_periods
+from openretailscience.utils.date import filter_and_label_by_event_periods, filter_and_label_by_periods
 
 cols = ColumnHelper()
+WEEK = timedelta(weeks=1)
+DAY = timedelta(days=1)
 
 
 @pytest.fixture
@@ -58,6 +62,17 @@ DATE_CONSTRUCTORS = [
     pytest.param(
         lambda df: filter_and_label_by_periods(df, {"H1 2024": ("2024-01-01", "2024-06-30")}),
         id="filter_and_label_by_periods",
+    ),
+    pytest.param(
+        lambda df: filter_and_label_by_event_periods(
+            df,
+            events=pd.DataFrame(
+                {cols.customer_id: [101, 102], "event_date": pd.to_datetime(["2024-05-01", "2024-06-03"])}
+            ),
+            on=cols.customer_id,
+            windows={"pre": (-12 * WEEK, -DAY), "post": (0 * WEEK, 12 * WEEK - DAY)},
+        ),
+        id="filter_and_label_by_event_periods",
     ),
 ]
 
