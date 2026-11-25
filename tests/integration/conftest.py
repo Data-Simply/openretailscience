@@ -45,8 +45,6 @@ _CONNECT_RETRY_SECONDS = 2.0
 # process id, so every run would leave another volume behind in the CI schema.
 _DATABRICKS_MEMTABLE_VOLUME = "ibis_memtables"
 
-# The test_data dataset's location. Without it Ibis stages memtables in US, and a query joining one to
-# test_data runs in US, where test_data does not exist.
 _BIGQUERY_LOCATION = "europe-west1"
 
 
