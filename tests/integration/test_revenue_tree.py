@@ -1,62 +1,30 @@
-"""Unified integration tests for Revenue Tree Analysis with multiple database backends."""
+"""Integration tests for RevenueTree across database backends."""
 
+import ibis
+import pandas as pd
 import pytest
 
 from openretailscience.analysis.revenue_tree import RevenueTree
 from openretailscience.options import ColumnHelper
+from openretailscience.utils import filter_and_label_by_periods
 
 cols = ColumnHelper()
 
+PERIODS = {"H1 2023": ("2023-01-01", "2023-06-30"), "H2 2023": ("2023-07-01", "2023-12-31")}
+SELECTION = {"period_col": "period", "p1_value": "H1 2023", "p2_value": "H2 2023"}
 
-@pytest.mark.parametrize(
-    ("group_col", "include_qty"),
-    [
-        (None, True),
-        (None, False),
-        ("category_0_name", True),
-        ("category_0_name", False),
-    ],
-)
-def test_revenue_tree_integration(
-    transactions_table,
-    group_col,
-    include_qty,
-):
-    """Integration test for RevenueTree using parameterized database backends.
 
-    This test runs against both BigQuery and PySpark backends automatically
-    via pytest parameterization. The same test logic validates functionality
-    across different database systems.
+def _tree(transactions: ibis.Table, group_col: str | None, include_qty: bool) -> pd.DataFrame:
+    labelled = filter_and_label_by_periods(transactions, PERIODS, "period")
+    if not include_qty:
+        labelled = labelled.drop(cols.unit_qty)
+    return RevenueTree(labelled, **SELECTION, group_col=group_col).df
 
-    Args:
-        transactions_table: Parameterized fixture providing either BigQuery
-                          or PySpark transactions table
-        group_col: Group column parameter for analysis
-        include_qty: Whether to include quantity in analysis
-    """
-    period_col = "transaction_date"
-    limited_table = transactions_table.limit(10000)
 
-    columns_to_keep = [
-        cols.customer_id,
-        cols.transaction_id,
-        cols.unit_spend,
-        period_col,
-    ]
+@pytest.mark.parametrize("include_qty", [True, False])
+@pytest.mark.parametrize("group_col", [None, "category_0_name"])
+def test_revenue_tree_matches_duckdb(transactions_table, group_col, include_qty):
+    """The backend's tree matches DuckDB's on the same transactions."""
+    expected = _tree(ibis.memtable(pd.read_parquet("data/transactions.parquet")), group_col, include_qty)
 
-    if include_qty:
-        columns_to_keep.append(cols.unit_qty)
-    if group_col:
-        columns_to_keep.append(group_col)
-
-    filtered_transactions = limited_table.select(columns_to_keep)
-
-    revenue_tree = RevenueTree(
-        df=filtered_transactions,
-        period_col=period_col,
-        p1_value="2023-05-24",
-        p2_value="2023-04-15",
-        group_col=group_col,
-    )
-
-    assert revenue_tree is not None
+    pd.testing.assert_frame_equal(_tree(transactions_table, group_col, include_qty), expected)
