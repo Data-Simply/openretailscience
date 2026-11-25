@@ -5,6 +5,7 @@ from __future__ import annotations
 import numbers
 from collections.abc import Mapping
 from datetime import UTC, date, datetime, time, timedelta
+from enum import Enum
 from typing import TYPE_CHECKING
 
 import ibis
@@ -12,6 +13,7 @@ import ibis
 from openretailscience.core.validation import (
     ensure_columns,
     ensure_data_has_columns,
+    ensure_date,
     ensure_ibis_table,
     ensure_tznaive_datetime,
 )
@@ -22,6 +24,15 @@ if TYPE_CHECKING:
     import pandas as pd
 
 _DAY = timedelta(days=1)
+
+
+class _BeforeEvent(Enum):
+    """Type of ``BEFORE_EVENT``, the window that ends the day before the event."""
+
+    BEFORE_EVENT = "BEFORE_EVENT"
+
+
+BEFORE_EVENT = _BeforeEvent.BEFORE_EVENT
 _MAX_BAD_EVENT_ROWS = 5
 _RANGE_BOUNDS = 2
 
@@ -257,15 +268,10 @@ def filter_and_label_by_periods(
     return filter_and_label_by_condition(transactions, conditions, label_col=period_col)
 
 
-def _window_days(
-    windows: Mapping[str, tuple[timedelta, timedelta]] | Mapping[int, tuple[timedelta, timedelta]],
-) -> dict[str | int, tuple[int, int]]:
-    """Validate ``windows`` and return each label's inclusive ``(start, end)`` offsets in days."""
+def _ensure_window_labels(windows: Mapping, values: str) -> None:
+    """Raise unless ``windows`` is a non-empty mapping whose labels are all strings or all integers."""
     if not isinstance(windows, Mapping):
-        msg = (
-            "windows must be a mapping of labels to (start, end) timedelta offsets from the event date. "
-            f"Got {type(windows).__name__}."
-        )
+        msg = f"windows must be a mapping of labels to {values}. Got {type(windows).__name__}."
         raise TypeError(msg)
     if len(windows) == 0:
         raise ValueError("windows must contain at least one window.")
@@ -276,6 +282,12 @@ def _window_days(
         msg = "windows labels must be all strings or all integers. They become one label column, which has one type."
         raise ValueError(msg)
 
+
+def _window_days(
+    windows: Mapping[str, tuple[timedelta, timedelta]] | Mapping[int, tuple[timedelta, timedelta]],
+) -> dict[str | int, tuple[int, int]]:
+    """Validate ``windows`` and return each label's inclusive ``(start, end)`` offsets in days."""
+    _ensure_window_labels(windows, "(start, end) timedelta offsets from the event date")
     days = {}
     for label, bounds in windows.items():
         if not (
@@ -295,25 +307,154 @@ def _window_days(
     return days
 
 
-def _ensure_one_event_per_key(events: ibis.Table, keys: list[str], event_date_col: str) -> None:
-    """Raise if a key has several events, a null value or a null event date; a duplicate would fan out the join."""
-    per_key = events.group_by(keys).aggregate(
-        rows=events.count(),
-        null_event_dates=events.count() - events[event_date_col].count(),
-    )
+def _shift_days(
+    windows: Mapping[str, timedelta | _BeforeEvent] | Mapping[int, timedelta | _BeforeEvent],
+) -> dict[str | int, int | _BeforeEvent]:
+    """Validate event-to-date ``windows`` and return each label's shift in days, or ``BEFORE_EVENT``."""
+    _ensure_window_labels(windows, "timedelta moves of the test period, or BEFORE_EVENT")
+    shifts = {}
+    for label, shift in windows.items():
+        if shift is BEFORE_EVENT:
+            shifts[label] = shift
+            continue
+        if not isinstance(shift, timedelta):
+            msg = f"Window {label!r} must be a timedelta or BEFORE_EVENT. Got {shift!r}."
+            raise TypeError(msg)
+        if shift % _DAY:
+            msg = f"Window {label!r} must move by whole days. Got {shift}."
+            raise ValueError(msg)
+        shifts[label] = shift.days
+    return shifts
+
+
+def _longest_test_period(
+    shifts: dict[str | int, int | _BeforeEvent],
+) -> tuple[int, str | int, str | int] | None:
+    """Return the longest test period, in days, for which no two windows overlap, and the pair that sets it.
+
+    None when no pair overlaps at any length, so only events after ``end_date`` are invalid.
+
+    Every window is as long as the test period. Two windows moved by ``a`` and ``b`` days overlap once that
+    length exceeds ``|a - b|``. ``BEFORE_EVENT`` ends the day before the event, so it overlaps a window moved
+    back ``a`` days once the length exceeds ``a // 2``.
+
+    Raises:
+        ValueError: If two windows overlap at any length.
+    """
+    limits = []
+    labels = list(shifts)
+    for i, label1 in enumerate(labels):
+        for label2 in labels[i + 1 :]:
+            shift1, shift2 = shifts[label1], shifts[label2]
+            if shift1 is BEFORE_EVENT and shift2 is BEFORE_EVENT:
+                msg = f"Windows {label1!r} and {label2!r} are both BEFORE_EVENT, so they always overlap."
+                raise ValueError(msg)
+            if shift1 is BEFORE_EVENT or shift2 is BEFORE_EVENT:
+                moved = shift2 if shift1 is BEFORE_EVENT else shift1
+                if moved == -1:
+                    msg = (
+                        f"Windows {label1!r} and {label2!r} both hold the day before the event, so they always overlap."
+                    )
+                    raise ValueError(msg)
+                if moved < 0:
+                    limits.append((-moved // 2, label1, label2))
+                continue
+            if shift1 == shift2:
+                msg = f"Windows {label1!r} and {label2!r} move by the same amount, so they always overlap."
+                raise ValueError(msg)
+            limits.append((abs(shift1 - shift2), label1, label2))
+    return min(limits, key=lambda limit: limit[0]) if len(limits) > 0 else None
+
+
+def _ensure_one_event_per_key(
+    events: ibis.Table,
+    keys: list[str],
+    event_date_col: str,
+    date_rule: tuple[ibis.expr.types.BooleanColumn, str] | None = None,
+) -> None:
+    """Raise if a key has several events, a null value or a null event date; a duplicate would fan out the join.
+
+    ``date_rule`` is ``(outside, rule)``: events where ``outside`` is true raise too, in the same query, and
+    ``rule`` says which event dates are allowed.
+    """
+    aggregates = {
+        "rows": events.count(),
+        "null_event_dates": events.count() - events[event_date_col].count(),
+    }
+    if date_rule is not None:
+        aggregates["dates_outside"] = ibis.cases((date_rule[0], 1), else_=0).sum()
+    per_key = events.group_by(keys).aggregate(**aggregates)
     has_null_key = ibis.or_(*[per_key[key].isnull() for key in keys])  # noqa: PD003 (ibis API, not pandas)
-    bad = (
-        per_key.filter((per_key.rows > 1) | (per_key.null_event_dates > 0) | has_null_key)
-        .limit(_MAX_BAD_EVENT_ROWS)
-        .to_pandas()
-    )
+    is_bad = (per_key.rows > 1) | (per_key.null_event_dates > 0) | has_null_key
+    if date_rule is not None:
+        is_bad |= per_key.dates_outside > 0
+    bad = per_key.filter(is_bad).limit(_MAX_BAD_EVENT_ROWS).to_pandas()
     if len(bad) > 0:
+        rule = f"events must have one row per {', '.join(keys)}, with no null keys or event dates"
+        if date_rule is not None:
+            rule += f", and {date_rule[1]}"
         rows = "; ".join(str(row) for row in bad.to_dict("records"))
-        msg = (
-            f"events must have one row per {', '.join(keys)}, with no null keys or event dates. "
-            f"Rows to fix (at most {_MAX_BAD_EVENT_ROWS} shown): {rows}"
-        )
+        msg = f"{rule}. Rows to fix (at most {_MAX_BAD_EVENT_ROWS} shown): {rows}"
         raise ValueError(msg)
+
+
+def _prepare_event_inputs(
+    transactions: pd.DataFrame | ibis.Table,
+    events: pd.DataFrame | ibis.Table,
+    on: str | list[str],
+    event_date_col: str,
+    period_col: str,
+) -> tuple[ibis.Table, ibis.Table, list[str]]:
+    """Validate the arguments both event functions share; return the two tables and the key columns."""
+    transactions = ensure_ibis_table(transactions, "transactions")
+    events = ensure_ibis_table(events, "events")
+    keys = ensure_columns(transactions, on, "on")
+    ensure_columns(events, keys, "on (in events)")
+    ensure_columns(events, event_date_col, "event_date_col")
+    date_col = get_option("column.transaction_date")
+    ensure_data_has_columns(transactions, [date_col])
+    if period_col in transactions.columns:
+        msg = f"period_col '{period_col}' is already a column in transactions. Pass a different period_col."
+        raise ValueError(msg)
+    ensure_tznaive_datetime(transactions, date_col)
+    ensure_tznaive_datetime(events, event_date_col)
+    return transactions, events, keys
+
+
+def _label_by_key_bounds(
+    transactions: ibis.Table,
+    events: ibis.Table,
+    keys: list[str],
+    bounds: dict[str | int, tuple[ibis.expr.types.DateValue, ibis.expr.types.DateValue]],
+    period_col: str,
+    extra_cols: dict[str, ibis.Value],
+) -> ibis.Table:
+    """Label each transaction with the window its key's ``[start, stop)`` dates contain.
+
+    ``bounds`` maps each label to start and stop dates built from ``events``; stop is the day after the
+    window's last day. They are computed on the events table so the join leaves only comparisons for the
+    transactions. ``extra_cols`` are further per-key columns, built from ``events``, to keep in the output.
+    """
+    date_col = get_option("column.transaction_date")
+    date_type = transactions[date_col].type()
+    bound_cols = {}
+    for i, (start, stop) in enumerate(bounds.values()):
+        bound_cols[f"__window_{i}_start"] = start.cast(date_type)
+        bound_cols[f"__window_{i}_stop"] = stop.cast(date_type)
+    key_bounds = events.select(*keys, **bound_cols, **extra_cols)
+    joined = transactions.join(key_bounds, keys)
+
+    date_column = joined[date_col]
+    # Read through key_bounds, not joined: a transactions column with a bound's name makes the join rename it.
+    conditions = {
+        label: (date_column >= key_bounds[f"__window_{i}_start"]) & (date_column < key_bounds[f"__window_{i}_stop"])
+        for i, label in enumerate(bounds)
+    }
+    labelled = filter_and_label_by_condition(joined, conditions, label_col=period_col)
+    if not isinstance(next(iter(bounds)), str):
+        # An integer literal takes the narrowest type that fits, so week numbers would come back as int8.
+        labelled = labelled.mutate(**{period_col: labelled[period_col].cast("int64")})
+    return labelled.select(*transactions.columns, period_col, *extra_cols)
 
 
 def filter_and_label_by_event_periods(
@@ -381,43 +522,129 @@ def filter_and_label_by_event_periods(
         1         pre  544.65
     """
     window_days = _window_days(windows)
-    transactions = ensure_ibis_table(transactions, "transactions")
-    events = ensure_ibis_table(events, "events")
-    keys = ensure_columns(transactions, on, "on")
-    ensure_columns(events, keys, "on (in events)")
-    ensure_columns(events, event_date_col, "event_date_col")
-    date_col = get_option("column.transaction_date")
-    ensure_data_has_columns(transactions, [date_col])
-    if period_col in transactions.columns:
-        msg = f"period_col '{period_col}' is already a column in transactions. Pass a different period_col."
-        raise ValueError(msg)
-    ensure_tznaive_datetime(transactions, date_col)
-    ensure_tznaive_datetime(events, event_date_col)
+    transactions, events, keys = _prepare_event_inputs(transactions, events, on, event_date_col, period_col)
     _ensure_one_event_per_key(events, keys, event_date_col)
 
-    # Window bounds are computed on the events table so the join leaves only comparisons for the transactions.
-    date_type = transactions[date_col].type()
     # Truncated whatever its type: ibis types an Oracle DATE, which holds a time of day, as a date.
-    event_day = events[event_date_col].truncate("D")
-    bound_cols = {}
-    for i, (start, end) in enumerate(window_days.values()):
-        bound_cols[f"__window_{i}_start"] = (event_day + ibis.interval(days=start)).cast(date_type)
-        # The day after the end, so a timestamp late on the end day is still inside.
-        bound_cols[f"__window_{i}_stop"] = (event_day + ibis.interval(days=end + 1)).cast(date_type)
-    bounds = events.select(*keys, **bound_cols)
-    joined = transactions.join(bounds, keys)
-
-    date_column = joined[date_col]
-    # Read through bounds, not joined: a transactions column with a bound's name makes the join rename the bound.
-    conditions = {
-        label: (date_column >= bounds[f"__window_{i}_start"]) & (date_column < bounds[f"__window_{i}_stop"])
-        for i, label in enumerate(window_days)
+    event_day = events[event_date_col].truncate("D").cast("date")
+    bounds = {
+        # The day after the end is the stop, so a timestamp late on the end day is still inside.
+        label: (event_day + ibis.interval(days=start), event_day + ibis.interval(days=end + 1))
+        for label, (start, end) in window_days.items()
     }
-    labelled = filter_and_label_by_condition(joined, conditions, label_col=period_col)
-    if not isinstance(next(iter(window_days)), str):
-        # An integer literal takes the narrowest type that fits, so week numbers would come back as int8.
-        labelled = labelled.mutate(**{period_col: labelled[period_col].cast("int64")})
-    return labelled.select(*transactions.columns, period_col)
+    return _label_by_key_bounds(transactions, events, keys, bounds, period_col, {})
+
+
+def filter_and_label_by_event_to_date(
+    transactions: pd.DataFrame | ibis.Table,
+    events: pd.DataFrame | ibis.Table,
+    on: str | list[str],
+    end_date: date | str,
+    windows: Mapping[str, timedelta | _BeforeEvent] | Mapping[int, timedelta | _BeforeEvent],
+    event_date_col: str = "event_date",
+    period_col: str = "period_name",
+    include_duration: bool = False,
+    duration_col: str = "period_days",
+) -> ibis.Table:
+    """Label transactions with a test period from each key's event date to one end date, and copies of it.
+
+    Each key's test period runs from its own event date, such as a loyalty sign-up, to ``end_date``, such as the
+    last day of the data. Every window has the same length as its key's test period. A ``timedelta`` moves both
+    ends of the test period: ``0 * wk`` is the test period itself, and ``-52 * wk`` the same weeks a year earlier.
+    ``BEFORE_EVENT`` is the window that ends the day before the event.
+
+    Windows of the same length overlap once the test period is long enough. With ``BEFORE_EVENT`` and
+    ``-52 * wk``, a test period over 182 days overlaps, so every event must be at most 181 days before
+    ``end_date``. ``events`` is checked for this, and for one row per key, with one query when this function
+    is called. Filter early events out first to leave them out knowingly. The returned table is lazy.
+
+    Transactions whose key has no row in ``events``, or whose key is null, are dropped. So are rows outside
+    every window. A window the data covers only in part returns the rows it has: make sure the data spans
+    every window for every key.
+
+    Args:
+        transactions (pd.DataFrame | ibis.Table): Transactions with the transaction date column and the
+            ``on`` columns.
+        events (pd.DataFrame | ibis.Table): One row per ``on`` key, with its event date.
+        on (str | list[str]): Column, or columns, in both tables that say what each event belongs to,
+            such as ``"customer_id"`` or ``"store_id"``.
+        end_date (date | str): The last day of every key's test period, included.
+        windows (Mapping[str, timedelta | BEFORE_EVENT] | Mapping[int, timedelta | BEFORE_EVENT]): Labels mapped
+            to a whole-day ``timedelta`` added to both ends of the test period, or ``BEFORE_EVENT``. The labels
+            must be all strings or all integers.
+        event_date_col (str): Date column in ``events``. A timestamp counts from the start of its day.
+            Defaults to ``"event_date"``.
+        period_col (str): Name of the label column to add. Defaults to ``"period_name"``.
+        include_duration (bool): Whether to add ``duration_col``, the key's period length in days, both ends
+            included. Defaults to False.
+        duration_col (str): Name of the duration column. Defaults to ``"period_days"``.
+
+    Returns:
+        ibis.Table: The transactions inside a window, with the ``period_col`` label column, and
+            ``duration_col`` if ``include_duration``.
+
+    Raises:
+        TypeError: If ``transactions`` or ``events`` is neither a pandas DataFrame nor an ibis Table, if
+            ``on`` is not a string or list of strings, if ``windows`` is not a mapping, if a window is neither a
+            ``timedelta`` nor ``BEFORE_EVENT``, if ``end_date`` is not a date or string, or if either date column
+            is not a date or datetime type.
+        ValueError: If ``windows`` is empty, mixes string and integer labels, moves by part of a day or has two
+            windows that always overlap; if ``end_date`` is not an ISO date; if ``on`` is empty; if a column is
+            missing; if ``period_col`` or ``duration_col`` is already a column in ``transactions``, or
+            ``duration_col`` equals ``period_col``; if either date column is timezone-aware; or if ``events`` has
+            more than one row for a key, a null key or a null event date, or an event after ``end_date`` or too
+            early for its windows not to overlap.
+
+    Examples:
+        >>> from datetime import timedelta
+        >>> from openretailscience.utils import BEFORE_EVENT, filter_and_label_by_event_to_date
+        >>> events = pd.DataFrame({"store_id": [101, 102], "event_date": pd.to_datetime(["2025-03-03", "2025-04-07"])})
+        >>> windows = {"post": timedelta(0), "pre": BEFORE_EVENT, "post_py1": timedelta(weeks=-52)}
+        >>> labelled = filter_and_label_by_event_to_date(
+        ...     transactions, events=events, on="store_id", end_date="2025-06-30", windows=windows
+        ... )
+        >>> labelled.group_by("period_name").agg(spend=labelled.unit_spend.sum()).order_by("period_name").to_pandas()
+          period_name   spend
+        0        post  476.95
+        1    post_py1  388.80
+        2         pre  521.85
+    """
+    end_date = ensure_date(end_date, "end_date")
+    shifts = _shift_days(windows)
+    longest = _longest_test_period(shifts)
+    transactions, events, keys = _prepare_event_inputs(transactions, events, on, event_date_col, period_col)
+    if include_duration and duration_col in transactions.columns:
+        msg = f"duration_col '{duration_col}' is already a column in transactions. Pass a different duration_col."
+        raise ValueError(msg)
+    if include_duration and duration_col == period_col:
+        msg = f"duration_col and period_col are both '{period_col}'. Pass a different duration_col."
+        raise ValueError(msg)
+
+    # Truncated whatever its type: ibis types an Oracle DATE, which holds a time of day, as a date.
+    event_day = events[event_date_col].truncate("D").cast("date")
+    if longest is None:
+        outside, dates = event_day > end_date, f"event dates on or before {end_date}"
+    else:
+        max_days, label1, label2 = longest
+        earliest = end_date - timedelta(days=max_days - 1)
+        outside = (event_day < earliest) | (event_day > end_date)
+        dates = (
+            f"event dates from {earliest} to {end_date}. An earlier event gives a test period over {max_days} "
+            f"days, where windows {label1!r} and {label2!r} overlap"
+        )
+    _ensure_one_event_per_key(events, keys, event_date_col, (outside, dates))
+
+    end = ibis.literal(end_date, type="date")
+    length = end.delta(event_day, unit="day") + 1
+    bounds = {}
+    for label, shift in shifts.items():
+        if shift is BEFORE_EVENT:
+            bounds[label] = (event_day - length.as_interval("D"), event_day)
+        else:
+            # The day after the end is the stop, so a timestamp late on end_date is still inside.
+            bounds[label] = (event_day + ibis.interval(days=shift), end + ibis.interval(days=shift + 1))
+    extra_cols = {duration_col: length.cast("int64")} if include_duration else {}
+    return _label_by_key_bounds(transactions, events, keys, bounds, period_col, extra_cols)
 
 
 def find_overlapping_periods(

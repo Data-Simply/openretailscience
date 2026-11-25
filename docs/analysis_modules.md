@@ -905,6 +905,82 @@ Store 103 has no opening, so none of its transactions are returned. For a week-b
 `windows={n: (n * wk, (n + 1) * wk - day) for n in range(-12, 12)}` labels each row with its week number, where
 week 0 starts on the event day.
 
+### Filter and Label by Event to Date
+
+<div class="clear" markdown>
+
+Filter and Label by Event to Date gives each key a test period from its own event date, such as the day a
+customer joined the loyalty programme, to one end date, such as the last day of the data. Comparison windows have
+the same length as that key's test period, so a customer who joined in January is compared over about five months,
+and one who joined in May over seven weeks.
+
+Use it to:
+
+- Compare each loyalty member's spend since joining with the same number of days just before they joined
+- Compare the same period with the same weeks a year earlier
+
+</div>
+
+Each window is the test period moved by a `timedelta`: `0 * wk` is the test period itself and `-52 * wk` the same
+weeks a year earlier. `BEFORE_EVENT` is the window of the same length that ends the day before the event. Windows of
+the same length overlap once the test period is long enough. With `BEFORE_EVENT` and `-52 * wk` together, every
+event must be at most 181 days before the end date, and an earlier event raises an error that names the cutoff date.
+
+Example:
+
+```python
+from datetime import timedelta
+
+import numpy as np
+import pandas as pd
+from openretailscience.utils.date import BEFORE_EVENT, filter_and_label_by_event_to_date
+
+rng = np.random.default_rng(7)
+transactions = pd.DataFrame({
+    "transaction_id": range(1, 3001),
+    "customer_id": rng.choice([1042, 2210, 3378, 4415], 3000),
+    "transaction_date": pd.Timestamp("2024-01-01") + pd.to_timedelta(rng.integers(0, 547, 3000), unit="D"),
+    "unit_spend": rng.uniform(5, 80, 3000).round(2),
+})
+
+# The day each customer joined the loyalty programme
+signups = pd.DataFrame({
+    "customer_id": [1042, 2210, 3378],
+    "event_date": pd.to_datetime(["2025-01-20", "2025-03-15", "2025-05-10"]),
+})
+
+wk = timedelta(weeks=1)
+labelled = filter_and_label_by_event_to_date(
+    transactions,
+    events=signups,
+    on="customer_id",
+    end_date="2025-06-30",
+    windows={"post": 0 * wk, "pre": BEFORE_EVENT, "post_py1": -52 * wk},
+    include_duration=True,
+)
+
+(
+    labelled.group_by(["customer_id", "period_name", "period_days"])
+    .aggregate(spend=labelled.unit_spend.sum())
+    .order_by(["customer_id", "period_name"])
+    .to_pandas()
+)
+```
+
+| customer_id | period_name | period_days | spend   |
+|------------:|:------------|------------:|--------:|
+| 1042        | post        | 162         | 9465.94 |
+| 1042        | post_py1    | 162         | 8301.09 |
+| 1042        | pre         | 162         | 8693.58 |
+| 2210        | post        | 108         | 6141.57 |
+| 2210        | post_py1    | 108         | 6480.41 |
+| 2210        | pre         | 108         | 6702.99 |
+| 3378        | post        | 52          | 2193.25 |
+| 3378        | post_py1    | 52          | 3951.41 |
+| 3378        | pre         | 52          | 2956.73 |
+
+Customer 4415 never joined, so none of their transactions are returned.
+
 ### Find Overlapping Periods
 
 <div class="clear" markdown>

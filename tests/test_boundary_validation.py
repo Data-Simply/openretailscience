@@ -18,7 +18,12 @@ from openretailscience.segmentation.hml import HMLSegmentation
 from openretailscience.segmentation.nlr import NLRSegmentation
 from openretailscience.segmentation.rfm import RFMSegmentation
 from openretailscience.segmentation.threshold import ThresholdSegmentation
-from openretailscience.utils.date import filter_and_label_by_event_periods, filter_and_label_by_periods
+from openretailscience.utils.date import (
+    BEFORE_EVENT,
+    filter_and_label_by_event_periods,
+    filter_and_label_by_event_to_date,
+    filter_and_label_by_periods,
+)
 
 cols = ColumnHelper()
 WEEK = timedelta(weeks=1)
@@ -73,6 +78,18 @@ DATE_CONSTRUCTORS = [
             windows={"pre": (-12 * WEEK, -DAY), "post": (0 * WEEK, 12 * WEEK - DAY)},
         ),
         id="filter_and_label_by_event_periods",
+    ),
+    pytest.param(
+        lambda df: filter_and_label_by_event_to_date(
+            df,
+            events=pd.DataFrame(
+                {cols.customer_id: [101, 102], "event_date": pd.to_datetime(["2024-05-01", "2024-06-03"])}
+            ),
+            on=cols.customer_id,
+            end_date="2024-09-30",
+            windows={"post": 0 * WEEK, "pre": BEFORE_EVENT},
+        ),
+        id="filter_and_label_by_event_to_date",
     ),
 ]
 
