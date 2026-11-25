@@ -45,6 +45,10 @@ _CONNECT_RETRY_SECONDS = 2.0
 # process id, so every run would leave another volume behind in the CI schema.
 _DATABRICKS_MEMTABLE_VOLUME = "ibis_memtables"
 
+# The test_data dataset's location. Without it Ibis stages memtables in US, and a query joining one to
+# test_data runs in US, where test_data does not exist.
+_BIGQUERY_LOCATION = "europe-west1"
+
 
 def _read_transactions() -> pd.DataFrame:
     """Read the transactions sample data used to seed container backends.
@@ -219,6 +223,7 @@ def transactions_table(request: pytest.FixtureRequest) -> Table:
     if request.param == "bigquery":
         connection = ibis.bigquery.connect(
             project_id=os.environ["GCP_PROJECT_ID"],
+            location=_BIGQUERY_LOCATION,
         )
         return connection.table(f"test_data.{_TRANSACTIONS_TABLE_NAME}")
     if request.param == "pyspark":
