@@ -829,6 +829,82 @@ result_df.groupby("period_name").agg(
 | Promotion      |                28 |      2800.0 |                100.00 |
 | Post-Promotion |                31 |      3150.0 |                101.61 |
 
+### Filter and Label by Event Periods
+
+<div class="clear" markdown>
+
+Filter and Label by Event Periods labels each transaction with a window around an event date that belongs to its
+store, customer or product, such as a competitor opening nearby or a loyalty sign-up. Each key has its own event
+date, and the same windows are placed around each one.
+
+Use it to:
+
+- Compare each store's sales before and after a competitor opened next to it
+- Compare the weeks after an event with the same weeks a year earlier
+- Track spend week by week around each customer's sign-up date
+
+</div>
+
+Each window is a pair of `timedelta` offsets from the event date, and both ends are included as whole days, so a
+window that follows on from another ends a day before the next one starts. For the same window a year earlier,
+subtract 52 weeks from both offsets. Transactions outside every window, or from a key with no event, are dropped.
+
+Example:
+
+```python
+from datetime import timedelta
+
+import numpy as np
+import pandas as pd
+from openretailscience.utils.date import filter_and_label_by_event_periods
+
+rng = np.random.default_rng(7)
+transactions = pd.DataFrame({
+    "transaction_id": range(1, 2001),
+    "store_id": rng.choice([101, 102, 103], 2000),
+    "transaction_date": pd.Timestamp("2024-01-01") + pd.to_timedelta(rng.integers(0, 730, 2000), unit="D"),
+    "unit_spend": rng.uniform(5, 80, 2000).round(2),
+})
+
+# The date a competitor opened near each store
+openings = pd.DataFrame({
+    "store_id": [101, 102],
+    "event_date": pd.to_datetime(["2025-03-10", "2025-06-02"]),
+})
+
+wk, day = timedelta(weeks=1), timedelta(days=1)
+labelled = filter_and_label_by_event_periods(
+    transactions,
+    events=openings,
+    on="store_id",
+    windows={
+        "pre": (-12 * wk, -day),
+        "post": (0 * wk, 12 * wk - day),
+        "post_py1": (-52 * wk, -40 * wk - day),
+    },
+)
+
+(
+    labelled.group_by(["store_id", "period_name"])
+    .aggregate(spend=labelled.unit_spend.sum())
+    .order_by(["store_id", "period_name"])
+    .to_pandas()
+)
+```
+
+| store_id | period_name | spend   |
+|---------:|:------------|--------:|
+| 101      | post        | 3459.35 |
+| 101      | post_py1    | 3167.65 |
+| 101      | pre         | 3100.12 |
+| 102      | post        | 3545.92 |
+| 102      | post_py1    | 3279.49 |
+| 102      | pre         | 3124.57 |
+
+Store 103 has no opening, so none of its transactions are returned. For a week-by-week view, use integer labels:
+`windows={n: (n * wk, (n + 1) * wk - day) for n in range(-12, 12)}` labels each row with its week number, where
+week 0 starts on the event day.
+
 ### Find Overlapping Periods
 
 <div class="clear" markdown>

@@ -163,7 +163,11 @@ from openretailscience.analysis.haversine import haversine_distance
 ## Utils (`openretailscience.utils`)
 
 ```python
-from openretailscience.utils.date import filter_and_label_by_periods, find_overlapping_periods
+from openretailscience.utils.date import (
+    filter_and_label_by_event_periods,
+    filter_and_label_by_periods,
+    find_overlapping_periods,
+)
 from openretailscience.utils.filter_and_label import filter_and_label_by_condition
 from openretailscience.utils.label import label_by_condition
 ```
@@ -174,6 +178,16 @@ from openretailscience.utils.label import label_by_condition
   columns are rejected). A `"YYYY-MM-DD"` string or `date` end includes that whole day; on a timestamp column a
   datetime end is an exact instant, so `datetime(2023, 3, 31)` drops sales later on Mar 31. A tz-aware bound is read
   as wall-clock time (its offset is ignored).
+- `filter_and_label_by_event_periods(transactions, events, on, windows, event_date_col="event_date",
+  period_col="period_name")` — tag each row with a window around its own key's event date (each store's competitor
+  opening, each customer's sign-up), returning an Ibis table. `events` has one row per `on` key (a column or a list
+  of columns); a duplicate, null key or null date raises, checked by one query on `events` at call time. `windows`
+  maps labels (all str or all int) to inclusive whole-day `(start, end)` `timedelta` offsets; overlaps raise. Windows
+  that follow on end a day early:
+  `wk, day = timedelta(weeks=1), timedelta(days=1)`, `{"pre": (-12 * wk, -day), "post": (0 * wk, 12 * wk - day)}`.
+  Prior year: subtract `52 * wk` from both offsets. Weekly curve: `{n: (n * wk, (n + 1) * wk - day) for n in
+  range(-12, 12)}` gives an int week label. Rows whose key has no event, or a null key, are dropped; a window the
+  data only partly covers returns what it has, so check coverage first.
 - `find_overlapping_periods(start_date, end_date, return_str=True)` — split a range
   into year-aligned `(start, end)` tuples for `plots.period_on_period.plot`.
 - `filter_and_label_by_condition(table, conditions, label_col="label")` — keep rows
