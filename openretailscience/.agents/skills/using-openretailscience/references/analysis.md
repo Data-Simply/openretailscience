@@ -181,25 +181,27 @@ from openretailscience.utils.label import label_by_condition
   datetime end is an exact instant, so `datetime(2023, 3, 31)` drops sales later on Mar 31. A tz-aware bound is read
   as wall-clock time (its offset is ignored).
 - `filter_and_label_by_event_periods(transactions, events, on, windows, event_date_col="event_date",
-  period_col="period_name")` — tag each row with a window around its own key's event date (each store's competitor
-  opening, each customer's sign-up), returning an Ibis table. `events` has one row per `on` key (a column or a list
-  of columns); a duplicate, null key or null date raises, checked by one query on `events` at call time. `windows`
-  maps labels (all str or all int) to inclusive whole-day `(start, end)` `timedelta` offsets; overlaps raise. Windows
-  that follow on end a day early:
+  period_col="period_name", require_every_window=False)` — tag each row with a window around its own key's event
+  date (each store's competitor opening, each customer's sign-up), returning an Ibis table. `events` has one row per
+  `on` key (a column or a list of columns); a duplicate, null key or null date raises, checked by one query on
+  `events` at call time. `windows` maps labels (all str or all int) to inclusive whole-day `(start, end)`
+  `timedelta` offsets; overlaps raise. Windows that follow on end a day early:
   `wk, day = timedelta(weeks=1), timedelta(days=1)`, `{"pre": (-12 * wk, -day), "post": (0 * wk, 12 * wk - day)}`.
   Prior year: subtract `52 * wk` from both offsets. Weekly curve: `{n: (n * wk, (n + 1) * wk - day) for n in
   range(-12, 12)}` gives an int week label. Rows whose key has no event, or a null key, are dropped; a window the
-  data only partly covers returns what it has, so check coverage first.
+  data only partly covers returns what it has, so check coverage first. `require_every_window=True` keeps only keys
+  with a transaction in every window, such as customers who bought both pre and post.
 - `filter_and_label_by_event_to_date(transactions, events, on, end_date, windows, event_date_col="event_date",
-  period_col="period_name", include_duration=False, duration_col="period_days")` — each key's test period runs from
-  its own event date to one `end_date` (inclusive), so its length differs per key. `windows` maps labels to a
-  whole-day `timedelta` added to both ends of the test period (`0 * wk` is the test period, `-52 * wk` the same
-  weeks a year earlier), or `BEFORE_EVENT` for the same number of days ending the day before the event. Same-length
-  windows overlap once the test period is long enough: with `BEFORE_EVENT` and `-52 * wk`, every event must be at
-  most 181 days before `end_date`. One query on `events` at call time raises on that, on events after `end_date`, and on
-  duplicate or null keys, naming the cutoff date. Filter early events out first to drop them knowingly.
-  `include_duration=True` adds each row's period length in days. Use `filter_and_label_by_event_periods` instead when
-  every key gets the same fixed-length windows.
+  period_col="period_name", include_duration=False, duration_col="period_days", require_every_window=False)` — each
+  key's test period runs from its own event date to one `end_date` (inclusive), so its length differs per key.
+  `windows` maps labels to a whole-day `timedelta` added to both ends of the test period (`0 * wk` is the test
+  period, `-52 * wk` the same weeks a year earlier), or `BEFORE_EVENT` for the same number of days ending the day
+  before the event. Same-length windows overlap once the test period is long enough: with `BEFORE_EVENT` and
+  `-52 * wk`, every event must be at most 181 days before `end_date`. One query on `events` at call time raises on
+  that, on events after `end_date`, and on duplicate or null keys, naming the cutoff date. Filter early events out
+  first to drop them knowingly. `include_duration=True` adds each row's period length in days.
+  `require_every_window=True` keeps only keys with a transaction in every window. Use
+  `filter_and_label_by_event_periods` instead when every key gets the same fixed-length windows.
 - `find_overlapping_periods(start_date, end_date, return_str=True)` — split a range
   into year-aligned `(start, end)` tuples for `plots.period_on_period.plot`.
 - `filter_and_label_by_condition(table, conditions, label_col="label")` — keep rows

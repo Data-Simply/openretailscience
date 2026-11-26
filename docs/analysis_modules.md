@@ -848,6 +848,7 @@ Use it to:
 Each window is a pair of `timedelta` offsets from the event date, and both ends are included as whole days, so a
 window that follows on from another ends a day before the next one starts. For the same window a year earlier,
 subtract 52 weeks from both offsets. Transactions outside every window, or from a key with no event, are dropped.
+Pass `require_every_window=True` to keep only keys with a transaction in every window.
 
 Example:
 
@@ -979,7 +980,8 @@ labelled = filter_and_label_by_event_to_date(
 | 3378        | post_py1    | 52          | 3951.41 |
 | 3378        | pre         | 52          | 2956.73 |
 
-Customer 4415 never joined, so none of their transactions are returned.
+Customer 4415 never joined, so none of their transactions are returned. Pass `require_every_window=True` to keep
+only customers who bought in every window.
 
 ### Find Overlapping Periods
 

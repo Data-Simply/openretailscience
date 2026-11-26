@@ -202,6 +202,16 @@ def _databricks_transactions_table() -> Iterator[Table]:
         connection.disconnect()
 
 
+@pytest.fixture(scope="session")
+def duckdb_transactions_table() -> Table:
+    """Provide the transactions on DuckDB, the expected side of each backend comparison.
+
+    Returns:
+        Table: The transactions table, read by Ibis's default DuckDB backend.
+    """
+    return ibis.read_parquet(_TRANSACTIONS_PARQUET)
+
+
 @pytest.fixture(
     params=["bigquery", "databricks", "pyspark", "snowflake", "mssql", "oracle"],
     ids=lambda backend: f"backend={backend}",

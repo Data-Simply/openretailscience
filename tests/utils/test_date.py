@@ -611,6 +611,21 @@ class TestFilterAndLabelByEventPeriods:
             pd.DataFrame({cols.transaction_id: [2, 3, 4, 5, 8], "period_name": [-2, -1, 0, 1, -1]}),
         )
 
+    def test_require_every_window_keeps_keys_seen_in_every_window(self, transactions, events):
+        """Store 101 sold in pre and post and is kept; 102 sold only in pre and is dropped."""
+        result = filter_and_label_by_event_periods(
+            transactions,
+            events=events,
+            on=cols.store_id,
+            windows={"pre": (-2 * WEEK, -DAY), "post": (0 * WEEK, 2 * WEEK - DAY)},
+            require_every_window=True,
+        )
+
+        pd.testing.assert_frame_equal(
+            result.select(cols.transaction_id, "period_name").order_by(cols.transaction_id).to_pandas(),
+            pd.DataFrame({cols.transaction_id: [2, 3, 4, 5], "period_name": ["pre", "pre", "post", "post"]}),
+        )
+
     def test_reads_the_configured_transaction_date_column(self, transactions, events):
         """The transaction date column comes from the column.transaction_date option."""
         renamed = transactions.rename(columns={cols.transaction_date: "sold_at"})
@@ -887,6 +902,26 @@ class TestFilterAndLabelByEventToDate:
         ],
         ids=["pandas_timestamps", "ibis_dates"],
     )
+    @pytest.mark.parametrize(
+        ("require_every_window", "expected"),
+        [
+            (
+                False,
+                {
+                    cols.transaction_id: [2, 3, 4, 5, 7, 8, 10, 11],
+                    "period_name": ["pre", "pre", "post", "post", "post_py1", "post_py1", "pre", "post"],
+                },
+            ),
+            (
+                True,
+                {
+                    cols.transaction_id: [2, 3, 4, 5, 7, 8],
+                    "period_name": ["pre", "pre", "post", "post", "post_py1", "post_py1"],
+                },
+            ),
+        ],
+        ids=["every_key", "keys_in_every_window"],
+    )
     def test_labels_each_keys_test_period_and_its_moved_copies(
         self,
         transactions,
@@ -894,14 +929,20 @@ class TestFilterAndLabelByEventToDate:
         to_transactions,
         to_events,
         end_date,
+        require_every_window,
+        expected,
     ):
-        """Post runs from sign-up to end_date; pre is as long and ends the day before; post_py1 is 52 weeks earlier."""
+        """Post runs from sign-up to end_date; pre is as long and ends the day before; post_py1 is 52 weeks earlier.
+
+        require_every_window drops 3378, who bought nothing in post_py1.
+        """
         result = filter_and_label_by_event_to_date(
             to_transactions(transactions),
             events=to_events(signups),
             on=cols.customer_id,
             end_date=end_date,
             windows={"post": 0 * WEEK, "pre": BEFORE_EVENT, "post_py1": -52 * WEEK},
+            require_every_window=require_every_window,
         )
 
         pd.testing.assert_frame_equal(
@@ -909,12 +950,7 @@ class TestFilterAndLabelByEventToDate:
             result.drop(cols.customer_id, cols.transaction_date, cols.unit_spend)
             .order_by(cols.transaction_id)
             .to_pandas(),
-            pd.DataFrame(
-                {
-                    cols.transaction_id: [2, 3, 4, 5, 7, 8, 10, 11],
-                    "period_name": ["pre", "pre", "post", "post", "post_py1", "post_py1", "pre", "post"],
-                },
-            ),
+            pd.DataFrame(expected),
         )
 
     @pytest.mark.parametrize(
