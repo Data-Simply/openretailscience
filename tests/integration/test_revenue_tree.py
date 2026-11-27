@@ -23,8 +23,8 @@ def _tree(transactions: ibis.Table, group_col: str | None, include_qty: bool) ->
 
 @pytest.mark.parametrize("include_qty", [True, False])
 @pytest.mark.parametrize("group_col", [None, "category_0_name"])
-def test_revenue_tree_matches_duckdb(transactions_table, group_col, include_qty):
+def test_revenue_tree_matches_duckdb(transactions_table, duckdb_transactions_table, group_col, include_qty):
     """The backend's tree matches DuckDB's on the same transactions."""
-    expected = _tree(ibis.memtable(pd.read_parquet("data/transactions.parquet")), group_col, include_qty)
+    expected = _tree(duckdb_transactions_table, group_col, include_qty)
 
     pd.testing.assert_frame_equal(_tree(transactions_table, group_col, include_qty), expected)

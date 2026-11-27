@@ -428,6 +428,7 @@ def _label_by_key_bounds(
     bounds: dict[str | int, tuple[ibis.expr.types.DateValue, ibis.expr.types.DateValue]],
     period_col: str,
     extra_cols: dict[str, ibis.Value],
+    require_every_window: bool,
 ) -> ibis.Table:
     """Label each transaction with the window its key's ``[start, stop)`` dates contain.
 
@@ -451,6 +452,9 @@ def _label_by_key_bounds(
         for i, label in enumerate(bounds)
     }
     labelled = filter_and_label_by_condition(joined, conditions, label_col=period_col)
+    if require_every_window:
+        complete_keys = labelled.group_by(keys).having(labelled[period_col].nunique() == len(bounds)).aggregate()
+        labelled = labelled.semi_join(complete_keys, keys)
     if not isinstance(next(iter(bounds)), str):
         # An integer literal takes the narrowest type that fits, so week numbers would come back as int8.
         labelled = labelled.mutate(**{period_col: labelled[period_col].cast("int64")})
@@ -464,6 +468,7 @@ def filter_and_label_by_event_periods(
     windows: Mapping[str, tuple[timedelta, timedelta]] | Mapping[int, tuple[timedelta, timedelta]],
     event_date_col: str = "event_date",
     period_col: str = "period_name",
+    require_every_window: bool = False,
 ) -> ibis.Table:
     """Filter transactions to windows around each key's own event date and label each row with its window.
 
@@ -495,6 +500,8 @@ def filter_and_label_by_event_periods(
         event_date_col (str): Date column in ``events``. A timestamp counts from the start of its day.
             Defaults to ``"event_date"``.
         period_col (str): Name of the label column to add. Defaults to ``"period_name"``.
+        require_every_window (bool): Whether to keep only keys with a transaction in every window, such as
+            customers who bought both before and after their event. Defaults to False.
 
     Returns:
         ibis.Table: The transactions inside a window, with the ``period_col`` label column.
@@ -532,7 +539,7 @@ def filter_and_label_by_event_periods(
         label: (event_day + ibis.interval(days=start), event_day + ibis.interval(days=end + 1))
         for label, (start, end) in window_days.items()
     }
-    return _label_by_key_bounds(transactions, events, keys, bounds, period_col, {})
+    return _label_by_key_bounds(transactions, events, keys, bounds, period_col, {}, require_every_window)
 
 
 def filter_and_label_by_event_to_date(
@@ -545,6 +552,7 @@ def filter_and_label_by_event_to_date(
     period_col: str = "period_name",
     include_duration: bool = False,
     duration_col: str = "period_days",
+    require_every_window: bool = False,
 ) -> ibis.Table:
     """Label transactions with a test period from each key's event date to one end date, and copies of it.
 
@@ -578,6 +586,8 @@ def filter_and_label_by_event_to_date(
         include_duration (bool): Whether to add ``duration_col``, the key's period length in days, both ends
             included. Defaults to False.
         duration_col (str): Name of the duration column. Defaults to ``"period_days"``.
+        require_every_window (bool): Whether to keep only keys with a transaction in every window, such as
+            customers who bought both before and after their event. Defaults to False.
 
     Returns:
         ibis.Table: The transactions inside a window, with the ``period_col`` label column, and
@@ -644,7 +654,7 @@ def filter_and_label_by_event_to_date(
             # The day after the end is the stop, so a timestamp late on end_date is still inside.
             bounds[label] = (event_day + ibis.interval(days=shift), end + ibis.interval(days=shift + 1))
     extra_cols = {duration_col: length.cast("int64")} if include_duration else {}
-    return _label_by_key_bounds(transactions, events, keys, bounds, period_col, extra_cols)
+    return _label_by_key_bounds(transactions, events, keys, bounds, period_col, extra_cols, require_every_window)
 
 
 def find_overlapping_periods(
